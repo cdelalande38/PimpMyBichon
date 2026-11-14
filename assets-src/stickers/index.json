@@ -1,0 +1,1142 @@
+{
+  "total": 86,
+  "controle": {
+    "date": "2026-11-14",
+    "aReprendre": 19,
+    "ecartes": [
+      {
+        "id": "graffiti-couronne",
+        "motif": "trop proche de la couronne-signature d'un peintre connu : à redessiner (autre nombre de pointes, sans boules) avant d'entrer dans le dépôt"
+      },
+      {
+        "id": "griffure-trois-griffes",
+        "motif": "trois griffures parallèles, trop proche du logo d'un sponsor réel des sports mécaniques : à redessiner à quatre ou cinq griffures irrégulières avant d'entrer dans le dépôt"
+      }
+    ]
+  },
+  "stickers": [
+    {
+      "id": "aile-aigle-paire",
+      "label": "Ailes d'aigle",
+      "categorie": "ailes",
+      "fichier": "ailes/aile-aigle-paire.svg",
+      "ratio": "2:1",
+      "symetrique": true,
+      "tags": [
+        "ailes",
+        "aigle"
+      ]
+    },
+    {
+      "id": "aile-chauve-souris",
+      "label": "Ailes de chauve-souris",
+      "categorie": "ailes",
+      "fichier": "ailes/aile-chauve-souris.svg",
+      "ratio": "2:1",
+      "symetrique": true,
+      "tags": [
+        "ailes",
+        "chauve-souris",
+        "nuit"
+      ]
+    },
+    {
+      "id": "aile-roue",
+      "label": "Roue ailée",
+      "categorie": "ailes",
+      "fichier": "ailes/aile-roue.svg",
+      "ratio": "2:1",
+      "symetrique": true,
+      "tags": [
+        "roue",
+        "ailes",
+        "vitesse"
+      ]
+    },
+    {
+      "id": "aile-seule",
+      "label": "Aile seule",
+      "categorie": "ailes",
+      "fichier": "ailes/aile-seule.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "aile",
+        "plumes"
+      ]
+    },
+    {
+      "id": "bande-chevrons",
+      "label": "Chevrons",
+      "categorie": "bandes",
+      "fichier": "bandes/bande-chevrons.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "bande",
+        "flèche",
+        "vitesse"
+      ]
+    },
+    {
+      "id": "bande-crosse",
+      "label": "Bande en crosse",
+      "categorie": "bandes",
+      "fichier": "bandes/bande-crosse.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "bande",
+        "flanc",
+        "crosse"
+      ],
+      "aReprendre": "hors gabarit : collé au bord haut, à recadrer"
+    },
+    {
+      "id": "bande-decroche",
+      "label": "Bande à décroché",
+      "categorie": "bandes",
+      "fichier": "bandes/bande-decroche.svg",
+      "ratio": "4:1",
+      "symetrique": false,
+      "tags": [
+        "bande",
+        "flanc",
+        "années70"
+      ],
+      "aReprendre": "hors gabarit : collé aux bords gauche et droit, à recadrer avec environ 6 % de marge"
+    },
+    {
+      "id": "bande-double-capot",
+      "label": "Double bande de capot",
+      "categorie": "bandes",
+      "fichier": "bandes/bande-double-capot.svg",
+      "ratio": "4:1",
+      "symetrique": true,
+      "tags": [
+        "bande",
+        "capot",
+        "rallye"
+      ]
+    },
+    {
+      "id": "bande-triple-filet",
+      "label": "Triple filet",
+      "categorie": "bandes",
+      "fichier": "bandes/bande-triple-filet.svg",
+      "ratio": "4:1",
+      "symetrique": false,
+      "tags": [
+        "bande",
+        "filet",
+        "dégradé"
+      ]
+    },
+    {
+      "id": "cle-bougie",
+      "label": "Bougie d'allumage",
+      "categorie": "cles",
+      "fichier": "cles/cle-bougie.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "bougie",
+        "moteur",
+        "étincelle"
+      ]
+    },
+    {
+      "id": "cle-molette-boulon",
+      "label": "Clé à molette",
+      "categorie": "cles",
+      "fichier": "cles/cle-molette-boulon.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "clé",
+        "boulon",
+        "outils"
+      ]
+    },
+    {
+      "id": "cle-plates-croisees",
+      "label": "Clés croisées",
+      "categorie": "cles",
+      "fichier": "cles/cle-plates-croisees.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "clés",
+        "outils",
+        "garage"
+      ]
+    },
+    {
+      "id": "damier-bandeau",
+      "label": "Bandeau damier",
+      "categorie": "damiers",
+      "fichier": "damiers/damier-bandeau.svg",
+      "ratio": "4:1",
+      "symetrique": true,
+      "tags": [
+        "damier",
+        "frise",
+        "course"
+      ]
+    },
+    {
+      "id": "damier-coin",
+      "label": "Coin damier",
+      "categorie": "damiers",
+      "fichier": "damiers/damier-coin.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "damier",
+        "angle",
+        "pointe"
+      ]
+    },
+    {
+      "id": "damier-dissous",
+      "label": "Damier dissous",
+      "categorie": "damiers",
+      "fichier": "damiers/damier-dissous.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "damier",
+        "dégradé",
+        "éclats"
+      ]
+    },
+    {
+      "id": "damier-drapeau",
+      "label": "Drapeau à damier",
+      "categorie": "damiers",
+      "fichier": "damiers/damier-drapeau.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "damier",
+        "drapeau",
+        "course"
+      ]
+    },
+    {
+      "id": "degrade-bande-fondu",
+      "label": "Bande fondue",
+      "categorie": "degrades",
+      "fichier": "degrades/degrade-bande-fondu.svg",
+      "ratio": "4:1",
+      "symetrique": false,
+      "tags": [
+        "dégradé",
+        "bande",
+        "fondu"
+      ]
+    },
+    {
+      "id": "degrade-trame",
+      "label": "Trame qui se fond",
+      "categorie": "degrades",
+      "fichier": "degrades/degrade-trame.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "dégradé",
+        "trame",
+        "points"
+      ]
+    },
+    {
+      "id": "degrade-vitesse",
+      "label": "Lignes de vitesse",
+      "categorie": "degrades",
+      "fichier": "degrades/degrade-vitesse.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "dégradé",
+        "vitesse",
+        "traînée"
+      ],
+      "aReprendre": "traits trop fins à 128 px (1,55 px)"
+    },
+    {
+      "id": "eclaboussure-allongee",
+      "label": "Éclaboussure allongée",
+      "categorie": "eclaboussures",
+      "fichier": "eclaboussures/eclaboussure-allongee.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "peinture",
+        "vitesse",
+        "flanc"
+      ],
+      "aReprendre": "la masse et les traînées se lisent comme une main ou un gant"
+    },
+    {
+      "id": "eclaboussure-bombe",
+      "label": "Nuage de bombe",
+      "categorie": "eclaboussures",
+      "fichier": "eclaboussures/eclaboussure-bombe.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "bombe",
+        "spray",
+        "dégradé"
+      ],
+      "aReprendre": "nuage flou de dégradés superposés : à refaire net (gouttelettes pleines, deux ou trois paliers d'opacité) ; identifiant interne à préfixer par celui du sticker"
+    },
+    {
+      "id": "eclaboussure-coulures",
+      "label": "Coulures",
+      "categorie": "eclaboussures",
+      "fichier": "eclaboussures/eclaboussure-coulures.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "peinture",
+        "coulures",
+        "rat look"
+      ]
+    },
+    {
+      "id": "eclaboussure-impact",
+      "label": "Tache d’impact",
+      "categorie": "eclaboussures",
+      "fichier": "eclaboussures/eclaboussure-impact.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "peinture",
+        "splash",
+        "impact"
+      ]
+    },
+    {
+      "id": "eclair-cercle",
+      "label": "Éclair en médaillon",
+      "categorie": "eclairs",
+      "fichier": "eclairs/eclair-cercle.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "éclair",
+        "badge",
+        "rond"
+      ]
+    },
+    {
+      "id": "eclair-double",
+      "label": "Éclair double",
+      "categorie": "eclairs",
+      "fichier": "eclairs/eclair-double.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "éclair",
+        "paire",
+        "capot"
+      ]
+    },
+    {
+      "id": "eclair-pluie",
+      "label": "Pluie d'éclairs",
+      "categorie": "eclairs",
+      "fichier": "eclairs/eclair-pluie.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "éclair",
+        "orage",
+        "semis"
+      ]
+    },
+    {
+      "id": "eclair-simple",
+      "label": "Éclair",
+      "categorie": "eclairs",
+      "fichier": "eclairs/eclair-simple.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "éclair",
+        "foudre"
+      ]
+    },
+    {
+      "id": "eclair-zigzag-long",
+      "label": "Éclair zigzag long",
+      "categorie": "eclairs",
+      "fichier": "eclairs/eclair-zigzag-long.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "éclair",
+        "bande",
+        "flanc"
+      ]
+    },
+    {
+      "id": "etoile-cinq-branches",
+      "label": "Étoile",
+      "categorie": "etoiles",
+      "fichier": "etoiles/etoile-cinq-branches.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "étoile",
+        "classique"
+      ]
+    },
+    {
+      "id": "etoile-filante",
+      "label": "Étoile filante",
+      "categorie": "etoiles",
+      "fichier": "etoiles/etoile-filante.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "étoile",
+        "vitesse",
+        "flanc"
+      ]
+    },
+    {
+      "id": "etoile-laurier",
+      "label": "Étoile et lauriers",
+      "categorie": "etoiles",
+      "fichier": "etoiles/etoile-laurier.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "étoile",
+        "laurier",
+        "badge"
+      ]
+    },
+    {
+      "id": "etoile-nautique",
+      "label": "Étoile nautique",
+      "categorie": "etoiles",
+      "fichier": "etoiles/etoile-nautique.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "étoile",
+        "tatouage",
+        "marin"
+      ]
+    },
+    {
+      "id": "etoile-rangee-trois",
+      "label": "Rangée d'étoiles",
+      "categorie": "etoiles",
+      "fichier": "etoiles/etoile-rangee-trois.svg",
+      "ratio": "2:1",
+      "symetrique": true,
+      "tags": [
+        "étoile",
+        "trio",
+        "capot"
+      ]
+    },
+    {
+      "id": "flammes-classiques-court",
+      "label": "Flammes hot rod courtes",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-classiques-court.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "hot rod",
+        "réservoir",
+        "classique"
+      ]
+    },
+    {
+      "id": "flammes-classiques-long",
+      "label": "Flammes hot rod longues",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-classiques-long.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "hot rod",
+        "flanc",
+        "classique"
+      ]
+    },
+    {
+      "id": "flammes-fantomes-court",
+      "label": "Flammes fantômes courtes",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-fantomes-court.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "fantôme",
+        "contour",
+        "discret"
+      ],
+      "aReprendre": "contours trop fins : les doubles fantômes s'effacent à 128 px"
+    },
+    {
+      "id": "flammes-fantomes-long",
+      "label": "Flammes fantômes longues",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-fantomes-long.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "fantôme",
+        "contour",
+        "discret"
+      ],
+      "aReprendre": "contours trop fins (1,72 px) : les doubles fantômes s'effacent à 128 px"
+    },
+    {
+      "id": "flammes-larges-court",
+      "label": "Grosses flammes courtes",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-larges-court.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "larges",
+        "réservoir",
+        "casque"
+      ],
+      "aReprendre": "doublon de flammes-classiques-court (même silhouette)"
+    },
+    {
+      "id": "flammes-larges-long",
+      "label": "Grosses flammes longues",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-larges-long.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "larges",
+        "capot",
+        "flanc"
+      ],
+      "aReprendre": "doublon de flammes-classiques-long (même silhouette)"
+    },
+    {
+      "id": "flammes-lisere-court",
+      "label": "Flammes liseré courtes",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-lisere-court.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "pinstriping",
+        "liseré",
+        "casque"
+      ],
+      "aReprendre": "liseré trop fin à 128 px (1,97 px)"
+    },
+    {
+      "id": "flammes-lisere-long",
+      "label": "Flammes liseré longues",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-lisere-long.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "pinstriping",
+        "liseré",
+        "flanc"
+      ],
+      "aReprendre": "liseré trop fin à 128 px (1,63 px), fichier lourd (11,8 ko)"
+    },
+    {
+      "id": "flammes-rafale-court",
+      "label": "Rafale de flammes courte",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-rafale-court.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "rafale",
+        "roue",
+        "garde-boue"
+      ],
+      "aReprendre": "se lit comme un soleil levant et n'occupe qu'un tiers du carré"
+    },
+    {
+      "id": "flammes-rafale-long",
+      "label": "Rafale de flammes longue",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-rafale-long.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "rafale",
+        "roue",
+        "flanc"
+      ],
+      "aReprendre": "se lit comme un soleil levant"
+    },
+    {
+      "id": "flammes-tribales-court",
+      "label": "Flammes tribales courtes",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-tribales-court.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "tribal",
+        "réservoir",
+        "pointes"
+      ],
+      "aReprendre": "se lit comme une arête de poisson ou une flèche, pas comme des flammes"
+    },
+    {
+      "id": "flammes-tribales-long",
+      "label": "Flammes tribales longues",
+      "categorie": "flammes",
+      "fichier": "flammes/flammes-tribales-long.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "tribal",
+        "flanc",
+        "pointes"
+      ],
+      "aReprendre": "se lit comme une arête de poisson ou une flèche, pas comme des flammes"
+    },
+    {
+      "id": "graffiti-fleche",
+      "label": "Flèche taguée",
+      "categorie": "graffiti",
+      "fichier": "graffiti/graffiti-fleche.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "tag",
+        "flèche",
+        "street"
+      ]
+    },
+    {
+      "id": "graffiti-gaz",
+      "label": "GAZ anguleux",
+      "categorie": "graffiti",
+      "fichier": "graffiti/graffiti-gaz.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "lettrage",
+        "anguleux",
+        "gaz"
+      ]
+    },
+    {
+      "id": "graffiti-rat",
+      "label": "RAT qui coule",
+      "categorie": "graffiti",
+      "fichier": "graffiti/graffiti-rat.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "lettrage",
+        "coulures",
+        "rat look"
+      ]
+    },
+    {
+      "id": "graffiti-vroum",
+      "label": "VROUM en bulles",
+      "categorie": "graffiti",
+      "fichier": "graffiti/graffiti-vroum.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "lettrage",
+        "bulles",
+        "vroum"
+      ]
+    },
+    {
+      "id": "griffure-dechirure",
+      "label": "Tôle déchirée",
+      "categorie": "griffures",
+      "fichier": "griffures/griffure-dechirure.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "déchirure",
+        "tôle",
+        "trompe-l’œil"
+      ]
+    },
+    {
+      "id": "griffure-quatre-longues",
+      "label": "Quatre griffes longues",
+      "categorie": "griffures",
+      "fichier": "griffures/griffure-quatre-longues.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "griffes",
+        "flanc",
+        "fauve"
+      ]
+    },
+    {
+      "id": "numero-bouclier-42",
+      "label": "Bouclier 42",
+      "categorie": "numeros",
+      "fichier": "numeros/numero-bouclier-42.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "numéro",
+        "course",
+        "bouclier"
+      ]
+    },
+    {
+      "id": "numero-ovale-27",
+      "label": "Plaque ovale 27",
+      "categorie": "numeros",
+      "fichier": "numeros/numero-ovale-27.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "numéro",
+        "course",
+        "ovale"
+      ]
+    },
+    {
+      "id": "numero-rond-13",
+      "label": "Rond n° 13",
+      "categorie": "numeros",
+      "fichier": "numeros/numero-rond-13.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "numéro",
+        "course",
+        "rond"
+      ]
+    },
+    {
+      "id": "numero-rond-7",
+      "label": "Rond n° 7",
+      "categorie": "numeros",
+      "fichier": "numeros/numero-rond-7.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "numéro",
+        "course",
+        "rond"
+      ]
+    },
+    {
+      "id": "pinstriping-blason",
+      "label": "Blason de filets",
+      "categorie": "pinstriping",
+      "fichier": "pinstriping/pinstriping-blason.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "filet",
+        "blason",
+        "symétrique"
+      ]
+    },
+    {
+      "id": "pinstriping-coin",
+      "label": "Coin d'angle",
+      "categorie": "pinstriping",
+      "fichier": "pinstriping/pinstriping-coin.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "filet",
+        "angle",
+        "boucle"
+      ]
+    },
+    {
+      "id": "pinstriping-filet",
+      "label": "Filet à pointe",
+      "categorie": "pinstriping",
+      "fichier": "pinstriping/pinstriping-filet.svg",
+      "ratio": "4:1",
+      "symetrique": false,
+      "tags": [
+        "filet",
+        "lance",
+        "frise"
+      ],
+      "aReprendre": "illisible à 128 px (trait de 1,5 px dans la frise 4:1) et décentré"
+    },
+    {
+      "id": "pinstriping-goutte",
+      "label": "Goutte ornée",
+      "categorie": "pinstriping",
+      "fichier": "pinstriping/pinstriping-goutte.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "filet",
+        "goutte",
+        "symétrique"
+      ]
+    },
+    {
+      "id": "pinstriping-ornement",
+      "label": "Ornement central",
+      "categorie": "pinstriping",
+      "fichier": "pinstriping/pinstriping-ornement.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "filet",
+        "symétrique",
+        "kustom"
+      ]
+    },
+    {
+      "id": "pinstriping-volute",
+      "label": "Volute",
+      "categorie": "pinstriping",
+      "fichier": "pinstriping/pinstriping-volute.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "filet",
+        "spirale",
+        "kustom"
+      ]
+    },
+    {
+      "id": "piston-aile",
+      "label": "Piston ailé",
+      "categorie": "pistons",
+      "fichier": "pistons/piston-aile.svg",
+      "ratio": "2:1",
+      "symetrique": true,
+      "tags": [
+        "piston",
+        "ailes"
+      ]
+    },
+    {
+      "id": "piston-bielle",
+      "label": "Piston et bielle",
+      "categorie": "pistons",
+      "fichier": "pistons/piston-bielle.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "piston",
+        "bielle",
+        "moteur"
+      ]
+    },
+    {
+      "id": "piston-croises",
+      "label": "Pistons croisés",
+      "categorie": "pistons",
+      "fichier": "pistons/piston-croises.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "pistons",
+        "moteur"
+      ]
+    },
+    {
+      "id": "sponsor-bougie-noyee",
+      "label": "Bougie Noyée",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-bougie-noyee.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "bougie",
+        "flotte"
+      ]
+    },
+    {
+      "id": "sponsor-boulons-perdus",
+      "label": "Boulons Perdus",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-boulons-perdus.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "écrou",
+        "atelier"
+      ]
+    },
+    {
+      "id": "sponsor-bout-de-ficelle",
+      "label": "Bout de Ficelle",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-bout-de-ficelle.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "bricolage",
+        "nœud"
+      ],
+      "aReprendre": "cadre pointillé, nœud et lettrage trop fins à 128 px (1,88 px)"
+    },
+    {
+      "id": "sponsor-cambouis-et-fils",
+      "label": "Cambouis et Fils",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-cambouis-et-fils.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "cambouis",
+        "vintage"
+      ],
+      "aReprendre": "empattements et « ET FILS » trop fins à 128 px (1,85 px)"
+    },
+    {
+      "id": "sponsor-huile-de-coude",
+      "label": "Huile de Coude",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-huile-de-coude.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "huile",
+        "muscle"
+      ]
+    },
+    {
+      "id": "sponsor-la-bielle-coulee",
+      "label": "La Bielle Coulée",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-la-bielle-coulee.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "bielle",
+        "moteur"
+      ]
+    },
+    {
+      "id": "sponsor-patin-fumant",
+      "label": "Patin Fumant",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-patin-fumant.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "frein",
+        "fumée"
+      ]
+    },
+    {
+      "id": "sponsor-pot-perce",
+      "label": "Pot Percé",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-pot-perce.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "échappement",
+        "fumée"
+      ]
+    },
+    {
+      "id": "sponsor-rouille-royale",
+      "label": "Rouille Royale",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-rouille-royale.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "rouille",
+        "couronne"
+      ]
+    },
+    {
+      "id": "sponsor-turbo-mamie",
+      "label": "Turbo Mamie",
+      "categorie": "sponsors",
+      "fichier": "sponsors/sponsor-turbo-mamie.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "faux sponsor",
+        "turbo",
+        "tricot"
+      ]
+    },
+    {
+      "id": "tete-de-mort-ailee",
+      "label": "Crâne ailé",
+      "categorie": "tetes-de-mort",
+      "fichier": "tetes-de-mort/tete-de-mort-ailee.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "crâne",
+        "ailes"
+      ],
+      "aReprendre": "mêmes ailes que trois autres bandeaux, crâne minuscule à 128 px"
+    },
+    {
+      "id": "tete-de-mort-bandana",
+      "label": "Crâne à bandana",
+      "categorie": "tetes-de-mort",
+      "fichier": "tetes-de-mort/tete-de-mort-bandana.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "crâne",
+        "bandana",
+        "biker"
+      ]
+    },
+    {
+      "id": "tete-de-mort-face",
+      "label": "Crâne de face",
+      "categorie": "tetes-de-mort",
+      "fichier": "tetes-de-mort/tete-de-mort-face.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "crâne",
+        "face",
+        "rock"
+      ]
+    },
+    {
+      "id": "tete-de-mort-flammes",
+      "label": "Crâne en flammes",
+      "categorie": "tetes-de-mort",
+      "fichier": "tetes-de-mort/tete-de-mort-flammes.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "crâne",
+        "flammes"
+      ]
+    },
+    {
+      "id": "tete-de-mort-pistons",
+      "label": "Crâne et pistons",
+      "categorie": "tetes-de-mort",
+      "fichier": "tetes-de-mort/tete-de-mort-pistons.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "crâne",
+        "pistons",
+        "moteur"
+      ]
+    },
+    {
+      "id": "tete-de-mort-profil",
+      "label": "Crâne de profil",
+      "categorie": "tetes-de-mort",
+      "fichier": "tetes-de-mort/tete-de-mort-profil.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "crâne",
+        "profil"
+      ]
+    },
+    {
+      "id": "toile-araignee",
+      "label": "Toile et araignée",
+      "categorie": "toiles",
+      "fichier": "toiles/toile-araignee.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "toile",
+        "araignée"
+      ]
+    },
+    {
+      "id": "toile-coin",
+      "label": "Toile en coin",
+      "categorie": "toiles",
+      "fichier": "toiles/toile-coin.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "toile",
+        "coin",
+        "araignée"
+      ]
+    },
+    {
+      "id": "toile-entiere",
+      "label": "Toile entière",
+      "categorie": "toiles",
+      "fichier": "toiles/toile-entiere.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "toile",
+        "araignée"
+      ]
+    },
+    {
+      "id": "tribal-lame",
+      "label": "Lame tribale",
+      "categorie": "tribal",
+      "fichier": "tribal/tribal-lame.svg",
+      "ratio": "2:1",
+      "symetrique": false,
+      "tags": [
+        "tribal",
+        "lame"
+      ]
+    },
+    {
+      "id": "tribal-ornement",
+      "label": "Ornement tribal",
+      "categorie": "tribal",
+      "fichier": "tribal/tribal-ornement.svg",
+      "ratio": "1:1",
+      "symetrique": true,
+      "tags": [
+        "tribal",
+        "tatouage"
+      ]
+    },
+    {
+      "id": "tribal-soleil",
+      "label": "Soleil tribal",
+      "categorie": "tribal",
+      "fichier": "tribal/tribal-soleil.svg",
+      "ratio": "1:1",
+      "symetrique": false,
+      "tags": [
+        "tribal",
+        "soleil"
+      ]
+    }
+  ]
+}

@@ -74,7 +74,10 @@ export function parseDirective(line) {
 
 /** @param {string} rel */
 export function isAppPath(rel) {
-  return rel === 'index.html' || rel.startsWith('src/') || rel.startsWith('public/');
+  // assets-src/ : dessins en attente, destinés à l'app. Ils reçoivent les mêmes contrôles qu'elle.
+  return (
+    rel === 'index.html' || rel.startsWith('src/') || rel.startsWith('public/') || rel.startsWith('assets-src/')
+  );
 }
 
 /**

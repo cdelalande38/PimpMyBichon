@@ -130,6 +130,17 @@ describe('guard — marques dans l’app', () => {
     ]);
   });
 
+  it('contrôle aussi les dessins en attente (assets-src/), contenu et noms de fichiers', () => {
+    const root = tree({
+      'assets-src/stickers/index.json': '{\n  "label": "Huile Vlimpf-Krabouille"\n}\n',
+      'assets-src/stickers/sponsors/xqzorbl.svg': '<svg xmlns="http://www.w3.org/2000/svg"/>',
+    });
+    expect(located(runGuard({ root, brandHashes }).errors)).toEqual([
+      'assets-src/stickers/index.json:2 marque',
+      'assets-src/stickers/sponsors/xqzorbl.svg:0 marque',
+    ]);
+  });
+
   it('ne contrôle ni le prototype, ni la documentation, ni les outils, ni les tests', () => {
     const line = 'Xqzorbl, Vlimpf Krabouille et le Trophée des Blorps\n';
     const root = tree({

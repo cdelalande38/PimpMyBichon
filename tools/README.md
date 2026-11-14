@@ -45,7 +45,7 @@ Avec `--json`, la sortie est un objet `{ tool, ok, errors, warnings, notes }` ; 
 
 ## guard : garde-fous du dépôt public
 
-« L'app » désigne `src/`, `public/` et `index.html`. Le prototype (`proto/`), la documentation, les outils et les tests ne sont concernés que par la famille c.
+« L'app » désigne `src/`, `public/`, `index.html` et `assets-src/` (dessins en attente, destinés à l'app). Le prototype (`proto/`), la documentation, les outils et les tests ne sont concernés que par la famille c.
 
 ### a. Requêtes vers un tiers
 
