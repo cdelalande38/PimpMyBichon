@@ -15,7 +15,7 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
   // WebGL en rendu logiciel occupe un cœur entier par page : inutile d'en lancer davantage.
-  workers: process.env.CI ? 1 : 2,
+  workers: 2,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   timeout: 60_000,
   expect: { timeout: 15_000 },

@@ -24,7 +24,8 @@ jobs:
   build:
     name: Build, contrôles et parcours
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Les parcours tournent en WebGL logiciel : large, pour ne pas échouer sur une simple lenteur.
+    timeout-minutes: 45
     env:
       # Un secret ne se lit pas dans un `if:` d'étape : on passe par une variable.
       # Elle vaut « false » tant que la clé n'est pas posée, et sur les forks.
