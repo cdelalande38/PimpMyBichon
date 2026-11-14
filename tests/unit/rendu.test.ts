@@ -92,7 +92,8 @@ describe('étape B : niveaux de qualité, étalonnage, sol', () => {
     expect(eco).toMatchObject({ reflection: 0, atmosphere: false, ao: false });
     expect(eco.probeSize).toBeGreaterThanOrEqual(256);
     expect(standard).toMatchObject({ reflection: 0.5, atmosphere: true, ao: false, smaa: true });
-    expect(standard.multisampling).toBeGreaterThan(0);
+    // Étape C2 (revue de code n° 2) : plus de MSAA sur les cibles en demi-flottants ; SMAA seul.
+    expect(standard.multisampling).toBe(0);
     expect(max).toMatchObject({ reflection: 1, atmosphere: true, ao: true, smaa: true, probeSize: 512 });
   });
 

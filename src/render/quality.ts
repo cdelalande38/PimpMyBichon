@@ -32,19 +32,22 @@ export interface QualityProfile {
 
 export const QUALITY_PROFILES: Readonly<Record<QualityLevel, QualityProfile>> = Object.freeze({
   eco: { dprMax: 1.25, probeSize: 256, reflection: 0, atmosphere: false, ao: false, bloom: false, multisampling: 0, smaa: true },
-  standard: { dprMax: 2, probeSize: 256, reflection: 0.5, atmosphere: true, ao: false, bloom: true, multisampling: 4, smaa: true },
+  // Pas de MSAA : sur des cibles en demi-flottants il double la mémoire du composeur, et il se
+  // résout avant le tone mapping (inutile sur les néons). SMAA et pixel ratio plein suffisent ;
+  // l'image photo, elle, est suréchantillonnée par accumulation.
+  standard: { dprMax: 2, probeSize: 256, reflection: 0.5, atmosphere: true, ao: false, bloom: true, multisampling: 0, smaa: true },
   // L'occlusion lit la profondeur du composeur, que le MSAA ne lui transmet pas (§ mémo d'API) :
   // au niveau max, l'anticrénelage passe par le SMAA et le pixel ratio plein.
   max: { dprMax: 2, probeSize: 512, reflection: 1, atmosphere: true, ao: true, bloom: true, multisampling: 0, smaa: true },
 });
 
 /**
- * Niveau appliqué pour un réglage donné.
- * « auto » retient pour l'instant le niveau standard : le choix d'après la cadence mesurée
- * arrive à l'étape suivante du jalon 1.
+ * Niveau appliqué pour un réglage donné. « auto » prend le niveau retenu d'après la cadence
+ * mesurée (src/render/autoQuality.ts). Sans cibles de rendu flottantes, toujours l'économie.
  */
-export function resolveQuality(setting: QualitySetting): QualityLevel {
-  return setting === 'auto' ? 'standard' : setting;
+export function resolveQuality(setting: QualitySetting, auto: QualityLevel = 'standard', floatTargets = true): QualityLevel {
+  if (!floatTargets) return 'eco';
+  return setting === 'auto' ? auto : setting;
 }
 
 export const QUALITY_LABELS: Readonly<Record<QualityLevel, string>> = Object.freeze({

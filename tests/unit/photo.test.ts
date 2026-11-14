@@ -45,7 +45,7 @@ describe('cadrages', () => {
       expect(item.aperture, item.id).toBeGreaterThanOrEqual(limits.aperture.min);
       expect(item.aperture, item.id).toBeLessThanOrEqual(limits.aperture.max);
       expect(Math.abs(item.azimuth), item.id).toBeLessThanOrEqual(Math.PI);
-      const pose = framingPose(item, { fov: fit.fov, distance: fit.distance, target: [0, 0.6, 0], halfLength: 2.2 });
+      const pose = framingPose(item, { fov: fit.fov, distance: fit.distance, target: [0, 0.6, 0], halfLength: 2.2, frontX: 1 });
       expect(pose.position[1], item.id).toBeGreaterThan(0);
       expect(pose.fov, item.id).toBeGreaterThan(0);
       expect(pose.fov, item.id).toBeLessThanOrEqual(80);
@@ -56,6 +56,7 @@ describe('cadrages', () => {
     const neutral: Framing = {
       id: 'avant',
       label: 'Neutre',
+      short: 'Neutre',
       azimuth: 0.7,
       polar: 1.2,
       distance: 1,
@@ -65,14 +66,14 @@ describe('cadrages', () => {
       aperture: 0,
     };
     const fit = fitCamera(390, 844, 2.2);
-    const pose = framingPose(neutral, { fov: fit.fov, distance: fit.distance, target: [0, 0.6, 0], halfLength: 2.2 });
+    const pose = framingPose(neutral, { fov: fit.fov, distance: fit.distance, target: [0, 0.6, 0], halfLength: 2.2, frontX: 1 });
     const expected = orbitPosition([0, 0.6, 0], fit.distance, 0.7, 1.2);
     pose.position.forEach((value, i) => expect(value).toBeCloseTo(expected[i] ?? Number.NaN, 9));
     expect(pose.fov).toBe(fit.fov);
   });
 
   it('avant et arrière sont de part et d’autre du véhicule, le ras du sol vise la roue avant', () => {
-    const base = { fov: 40, distance: 5, target: [0, 0.6, 0] as const, halfLength: 2.2 };
+    const base = { fov: 40, distance: 5, target: [0, 0.6, 0] as const, halfLength: 2.2, frontX: 1 };
     expect(framingPose(framingById('avant'), base).position[0]).toBeGreaterThan(0);
     expect(framingPose(framingById('arriere'), base).position[0]).toBeLessThan(0);
     expect(framingPose(framingById('ras-du-sol'), base).target[0]).toBeGreaterThan(0);

@@ -1,16 +1,18 @@
 // Un seul panneau bas, dont le contenu suit la route. Les textes vivent ici, en données.
 
 import type { ReactNode } from 'react';
-import type { Route, SheetRouteName } from '../app/router.ts';
+import { isSheetRoute, type Route, type SheetRouteName } from '../app/router.ts';
 import { closeSheet } from '../app/useRoute.ts';
 import { SettingsPanel } from './SettingsPanel.tsx';
 import { Sheet } from './Sheet.tsx';
-import { UnderHoodPanel } from './UnderHoodPanel.tsx';
+import { MeterButton, UnderHoodPanel } from './UnderHoodPanel.tsx';
 
 interface SheetContent {
   eyebrow: string;
   title: string;
   body: ReactNode;
+  /** Commandes propres au panneau, à côté de « Retour à l'atelier ». */
+  actions?: ReactNode;
 }
 
 const CONTENT: Record<SheetRouteName, SheetContent> = {
@@ -23,6 +25,7 @@ const CONTENT: Record<SheetRouteName, SheetContent> = {
     eyebrow: 'État du socle',
     title: 'Sous le capot',
     body: <UnderHoodPanel />,
+    actions: <MeterButton />,
   },
   commande: {
     eyebrow: 'Passer commande à Bichon',
@@ -64,13 +67,14 @@ const CONTENT: Record<SheetRouteName, SheetContent> = {
 };
 
 export function Sheets({ route }: { route: Route }) {
-  const content = route.name === 'garage' ? null : CONTENT[route.name];
+  const content = isSheetRoute(route) ? CONTENT[route.name] : null;
   return (
     <Sheet
       open={content !== null}
       eyebrow={content?.eyebrow ?? ''}
       title={content?.title ?? ''}
       onClose={closeSheet}
+      actions={content?.actions}
     >
       {content?.body}
     </Sheet>

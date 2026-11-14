@@ -6,6 +6,7 @@ import { useBench } from '../state/bench.ts';
 import { useSettings } from '../state/store.ts';
 import { Dock } from '../ui/Dock.tsx';
 import { Hud } from '../ui/Hud.tsx';
+import { PhotoBar } from '../ui/PhotoBar.tsx';
 import { Sheets } from '../ui/Sheets.tsx';
 import { isSheetRoute } from './router.ts';
 import { SceneBoundary } from './SceneBoundary.tsx';
@@ -28,6 +29,7 @@ export function App() {
   const textSize = useSettings((state) => state.textSize);
   const [sceneFailed, setSceneFailed] = useState(false);
   const benchStatus = useBench((state) => state.status);
+  const photo = route.name === 'photo' && !sceneFailed;
 
   // La taille du texte s'applique à la racine : toute l'interface est dimensionnée en rem.
   useEffect(() => {
@@ -38,25 +40,35 @@ export function App() {
     <div className="app">
       <SceneBoundary onFail={() => setSceneFailed(true)}>
         <Suspense fallback={<p className="stage-wait">Ouverture du garage…</p>}>
-          <GarageCanvas paused={isSheetRoute(route)} />
+          <GarageCanvas paused={isSheetRoute(route)} photo={photo} />
         </Suspense>
       </SceneBoundary>
 
-      <Hud />
+      {photo ? (
+        // Mode photo : l'interface s'efface, la scène prend l'écran.
+        <>
+          <div className="mid" />
+          <PhotoBar />
+        </>
+      ) : (
+        <>
+          <Hud />
 
-      <div className="mid">
-        {/* Jamais de substitut en silence : celui-ci est annoncé à l'écran. */}
-        {!sceneFailed && (
-          <p className="tag" role="status">
-            Substitut · modèle de banc d’essai
-            {benchStatus === 'chargement' && ' · en route…'}
-            {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}
-          </p>
-        )}
-        {sceneFailed && <SceneFailure />}
-      </div>
+          <div className="mid">
+            {/* Jamais de substitut en silence : celui-ci est annoncé à l'écran. */}
+            {!sceneFailed && (
+              <p className="tag" role="status">
+                Substitut · modèle de banc d’essai
+                {benchStatus === 'chargement' && ' · en route…'}
+                {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}
+              </p>
+            )}
+            {sceneFailed && <SceneFailure />}
+          </div>
 
-      <Dock sceneFailed={sceneFailed} />
+          <Dock sceneFailed={sceneFailed} />
+        </>
+      )}
       <Sheets route={route} />
     </div>
   );

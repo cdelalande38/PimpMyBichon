@@ -68,7 +68,7 @@ export function openSheet(route: Exclude<Route, { name: 'garage' }>): void {
   window.dispatchEvent(new Event(ROUTE_EVENT));
 }
 
-/** Revient au garage, sans laisser le panneau derrière soi dans l'historique. */
+/** Revient au garage (panneau ou mode photo), sans laisser l'entrée derrière soi dans l'historique. */
 export function closeSheet(): void {
   // Double appui ou double clic : le premier suffit. Un second retour d'historique
   // reculerait d'une entrée de trop et ferait sortir de l'app.

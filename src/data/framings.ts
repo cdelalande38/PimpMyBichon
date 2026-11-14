@@ -1,14 +1,17 @@
 // Les 5 cadrages du mode photo (§ 5.1), en données. Aucune condition propre à un cadrage dans le code.
-// Repère de src/scene/fit.ts : azimut 0 côté canapé (+z), l'avant du véhicule est vers +x,
-// angle polaire mesuré depuis la verticale (π/2 : caméra à hauteur de la cible).
+// Repère de src/scene/fit.ts : azimut 0 côté canapé (+z), angle polaire mesuré depuis la verticale
+// (π/2 : caméra à hauteur de la cible). Les cadrages sont décrits pour un avant vers +x ; quand le
+// véhicule est posé nez vers -x (GARAGE.vehicle.turn = π), framingPose les passe en miroir.
 
 export const FRAMING_IDS = ['avant', 'profil', 'arriere', 'plongee', 'ras-du-sol'] as const;
 export type FramingId = (typeof FRAMING_IDS)[number];
 
 export interface Framing {
   id: FramingId;
-  /** Libellé affiché, en français. */
+  /** Libellé complet, en français (lu par les lecteurs d'écran). */
   label: string;
+  /** Libellé court du bouton, sous le pouce. */
+  short: string;
   /** Azimut de la caméra autour du véhicule, en radians. */
   azimuth: number;
   /** Angle polaire, en radians (0 : au-dessus, π/2 : à l'horizontale). */
@@ -40,6 +43,7 @@ export const FRAMINGS: readonly Framing[] = Object.freeze([
   {
     id: 'avant',
     label: 'Trois-quarts avant',
+    short: 'Avant',
     azimuth: 0.95,
     polar: 1.38,
     distance: 1,
@@ -51,6 +55,7 @@ export const FRAMINGS: readonly Framing[] = Object.freeze([
   {
     id: 'profil',
     label: 'Profil',
+    short: 'Profil',
     azimuth: 0,
     polar: 1.5,
     distance: 1.2,
@@ -62,6 +67,7 @@ export const FRAMINGS: readonly Framing[] = Object.freeze([
   {
     id: 'arriere',
     label: 'Trois-quarts arrière',
+    short: 'Arrière',
     azimuth: -0.95,
     polar: 1.36,
     distance: 1,
@@ -73,6 +79,7 @@ export const FRAMINGS: readonly Framing[] = Object.freeze([
   {
     id: 'plongee',
     label: 'Plongée',
+    short: 'Plongée',
     azimuth: 0.55,
     polar: 0.62,
     distance: 1.1,
@@ -84,6 +91,7 @@ export const FRAMINGS: readonly Framing[] = Object.freeze([
   {
     id: 'ras-du-sol',
     label: 'Ras du sol, côté roue',
+    short: 'Ras du sol',
     azimuth: 0.45,
     polar: 1.52,
     distance: 0.6,

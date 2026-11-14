@@ -143,7 +143,9 @@ export default defineConfig({
         // textures. Les véhicules et la musique n'y entrent pas, ils se téléchargent à la demande
         // puis restent hors ligne (§ 7).
         globPatterns: ['**/*.{js,css,html,woff2,svg,png,webp,ico,glb,wasm}'],
-        globIgnores: ['assets/vehicles/**', 'assets/audio/**'],
+        // Copie hachée du transcodeur émise par KTX2Loader (son chemin par défaut, `new URL(…)`) :
+        // jamais lue, l'app fixe transcoderPath sur libs/basis/. Inutile de la précacher (≈ 0,6 Mo).
+        globIgnores: ['assets/vehicles/**', 'assets/audio/**', 'assets/basis_transcoder-*'],
         // Le modèle de banc d'essai pèse près de 10 Mo (budget d'un véhicule : 8 à 15 Mo, § 8).
         maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
       },

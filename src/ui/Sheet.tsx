@@ -9,9 +9,11 @@ interface SheetProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  /** Commandes propres au panneau, posées à côté du bouton de fermeture, sous le pouce. */
+  actions?: ReactNode;
 }
 
-export function Sheet({ open, eyebrow, title, onClose, children }: SheetProps) {
+export function Sheet({ open, eyebrow, title, onClose, children, actions }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const pressedOnBackdrop = useRef(false);
@@ -55,9 +57,12 @@ export function Sheet({ open, eyebrow, title, onClose, children }: SheetProps) {
             <h2 id={titleId}>{title}</h2>
             {children}
           </div>
-          <button ref={closeRef} type="button" className="btn cta" onClick={onClose}>
-            Retour à l’atelier
-          </button>
+          <div className="sheet-acts">
+            {actions}
+            <button ref={closeRef} type="button" className="btn cta" onClick={onClose}>
+              Retour à l’atelier
+            </button>
+          </div>
         </div>
       )}
     </dialog>

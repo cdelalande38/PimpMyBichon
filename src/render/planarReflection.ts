@@ -166,6 +166,9 @@ export class PlanarReflection {
 
   /** Rend le reflet de `scene` vu par `camera` ; `floor` (le miroir) est masqué le temps du rendu. */
   update(gl: WebGLRenderer, scene: Scene, camera: Camera, floor: Object3D): void {
+    // La caméra de drei ne recalcule sa matrice que dans gl.render : sans cela, le reflet
+    // suivrait la rotation de l'image d'avant.
+    camera.updateMatrixWorld();
     this.resize(gl);
     floor.updateMatrixWorld();
     this.mirror(camera, floor.getWorldPosition(new Vector3()).y);

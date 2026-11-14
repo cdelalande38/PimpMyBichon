@@ -36,11 +36,16 @@ function capture(gl: WebGLRenderer, scene: Scene, size: number, position: Vec3):
   for (const layer of PROBE_LAYERS) camera.layers.enable(layer);
 
   const hidden: Object3D[] = [];
+  // Un objet peut aussi s'apprêter pour la sonde (`userData.onProbe`, qui rend de quoi revenir) :
+  // le sol coupe ainsi son reflet planaire, rendu à l'image d'avant (autre ambiance, véhicule compris).
+  const restores: Array<() => void> = [];
   scene.traverse((object) => {
     if (object.userData.hideInProbe === true && object.visible) {
       object.visible = false;
       hidden.push(object);
     }
+    const prepare: unknown = object.userData.onProbe;
+    if (typeof prepare === 'function') restores.push((prepare as () => () => void)());
   });
   const environment = scene.environment;
   scene.environment = null;
@@ -52,6 +57,7 @@ function capture(gl: WebGLRenderer, scene: Scene, size: number, position: Vec3):
   gl.autoClear = autoClear;
   scene.environment = environment;
   for (const object of hidden) object.visible = true;
+  for (const restore of restores) restore();
 
   const pmrem = new PMREMGenerator(gl);
   const target = pmrem.fromCubemap(cube.texture);
@@ -77,9 +83,11 @@ export interface ReflectionProbeProps {
   position: Vec3;
   /** Change quand le décor change d'éclairage (identifiant d'ambiance) : la sonde se refait. */
   version: string;
+  /** Change quand le contexte WebGL revient d'une perte : la sonde, vidée, se refait. */
+  epoch?: number;
 }
 
-export function ReflectionProbe({ size, position, version }: ReflectionProbeProps) {
+export function ReflectionProbe({ size, position, version, epoch = 0 }: ReflectionProbeProps) {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   const invalidate = useThree((state) => state.invalidate);
@@ -95,7 +103,7 @@ export function ReflectionProbe({ size, position, version }: ReflectionProbeProp
     gl.info.reset();
     invalidate();
     return uninstall;
-  }, [gl, scene, size, x, y, z, version, invalidate]);
+  }, [gl, scene, size, x, y, z, version, epoch, invalidate]);
 
   return null;
 }

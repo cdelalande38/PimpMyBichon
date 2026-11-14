@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { BUILD, formatBuildDate } from '../app/buildInfo.ts';
 import { precachePercent, usePwa } from '../pwa/pwaStore.ts';
 import { QUALITY_LABELS, resolveQuality } from '../render/quality.ts';
-import { useRenderStats } from '../render/renderStats.ts';
+import { METER_DURATION_MS } from '../render/frameMeter.ts';
+import { startMeter, useRenderStats, type RenderStatsState } from '../render/renderStats.ts';
 import { readStorageStatus, type StorageStatus } from '../state/persistence.ts';
 import { useSettings } from '../state/store.ts';
 import { count, formatBytes, offlineDetail, typo } from './labels.ts';
@@ -53,6 +54,38 @@ function installLine(standalone: boolean, canInstall: boolean): string {
   return 'Dans le navigateur. Pour l’installer : menu de Chrome, puis « Ajouter à l’écran d’accueil ».';
 }
 
+const decimal = (value: number) => value.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+function qualityLine(quality: string, level: string, auto: RenderStatsState['auto'], floatTargets: boolean | null): string {
+  if (floatTargets === false) return `${level} imposé : ce processeur graphique ne rend pas en demi-flottants`;
+  if (quality !== 'auto') return level;
+  if (auto.fps === null) return `Auto, niveau ${level.toLowerCase()} pour l’instant : cadence pas encore mesurée`;
+  const fixed = auto.settled ? ', retenu' : '';
+  return `Auto, niveau ${level.toLowerCase()}${fixed} (cadence vue : ${Math.round(auto.fps)} i/s)`;
+}
+
+function meterLine(meter: RenderStatsState['meter']): string {
+  if (meter.running) return `Mesure en cours : la scène tourne ${METER_DURATION_MS / 1000} secondes…`;
+  const result = meter.result;
+  if (!result) return 'Appuie sur « Mesurer » : la scène tourne cinq secondes au niveau en cours.';
+  return (
+    `${QUALITY_LABELS[result.level]} : ${decimal(result.fps)} i/s en moyenne, ${decimal(result.worstFps)} i/s au pire centile · ` +
+    `${result.calls.toLocaleString('fr-FR')} appels de dessin · ${result.triangles.toLocaleString('fr-FR')} triangles par image ` +
+    `(${result.frames} images).`
+  );
+}
+
+/** « Mesurer » : cinq secondes de rotation, cadence et coût par image au niveau en cours. */
+export function MeterButton() {
+  const running = useRenderStats((state) => state.meter.running);
+  const ready = useRenderStats((state) => state.gpu !== null);
+  return (
+    <button type="button" className="btn" disabled={running || !ready} onClick={startMeter}>
+      {running ? 'Mesure…' : 'Mesurer'}
+    </button>
+  );
+}
+
 export function UnderHoodPanel() {
   const offline = usePwa((state) => state.offline);
   const percent = usePwa(precachePercent);
@@ -66,10 +99,13 @@ export function UnderHoodPanel() {
   const probe = useRenderStats((state) => state.probe);
   const reflection = useRenderStats((state) => state.reflection);
   const quality = useSettings((state) => state.quality);
+  const auto = useRenderStats((state) => state.auto);
+  const floatTargets = useRenderStats((state) => state.floatTargets);
+  const meter = useRenderStats((state) => state.meter);
   const storage = useStorageStatus();
 
   const date = formatBuildDate(BUILD.date);
-  const level = QUALITY_LABELS[resolveQuality(quality)];
+  const level = QUALITY_LABELS[resolveQuality(quality, auto.level, floatTargets !== false)];
   const ratio =
     dpr === null ? '' : ` · pixel ratio ${dpr.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}`;
 
@@ -136,9 +172,14 @@ export function UnderHoodPanel() {
       </dd>
 
       <dt>Qualité</dt>
-      <dd>
-        {quality === 'auto' ? `Auto, niveau ${level.toLowerCase()} pour l’instant` : level}
+      <dd data-fact="qualite">
+        {typo(qualityLine(quality, level, auto, floatTargets))}
         {ratio}.
+      </dd>
+
+      <dt>Mesure</dt>
+      <dd data-fact="mesure" aria-live="polite">
+        {typo(meterLine(meter))}
       </dd>
 
       <dt>Assets privés</dt>

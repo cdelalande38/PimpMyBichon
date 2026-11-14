@@ -11,12 +11,19 @@ export interface PhotoPlan {
   depthOfField: boolean;
   /** Durée maximale de l'affinage, en millisecondes : on s'arrête là même si `frames` n'est pas atteint. */
   maxMs: number;
+  /**
+   * Images décalées par tuile pour l'image enregistrée (2160 px) : elle a déjà près de trois fois
+   * la définition de l'écran, il en faut moins qu'à l'écran ; sans profondeur de champ, une seule.
+   */
+  exportFrames: number;
 }
 
 export const PHOTO_PLANS: Readonly<Record<QualityLevel, PhotoPlan>> = Object.freeze({
-  eco: { frames: 12, probeSize: 512, depthOfField: false, maxMs: 1000 },
-  standard: { frames: 32, probeSize: 1024, depthOfField: true, maxMs: 1500 },
-  max: { frames: 64, probeSize: 1024, depthOfField: true, maxMs: 2000 },
+  // Sonde : le double de celle du niveau. 1024 px par face seulement en max : sa version
+  // préfiltrée pèse alors près de 100 Mo en mémoire graphique.
+  eco: { frames: 12, probeSize: 512, depthOfField: false, maxMs: 1000, exportFrames: 1 },
+  standard: { frames: 32, probeSize: 512, depthOfField: true, maxMs: 1500, exportFrames: 8 },
+  max: { frames: 64, probeSize: 1024, depthOfField: true, maxMs: 2000, exportFrames: 16 },
 });
 
 export function photoPlan(level: QualityLevel): PhotoPlan {
@@ -25,6 +32,14 @@ export function photoPlan(level: QualityLevel): PhotoPlan {
 
 /** Largeur de l'image partagée, en pixels (§ 8). */
 export const EXPORT_WIDTH = 2160;
+/**
+ * Côté maximal d'une tuile d'export, en pixels, marges comprises : au-delà, la mémoire graphique
+ * d'un téléphone ne suit plus (tampons du composeur en demi-flottants). Plafonné aussi par la
+ * taille de texture et de tampon du processeur graphique.
+ */
+export const EXPORT_TILE_LIMIT = 2048;
+/** Marge rendue autour de chaque tuile puis rognée : le bloom et le SMAA ne voient pas de couture. */
+export const EXPORT_MARGIN = 48;
 
 export interface Tile {
   /** Position de la tuile dans l'image complète, en pixels (origine en haut à gauche). */

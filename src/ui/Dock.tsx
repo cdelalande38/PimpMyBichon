@@ -55,6 +55,11 @@ export function Dock({ sceneFailed }: DockProps) {
         <button type="button" className="btn" onClick={() => openSheet({ name: 'reglages' })}>
           Réglages
         </button>
+        {!sceneFailed && (
+          <button type="button" className="btn" onClick={() => openSheet({ name: 'photo' })}>
+            Photo
+          </button>
+        )}
       </nav>
     </footer>
   );

@@ -13,16 +13,20 @@ import {
   MeshStandardMaterial,
   Texture,
   Vector3,
+  type Camera,
   type Material,
+  type Object3D,
+  type Scene,
   type WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BASIS_TRANSCODER_DIR, type BenchModel } from '../../data/bench.ts';
-import { finish as findFinish, type Finish } from '../../data/finishes.ts';
+import { FINISHES, finish as findFinish, type Finish } from '../../data/finishes.ts';
 import { paintColor } from '../../data/paintColors.ts';
-import { applyPaint, createPaintMaterial } from '../../render/paint.ts';
+import { applyPaint, createPaintMaterial, programVariants } from '../../render/paint.ts';
+import { useRenderStats } from '../../render/renderStats.ts';
 import { useBench } from '../../state/bench.ts';
 
 const BASE = import.meta.env.BASE_URL;
@@ -200,6 +204,35 @@ const ContactShadow = memo(function ContactShadow({ halfLength, halfWidth, heigh
   return <ContactShadows scale={[halfLength * 2.5, halfWidth * 3]} far={height} blur={2.2} opacity={0.8} resolution={512} frames={1} />;
 });
 
+/**
+ * Compile d'avance, en tâche de fond, chaque variante du programme de peinture (vernis oui/non ×
+ * irisation oui/non) avec l'éclairage de la scène : sinon elle se compile au premier toucher
+ * d'une finition, sur le fil principal (saccade sur Android). Les matériaux témoins gardent les
+ * programmes en vie ; la fonction rendue les libère.
+ */
+function warmPaintPrograms(gl: WebGLRenderer, scene: Scene, camera: Camera, root: Object3D, paints: readonly MeshPhysicalMaterial[]): () => void {
+  let sample: Mesh | null = null;
+  root.traverse((object) => {
+    if (sample || !(object instanceof Mesh)) return;
+    const materials: readonly Material[] = Array.isArray(object.material) ? object.material : [object.material];
+    if (materials.some((material) => paints.includes(material as MeshPhysicalMaterial))) sample = object;
+  });
+  const source = paints[0];
+  if (!sample || !source) return () => {};
+  const geometry = (sample as Mesh).geometry;
+  const witnesses = new Group();
+  const materials = programVariants(FINISHES).map((item) => {
+    const material = createPaintMaterial(source);
+    applyPaint(material, '#808080', item);
+    witnesses.add(new Mesh(geometry, material));
+    return material;
+  });
+  void gl.compileAsync(witnesses, camera, scene).catch(() => undefined);
+  return () => {
+    for (const material of materials) material.dispose();
+  };
+}
+
 interface BenchCarProps {
   model: BenchModel;
   /** Appelé une fois le modèle posé, pour le cadrage de la caméra. */
@@ -227,6 +260,13 @@ export function BenchCar({ model, onMeasured, bodyEnv }: BenchCarProps) {
     invalidate();
   }, [prepared, colorId, finishId, bodyEnv, invalidate]);
 
+  const scene = useThree((state) => state.scene);
+  const camera = useThree((state) => state.camera);
+  useEffect(() => warmPaintPrograms(gl, scene, camera, prepared.root, prepared.paints), [gl, scene, camera, prepared]);
+
+  // Contexte WebGL rendu après une perte : l'ombre, rendue une fois, se refait (revue n° 4).
+  const epoch = useRenderStats((state) => state.gpuEpoch);
+
   const { halfLength, halfWidth, height } = prepared;
   useEffect(() => {
     onMeasured({ halfLength, halfWidth, height });
@@ -239,7 +279,10 @@ export function BenchCar({ model, onMeasured, bodyEnv }: BenchCarProps) {
       {/* À laisser à y = 0 : surélevée, son plan de flou passe derrière sa caméra et l'ombre
           disparaît dès que le post-traitement est coupé (niveau économie). Rendue une fois,
           avec le modèle déjà en place. */}
-      <ContactShadow halfLength={halfLength} halfWidth={halfWidth} height={height} />
+      {/* Hors de la sonde : elle n'y entrerait qu'aux captures faites après le modèle (revue n° 7). */}
+      <group userData={{ hideInProbe: true }}>
+        <ContactShadow key={epoch} halfLength={halfLength} halfWidth={halfWidth} height={height} />
+      </group>
     </>
   );
 }

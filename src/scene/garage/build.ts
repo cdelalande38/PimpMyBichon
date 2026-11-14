@@ -172,6 +172,16 @@ export function createGarage(layout: GarageLayout): GarageScene {
   const root = new Group();
   root.name = 'garage';
   const surfaceUniforms = createSurfaceUniforms(layout.room, layout.outside.falloff, layout.vehicle.cutaway);
+  // La sonde de réflexion ne doit pas voir le reflet planaire du sol : il date de l'image d'avant
+  // (autre ambiance, véhicule compris). Elle appelle ce crochet avant sa capture (ReflectionProbe).
+  root.userData.onProbe = () => {
+    const strength = surfaceUniforms.pmbReflectionStrength;
+    const value = strength.value;
+    strength.value = 0;
+    return () => {
+      strength.value = value;
+    };
+  };
   const materials = new Map<GarageMaterialId, MeshStandardMaterial>();
   const material = (id: GarageMaterialId) => {
     let found = materials.get(id);

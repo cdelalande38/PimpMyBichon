@@ -6,7 +6,8 @@
 //  - Vernis (clearcoat) : léger grain de peau d'orange sur sa normale, Fresnel renforcé.
 //  - Effets d'angle : candy (vernis teinté, plus profond sur les bords), caméléon (seconde
 //    teinte sur les bords), nacré (irisation de three.js).
-// Un seul programme pour toutes les finitions : tout passe par des uniformes.
+// Les réglages propres passent par des uniformes ; seuls le vernis et l'irisation de three.js,
+// à 0 ou non, changent le programme (4 variantes, compilées d'avance : programVariants).
 
 import { Color, MeshPhysicalMaterial, type Material, type WebGLProgramParametersWithUniforms } from 'three';
 import type { Finish } from '../data/finishes.ts';
@@ -190,6 +191,19 @@ export function createPaintMaterial(source?: Material): MeshPhysicalMaterial {
   };
   material.customProgramCacheKey = () => 'pmb-peinture-1';
   return material;
+}
+
+/**
+ * Une finition par programme de shader distinct : le vernis (clearcoat) et l'irisation, s'ils
+ * passent de 0 à plus de 0, changent le programme. Sert à les compiler tous d'avance.
+ */
+export function programVariants<T extends Pick<Finish, 'clearcoat' | 'iridescence'>>(finishes: readonly T[]): T[] {
+  const variants = new Map<string, T>();
+  for (const item of finishes) {
+    const key = `${item.clearcoat > 0}-${item.iridescence > 0}`;
+    if (!variants.has(key)) variants.set(key, item);
+  }
+  return [...variants.values()];
 }
 
 /** Couleur de base effective : la teinte choisie, mêlée au métal nu selon la finition. */
