@@ -2,6 +2,7 @@
 // (toutes les commandes), et un panneau bas piloté par l'adresse.
 
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { useBench } from '../state/bench.ts';
 import { useSettings } from '../state/store.ts';
 import { Dock } from '../ui/Dock.tsx';
 import { Hud } from '../ui/Hud.tsx';
@@ -26,6 +27,7 @@ export function App() {
   const route = useRoute();
   const textSize = useSettings((state) => state.textSize);
   const [sceneFailed, setSceneFailed] = useState(false);
+  const benchStatus = useBench((state) => state.status);
 
   // La taille du texte s'applique à la racine : toute l'interface est dimensionnée en rem.
   useEffect(() => {
@@ -44,7 +46,13 @@ export function App() {
 
       <div className="mid">
         {/* Jamais de substitut en silence : celui-ci est annoncé à l'écran. */}
-        {!sceneFailed && <p className="tag">Substitut · forme d’essai de peinture</p>}
+        {!sceneFailed && (
+          <p className="tag" role="status">
+            Substitut · modèle de banc d’essai
+            {benchStatus === 'chargement' && ' · en route…'}
+            {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}
+          </p>
+        )}
         {sceneFailed && <SceneFailure />}
       </div>
 

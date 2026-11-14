@@ -1,8 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { detectPrivateAssets } from './tools/private-assets.mjs';
 
@@ -41,6 +43,49 @@ const buildInfo = {
 
 const NIGHT = '#0a0911';
 
+/** Dossier, sous le socle de l'app, où le transcodeur des textures KTX2 est servi (cf. src/data/bench.ts). */
+const BASIS_DIR = 'libs/basis/';
+const BASIS_FILES: Record<string, string> = {
+  'basis_transcoder.js': 'text/javascript',
+  'basis_transcoder.wasm': 'application/wasm',
+};
+
+/**
+ * Transcodeur Basis Universal (textures KTX2 des modèles), fourni par three : servi par l'app,
+ * jamais par un CDN. Émis dans le build sous libs/basis/, servi tel quel par le serveur de
+ * développement. Aucune copie versionnée : la source reste le paquet three installé.
+ */
+function basisTranscoder(): Plugin {
+  const require = createRequire(import.meta.url);
+  const source = dirname(require.resolve('three/examples/jsm/libs/basis/basis_transcoder.js'));
+  return {
+    name: 'pmb-basis-transcoder',
+    configureServer(server) {
+      const prefix = `${base.startsWith('/') ? base : '/'}${BASIS_DIR}`;
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url ?? '').split('?')[0] ?? '';
+        const name = path.startsWith(prefix) ? path.slice(prefix.length) : '';
+        const type = BASIS_FILES[name];
+        if (!type) {
+          next();
+          return;
+        }
+        res.setHeader('Content-Type', type);
+        res.end(readFileSync(join(source, name)));
+      });
+    },
+    generateBundle() {
+      for (const name of Object.keys(BASIS_FILES)) {
+        this.emitFile({
+          type: 'asset',
+          fileName: `${BASIS_DIR}${name}`,
+          source: readFileSync(join(source, name)),
+        });
+      }
+    },
+  };
+}
+
 export default defineConfig({
   base,
   define: {
@@ -48,6 +93,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    basisTranscoder(),
     VitePWA({
       // Service worker écrit à la main : progression du précache et, plus tard,
       // mise en cache à la demande des véhicules et des stations de radio.
@@ -93,11 +139,13 @@ export default defineConfig({
       injectManifest: {
         // Script classique : le type de service worker le plus largement pris en charge.
         rollupFormat: 'iife',
-        // Précache : toute la coque de l'app. Les véhicules et la musique n'y entrent pas,
-        // ils se téléchargent à la demande puis restent hors ligne (§ 7).
-        globPatterns: ['**/*.{js,css,html,woff2,svg,png,webp,ico}'],
+        // Précache : toute la coque de l'app, le modèle de banc d'essai et le transcodeur de ses
+        // textures. Les véhicules et la musique n'y entrent pas, ils se téléchargent à la demande
+        // puis restent hors ligne (§ 7).
+        globPatterns: ['**/*.{js,css,html,woff2,svg,png,webp,ico,glb,wasm}'],
         globIgnores: ['assets/vehicles/**', 'assets/audio/**'],
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // Le modèle de banc d'essai pèse près de 10 Mo (budget d'un véhicule : 8 à 15 Mo, § 8).
+        maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
       },
       devOptions: { enabled: false },
     }),

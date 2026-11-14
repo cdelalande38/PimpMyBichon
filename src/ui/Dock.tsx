@@ -3,6 +3,7 @@
 import { openSheet, useSettling } from '../app/useRoute.ts';
 import { usePwa } from '../pwa/pwaStore.ts';
 import { applyUpdate, promptInstall } from '../pwa/register.ts';
+import { BenchControls } from './BenchControls.tsx';
 
 interface DockProps {
   /** La scène 3D n'a pas démarré : le dock propose de relancer. */
@@ -18,12 +19,7 @@ export function Dock({ sceneFailed }: DockProps) {
   return (
     <footer className="dock" inert={settling}>
       <div className="dock-text">
-        <p className="eyebrow">Atelier en chantier · jalon 0</p>
-        <h2>Les fondations sont coulées</h2>
-        <p className="lead">
-          L’atelier s’installe sur ton téléphone et s’ouvre sans réseau. Les véhicules arrivent aux
-          prochains jalons.
-        </p>
+        <p className="eyebrow">Banc d’essai · jalon 1</p>
       </div>
 
       {sceneFailed && (
@@ -49,6 +45,8 @@ export function Dock({ sceneFailed }: DockProps) {
           Installer l’atelier
         </button>
       )}
+
+      {!sceneFailed && <BenchControls />}
 
       <nav className="acts" aria-label="Atelier">
         <button type="button" className="btn" onClick={() => openSheet({ name: 'capot' })}>

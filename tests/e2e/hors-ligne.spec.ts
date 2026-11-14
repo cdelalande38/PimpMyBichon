@@ -1,12 +1,16 @@
 import { expect, test } from '@playwright/test';
 import sharp from 'sharp';
-import { capture, openApp, waitForScene, waitOfflineReady } from './helpers.ts';
+import { capture, openApp, waitForBench, waitForScene, waitOfflineReady } from './helpers.ts';
 
 // Critère d'acceptation du jalon 0 : l'app s'installe et s'ouvre en mode avion
 // après une première visite.
 
 test.describe('hors ligne et installation', () => {
-  test('après une première visite, l’app s’ouvre sans réseau', async ({ page, context }) => {
+  test('après une première visite, l’app s’ouvre sans réseau, banc d’essai compris', async ({
+    page,
+    context,
+  }) => {
+    test.setTimeout(240_000);
     await openApp(page);
     await waitOfflineReady(page);
     await waitForScene(page);
@@ -19,6 +23,8 @@ test.describe('hors ligne et installation', () => {
 
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
     await waitForScene(page);
+    // Le modèle, ses textures KTX2 et leur transcodeur viennent du précache.
+    await waitForBench(page);
     await expect(page.locator('.pill')).toHaveText('Hors ligne · tout est là');
 
     // Ce libellé est le plus long de l'indicateur : sur un écran étroit, il ne doit rien pousser hors champ.
@@ -53,6 +59,9 @@ test.describe('hors ligne et installation', () => {
     expect(paths.some((path) => /\/assets\/GarageCanvas-[\w-]+\.js$/.test(path))).toBe(true);
     expect(paths.some((path) => path.endsWith('.woff2'))).toBe(true);
     expect(paths.some((path) => path.endsWith('/icons/pwa-512.png'))).toBe(true);
+    expect(paths.some((path) => path.endsWith('/assets/bench/carconcept/CarConcept.glb'))).toBe(true);
+    expect(paths.some((path) => path.endsWith('/libs/basis/basis_transcoder.js'))).toBe(true);
+    expect(paths.some((path) => path.endsWith('/libs/basis/basis_transcoder.wasm'))).toBe(true);
     expect(cached.every((url) => url.startsWith(baseURL ?? ''))).toBe(true);
   });
 

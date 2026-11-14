@@ -35,14 +35,34 @@ export async function waitForScene(page: Page): Promise<void> {
   await expect.poll(() => sceneLooksRendered(page), { timeout: 30_000 }).toBe(true);
 }
 
+/** Le modèle de banc d'essai est chargé et posé dans la scène (lent en rendu logiciel). */
+export async function waitForBench(page: Page): Promise<void> {
+  await expect(page.locator('.stage[data-bench="pret"]')).toBeAttached({ timeout: 120_000 });
+  await waitForStill(page);
+}
+
+/** Attend que l'image ne bouge plus : chargement de textures et rendus à la demande terminés. */
+export async function waitForStill(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const before = await sceneBand(page);
+        await page.waitForTimeout(700);
+        return changedRatio(before, await sceneBand(page));
+      },
+      { message: 'scène immobile', timeout: 90_000, intervals: [300] },
+    )
+    .toBeLessThan(0.0005);
+}
+
 /** Le précache est terminé : l'indicateur du HUD passe à « prêt ». */
 export async function waitOfflineReady(page: Page): Promise<void> {
   await expect(page.locator('.pill[data-state="pret"]')).toBeVisible({ timeout: 45_000 });
 }
 
-/** Capture d'écran de revue, rangée dans captures/jalon-0/ (hors dépôt). */
+/** Capture d'écran de revue, rangée dans captures/jalon-1/ (hors dépôt). */
 export async function capture(page: Page, name: string): Promise<void> {
-  const path = resolve('captures', 'jalon-0', `${name}.png`);
+  const path = resolve('captures', 'jalon-1', `${name}.png`);
   mkdirSync(dirname(path), { recursive: true });
   await page.screenshot({ path });
 }

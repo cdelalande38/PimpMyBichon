@@ -80,7 +80,7 @@ Critère d'acceptation : l'app s'installe et s'ouvre en mode avion.
 C'est bon si :
 
 - l'app s'ouvre en plein écran, sans barre d'adresse ;
-- la forme d'essai apparaît et tourne sous le pouce ;
+- le modèle de banc d’essai apparaît et tourne sous le pouce ;
 - l'indicateur affiche « Hors ligne · tout est là » ;
 - « Sous le capot » indique « Installée », la version attendue, et une cadence proche de 60 i/s après avoir fait tourner la forme.
 

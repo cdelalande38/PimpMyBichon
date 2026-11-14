@@ -116,7 +116,7 @@ export function UnderHoodPanel() {
       <dd>{typo(privateAssetsLine())}</dd>
 
       <dt>Substituts</dt>
-      <dd>placeholder_garage, placeholder_speedshape (voir TODO_ASSETS.md).</dd>
+      <dd>placeholder_garage, placeholder_banc (voir TODO_ASSETS.md).</dd>
     </dl>
   );
 }

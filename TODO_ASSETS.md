@@ -28,9 +28,9 @@ Claude Code tient ce fichier à jour : chaque substitut encore en place y figure
 Format : `placeholder_<nom>` · ce qu'il remplace · depuis quel jalon.
 
 - `placeholder_garage` · le garage du § 4 (décor, objets, éclairage par ambiance) : un sol, un mur et deux tubes néon rouge et bleu · depuis le jalon 0
-- `placeholder_speedshape` · le modèle de banc d'essai du jalon 1, puis les véhicules : une forme d'essai de peinture, sans rapport avec un véhicule du catalogue · depuis le jalon 0
+- `placeholder_banc` · les véhicules du catalogue : un modèle de banc d'essai sous licence CC-BY 4.0 (`public/assets/bench/carconcept/`, crédit dans `CREDITS.md`), sans rapport avec un véhicule du catalogue ; sa plaque à logos est remplacée par une plaque unie · depuis le jalon 1
 
-Les deux sont générés par le code (`src/scene/`) et annoncés à l'écran (« Substitut · forme d'essai de peinture », et dans « Sous le capot »).
+Le garage est généré par le code (`src/scene/`), le banc d'essai est décrit dans `src/data/bench.ts`. Les deux sont annoncés à l'écran (« Substitut · modèle de banc d'essai », et dans « Sous le capot »).
 
 ## Emplacements audio
 

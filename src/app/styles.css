@@ -279,8 +279,16 @@ button {
 }
 
 .dock button,
-.dock .strip {
+.dock .strip,
+.dock .tabs,
+.dock .chips {
   pointer-events: auto;
+}
+
+/* Les rangées d'onglets et de choix débordent jusqu'aux bords de l'écran, comme dans les panneaux. */
+.dock {
+  --pad-l: calc(var(--gutter) + var(--safe-l));
+  --pad-r: calc(var(--gutter) + var(--safe-r));
 }
 
 .dock-text {
@@ -538,6 +546,21 @@ button {
 
 .chip[aria-pressed='true'] small {
   color: #4a4660;
+}
+
+/* Teintes : une pastille devant le nom. */
+.chip-swatch {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.swatch {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
 }
 
 /* La découpe en parallélogramme rogne un contour extérieur : on le rentre. */

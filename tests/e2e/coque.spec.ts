@@ -1,8 +1,17 @@
 import { expect, test } from '@playwright/test';
-import { capture, changedRatio, openApp, sceneBand, VIEWPORT, waitForScene } from './helpers.ts';
+import {
+  capture,
+  changedRatio,
+  openApp,
+  sceneBand,
+  VIEWPORT,
+  waitForBench,
+  waitForScene,
+} from './helpers.ts';
 
 test.describe('coque de l’app', () => {
-  test('l’écran principal s’affiche en 390 × 844, scène 3D comprise', async ({ page }) => {
+  test('l’écran principal s’affiche en 390 × 844, banc d’essai compris', async ({ page }) => {
+    test.setTimeout(180_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
@@ -11,8 +20,10 @@ test.describe('coque de l’app', () => {
 
     await openApp(page);
     await waitForScene(page);
+    await waitForBench(page);
 
-    await expect(page.getByText('Substitut · forme d’essai de peinture')).toBeVisible();
+    await expect(page.getByText('Substitut · modèle de banc d’essai')).toBeVisible();
+    await expect(page.getByText('Banc d’essai · jalon 1')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sous le capot' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Réglages' })).toBeVisible();
     await capture(page, '01-garage');
@@ -59,7 +70,7 @@ test.describe('coque de l’app', () => {
     expect(outside).toEqual([]);
   });
 
-  test('la forme tourne au repos, et s’arrête si le système demande moins de mouvement', async ({
+  test('le véhicule tourne au repos, et s’arrête si le système demande moins de mouvement', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -94,6 +105,7 @@ test.describe('coque de l’app', () => {
   });
 
   test('au repos, la scène ne dessine plus rien (rendu à la demande)', async ({ page }) => {
+    test.setTimeout(180_000);
     // Compte les appels de dessin WebGL de la page.
     await page.addInitScript({
       content: `
@@ -108,6 +120,7 @@ test.describe('coque de l’app', () => {
     });
     await openApp(page);
     await waitForScene(page);
+    await waitForBench(page);
 
     const draws = () => page.evaluate(() => (window as unknown as { __draws: number }).__draws);
     const drawsOverTwoSeconds = async () => {
