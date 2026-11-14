@@ -18,6 +18,7 @@ import {
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BASIS_TRANSCODER_DIR, type BenchModel } from '../../data/bench.ts';
 import { finish as findFinish } from '../../data/finishes.ts';
 import { paintColor } from '../../data/paintColors.ts';
@@ -112,11 +113,52 @@ function prepare(source: Group, model: BenchModel): Prepared {
     if (paint) paints.push(paint);
   }
 
-  // 3. Pose : longueur sur X, au sol, centré. Orientation mesurée, jamais supposée.
+  // 3. Vitrages transparents plutôt que réfractants (voir src/data/bench.ts).
+  for (const material of all) {
+    if (!model.glass.materials.includes(material.name) || !(material instanceof MeshPhysicalMaterial)) continue;
+    material.transmission = 0;
+    material.color.set(model.glass.color);
+    material.transparent = true;
+    material.opacity = model.glass.opacity;
+    material.depthWrite = false;
+    material.needsUpdate = true;
+  }
+
+  // 4. Budget de draw calls (§ 8) : le modèle est immobile, ses pièces sont fusionnées par
+  //    matériau. Seules les géométries aux attributs identiques se fusionnent.
+  scene.updateMatrixWorld(true);
+  const groups = new Map<string, Mesh[]>();
+  for (const mesh of meshes) {
+    if (Array.isArray(mesh.material)) continue;
+    const { geometry } = mesh;
+    const signature = [
+      mesh.material.uuid,
+      geometry.index ? 'indexé' : 'libre',
+      Object.keys(geometry.attributes).sort().join(','),
+      Object.keys(geometry.morphAttributes).length,
+    ].join('|');
+    groups.set(signature, [...(groups.get(signature) ?? []), mesh]);
+  }
+  const merged = new Group();
+  for (const parts of groups.values()) {
+    const first = parts[0];
+    if (!first || parts.length < 2) continue;
+    const geometries = parts.map((part) => part.geometry.clone().applyMatrix4(part.matrixWorld));
+    const geometry = mergeGeometries(geometries, false);
+    for (const item of geometries) item.dispose();
+    if (!geometry) continue;
+    const mesh = new Mesh(geometry, first.material);
+    mesh.name = `fusion_${(first.material as Material).name}`;
+    merged.add(mesh);
+    for (const part of parts) part.removeFromParent();
+  }
+
+  // 5. Pose : longueur sur X, au sol, centré. Orientation mesurée, jamais supposée.
   const root = new Group();
   root.name = 'placeholder_banc';
   const turn = new Group();
-  turn.add(scene);
+  // Les pièces fusionnées sont déjà dans le repère du parent du modèle : elles vont à côté.
+  turn.add(scene, merged);
   root.add(turn);
   // Boîte précise (sommets) : celle des boîtes englobantes tournées déborde sous les roues,
   // et le véhicule flotterait au-dessus du sol.

@@ -20,6 +20,12 @@ export interface BenchModel {
    * couleur que donnait la texture retirée.
    */
   logoTextures: ReadonlyArray<{ material: string; maps: readonly string[]; color?: string }>;
+  /**
+   * Vitrages : la transmission du glTF (réfraction) coûte une seconde passe de rendu complète à
+   * chaque image, soit une centaine d'appels de dessin de plus. Ils deviennent transparents et
+   * teintés (un verre clair paraît laiteux sous les reflets du garage).
+   */
+  glass: { materials: readonly string[]; color: string; opacity: number };
   /** Demi-longueur attendue avant chargement (cadrage d'attente), en mètres. */
   halfLengthHint: number;
   /** Quart de tour à ajouter après la mise à plat, pour présenter l'avant à la caméra de départ. */
@@ -39,6 +45,7 @@ export const BENCH_MODEL: BenchModel = {
     { material: 'License', maps: ['map'] },
     { material: 'Tireside', maps: ['map', 'normalMap'], color: '#1a1a1c' },
   ],
+  glass: { materials: ['Glass'], color: '#0c0e14', opacity: 0.55 },
   halfLengthHint: 2.3,
   yawQuarterTurns: 0,
 };
