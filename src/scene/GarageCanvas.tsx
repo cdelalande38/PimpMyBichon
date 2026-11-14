@@ -14,6 +14,7 @@ import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
 import { BENCH_MODEL } from '../data/bench.ts';
 import { GARAGE } from '../data/garage.ts';
+import { CAMERA_LAYERS } from '../render/layers.ts';
 import { PostChain } from '../render/PostChain.tsx';
 import { QUALITY_PROFILES, resolveQuality, type QualityProfile } from '../render/quality.ts';
 import { ReflectionProbe } from '../render/ReflectionProbe.tsx';
@@ -21,7 +22,6 @@ import { useBench } from '../state/bench.ts';
 import { useSettings } from '../state/store.ts';
 import { BenchCar, type BenchMeasure } from './bench/BenchCar.tsx';
 import { fitCamera, orbitPosition } from './fit.ts';
-import { CAMERA_LAYERS } from '../render/layers.ts';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
 
