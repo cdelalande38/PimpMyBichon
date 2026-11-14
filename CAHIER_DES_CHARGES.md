@@ -1,6 +1,6 @@
 # PimpMyBichon — cahier des charges pour Claude Code
 
-Version 0.3 du 13 novembre 2026. Remplace les v0.1 et v0.2.
+Version 0.3 du 13 novembre 2026. Remplace les v0.1 et v0.2. Complétée le 14 novembre 2026 : télé du garage et option YouTube (§ 5.12).
 
 > Ce fichier est écrit pour vivre dans un dépôt public. Il ne contient volontairement aucune information personnelle sur l'utilisateur final au-delà de son surnom. Garder cette règle dans tout le dépôt (code, commits, issues, assets).
 
@@ -334,6 +334,14 @@ Le combi a un deuxième atelier : **l'intérieur**. On y entre par la porte lat�
 - **Toute pièce sur l'établi** : un appui sur une pièce montée (jante, pare-chocs, guidon, échappement, rétroviseur…) propose « sur l'établi ». La pièce s'isole, et reçoit couleur et finition propres, indépendantes de la carrosserie.
 - Ce n'est pas une simulation mécanique : pas de pannes, pas de réglages, pas de calcul de puissance.
 
+### 5.12 Télé du garage (option, décidée le 14 novembre 2026)
+
+- **Par défaut, rien ne sort de l'app.** L'écran du garage diffuse ce que l'app produit elle-même : la photo du dernier build livré, un diaporama des builds, plus tard les clips de sortie de nuit. La musique vient de la radio hors ligne du § 9.
+- **En option** : toucher l'écran ouvre un panneau « Télé » avec le lecteur officiel de YouTube, sur **la playlist que l'utilisateur a lui-même renseignée** dans les réglages. Le lien reste sur son téléphone ; rien n'est écrit en dur dans le dépôt. C'est le moyen d'avoir d'autres vidéos ou d'autres musiques sans mise à jour de l'app.
+- C'est **la seule exception** à la règle « aucune requête vers un tiers ». Rien ne part vers l'extérieur tant que la télé n'a pas été ouverte, l'app n'en dépend jamais, et hors ligne le panneau dit simplement que la télé reviendra avec le réseau. Domaine sans cookie de suivi quand il existe.
+- Le lecteur reste dans son panneau, à la taille et selon les règles d'intégration du service : il ne se plaque pas sur l'écran 3D et ne se mélange pas au son de l'app. La radio se met en pause pendant qu'il joue.
+- Priorité P2, avec la personnalisation du garage (jalon 11).
+
 ## 6. Modèle de données
 
 ```ts
@@ -383,7 +391,7 @@ Le catalogue est **piloté par les données** : ajouter une pièce = un nœud da
 - Audio : **Web Audio API** en direct (pas de moteur audio lourd). Un module `audio/` autonome : mixeur, radio, bruitages, moteurs.
 - Routage par **hash** uniquement (`#b=`, `#d=`, `#/commande`), parce que GitHub Pages ne sert que des fichiers statiques.
 - Tests : **Vitest** (logique : coût, règles, encodage des liens), **Playwright** (parcours et captures d'écran du canvas).
-- Aucune dépendance à un service tiers au moment de l'exécution : polices, textures, sons et modèles sont servis par l'app.
+- Aucune dépendance à un service tiers au moment de l'exécution : polices, textures, sons et modèles sont servis par l'app. Seule exception, facultative et à la demande : la télé du § 5.12.
 - **Véhicules à la demande** : le premier lancement ne précache que le garage et le dernier véhicule utilisé ; les autres se téléchargent à la première sélection puis restent hors ligne. Un écran « Mes véhicules » montre ce qui est déjà sur le téléphone.
 - **Intérieur** (`interior/`) et **établi** (`bench/`) : deux modes de la même scène de garage, pilotés par le manifeste du véhicule.
 - **Dossier de lecture** : un script de build indexe les fichiers audio trouvés dans les dossiers de stations (titre, artiste, durée lus dans les métadonnées) et génère le manifeste de la radio. Déposer un fichier suffit.
@@ -684,7 +692,7 @@ Précautions Blender MCP : l'outil exécute du Python arbitraire dans Blender, d
 | 8 | Sortie de nuit | ville néon complète, pluie, pilote automatique, 6 caméras, mode réalisateur, 30 i/s plancher |
 | 9 | Son | un moteur accepté à l'aveugle par famille, bruitages, dossier de lecture et import « Ma playlist », mixage tenu au casque et au haut-parleur |
 | 10 | Projets et partage | 20 briefs, carnet, livraison, liens de build et de défi, photo haute qualité partagée depuis Android |
-| 11 | Finition | pièces P2, bivouac, accessibilité, tests sur appareil, clip vidéo, APK si demandé |
+| 11 | Finition | pièces P2, bivouac, télé du garage (§ 5.12), accessibilité, tests sur appareil, clip vidéo, APK si demandé |
 | 12 | Vague 2 | berline 90, pick-up, 4x4, coupé, déposés sans modification du code |
 
 Le jalon 1 passe avant tout le reste : si le rendu n'atteint pas le niveau attendu sur un seul véhicule, ajouter des véhicules et des options n'y changera rien. Les jalons 2, 3, 4 et 8 ne dépendent d'aucun asset externe. Les jalons 5, 6, 7, 9 et 12 attendent les fournitures du § 10.3 ; leur code se développe avant, contre des substituts déclarés.
@@ -693,7 +701,7 @@ Le jalon 1 passe avant tout le reste : si le rendu n'atteint pas le niveau atten
 
 - `npm run build` sans avertissement ; tests Vitest et Playwright verts.
 - Fonctionne en mode avion après une première visite.
-- Aucune requête réseau vers un tiers à l'exécution.
+- Aucune requête réseau vers un tiers à l'exécution, hors télé du § 5.12 ouverte par l'utilisateur.
 - Budgets du § 8 vérifiés par `npm run assets:check` ; audio vérifié par `npm run audio:check`.
 - Aucun son de moteur ni de musique synthétisé dans le build livré.
 - Parcours complet réalisable d'une seule main, pouce droit ou gauche, y compris la pose d'un sticker.

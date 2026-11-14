@@ -22,7 +22,7 @@ Atelier de customisation de voitures et de motos en 3D temps réel, sur téléph
 - Vérifier chaque écran par une capture Playwright en 390 × 844 avant de déclarer une tâche finie ; la sortie de nuit par une séquence de captures.
 - Mesurer avant d'optimiser ; tenir les budgets du § 8.
 - Routage par hash uniquement, chemins d'assets relatifs, `base` Vite réglé sur `/PimpMyBichon/`.
-- Aucune requête vers un tiers à l'exécution : polices, textures, sons et modèles sont servis par l'app.
+- Aucune requête vers un tiers à l'exécution : polices, textures, sons et modèles sont servis par l'app. Seule exception (§ 5.12 du cahier des charges) : la télé du garage, en option, qui n'ouvre le lecteur YouTube que sur un geste de l'utilisateur et sur la playlist qu'il a lui-même renseignée.
 
 ## Interdits
 
