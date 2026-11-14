@@ -3,7 +3,9 @@
 // de l'ambiance choisie (src/data/ambiances.ts) ; le composant ne connaît aucun objet.
 // Repère : x vers la droite vue du canapé, z vers le canapé, y vers le haut, en mètres,
 // origine au centre du sol. Cotes relevées sur le lieu (pièce de 7,5 × 6 m, retombée à 2,35 m) ;
-// le véhicule est au centre, parallèle au mur du fond, l'avant vers la droite.
+// le véhicule est au centre, parallèle au mur du fond, l'avant vers la gauche (vue de départ :
+// trois quarts avant, mur du fond et mur rouge dans le même cadre). Le sol et le plafond se
+// prolongent hors de la pièce et s'y perdent dans la brume de l'ambiance.
 
 import type { Ambiance } from './ambiances.ts';
 
@@ -12,6 +14,7 @@ export type Vec3 = readonly [number, number, number];
 /** Textures dessinées au canvas (src/scene/garage/textures.ts). */
 export type GarageTextureId =
   | 'carrelage'
+  | 'carrelageRugosite'
   | 'osb'
   | 'lambris'
   | 'tiroirs'
@@ -25,8 +28,10 @@ export interface GarageMaterial {
   roughness: number;
   metalness: number;
   map?: GarageTextureId;
-  /** Répétitions de la texture par mètre (u, v). */
+  /** Répétitions de la texture par mètre (u, v), partagées par la carte de rugosité. */
   repeat?: readonly [number, number];
+  /** Carte de rugosité (canal vert) : joints plus mats que les carreaux. */
+  roughnessMap?: GarageTextureId;
   /** Couleur émissive fixe (optiques du quad, fronton du flipper). */
   emissive?: string;
   emissiveIntensity?: number;
@@ -55,7 +60,15 @@ export const GARAGE_MATERIALS = {
   caisse: { color: '#b88a55', roughness: 0.8, metalness: 0 },
   optique: { color: '#ffffff', roughness: 0.2, metalness: 0, emissive: '#fff2dc', emissiveIntensity: 3 },
   fronton: { color: '#ffffff', roughness: 0.4, metalness: 0, map: 'popart', repeat: [1 / 0.7, 1 / 0.45], emissive: '#ffffff', emissiveIntensity: 0.9 },
-  carrelage: { color: '#ffffff', roughness: 0.3, metalness: 0, map: 'carrelage', repeat: [1 / 0.9, 1 / 0.9], env: 0.45 },
+  carrelage: {
+    color: '#ffffff',
+    roughness: 0.3,
+    metalness: 0,
+    map: 'carrelage',
+    roughnessMap: 'carrelageRugosite',
+    repeat: [1 / 0.9, 1 / 0.9],
+    env: 0.45,
+  },
   osb: { color: '#ffffff', roughness: 0.85, metalness: 0, map: 'osb', repeat: [1 / 1.25, 1 / 2.5] },
   lambris: { color: '#5a4a3c', roughness: 0.8, metalness: 0, map: 'lambris', repeat: [1 / 1.6, 1 / 1.6] },
   murRouge: { color: '#b00010', roughness: 0.85, metalness: 0 },
@@ -81,7 +94,7 @@ export interface Prop {
 }
 
 /** Côté de la pièce dont une source prend la couleur. */
-export type ColorKey = 'left' | 'right' | 'center' | 'violet' | 'accent' | 'spotLeft' | 'spotCenter' | 'spotRight';
+export type ColorKey = 'left' | 'right' | 'center' | 'violet' | 'accent' | 'bar' | 'spotLeft' | 'spotCenter' | 'spotRight';
 
 export function colorOf(ambiance: Ambiance, key: ColorKey): string {
   switch (key) {
@@ -140,6 +153,24 @@ export interface Spot {
   radius: number;
   /** Halo en goutte dessiné sur le mur du fond, sous le spot. */
   wallHalo: boolean;
+  /** Cône de lumière dans la brume, sous le spot (atmosphère). */
+  beam?: boolean;
+}
+
+/** Rampe lumineuse douce et plane : largeur, hauteur, centre, orientation (défaut : vers le sol). */
+export interface LightBar {
+  size: readonly [number, number];
+  at: Vec3;
+  facing?: Facing;
+}
+
+/** Nappe de brume au ras du sol : plan vertical additif, clair en bas, fondu vers le haut. */
+export interface Mist {
+  size: readonly [number, number];
+  at: Vec3;
+  facing: Facing;
+  color: ColorKey;
+  gain: number;
 }
 
 /**
@@ -156,6 +187,19 @@ export interface Strip {
 export interface GarageLayout {
   /** Largeur (x), profondeur (z), hauteur (y). */
   room: { width: number; depth: number; height: number };
+  /** Pose du véhicule : rotation de son groupe autour de la verticale (π : l'avant vers la gauche). */
+  vehicle: { turn: number };
+  /**
+   * Sol et plafond prolongés hors de la pièce (côté du carré, en mètres) ; ils se perdent dans la
+   * brume de l'ambiance : à `falloff` mètres des murs, il en reste 1/e. Coupé à aucun niveau.
+   */
+  outside: { extent: number; falloff: number };
+  /** Brouillard léger (atmosphère) : distances de début et de fin, depuis la caméra. */
+  fog: { near: number; far: number };
+  /** Cônes de lumière sous les spots : hauteur et rayon au sol. */
+  beam: { height: number; radius: number };
+  lightBars: readonly LightBar[];
+  mists: readonly Mist[];
   /** Retombées de plafond blanches : taille et centre de chaque boîte. */
   soffits: ReadonlyArray<{ size: Vec3; at: Vec3 }>;
   /** Enveloppe : matériau de chaque face, tournée vers l'intérieur. */
@@ -201,6 +245,27 @@ const leg = (x: number, z: number, h: number, material: GarageMaterialId = 'bois
 
 export const GARAGE: GarageLayout = {
   room: { width: W, depth: D, height: H },
+  vehicle: { turn: Math.PI },
+  outside: { extent: 70, falloff: 4 },
+  fog: { near: 12, far: 46 },
+  beam: { height: 2.2, radius: 0.5 },
+  // Rampes au-dessus du véhicule, dans le sens de sa longueur : elles dessinent de longs reflets
+  // sur le toit, les épaules et les flancs, et éclairent la caisse par la sonde de réflexion.
+  lightBars: [
+    { size: [3.8, 0.4], at: [0, H - 0.08, -0.75] },
+    { size: [3.8, 0.4], at: [0, H - 0.08, 0.55] },
+    { size: [3.8, 0.4], at: [0, H - 0.08, 1.75] },
+    // Sur le mur du canapé, au-dessus de l'enseigne, tournée vers le véhicule : invisible depuis
+    // la caméra (elle passe derrière ce mur), elle trace la longue ligne claire du flanc.
+    { size: [6.2, 0.3], at: [0, 2.2, D / 2 - 0.04], facing: '-z' },
+  ],
+  // Nappes au ras du sol : le long du fond, devant le véhicule et sur les côtés.
+  mists: [
+    { size: [7.2, 0.9], at: [0, 0.45, -2.2], facing: '+z', color: 'violet', gain: 1 },
+    { size: [7.2, 0.6], at: [0, 0.3, 1.9], facing: '+z', color: 'left', gain: 0.6 },
+    { size: [5.5, 0.8], at: [-2.9, 0.4, 0], facing: '+x', color: 'left', gain: 0.8 },
+    { size: [5.5, 0.8], at: [3.1, 0.4, 0], facing: '-x', color: 'right', gain: 0.8 },
+  ],
   soffits: [
     // Le long du mur du fond, jusqu'à la colonne noire.
     { size: [1.5 - LEFT, H - SOFFIT, 0.35], at: [(LEFT + 1.5) / 2, (H + SOFFIT) / 2, BACK + 0.175] },
@@ -213,12 +278,12 @@ export const GARAGE: GarageLayout = {
   lights: { left: [-2.4, 2.1, -1.6], right: [1.8, 2.1, -1.3], key: [-0.2, 2.85, 0.9], keyTarget: [0, 0.6, 0] },
   spots: [
     // Paires espacées de 0,4 m : bleu à gauche, blanc au centre, rouge à droite.
-    { at: [-1.9, SPOT_Y, SPOT_Z], color: 'spotLeft', radius: 0.045, wallHalo: true },
-    { at: [-1.5, SPOT_Y, SPOT_Z], color: 'spotLeft', radius: 0.045, wallHalo: true },
-    { at: [-0.5, SPOT_Y, SPOT_Z], color: 'spotCenter', radius: 0.045, wallHalo: true },
-    { at: [-0.1, SPOT_Y, SPOT_Z], color: 'spotCenter', radius: 0.045, wallHalo: true },
-    { at: [0.7, SPOT_Y, SPOT_Z], color: 'spotRight', radius: 0.045, wallHalo: true },
-    { at: [1.1, SPOT_Y, SPOT_Z], color: 'spotRight', radius: 0.045, wallHalo: true },
+    { at: [-1.9, SPOT_Y, SPOT_Z], color: 'spotLeft', radius: 0.045, wallHalo: true, beam: true },
+    { at: [-1.5, SPOT_Y, SPOT_Z], color: 'spotLeft', radius: 0.045, wallHalo: true, beam: true },
+    { at: [-0.5, SPOT_Y, SPOT_Z], color: 'spotCenter', radius: 0.045, wallHalo: true, beam: true },
+    { at: [-0.1, SPOT_Y, SPOT_Z], color: 'spotCenter', radius: 0.045, wallHalo: true, beam: true },
+    { at: [0.7, SPOT_Y, SPOT_Z], color: 'spotRight', radius: 0.045, wallHalo: true, beam: true },
+    { at: [1.1, SPOT_Y, SPOT_Z], color: 'spotRight', radius: 0.045, wallHalo: true, beam: true },
     // Petits spots chauds de la retombée.
     { at: [-3.1, SPOT_Y, SPOT_Z], color: 'accent', radius: 0.025, wallHalo: false },
     { at: [-2.6, SPOT_Y, SPOT_Z], color: 'accent', radius: 0.025, wallHalo: false },
@@ -275,6 +340,10 @@ export const GARAGE: GarageLayout = {
     { kind: 'rond', size: [4.5, 4.0], at: [0, 0.003, -1.6], facing: '+y', color: 'center', gain: 0.16 },
     { kind: 'rond', size: [4.5, 5.0], at: [2.0, 0.004, -0.8], facing: '+y', color: 'right', gain: 0.35 },
     { kind: 'rond', size: [3.0, 2.2], at: [-0.3, 0.005, -2.5], facing: '+y', color: 'spotCenter', gain: 0.12 },
+    // Flaques sous les spots du fond (bleu, rouge) et sous les rampes, autour du véhicule.
+    { kind: 'rond', size: [1.8, 1.4], at: [-1.7, 0.006, -2.45], facing: '+y', color: 'spotLeft', gain: 0.35 },
+    { kind: 'rond', size: [1.8, 1.4], at: [0.9, 0.007, -2.45], facing: '+y', color: 'spotRight', gain: 0.3 },
+    { kind: 'rond', size: [6.2, 4.2], at: [0, 0.008, 0.5], facing: '+y', color: 'bar', gain: 0.04 },
   ],
   panels: [
     { name: 'placeholder_credence', texture: 'credence', size: [2.95, 0.55], at: [-0.025, 1.175, BACK + 0.003], facing: '+z' },
@@ -401,7 +470,7 @@ export const GARAGE: GarageLayout = {
     },
     {
       name: 'placeholder_fut',
-      at: [-3.35, 0, -0.65],
+      at: [-3.35, 0, 0.35],
       parts: [{ cylinder: [0.29, 0.88], at: [0, 0.44, 0], material: 'rouge' }],
     },
     {
@@ -422,8 +491,8 @@ export const GARAGE: GarageLayout = {
     },
     {
       name: 'placeholder_table_basse',
-      at: [-2.75, 0, 2.0],
-      turn: Math.PI / 2,
+      at: [2.5, 0, 1.9],
+      turn: 0,
       parts: [
         { box: [1.8, 0.06, 0.7], at: [0, 0.42, 0], material: 'boisClair' },
         { box: [1.7, 0.04, 0.6], at: [0, 0.12, 0], material: 'boisClair' },
@@ -435,8 +504,8 @@ export const GARAGE: GarageLayout = {
     },
     {
       name: 'placeholder_bloc_moteur',
-      at: [-2.75, 0.45, 2.0],
-      turn: Math.PI / 2,
+      at: [2.5, 0.45, 1.9],
+      turn: Math.PI,
       parts: [
         { box: [0.6, 0.22, 0.4], at: [0, 0.11, 0], material: 'alu' },
         { box: [0.56, 0.1, 0.3], at: [0, 0.27, 0], material: 'alu' },
@@ -448,7 +517,7 @@ export const GARAGE: GarageLayout = {
     },
     {
       name: 'placeholder_tabouret_frein',
-      at: [-1.4, 0, 2.55],
+      at: [1.4, 0, 2.55],
       parts: [
         { cylinder: [0.17, 0.03], at: [0, 0.02, 0], material: 'noir' },
         { cylinder: [0.04, 0.45], at: [0, 0.25, 0], material: 'noir' },
@@ -458,7 +527,7 @@ export const GARAGE: GarageLayout = {
     },
     {
       name: 'placeholder_pouf_pneu',
-      at: [2.7, 0, 2.3],
+      at: [3.05, 0, 0.9],
       parts: [
         { cylinder: [0.33, 0.24], at: [0, 0.12, 0], material: 'gomme' },
         { cylinder: [0.2, 0.245], at: [0, 0.12, 0], material: 'noirMat' },
@@ -466,7 +535,7 @@ export const GARAGE: GarageLayout = {
     },
     {
       name: 'placeholder_fauteuils',
-      at: [-3.25, 0, 0.95],
+      at: [-3.25, 0, -0.85],
       turn: Math.PI / 2,
       parts: [
         { box: [0.8, 0.42, 0.78], at: [0, 0.21, 0], material: 'cuir' },

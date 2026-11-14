@@ -5,7 +5,10 @@ import { describe, expect, it } from 'vitest';
 import { AMBIANCES } from '../../src/data/ambiances.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import { colorOf, GARAGE, GARAGE_MATERIALS, type ColorKey } from '../../src/data/garage.ts';
+import { patchSurfaceShader } from '../../src/render/floor.ts';
+import { gradeColor, gradeLutData } from '../../src/render/lut.ts';
 import { applyPaint, createPaintMaterial, paintUniforms, patchPaintShader } from '../../src/render/paint.ts';
+import { QUALITY_PROFILES } from '../../src/render/quality.ts';
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -78,6 +81,56 @@ describe('garage du § 4', () => {
       expect(Math.abs(prop.at[0]), prop.name).toBeLessThanOrEqual(width / 2);
       expect(Math.abs(prop.at[2]), prop.name).toBeLessThanOrEqual(depth / 2);
       expect(prop.at[1], prop.name).toBeLessThan(height);
+    }
+  });
+});
+
+describe('étape B : niveaux de qualité, étalonnage, sol', () => {
+  it('chaque niveau dit ce qu’il active ; l’économie garde la sonde et coupe reflet, brume, occlusion', () => {
+    const { eco, standard, max } = QUALITY_PROFILES;
+    expect(eco).toMatchObject({ reflection: 0, atmosphere: false, ao: false });
+    expect(eco.probeSize).toBeGreaterThanOrEqual(256);
+    expect(standard).toMatchObject({ reflection: 0.5, atmosphere: true, ao: false, smaa: true });
+    expect(standard.multisampling).toBeGreaterThan(0);
+    expect(max).toMatchObject({ reflection: 1, atmosphere: true, ao: true, smaa: true, probeSize: 512 });
+  });
+
+  it('la table de correspondance est neutre sans réglage, et teinte les ombres sinon', () => {
+    const neutral = { shadows: '#808080', highlights: '#808080', amount: 0, saturation: 1, contrast: 1 };
+    const data = gradeLutData(neutral, 8);
+    const step = 1 / 7;
+    for (let i = 0; i < 8 ** 3; i += 1) {
+      const r = (i % 8) * step;
+      const g = (Math.floor(i / 8) % 8) * step;
+      const b = Math.floor(i / 64) * step;
+      expect(data[i * 4] ?? -1).toBeCloseTo(r, 5);
+      expect(data[i * 4 + 1] ?? -1).toBeCloseTo(g, 5);
+      expect(data[i * 4 + 2] ?? -1).toBeCloseTo(b, 5);
+    }
+    const bichon = AMBIANCES.find((item) => item.id === 'bichon');
+    if (!bichon) throw new Error('ambiance Bichon absente');
+    const [r, , b] = gradeColor(bichon.grade, 0.2, 0.2, 0.2);
+    expect(b).toBeGreaterThan(r);
+  });
+
+  it('les repères du shader du sol existent dans la version de three.js installée', () => {
+    const shader = { vertexShader: ShaderLib.standard.vertexShader, fragmentShader: ShaderLib.standard.fragmentShader };
+    expect(() => patchSurfaceShader(shader)).not.toThrow();
+    expect(shader.fragmentShader).toContain('pmbHazeColor');
+    expect(shader.fragmentShader).toContain('iblIrradiance *= pmbIblDiffuse');
+    expect(shader.vertexShader).toContain('vPmbReflCoord');
+  });
+
+  it('le décor se prolonge, les rampes éclairent le véhicule posé nez à gauche', () => {
+    const { width, depth } = GARAGE.room;
+    expect(GARAGE.outside.extent).toBeGreaterThan(4 * Math.max(width, depth));
+    expect(GARAGE.vehicle.turn).toBeCloseTo(Math.PI, 9);
+    expect(GARAGE.lightBars.length).toBeGreaterThanOrEqual(3);
+    expect(GARAGE.spots.filter((spot) => spot.beam).length).toBe(6);
+    for (const ambiance of AMBIANCES) {
+      expect(ambiance.night, ambiance.id).not.toBe('#000000');
+      expect(ambiance.barGain, ambiance.id).toBeGreaterThan(1);
+      expect(ambiance.exposure, ambiance.id).toBeGreaterThan(0);
     }
   });
 });

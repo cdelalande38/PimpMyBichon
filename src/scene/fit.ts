@@ -35,12 +35,19 @@ export function fitCamera(width: number, height: number, halfLength: number): Ca
   };
 }
 
-/** Position de départ de la caméra : trois quarts avant, légèrement au-dessus. */
+/**
+ * Vue de départ : côté gauche (azimut négatif), trois quarts avant du véhicule posé nez à
+ * gauche, légèrement au-dessus. Dans le même cadre : le mur du fond et ses halos, le mur rouge.
+ */
+export const START_AZIMUTH = -0.5;
+export const START_POLAR = 1.42;
+
+/** Position de la caméra sur son orbite (azimut 0 : face au mur du fond, depuis le canapé). */
 export function orbitPosition(
   target: readonly [number, number, number],
   distance: number,
-  azimuth = 0.38,
-  polar = 1.4,
+  azimuth = START_AZIMUTH,
+  polar = START_POLAR,
 ): [number, number, number] {
   const s = Math.sin(polar);
   return [

@@ -73,7 +73,7 @@ test.describe('coque de l’app', () => {
   test('le véhicule tourne au repos, et s’arrête si le système demande moins de mouvement', async ({
     page,
   }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(300_000);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await openApp(page);
     await waitForScene(page);
@@ -98,9 +98,10 @@ test.describe('coque de l’app', () => {
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
     // La rotation s'amortit sur quelques dizaines d'images, puis le rendu à la demande se tait.
-    // En rendu logiciel, ces images prennent du temps : on attend l'immobilité au lieu de la supposer.
+    // En rendu logiciel, ces images prennent du temps (reflet du sol, MSAA) : on attend
+    // l'immobilité au lieu de la supposer.
     await expect
-      .poll(motion, { message: 'scène immobile', timeout: 60_000, intervals: [500] })
+      .poll(motion, { message: 'scène immobile', timeout: 200_000, intervals: [500] })
       .toBeLessThan(0.0005);
   });
 

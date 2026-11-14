@@ -1,8 +1,12 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { capture, changedRatio, openApp, sceneBand, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import sharp from 'sharp';
+import { capture, changedRatio, openApp, sceneBand, VIEWPORT, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
-// Jalon 1, rendu cible : une capture par ambiance et par finition clé, pour juger à l'œil
-// (captures/jalon-1/), et les relevés de « Sous le capot » (coût d'une image, sonde).
+// Jalon 1, rendu cible : une capture par ambiance, la planche de revue (3 ambiances × 4
+// peintures, captures/jalon-1/planche-b.jpg) et les relevés de « Sous le capot » (coût d'une
+// image, sonde, réflexion du sol) en standard et en max.
 
 const dock = (page: Page) => page.locator('footer.dock');
 
@@ -17,16 +21,46 @@ async function pick(page: Page, tab: string, choice: string): Promise<void> {
   await expect(button).toHaveAttribute('aria-pressed', 'true');
 }
 
-async function facts(page: Page): Promise<{ image: string; sonde: string }> {
+interface Facts {
+  image: string;
+  sonde: string;
+  sol: string;
+}
+
+async function facts(page: Page): Promise<Facts> {
   await page.goto('./#/capot');
-  const image = (await page.locator('[data-fact="image"]').innerText()).trim();
-  const sonde = (await page.locator('[data-fact="sonde"]').innerText()).trim();
+  const read = async (name: string) => (await page.locator(`[data-fact="${name}"]`).innerText()).trim();
+  const result = { image: await read('image'), sonde: await read('sonde'), sol: await read('sol') };
   await page.goBack();
-  return { image, sonde };
+  return result;
+}
+
+async function setQuality(page: Page, label: string): Promise<void> {
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Réglages' });
+  await expect(dialog).toBeVisible();
+  const button = dialog.getByRole('group', { name: 'Qualité' }).getByRole('button', { name: new RegExp(`^${label}`) });
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await page.goBack();
+  await expect(dialog).toBeHidden();
+}
+
+/** Moyenne RGB d'une zone de la capture (fractions de l'écran) : un relevé chiffré à côté de l'œil. */
+async function meanColor(png: Buffer, box: { x: number; y: number; w: number; h: number }): Promise<number[]> {
+  const { width = VIEWPORT.width, height = VIEWPORT.height } = await sharp(png).metadata();
+  const region = {
+    left: Math.round(box.x * width),
+    top: Math.round(box.y * height),
+    width: Math.round(box.w * width),
+    height: Math.round(box.h * height),
+  };
+  const { channels } = await sharp(await sharp(png).extract(region).toBuffer()).stats();
+  return channels.slice(0, 3).map((channel) => Math.round(channel.mean));
 }
 
 test.describe('rendu cible', () => {
-  test.setTimeout(420_000);
+  test.setTimeout(900_000);
 
   test('trois ambiances : la sonde se refait à chaque changement, jamais au repos', async ({ page }) => {
     await openApp(page);
@@ -37,6 +71,7 @@ test.describe('rendu cible', () => {
     const first = await facts(page);
     expect(first.image).toMatch(/\d+ appels de dessin · [\d\s ]+ triangles/);
     expect(first.sonde).toMatch(/Sonde de 256 px par face, calculée en \d+ ms \(1 calcul\)/);
+    expect(first.sol).toMatch(/Réflexion du sol sur \d+ × \d+ px/);
     test.info().annotations.push({ type: 'image', description: first.image }, { type: 'sonde', description: first.sonde });
     await waitForStill(page);
 
@@ -55,22 +90,75 @@ test.describe('rendu cible', () => {
     test.info().annotations.push({ type: 'sonde-fin', description: last.sonde });
   });
 
-  test('finitions clés sous l’ambiance Bichon', async ({ page }) => {
+  test('planche de revue : 3 ambiances × 4 peintures, et relevés standard puis max', async ({ page }) => {
+    // Douze images arrêtées en rendu logiciel, à côté d'un autre parcours : c'est long.
+    test.setTimeout(1_800_000);
     await openApp(page);
     await waitForScene(page);
     await waitForBench(page);
 
-    const looks: Array<[color: string, finish: string, file: string]> = [
-      ['Vert Bichon', 'Pailleté', '13-finition-paillete-vert'],
-      ['Violet', 'Chrome coloré', '14-finition-chrome-colore'],
-      ['Bleu nuit', 'Caméléon', '15-finition-cameleon'],
-      ['Gris pick-up', 'Mat', '16-finition-mat'],
+    const ambiances = ['Bichon', 'Néon', 'Atelier'] as const;
+    const looks: ReadonlyArray<readonly [color: string, finish: string, caption: string]> = [
+      ['Vert Bichon', 'Pailleté', 'Vert Bichon pailleté'],
+      ['Orange piste', 'Brillant', 'Orange piste brillant'],
+      ['Violet', 'Chrome coloré', 'Violet chrome coloré'],
+      ['Noir', 'Brillant', 'Noir brillant'],
     ];
-    for (const [color, finish, file] of looks) {
-      await pick(page, 'Teinte', color);
-      await pick(page, 'Finition', finish);
-      await waitForStill(page);
-      await capture(page, file);
+    const shots: Array<{ png: Buffer; caption: string }> = [];
+    const stats: Record<string, { voiture: number[]; haut: number[]; bas: number[] }> = {};
+    for (const ambiance of ambiances) {
+      await pick(page, 'Ambiance', ambiance);
+      for (const [color, finish, caption] of looks) {
+        await pick(page, 'Teinte', color);
+        await pick(page, 'Finition', finish);
+        await waitForStill(page);
+        const png = await page.screenshot();
+        const label = `${ambiance} · ${caption}`;
+        shots.push({ png, caption: label });
+        stats[label] = {
+          voiture: await meanColor(png, { x: 0.3, y: 0.36, w: 0.4, h: 0.06 }),
+          haut: await meanColor(png, { x: 0, y: 0.1, w: 1, h: 0.06 }),
+          bas: await meanColor(png, { x: 0, y: 0.6, w: 1, h: 0.05 }),
+        };
+      }
     }
+
+    // Planche : vignettes de 390 px de large, légendées, 4 colonnes (peintures) × 3 lignes (ambiances).
+    const thumbWidth = 390;
+    const thumbHeight = Math.round((VIEWPORT.height / VIEWPORT.width) * thumbWidth);
+    const captionHeight = 34;
+    const columns = looks.length;
+    const width = columns * thumbWidth;
+    const height = ambiances.length * (thumbHeight + captionHeight);
+    const tiles = await Promise.all(
+      shots.map(async ({ png, caption }, index) => {
+        const left = (index % columns) * thumbWidth;
+        const top = Math.floor(index / columns) * (thumbHeight + captionHeight);
+        const thumb = await sharp(png).resize(thumbWidth, thumbHeight).toBuffer();
+        const text = Buffer.from(
+          `<svg width="${thumbWidth}" height="${captionHeight}"><rect width="100%" height="100%" fill="#111"/>` +
+            `<text x="10" y="23" font-family="sans-serif" font-size="17" fill="#fff">${caption}</text></svg>`,
+        );
+        return [
+          { input: thumb, left, top },
+          { input: text, left, top: top + thumbHeight },
+        ];
+      }),
+    );
+    const file = resolve('captures', 'jalon-1', 'planche-b.jpg');
+    mkdirSync(resolve('captures', 'jalon-1'), { recursive: true });
+    await sharp({ create: { width, height, channels: 3, background: '#000' } })
+      .composite(tiles.flat())
+      .jpeg({ quality: 82 })
+      .toFile(file);
+
+    // Relevés : standard (niveau « auto ») puis max.
+    const standard = await facts(page);
+    await setQuality(page, 'Max');
+    await waitForStill(page);
+    const max = await facts(page);
+    expect(max.sonde).toMatch(/Sonde de 512 px/);
+    expect(max.sol).toMatch(/Réflexion du sol sur \d+ × \d+ px/);
+    writeFileSync(resolve('captures', 'jalon-1', 'planche-b.json'), JSON.stringify({ standard, max, stats }, null, 2));
   });
 });

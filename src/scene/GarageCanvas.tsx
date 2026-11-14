@@ -1,7 +1,10 @@
 // Scène du garage. Chargée à la demande (three.js pèse lourd) : la coque de l'app s'affiche avant.
 // Au jalon 1, le modèle de banc d'essai dans le garage du § 4, sous l'ambiance choisie, avec
-// sa sonde de réflexion et sa chaîne d'image. Tout est servi par l'app : modèle, textures KTX2
-// et transcodeur ; les textures du garage sont dessinées sur place.
+// sa sonde de réflexion, son sol réfléchissant, son atmosphère et sa chaîne d'image, selon le
+// niveau de qualité (src/render/quality.ts). Tout est servi par l'app : modèle, textures KTX2 et
+// transcodeur ; les textures du garage sont dessinées sur place.
+// Vue de départ : le véhicule nez à gauche, la caméra côté gauche (trois quarts avant), le mur
+// du fond et ses halos, le mur rouge à droite : la signature du lieu.
 
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -18,6 +21,7 @@ import { useBench } from '../state/bench.ts';
 import { useSettings } from '../state/store.ts';
 import { BenchCar, type BenchMeasure } from './bench/BenchCar.tsx';
 import { fitCamera, orbitPosition } from './fit.ts';
+import { ATMOSPHERE_LAYER } from './garage/build.ts';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
 
@@ -65,13 +69,21 @@ function Stage({ profile, mayRotate }: StageProps) {
   useEffect(() => {
     if (rotating) invalidate();
   }, [rotating, invalidate]);
+  // La caméra voit l'atmosphère (calque 1) ; la sonde et le reflet du sol, non.
+  const camera = useThree((state) => state.camera);
+  useEffect(() => {
+    camera.layers.enable(ATMOSPHERE_LAYER);
+    invalidate();
+  }, [camera, invalidate]);
   useFrame(() => {
     if (rotating) invalidate();
   });
 
   return (
     <>
+      {/* Fond et brume : le sol et le plafond prolongés s'y perdent, jamais dans le noir. */}
       <color attach="background" args={[ambiance.night]} />
+      {profile.atmosphere && <fog attach="fog" args={[ambiance.night, GARAGE.fog.near, GARAGE.fog.far]} />}
 
       <PerspectiveCamera makeDefault fov={fit.fov} near={0.1} far={80} position={position} />
       <OrbitControls
@@ -96,15 +108,18 @@ function Stage({ profile, mayRotate }: StageProps) {
         }}
       />
 
-      <Garage ambiance={ambiance} />
+      <Garage ambiance={ambiance} profile={profile} />
       <ReflectionProbe size={profile.probeSize} position={GARAGE.probe} version={ambiance.id} />
       {/* Le modèle arrive après le décor ; s'il manque (première visite sans réseau), le garage
           reste et l'étiquette le dit. */}
-      <SceneBoundary onFail={() => setStatus('erreur')}>
-        <Suspense fallback={null}>
-          <BenchCar model={BENCH_MODEL} onMeasured={onMeasured} />
-        </Suspense>
-      </SceneBoundary>
+      {/* Pose du véhicule dans la pièce (nez à gauche) : on tourne son groupe, pas le modèle. */}
+      <group rotation-y={GARAGE.vehicle.turn}>
+        <SceneBoundary onFail={() => setStatus('erreur')}>
+          <Suspense fallback={null}>
+            <BenchCar model={BENCH_MODEL} onMeasured={onMeasured} bodyEnv={ambiance.bodyEnv} />
+          </Suspense>
+        </SceneBoundary>
+      </group>
 
       <PostChain ambiance={ambiance} profile={profile} />
 

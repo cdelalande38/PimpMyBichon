@@ -64,6 +64,7 @@ export function UnderHoodPanel() {
   const dpr = useRenderStats((state) => state.dpr);
   const frame = useRenderStats((state) => state.frame);
   const probe = useRenderStats((state) => state.probe);
+  const reflection = useRenderStats((state) => state.reflection);
   const quality = useSettings((state) => state.quality);
   const storage = useStorageStatus();
 
@@ -123,6 +124,14 @@ export function UnderHoodPanel() {
           probe === null
             ? 'Sonde pas encore calculée.'
             : `Sonde de ${probe.size} px par face, calculée en ${probe.ms} ms (${probe.updates} calcul${probe.updates > 1 ? 's' : ''}).`,
+        )}
+      </dd>
+      <dt>Sol</dt>
+      <dd data-fact="sol">
+        {typo(
+          reflection === null
+            ? 'Sol sans réflexion planaire : il brille par la sonde.'
+            : `Réflexion du sol sur ${reflection.width} × ${reflection.height} px.`,
         )}
       </dd>
 

@@ -53,18 +53,17 @@ export function SceneProbe() {
     useRenderStats.setState({ dpr });
   }, [dpr]);
 
-  // Coût d'une image, toutes passes comprises (la chaîne d'image en fait plusieurs) : le compteur
-  // n'est plus remis à zéro par chaque passe, mais avant chaque image, après lecture de la précédente.
+  // Coût d'une image, toutes passes comprises (reflet du sol, scène, chaîne d'image) : le
+  // compteur n'est plus remis à zéro par chaque passe, mais au début de chaque image, et lu à sa
+  // fin, après la chaîne d'image (priorité 1). Ce qui se rend hors image (sonde) n'y entre pas.
   useEffect(() => countWholeFrames(gl), [gl]);
+  useFrame((state) => state.gl.info.reset(), -1);
   useFrame((state) => {
-    const { info } = state.gl;
-    const { calls, triangles } = info.render;
-    if (calls > 0) {
-      const previous = useRenderStats.getState().frame;
-      if (previous?.calls !== calls || previous.triangles !== triangles) useRenderStats.setState({ frame: { calls, triangles } });
-    }
-    info.reset();
-  }, -1);
+    const { calls, triangles } = state.gl.info.render;
+    if (calls === 0) return;
+    const previous = useRenderStats.getState().frame;
+    if (previous?.calls !== calls || previous.triangles !== triangles) useRenderStats.setState({ frame: { calls, triangles } });
+  }, 2);
 
   // Le rendu est à la demande : on ne mesure que pendant que la scène bouge, et on garde
   // la dernière valeur (le panneau « Sous le capot » met lui-même la scène à l'arrêt).

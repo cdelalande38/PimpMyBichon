@@ -4,7 +4,7 @@
 
 import { ContactShadows } from '@react-three/drei';
 import { useLoader, useThree } from '@react-three/fiber';
-import { useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import {
   Box3,
   Group,
@@ -20,7 +20,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BASIS_TRANSCODER_DIR, type BenchModel } from '../../data/bench.ts';
-import { finish as findFinish } from '../../data/finishes.ts';
+import { finish as findFinish, type Finish } from '../../data/finishes.ts';
 import { paintColor } from '../../data/paintColors.ts';
 import { applyPaint, createPaintMaterial } from '../../render/paint.ts';
 import { useBench } from '../../state/bench.ts';
@@ -184,13 +184,31 @@ function prepare(source: Group, model: BenchModel): Prepared {
   return { root, paints, halfLength: size.x / 2, halfWidth: size.z / 2, height: size.y };
 }
 
+/** Peint la carrosserie ; l'ambiance règle la part de reflet de l'environnement. */
+function paintBody(paints: readonly MeshPhysicalMaterial[], hex: string, finish: Finish, bodyEnv: number): void {
+  for (const paint of paints) {
+    applyPaint(paint, hex, finish);
+    paint.envMapIntensity = finish.envMapIntensity * bodyEnv;
+  }
+}
+
+/**
+ * Ombre de contact, rendue une fois. Mémoïsée : le compteur d'images de ContactShadows repart
+ * à zéro à chaque rendu React, et un changement de peinture referait tout un rendu de scène.
+ */
+const ContactShadow = memo(function ContactShadow({ halfLength, halfWidth, height }: BenchMeasure) {
+  return <ContactShadows scale={[halfLength * 2.5, halfWidth * 3]} far={height} blur={2.2} opacity={0.8} resolution={512} frames={1} />;
+});
+
 interface BenchCarProps {
   model: BenchModel;
   /** Appelé une fois le modèle posé, pour le cadrage de la caméra. */
   onMeasured: (measure: BenchMeasure) => void;
+  /** Part du reflet de l'environnement propre à la carrosserie, selon l'ambiance. */
+  bodyEnv: number;
 }
 
-export function BenchCar({ model, onMeasured }: BenchCarProps) {
+export function BenchCar({ model, onMeasured, bodyEnv }: BenchCarProps) {
   const gl = useThree((state) => state.gl);
   const invalidate = useThree((state) => state.invalidate);
   const gltf = useLoader(GLTFLoader, `${BASE}${model.file}`, (loader) => {
@@ -205,9 +223,9 @@ export function BenchCar({ model, onMeasured }: BenchCarProps) {
   useEffect(() => {
     const { hex } = paintColor(colorId);
     const finish = findFinish(finishId);
-    for (const paint of prepared.paints) applyPaint(paint, hex, finish);
+    paintBody(prepared.paints, hex, finish, bodyEnv);
     invalidate();
-  }, [prepared, colorId, finishId, invalidate]);
+  }, [prepared, colorId, finishId, bodyEnv, invalidate]);
 
   const { halfLength, halfWidth, height } = prepared;
   useEffect(() => {
@@ -221,14 +239,7 @@ export function BenchCar({ model, onMeasured }: BenchCarProps) {
       {/* À laisser à y = 0 : surélevée, son plan de flou passe derrière sa caméra et l'ombre
           disparaît dès que le post-traitement est coupé (niveau économie). Rendue une fois,
           avec le modèle déjà en place. */}
-      <ContactShadows
-        scale={[halfLength * 2.5, halfWidth * 3]}
-        far={height}
-        blur={2.2}
-        opacity={0.8}
-        resolution={512}
-        frames={1}
-      />
+      <ContactShadow halfLength={halfLength} halfWidth={halfWidth} height={height} />
     </>
   );
 }

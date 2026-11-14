@@ -41,10 +41,26 @@ export interface Ambiance {
   sky: string;
   ground: string;
   ambient: number;
-  /** Fond, hors de la pièce. */
+  /**
+   * Brume du fond : la couleur où se perdent le sol et le plafond prolongés hors de la pièce,
+   * et celle du brouillard. Violet très sombre, jamais noir.
+   */
   night: string;
-  /** Étalonnage : dominante des ombres et des hautes lumières, et sa force (0 : neutre). */
-  grade: { shadows: string; highlights: string; amount: number };
+  /** Rampes lumineuses douces au-dessus du véhicule : couleur et force (longs reflets sur la caisse). */
+  bar: string;
+  barGain: number;
+  /** Part du reflet de l'environnement propre à la carrosserie (multiplie celle de la finition). */
+  bodyEnv: number;
+  /** Exposition de l'image, avant le tone mapping. */
+  exposure: number;
+  /** Atmosphère : force des cônes de lumière sous les spots et des nappes au ras du sol. */
+  beamGain: number;
+  mistGain: number;
+  /**
+   * Étalonnage, fabriqué en table de correspondance (src/render/lut.ts) : dominante des ombres
+   * et des hautes lumières, sa force (0 : neutre), saturation et contraste (1 : inchangés).
+   */
+  grade: { shadows: string; highlights: string; amount: number; saturation: number; contrast: number };
   /** Force du bloom. */
   bloom: number;
 }
@@ -68,13 +84,19 @@ export const AMBIANCES = [
     tubeGain: 6,
     haloGain: 1,
     key: '#f4eef0',
-    keyIntensity: 9,
-    sideIntensity: 7,
+    keyIntensity: 6,
+    sideIntensity: 6,
     sky: '#4a2fb0',
     ground: '#2a0618',
     ambient: 0.12,
-    night: '#06040b',
-    grade: { shadows: '#3a2cff', highlights: '#ff4fb0', amount: 0.22 },
+    night: '#170a28',
+    bar: '#fff8f0',
+    barGain: 10,
+    bodyEnv: 2.2,
+    exposure: 1.05,
+    beamGain: 0.45,
+    mistGain: 0.25,
+    grade: { shadows: '#6058c8', highlights: '#e878b8', amount: 0.2, saturation: 1.08, contrast: 1.04 },
     bloom: 0.85,
   },
   {
@@ -95,13 +117,19 @@ export const AMBIANCES = [
     tubeGain: 8,
     haloGain: 0.7,
     key: '#e9dcff',
-    keyIntensity: 7,
-    sideIntensity: 6,
+    keyIntensity: 5,
+    sideIntensity: 5,
     sky: '#3a2a90',
     ground: '#120a26',
     ambient: 0.1,
-    night: '#05030c',
-    grade: { shadows: '#2a3cff', highlights: '#ff3fd0', amount: 0.25 },
+    night: '#130a2a',
+    bar: '#f8f4ff',
+    barGain: 9,
+    bodyEnv: 2,
+    exposure: 1,
+    beamGain: 0.45,
+    mistGain: 0.3,
+    grade: { shadows: '#5060d0', highlights: '#e070c8', amount: 0.2, saturation: 1.1, contrast: 1.04 },
     bloom: 1,
   },
   {
@@ -127,8 +155,14 @@ export const AMBIANCES = [
     sky: '#d6d4dc',
     ground: '#3a3832',
     ambient: 0.35,
-    night: '#0b0b0f',
-    grade: { shadows: '#808080', highlights: '#808080', amount: 0 },
+    night: '#1d1a26',
+    bar: '#ffffff',
+    barGain: 7,
+    bodyEnv: 1.7,
+    exposure: 1,
+    beamGain: 0.12,
+    mistGain: 0.08,
+    grade: { shadows: '#808080', highlights: '#808080', amount: 0, saturation: 1, contrast: 1 },
     bloom: 0.6,
   },
 ] as const satisfies readonly Ambiance[];

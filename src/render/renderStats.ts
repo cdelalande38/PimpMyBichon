@@ -19,6 +19,8 @@ interface RenderStatsState {
   frame: { calls: number; triangles: number } | null;
   /** Sonde de réflexion : taille de face, durée du dernier calcul, nombre de calculs. */
   probe: { size: number; ms: number; updates: number; version: string } | null;
+  /** Cible de la réflexion planaire du sol, en pixels ; `null` sans réflexion (niveau économie). */
+  reflection: { width: number; height: number } | null;
 }
 
 export const useRenderStats = create<RenderStatsState>()(() => ({
@@ -27,4 +29,5 @@ export const useRenderStats = create<RenderStatsState>()(() => ({
   dpr: null,
   frame: null,
   probe: null,
+  reflection: null,
 }));

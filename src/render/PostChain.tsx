@@ -1,65 +1,53 @@
-// Chaîne d'image (§ 8, étalonnage) : bloom sélectif sur les émissifs (seuil au-dessus du blanc :
-// seules les sources et leurs reflets brillent), tone mapping filmique, dominante de l'ambiance,
-// vignettage léger, grain discret, SMAA. Coupée au niveau économie.
+// Chaîne d'image (§ 8, étalonnage) : occlusion ambiante en espace écran (max), bloom sélectif
+// sur les émissifs (seuil au-dessus du blanc : seules les sources et leurs reflets brillent),
+// exposition de l'ambiance, tone mapping filmique, table de correspondance des couleurs
+// fabriquée en code pour l'ambiance (src/render/lut.ts), vignettage léger, grain discret,
+// anticrénelage (MSAA du composeur + SMAA). Ce que chaque niveau garde : src/render/quality.ts.
 
-import { Bloom, EffectComposer, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing';
-import { BlendFunction, Effect, ToneMappingMode } from 'postprocessing';
-import { Color, Uniform } from 'three';
+import { Bloom, EffectComposer, LUT, N8AO, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing';
+import { BlendFunction, Effect, LookupTexture, ToneMappingMode } from 'postprocessing';
+import { useEffect, useMemo, type ReactElement } from 'react';
+import { Uniform } from 'three';
 import type { Ambiance } from '../data/ambiances.ts';
+import { gradeLutData, type Grade } from './lut.ts';
 import type { QualityProfile } from './quality.ts';
 
-const GRADE_SHADER = /* glsl */ `
-uniform vec3 shadows;
-uniform vec3 highlights;
-uniform float amount;
+/** Côté de la table de correspondance : 16³ suffit, l'interpolation tétraédrique lisse le reste. */
+const LUT_SIZE = 16;
 
+const EXPOSURE_SHADER = /* glsl */ `
+uniform float exposure;
 void mainImage( const in vec4 inputColor, const in vec2 uv, out vec4 outputColor ) {
-  vec3 color = inputColor.rgb;
-  float luma = dot( color, vec3( 0.2126, 0.7152, 0.0722 ) );
-  // Ombres vers une teinte, hautes lumières vers l'autre, à luminosité à peu près constante.
-  vec3 tint = mix( shadows, highlights, smoothstep( 0.04, 0.6, luma ) );
-  vec3 toned = color * tint / max( dot( tint, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-3 );
-  // Les noirs se relèvent à peine vers la dominante des ombres.
-  toned += shadows * 0.025 * ( 1.0 - smoothstep( 0.0, 0.2, luma ) );
-  outputColor = vec4( mix( color, toned, amount ), inputColor.a );
+  outputColor = vec4( inputColor.rgb * exposure, inputColor.a );
 }
 `;
 
-/** Dominante de couleur par ambiance : ombres et hautes lumières teintées séparément. */
-export class GradeEffect extends Effect {
-  constructor({ shadows = '#808080', highlights = '#808080', amount = 0 }: { shadows?: string; highlights?: string; amount?: number } = {}) {
-    super('GradeEffect', GRADE_SHADER, {
-      blendFunction: BlendFunction.NORMAL,
-      uniforms: new Map<string, Uniform>([
-        ['shadows', new Uniform(new Color(shadows))],
-        ['highlights', new Uniform(new Color(highlights))],
-        ['amount', new Uniform(amount)],
-      ]),
+/** Exposition, en lumière linéaire, avant le tone mapping. */
+export class ExposureEffect extends Effect {
+  constructor({ exposure = 1 }: { exposure?: number } = {}) {
+    super('ExposureEffect', EXPOSURE_SHADER, {
+      blendFunction: BlendFunction.SRC,
+      uniforms: new Map<string, Uniform>([['exposure', new Uniform(exposure)]]),
     });
   }
 
-  private uniform<T>(name: string): Uniform<T> {
-    return this.uniforms.get(name) as Uniform<T>;
+  get exposure(): number {
+    return (this.uniforms.get('exposure') as Uniform<number>).value;
   }
 
-  get shadows(): Color {
-    return this.uniform<Color>('shadows').value;
-  }
-
-  get highlights(): Color {
-    return this.uniform<Color>('highlights').value;
-  }
-
-  get amount(): number {
-    return this.uniform<number>('amount').value;
-  }
-
-  set amount(value: number) {
-    this.uniform<number>('amount').value = value;
+  set exposure(value: number) {
+    (this.uniforms.get('exposure') as Uniform<number>).value = value;
   }
 }
 
-const Grade = wrapEffect(GradeEffect);
+const Exposure = wrapEffect(ExposureEffect);
+
+function gradeLut(grade: Grade): LookupTexture {
+  const lut = LookupTexture.createNeutral(LUT_SIZE);
+  (lut.image.data as Float32Array).set(gradeLutData(grade, LUT_SIZE));
+  lut.needsUpdate = true;
+  return lut;
+}
 
 export interface PostChainProps {
   ambiance: Ambiance;
@@ -67,16 +55,27 @@ export interface PostChainProps {
 }
 
 export function PostChain({ ambiance, profile }: PostChainProps) {
-  if (!profile.post) return null;
   const { grade } = ambiance;
+  const lut = useMemo(() => gradeLut(grade), [grade]);
+  useEffect(() => () => lut.dispose(), [lut]);
+
+  const effects = [
+    profile.ao && <N8AO key="ao" quality="low" halfRes aoRadius={0.9} distanceFalloff={0.6} intensity={2.2} />,
+    profile.bloom && (
+      <Bloom key="bloom" mipmapBlur luminanceThreshold={1} luminanceSmoothing={0.15} intensity={ambiance.bloom} radius={0.72} />
+    ),
+    <Exposure key="exposure" exposure={ambiance.exposure} />,
+    <ToneMapping key="tone" mode={ToneMappingMode.ACES_FILMIC} />,
+    <LUT key="lut" lut={lut} tetrahedralInterpolation />,
+    <Vignette key="vignette" offset={0.32} darkness={0.42} />,
+    <Noise key="grain" premultiply blendFunction={BlendFunction.SCREEN} opacity={0.22} />,
+    profile.smaa && <SMAA key="smaa" />,
+  ].filter((effect): effect is ReactElement => effect !== false);
+
   return (
-    <EffectComposer multisampling={profile.multisampling}>
-      <Bloom mipmapBlur luminanceThreshold={1} luminanceSmoothing={0.15} intensity={ambiance.bloom} radius={0.72} />
-      <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-      <Grade shadows={grade.shadows} highlights={grade.highlights} amount={grade.amount} />
-      <Vignette offset={0.3} darkness={0.5} />
-      <Noise premultiply blendFunction={BlendFunction.SCREEN} opacity={0.32} />
-      <SMAA />
+    // Un composeur neuf à chaque niveau : le MSAA de sa cible ne se change pas en route.
+    <EffectComposer key={`${profile.multisampling}-${profile.ao}-${profile.bloom}-${profile.smaa}`} multisampling={profile.multisampling}>
+      {effects}
     </EffectComposer>
   );
 }

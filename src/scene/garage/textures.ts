@@ -53,6 +53,34 @@ const carrelage: Draw = (c, s) => {
   }
 };
 
+// Rugosité du carrelage (canal vert, linéaire), alignée sur le dessin du carrelage : carreaux
+// satinés (≈ 0,3, voile marbré), joints mats (≈ 0,85) un peu plus larges que leur trait.
+const carrelageRugosite: Draw = (c, s) => {
+  const rand = random(7);
+  const tile = s / 2;
+  const level = (value: number) => Math.round(value * 255);
+  for (let i = 0; i < 2; i += 1) {
+    for (let j = 0; j < 2; j += 1) {
+      const v = level(0.28 + rand() * 0.04);
+      c.fillStyle = `rgb(${v},${v},${v})`;
+      c.fillRect(i * tile, j * tile, tile, tile);
+      for (let k = 0; k < 60; k += 1) {
+        const w = level(0.3 + rand() * 0.12);
+        c.fillStyle = `rgba(${w},${w},${w},0.35)`;
+        c.beginPath();
+        c.ellipse(i * tile + rand() * tile, j * tile + rand() * tile, 6 + rand() * 24, 3 + rand() * 8, rand() * 3, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  }
+  const joint = level(0.85);
+  c.fillStyle = `rgb(${joint},${joint},${joint})`;
+  for (let k = 0; k <= 2; k += 1) {
+    c.fillRect(k * tile - 3, 0, 6, s);
+    c.fillRect(0, k * tile - 3, s, 6);
+  }
+};
+
 // OSB : copeaux allongés orientés, tons de paille et de miel. Un panneau par texture.
 const osb: Draw = (c, s) => {
   const rand = random(11);
@@ -235,9 +263,13 @@ const cible: Draw = (c, s) => {
   c.fill();
 };
 
-/** Dessins : largeur du canvas, fonction, et rapport hauteur / largeur quand il n'est pas carré. */
-const DRAWINGS: Record<GarageTextureId, [size: number, draw: Draw, ratio?: number]> = {
+/**
+ * Dessins : largeur du canvas, fonction, rapport hauteur / largeur quand il n'est pas carré, et
+ * `true` pour une donnée (rugosité) qui n'est pas une couleur sRGB.
+ */
+const DRAWINGS: Record<GarageTextureId, [size: number, draw: Draw, ratio?: number, data?: boolean]> = {
   carrelage: [512, carrelage],
+  carrelageRugosite: [512, carrelageRugosite, 1, true],
   osb: [512, osb],
   lambris: [512, lambris],
   tiroirs: [256, tiroirs],
@@ -254,8 +286,8 @@ export function garageTexture(id: GarageTextureId, repeat?: readonly [number, nu
   const key = `${id}:${repeat?.join('x') ?? ''}`;
   const cached = cache.get(key);
   if (cached) return cached;
-  const [size, draw, ratio = 1] = DRAWINGS[id];
-  const base = cache.get(`${id}:`) ?? texture(size, draw, true, Math.round(size * ratio));
+  const [size, draw, ratio = 1, data = false] = DRAWINGS[id];
+  const base = cache.get(`${id}:`) ?? texture(size, draw, !data, Math.round(size * ratio));
   cache.set(`${id}:`, base);
   let result: Texture = base;
   if (repeat) {
@@ -269,12 +301,57 @@ export function garageTexture(id: GarageTextureId, repeat?: readonly [number, nu
   return result;
 }
 
+export type HaloKind = 'rond' | 'goutte' | 'cone' | 'nappe';
+
+/** Cône de lumière dans la brume : étroit en haut, large et fondu en bas. */
+function drawCone(c: CanvasRenderingContext2D, s: number): void {
+  for (let y = 0; y < s; y += 1) {
+    const t = y / (s - 1);
+    const half = s * (0.05 + 0.45 * t);
+    const alpha = Math.pow(1 - t, 1.3) * (0.35 + 0.65 * Math.min(1, t * 6));
+    const g = c.createLinearGradient(s / 2 - half, 0, s / 2 + half, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)');
+    g.addColorStop(0.5, `rgba(255,255,255,${alpha.toFixed(3)})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    c.fillRect(s / 2 - half, y, half * 2, 1);
+  }
+}
+
+/** Nappe de brume au ras du sol : dense en bas, fondue vers le haut et aux deux bouts, en volutes. */
+function drawMist(c: CanvasRenderingContext2D, s: number): void {
+  const rand = random(23);
+  c.filter = 'blur(6px)';
+  for (let k = 0; k < 90; k += 1) {
+    const x = rand() * s;
+    const y = s * (0.55 + rand() * 0.45);
+    const r = s * (0.06 + rand() * 0.12);
+    const edge = Math.min(1, Math.min(x, s - x) / (s * 0.22));
+    const g = c.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, `rgba(255,255,255,${(0.16 * edge).toFixed(3)})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.ellipse(x, y, r * 1.8, r * 0.7, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.filter = 'none';
+  // Fondu vers le haut : on retire la lumière progressivement.
+  c.globalCompositeOperation = 'multiply';
+  const fade = c.createLinearGradient(0, 0, 0, s);
+  fade.addColorStop(0, 'rgb(0,0,0)');
+  fade.addColorStop(0.45, 'rgb(40,40,40)');
+  fade.addColorStop(1, 'rgb(255,255,255)');
+  c.fillStyle = fade;
+  c.fillRect(0, 0, s, s);
+}
+
 /**
  * Halo : `rond` (nappe douce) ou `goutte` (halo d'un spot sur un mur : haut arrondi et net juste
  * sous la retombée, cœur au premier tiers, fondu en pointe vers le bas). Deux gouttes voisines
- * dessinent un cœur, deux bosses en haut, pointe en bas.
+ * dessinent un cœur, deux bosses en haut, pointe en bas. `cone` et `nappe` : brume (atmosphère).
  */
-export function haloTexture(kind: 'rond' | 'goutte'): Texture {
+export function haloTexture(kind: HaloKind): Texture {
   const key = `halo:${kind}`;
   const cached = cache.get(key);
   if (cached) return cached;
@@ -284,6 +361,14 @@ export function haloTexture(kind: 'rond' | 'goutte'): Texture {
       c.fillStyle = '#000';
       c.fillRect(0, 0, s, s);
       c.globalCompositeOperation = 'lighter';
+      if (kind === 'cone') {
+        drawCone(c, s);
+        return;
+      }
+      if (kind === 'nappe') {
+        drawMist(c, s);
+        return;
+      }
       if (kind === 'rond') {
         const g = c.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
         g.addColorStop(0, 'rgba(255,255,255,1)');
