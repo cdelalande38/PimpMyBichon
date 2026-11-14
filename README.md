@@ -6,9 +6,8 @@ Le périmètre, la stack, les budgets et les jalons sont dans [CAHIER_DES_CHARGE
 
 ## Où en est le projet
 
-**Jalon 0, le socle** : Vite, React, React Three Fiber, PWA hors ligne, CI et déploiement Pages. L'app affiche une scène de substitut (déclarée dans [TODO_ASSETS.md](TODO_ASSETS.md)) : pas encore de véhicule, pas encore de son.
-
-Prochain jalon : le rendu cible (showroom néon), sur un modèle de banc d'essai.
+- **Jalon 0, le socle** : accepté le 14 novembre 2026. Vite, React, React Three Fiber, PWA hors ligne, CI et déploiement Pages.
+- **Jalon 1, le rendu cible** : en cours. Rendu showroom néon sur un modèle de banc d'essai, substitut déclaré dans [TODO_ASSETS.md](TODO_ASSETS.md). Pas encore de véhicule du catalogue, pas encore de son.
 
 ## Démarrer
 
