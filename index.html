@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0a0911" />
+    <meta
+      name="description"
+      content="L’atelier de Bichon : prépare un véhicule dans le garage, sors-le de nuit, livre la commande."
+    />
+    <link rel="icon" href="%BASE_URL%icons/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/apple-touch-icon-180.png" />
+    <title>PimpMyBichon</title>
+    <style>
+      /* Fond de nuit dès le premier pixel : jamais d'éclair blanc au chargement. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0911;
+        color: #ece9f4;
+      }
+      .boot-note {
+        padding: 24px 16px;
+        font: 16px/1.45 'Trebuchet MS', Verdana, sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <p class="boot-note">Le garage a besoin de JavaScript pour s’ouvrir. Active-le dans ton navigateur.</p>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

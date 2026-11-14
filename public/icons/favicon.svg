@@ -1,0 +1,55 @@
+<!--
+  PimpMyBichon : favicon, version simplifiée de l'icône pour 16 à 32 px.
+  Reste l'essentiel : la tuile nuit (bleu à gauche, rouge à droite), les flammes, le piston chromé.
+  Pas d'inclinaison ni de lettre : à cette taille, des bords droits calés sur la grille (4 unités = 1 px en 16 px)
+  restent nets. Fichier écrit à la main, sans police ni ressource externe ; l'icône complète est dans tools/icons/.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1b3a86"/>
+      <stop offset=".42" stop-color="#0a0911"/>
+      <stop offset=".58" stop-color="#0a0911"/>
+      <stop offset="1" stop-color="#701a28"/>
+    </linearGradient>
+    <linearGradient id="chrome" gradientUnits="userSpaceOnUse" x1="12" y1="0" x2="52" y2="0">
+      <stop offset="0" stop-color="#8f8bab"/>
+      <stop offset=".14" stop-color="#ece9f4"/>
+      <stop offset=".45" stop-color="#ffffff"/>
+      <stop offset=".78" stop-color="#cfcbe0"/>
+      <stop offset="1" stop-color="#7c7896"/>
+    </linearGradient>
+    <!-- Flammes : trois langues, les trois tons sont taillés dans ce seul tracé. -->
+    <path id="flame" d="
+      M12 36
+      C10 30 7 25 9 19.5
+      C10.5 15 15 12.5 20 12
+      C16.5 15 16.5 19.5 19.5 22
+      C22 24 25 22.5 25.5 19
+      C26.5 12.5 30 7 37 3.5
+      C33 8.5 32 14.5 34.5 19.5
+      C36.5 23 40.5 23.5 42 20.5
+      C43.5 17 45 13 50 10.5
+      C47.5 14.5 48.5 19 50.5 23
+      C52.5 27.5 53 32 52 36 Z"/>
+    <clipPath id="flame-clip">
+      <use href="#flame"/>
+    </clipPath>
+  </defs>
+
+  <rect width="64" height="64" rx="13" fill="url(#bg)"/>
+
+  <g clip-path="url(#flame-clip)">
+    <use href="#flame" fill="#ffe08a"/>
+    <use href="#flame" fill="none" stroke="#ffb224" stroke-width="12"/>
+    <use href="#flame" fill="none" stroke="#ff2d3f" stroke-width="5"/>
+  </g>
+
+  <!-- Piston : tête arrondie, une gorge, jupe échancrée ; un reflet bleu et un reflet rouge sur les flancs. -->
+  <path fill="url(#chrome)" d="
+    M12 35 a3 3 0 0 1 3 -3 h34 a3 3 0 0 1 3 3
+    v19 a2 2 0 0 1 -2 2 h-11 a7 5 0 0 0 -14 0 h-11 a2 2 0 0 1 -2 -2 Z"/>
+  <rect x="13.5" y="33" width="2.5" height="23" fill="#3b7bff" opacity=".85"/>
+  <rect x="48" y="33" width="2.5" height="23" fill="#ff2d3f" opacity=".85"/>
+  <rect x="12" y="40" width="40" height="4" fill="#0a0911"/>
+</svg>

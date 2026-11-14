@@ -1,0 +1,556 @@
+/* PimpMyBichon : un seul monde de nuit, pas de thème clair (§ 2, § 4).
+   Scène 3D en fond, HUD en haut (lecture seule), dock en bas : toutes les commandes dans le
+   tiers bas, cibles de 48 px minimum. Tailles en rem pour suivre le réglage « taille du texte ». */
+
+:root {
+  --night: #0a0911;
+  --sheet: #12101d;
+  --panel: rgba(16, 14, 26, 0.86);
+  --line: rgba(233, 230, 242, 0.16);
+  --rouge: #ff2d3f;
+  --bleu: #3b7bff;
+  --chrome: #ece9f4;
+  --mute: #9a95b3;
+  --ambre: #ffb224;
+  --ok: #22d3b6;
+
+  --display: 'Russo One', 'Arial Black', Impact, sans-serif;
+  --body: 'Chakra Petch', 'Trebuchet MS', Verdana, sans-serif;
+
+  /* Cibles tactiles : 52 px, jamais sous 48 px. Elles grandissent à peine avec la taille du
+     texte, pour que les commandes restent dans le tiers bas même en « très grand ». */
+  --tap: max(48px, calc(40px + 0.75rem));
+  --tap-chip: max(56px, calc(44px + 0.75rem));
+  --gutter: 0.75rem;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+
+  color-scheme: dark;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html[data-text='grand'] {
+  font-size: 112.5%;
+}
+
+html[data-text='tres-grand'] {
+  font-size: 125%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  /* Pas de tirer-pour-rafraîchir ni d'effet élastique : ils voleraient les gestes d'orbite. */
+  overscroll-behavior: none;
+  background: var(--night);
+  color: var(--chrome);
+  font-family: var(--body);
+  font-size: 1rem;
+  line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  /* Réponse immédiate au toucher, sans délai de double-tap. */
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ambre);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ───────────── Coque ───────────── */
+
+.app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  max-width: 56.25rem;
+  margin: 0 auto;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* Les gestes sur la scène pilotent la caméra, pas la page. */
+  touch-action: none;
+}
+
+.stage canvas {
+  display: block;
+  touch-action: none;
+}
+
+.stage-wait {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding-bottom: 30%;
+  color: var(--mute);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ───────────── HUD (lecture seule) ───────────── */
+
+.hud {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gutter);
+  padding: calc(0.625rem + var(--safe-t)) calc(var(--gutter) + var(--safe-r)) 0
+    calc(var(--gutter) + var(--safe-l));
+  pointer-events: none;
+}
+
+.brand {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  line-height: 0.9;
+  text-transform: uppercase;
+  transform: skewX(-9deg);
+  transform-origin: left bottom;
+}
+
+.brand span {
+  display: block;
+  font-size: 0.6875rem;
+  letter-spacing: 0.22em;
+  color: var(--ambre);
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+
+.brand b {
+  display: block;
+  font-size: 1.25rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--chrome);
+  text-shadow: 0 0 14px rgba(59, 123, 255, 0.9);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  margin: 0;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.pill::before {
+  content: '';
+  flex: none;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--mute);
+}
+
+.pill[data-state='pret']::before {
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+}
+
+.pill[data-state='preparation']::before {
+  background: var(--ambre);
+}
+
+.pill[data-state='erreur']::before,
+.pill[data-state='indisponible']::before {
+  background: var(--rouge);
+}
+
+/* ───────────── Zone centrale : la scène reste libre sous le pouce ───────────── */
+
+.mid {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gutter);
+  min-height: 0;
+  padding: 0.5rem calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
+  pointer-events: none;
+}
+
+.tag {
+  margin: 0;
+  padding: 0.2rem 0.5rem;
+  border-left: 2px solid var(--ambre);
+  background: rgba(10, 9, 17, 0.55);
+  color: var(--mute);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.alert {
+  align-self: stretch;
+  margin: auto 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--rouge);
+  border-radius: 4px;
+  background: var(--panel);
+  font-size: 0.9375rem;
+}
+
+/* ───────────── Dock : toutes les commandes, dans le tiers bas ───────────── */
+
+.dock {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.75rem calc(var(--gutter) + var(--safe-r)) calc(var(--gutter) + var(--safe-b))
+    calc(var(--gutter) + var(--safe-l));
+  background: linear-gradient(
+    180deg,
+    rgba(10, 9, 17, 0),
+    rgba(10, 9, 17, 0.9) 26%,
+    rgba(10, 9, 17, 0.97)
+  );
+  /* Le dégradé ne bloque pas l'orbite : seuls les boutons prennent le toucher. */
+  pointer-events: none;
+}
+
+.dock button,
+.dock .strip {
+  pointer-events: auto;
+}
+
+.dock-text {
+  margin-bottom: 0.25rem;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--ambre);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.dock h2,
+.card h2 {
+  margin: 0.15rem 0 0.25rem;
+  font-family: var(--display);
+  font-size: 1.375rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.lead {
+  max-width: 60ch;
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.acts {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* Texte nuit sur rouge LED : contraste suffisant, et l'air d'un néon allumé. */
+.btn.cta {
+  border-color: var(--rouge);
+  background: var(--rouge);
+  color: var(--night);
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+}
+
+.btn:active,
+.chip:active {
+  filter: brightness(1.2);
+}
+
+@media (hover: hover) {
+  .btn:hover {
+    border-color: rgba(233, 230, 242, 0.42);
+  }
+
+  .btn.cta:hover {
+    border-color: var(--chrome);
+  }
+}
+
+.strip {
+  display: flex;
+  align-items: center;
+  gap: var(--gutter);
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+  border: 1px solid var(--ok);
+  border-radius: 4px;
+  background: rgba(34, 211, 182, 0.1);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.strip span {
+  flex: 1;
+}
+
+.strip .btn {
+  flex: none;
+  min-width: 7.5rem;
+  border-color: var(--ok);
+  background: var(--ok);
+  color: var(--night);
+}
+
+.strip-alert {
+  border-color: var(--rouge);
+  background: rgba(255, 45, 63, 0.12);
+}
+
+.strip-alert .btn {
+  border-color: var(--rouge);
+  background: var(--rouge);
+}
+
+/* ───────────── Panneau bas ───────────── */
+
+.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  width: 100%;
+  max-width: 56.25rem;
+  max-height: none;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+}
+
+.sheet::backdrop {
+  background: rgba(5, 4, 10, 0.66);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 82dvh;
+  padding: 1.125rem calc(1rem + var(--safe-r)) calc(1rem + var(--safe-b)) calc(1rem + var(--safe-l));
+  border-top: 3px solid var(--ambre);
+  border-radius: 10px 10px 0 0;
+  background: var(--sheet);
+}
+
+.card-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.card h2 {
+  margin: 0;
+}
+
+.card p {
+  max-width: 60ch;
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.card .eyebrow {
+  font-size: 0.6875rem;
+}
+
+.card .note {
+  color: var(--mute);
+  font-size: 0.8125rem;
+}
+
+/* Onglets et choix : le motif du dock du prototype, défilement horizontal au pouce. */
+.tabs,
+.chips {
+  display: flex;
+  gap: 0.5rem;
+  flex: none;
+  /* Débord jusqu'aux bords du panneau, pour montrer que la rangée défile. */
+  margin: 0 -1rem;
+  padding: 0.25rem 1rem;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar,
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.tabs button {
+  flex: none;
+  min-width: 48px;
+  min-height: var(--tap);
+  margin-right: 0.625rem;
+  padding: 0 0.25rem;
+  border-bottom: 3px solid transparent;
+  color: var(--mute);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tabs button[aria-current='true'] {
+  border-bottom-color: var(--bleu);
+  color: var(--chrome);
+}
+
+.chip {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.125rem;
+  min-width: 5.75rem;
+  min-height: var(--tap-chip);
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  text-align: left;
+  /* Parallélogramme : la signature de l'interface (§ 4). */
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+.chip b {
+  font-size: 0.875rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chip small {
+  color: var(--mute);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.chip[aria-pressed='true'] {
+  background: var(--chrome);
+  color: var(--night);
+}
+
+.chip[aria-pressed='true'] small {
+  color: #4a4660;
+}
+
+/* La découpe en parallélogramme rogne un contour extérieur : on le rentre. */
+.chip:focus-visible {
+  outline-offset: -4px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr);
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.facts dt {
+  color: var(--mute);
+}
+
+.facts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  /* Pratique pour recopier une version ou un nom de carte graphique. */
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+@media (min-width: 700px) {
+  .dock {
+    padding-bottom: calc(1.125rem + var(--safe-b));
+  }
+}

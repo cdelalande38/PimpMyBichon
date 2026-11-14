@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PimpMyBichon : silhouette une couleur, pour les icônes thématisées (le système choisit la teinte).
+
+  Blanc sur transparent : seule la couche alpha compte. Version dépouillée du dessin de icon.svg :
+  flammes pleines, piston en trois pièces (les gorges de segment sont des vides), lettre B évidée,
+  pas d'enseigne néon. Le sujet tient dans la zone sûre des icônes adaptatives (cercle central de 80 %).
+
+  Les tracés reprennent ceux de icon.svg : une retouche des flammes, du piston ou du B se reporte ici à la main.
+
+  Ce fichier donne monochrome-512.png. Régénérer : `npm run icons` (tools/make-icons.mjs).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>PimpMyBichon</title>
+  <defs>
+    <!-- Les flammes s'arrêtent 8 unités au-dessus de la tête du piston : ce vide remplace le cerne nuit. -->
+    <clipPath id="above-crown">
+      <rect x="-200" y="-220" width="400" height="187"/>
+    </clipPath>
+  </defs>
+
+  <!-- Même origine, même inclinaison et même position que le dessin de icon-maskable.svg (8 px sous le centre). -->
+  <g transform="translate(256 264) skewX(-9)" fill="#fff">
+    <!-- Flammes -->
+    <path clip-path="url(#above-crown)" d="
+      M-100 -8
+      C-107 -30 -118 -52 -111 -76
+      C-105 -94 -92 -100 -70 -102
+      C-86 -94 -87 -76 -78 -62
+      C-71 -52 -56 -48 -48 -58
+      C-38 -70 -50 -100 -40 -124
+      C-29 -150 2 -174 30 -190
+      C4 -170 -8 -138 2 -108
+      C10 -84 22 -66 40 -66
+      C58 -66 50 -96 56 -116
+      C62 -134 76 -146 94 -154
+      C74 -140 66 -104 76 -82
+      C82 -68 90 -62 98 -66
+      C105 -70 103 -82 113 -92
+      C107 -78 116 -48 108 -28
+      C105 -20 103 -14 100 -8
+      L100 0 L-100 0 Z"/>
+
+    <!-- Piston : la tête, le cordon entre les deux gorges, puis la jupe frappée du B (evenodd). -->
+    <path d="M-100 -3 V-11 Q-100 -25 -86 -25 H86 Q100 -25 100 -11 V-3 Z"/>
+    <path d="M-100 9 H100 V21 H-100 Z"/>
+    <path fill-rule="evenodd" d="
+      M-100 33 H100 V136 Q100 150 86 150
+      H46 A46 24 0 0 0 -46 150
+      H-86 Q-100 150 -100 136 Z
+      M-31 50 H10 C19 50 26 56 26 65 V70.5 C26 75 24 78.5 19.5 81.5
+      C26 83 31 87.5 31 94.5 V99 C31 108 24 114 14 114 H-31 Z
+      M-14 62.5 V74 H4.5 A5.75 5.75 0 0 0 4.5 62.5 Z
+      M-14 87.5 V101 H6.5 A6.75 6.75 0 0 0 6.5 87.5 Z"/>
+  </g>
+</svg>

@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  PimpMyBichon : icône « maskable », pour les icônes adaptatives des lanceurs.
+
+  Fond plein bord à bord, sans transparence : le lanceur découpe la forme qu'il veut
+  (rond, carré arrondi, goutte). Tout le sujet tient dans la zone sûre, le cercle central
+  de 80 % : rayon 204,8 autour du point 256;256. Seules les lueurs débordent.
+
+  Le dessin est celui de icon.svg, à l'échelle 1 : seuls le fond et la mise en place changent.
+  Toute retouche du bloc « dessin » se fait dans les deux fichiers (make-icons.mjs le vérifie).
+
+  Ce fichier donne maskable-512.png. Régénérer : `npm run icons` (tools/make-icons.mjs).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>PimpMyBichon</title>
+  <defs>
+    <!-- Lueurs du fond : bleu à gauche, rouge à droite. -->
+    <radialGradient id="bg-blue" gradientUnits="userSpaceOnUse" cx="40" cy="250" r="330">
+      <stop offset="0" stop-color="#3b7bff" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#3b7bff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="bg-red" gradientUnits="userSpaceOnUse" cx="472" cy="262" r="330">
+      <stop offset="0" stop-color="#ff2d3f" stop-opacity=".38"/>
+      <stop offset="1" stop-color="#ff2d3f" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <g id="background">
+    <rect width="512" height="512" fill="#0a0911"/>
+    <rect width="512" height="512" fill="url(#bg-blue)"/>
+    <rect width="512" height="512" fill="url(#bg-red)"/>
+  </g>
+
+  <!-- Le dessin est centré sur son origine ; posé 8 px sous le centre, là où pointe de flamme et bas de jupe
+       restent ensemble à 4 px à l'intérieur de la zone sûre. -->
+  <g id="art" transform="translate(256 264)">
+    <!-- dessin:debut (bloc identique dans icon.svg et icon-maskable.svg, vérifié par make-icons.mjs) -->
+    <defs>
+      <!-- Néon : bleu à gauche, rouge à droite ; la bascule se fait derrière le piston. -->
+      <linearGradient id="neon" gradientUnits="userSpaceOnUse" x1="-135" y1="0" x2="135" y2="0">
+        <stop offset="0" stop-color="#3b7bff"/>
+        <stop offset=".42" stop-color="#3b7bff"/>
+        <stop offset=".58" stop-color="#ff2d3f"/>
+        <stop offset="1" stop-color="#ff2d3f"/>
+      </linearGradient>
+      <linearGradient id="neon-core" gradientUnits="userSpaceOnUse" x1="-135" y1="0" x2="135" y2="0">
+        <stop offset="0" stop-color="#dbe7ff"/>
+        <stop offset=".42" stop-color="#dbe7ff"/>
+        <stop offset=".58" stop-color="#ffe1e4"/>
+        <stop offset="1" stop-color="#ffe1e4"/>
+      </linearGradient>
+      <filter id="neon-halo" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="12"/>
+      </filter>
+
+      <!-- Chrome : un cylindre vu de face, qui renvoie le tube bleu à gauche et le tube rouge à droite. -->
+      <linearGradient id="chrome" gradientUnits="userSpaceOnUse" x1="-100" y1="0" x2="100" y2="0">
+        <stop offset="0" stop-color="#141226"/>
+        <stop offset=".05" stop-color="#3b7bff"/>
+        <stop offset=".09" stop-color="#6c9cff"/>
+        <stop offset=".15" stop-color="#2a3a78"/>
+        <stop offset=".24" stop-color="#a9a5c4"/>
+        <stop offset=".36" stop-color="#ece9f4"/>
+        <stop offset=".44" stop-color="#ffffff"/>
+        <stop offset=".52" stop-color="#ece9f4"/>
+        <stop offset=".66" stop-color="#b0abc8"/>
+        <stop offset=".78" stop-color="#6f6a8c"/>
+        <stop offset=".86" stop-color="#3a2c4e"/>
+        <stop offset=".91" stop-color="#ff2d3f"/>
+        <stop offset=".95" stop-color="#ff5f6d"/>
+        <stop offset="1" stop-color="#1c0f1c"/>
+      </linearGradient>
+      <linearGradient id="skirt-shade" gradientUnits="userSpaceOnUse" x1="0" y1="50" x2="0" y2="150">
+        <stop offset="0" stop-color="#0a0911" stop-opacity="0"/>
+        <stop offset="1" stop-color="#0a0911" stop-opacity=".38"/>
+      </linearGradient>
+
+      <!-- Cœur des flammes : pâle en haut, orangé au ras de la tête du piston. -->
+      <linearGradient id="fire-core" gradientUnits="userSpaceOnUse" x1="0" y1="-170" x2="0" y2="-25">
+        <stop offset="0" stop-color="#fff3c9"/>
+        <stop offset=".62" stop-color="#ffe89e"/>
+        <stop offset=".85" stop-color="#ffc94a"/>
+        <stop offset="1" stop-color="#ff7a1f"/>
+      </linearGradient>
+
+      <!-- Flammes : quatre langues qui partent vers la droite, creux arrondis entre elles. -->
+      <path id="flame" d="
+        M-100 -8
+        C-107 -30 -118 -52 -111 -76
+        C-105 -94 -92 -100 -70 -102
+        C-86 -94 -87 -76 -78 -62
+        C-71 -52 -56 -48 -48 -58
+        C-38 -70 -50 -100 -40 -124
+        C-29 -150 2 -174 30 -190
+        C4 -170 -8 -138 2 -108
+        C10 -84 22 -66 40 -66
+        C58 -66 50 -96 56 -116
+        C62 -134 76 -146 94 -154
+        C74 -140 66 -104 76 -82
+        C82 -68 90 -62 98 -66
+        C105 -70 103 -82 113 -92
+        C107 -78 116 -48 108 -28
+        C105 -20 103 -14 100 -8
+        L100 0 L-100 0 Z"/>
+      <clipPath id="flame-clip">
+        <use href="#flame"/>
+      </clipPath>
+
+      <!-- Piston vu de côté : tête arrondie, jupe échancrée en bas. -->
+      <path id="piston" d="
+        M-100 -11 Q-100 -25 -86 -25
+        L86 -25 Q100 -25 100 -11
+        L100 136 Q100 150 86 150
+        L46 150 A46 24 0 0 0 -46 150
+        L-86 150 Q-100 150 -100 136 Z"/>
+      <clipPath id="piston-clip">
+        <use href="#piston"/>
+      </clipPath>
+
+      <!-- Lettre B large, dessinée à la main (boîte 62 x 64). Les deux contre-formes sont évidées (evenodd). -->
+      <path id="letter-b" fill-rule="evenodd" d="
+        M-31 50 H10 C19 50 26 56 26 65 V70.5 C26 75 24 78.5 19.5 81.5
+        C26 83 31 87.5 31 94.5 V99 C31 108 24 114 14 114 H-31 Z
+        M-14 62.5 V74 H4.5 A5.75 5.75 0 0 0 4.5 62.5 Z
+        M-14 87.5 V101 H6.5 A6.75 6.75 0 0 0 6.5 87.5 Z"/>
+    </defs>
+
+    <g transform="skewX(-9)">
+      <!-- Enseigne néon : halo, tube, cœur clair. -->
+      <g fill="none">
+        <rect id="neon-glow" x="-135" y="-120" width="270" height="240" rx="20" stroke="url(#neon)" stroke-width="30" opacity=".7" filter="url(#neon-halo)"/>
+        <rect x="-135" y="-120" width="270" height="240" rx="20" stroke="url(#neon)" stroke-width="13"/>
+        <rect x="-135" y="-120" width="270" height="240" rx="20" stroke="url(#neon-core)" stroke-width="4"/>
+      </g>
+
+      <!-- Flammes : cerne nuit, puis trois tons taillés dans le même tracé (cœur, bande ambre, liseré rouge). -->
+      <use href="#flame" fill="none" stroke="#0a0911" stroke-width="9" stroke-linejoin="round"/>
+      <g clip-path="url(#flame-clip)">
+        <use href="#flame" fill="url(#fire-core)"/>
+        <use href="#flame" fill="none" stroke="#ffb224" stroke-width="40" stroke-linejoin="round"/>
+        <use href="#flame" fill="none" stroke="#ff2d3f" stroke-width="18" stroke-linejoin="round"/>
+      </g>
+
+      <!-- Piston : cerne nuit, chrome, puis détails découpés dans la silhouette. -->
+      <use href="#piston" fill="none" stroke="#0a0911" stroke-width="9" stroke-linejoin="round"/>
+      <use href="#piston" fill="url(#chrome)"/>
+      <g clip-path="url(#piston-clip)">
+        <rect x="-100" y="-25" width="200" height="6" fill="#fff" opacity=".5"/>
+        <rect x="-100" y="50" width="200" height="100" fill="url(#skirt-shade)"/>
+        <!-- Deux gorges de segment, chacune avec son filet de lumière. -->
+        <g fill="#0a0911" opacity=".94">
+          <rect x="-100" y="-3" width="200" height="12"/>
+          <rect x="-100" y="21" width="200" height="12"/>
+        </g>
+        <g fill="#fff" opacity=".45">
+          <rect x="-100" y="9" width="200" height="2.5"/>
+          <rect x="-100" y="33" width="200" height="2.5"/>
+        </g>
+      </g>
+
+      <!-- Le B frappé dans la jupe : un filet clair décalé donne le relief. -->
+      <use href="#letter-b" transform="translate(1.6 1.6)" fill="#fff" opacity=".55"/>
+      <use href="#letter-b" fill="#0a0911"/>
+
+      <!-- Éclat de chrome sur l'épaule gauche. -->
+      <path fill="#fff" d="
+        M-64 -34 C-62.6 -22.8 -59.2 -19.4 -48 -18
+        C-59.2 -16.6 -62.6 -13.2 -64 -2
+        C-65.4 -13.2 -68.8 -16.6 -80 -18
+        C-68.8 -19.4 -65.4 -22.8 -64 -34 Z"/>
+    </g>
+    <!-- dessin:fin -->
+  </g>
+</svg>
