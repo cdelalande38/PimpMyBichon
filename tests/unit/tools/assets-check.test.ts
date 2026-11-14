@@ -6,6 +6,7 @@ import { basename, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_LIMITS, FORBIDDEN_EXTENSIONS, formatBytes, runAssetsCheck } from '../../../tools/lib/assets.mjs';
 import { NOT_CHECKED_RULE } from '../../../tools/lib/report.mjs';
+import { TINY_GLB } from './glb-fixture.ts';
 import { BINARY, creditsFile, located, messagesOf, useTempTrees } from './helpers.ts';
 import type { FileSpec, TreeSpec } from './helpers.ts';
 
@@ -24,7 +25,7 @@ function vehicle(id: string): TreeSpec {
   const dir = `public/assets/vehicles/${id}`;
   return {
     [`${dir}/vehicle.json`]: JSON.stringify({ id, name: 'Véhicule de démonstration' }),
-    [`${dir}/body.glb`]: BINARY,
+    [`${dir}/body.glb`]: TINY_GLB,
     [`${dir}/thumb.webp`]: BINARY,
   };
 }
@@ -61,7 +62,7 @@ describe('assets-check — sources lourdes et masters', () => {
   it('laisse passer les formats livrables, et ne lit pas les dossiers ignorés', () => {
     const root = tree({
       ...ALL_ASSETS_CREDITED,
-      'public/assets/garage/sol.glb': BINARY,
+      'public/assets/garage/sol.glb': TINY_GLB,
       'public/assets/stickers/flamme.svg': SVG,
       'docs/blend.md': 'notes\n',
       'docs/wav/notes.txt': 'notes\n',
@@ -88,7 +89,7 @@ describe('assets-check — licence déclarée dans CREDITS.md', () => {
       ),
       'public/assets/stickers/flammes/flamme-01.svg': SVG,
       'public/assets/fonts/titre.woff2': BINARY,
-      'public/assets/garage/sol.glb': BINARY,
+      'public/assets/garage/sol.glb': TINY_GLB,
       'public/assets/ui/bouton.png': BINARY,
       'public/assets/ui/fond.webp': BINARY,
       'public/assets/vehicles/.gitkeep': '',
@@ -102,7 +103,7 @@ describe('assets-check — licence déclarée dans CREDITS.md', () => {
   it('refuse un fichier qu’aucune ligne ne couvre', () => {
     const root = tree({
       'CREDITS.md': creditsFile(['public/assets/garage/**', 'CC0-1.0']),
-      'public/assets/garage/sol.glb': BINARY,
+      'public/assets/garage/sol.glb': TINY_GLB,
       'public/assets/stickers/etoile.svg': SVG,
     });
     const report = runAssetsCheck({ root });
@@ -116,7 +117,7 @@ describe('assets-check — licence déclarée dans CREDITS.md', () => {
     (license) => {
       const root = tree({
         'CREDITS.md': creditsFile(['public/assets/garage/**', 'CC0-1.0'], ['public/assets/music/**', license]),
-        'public/assets/garage/sol.glb': BINARY,
+        'public/assets/garage/sol.glb': TINY_GLB,
         'public/assets/music/titre-01.opus': BINARY,
         'public/assets/music/titre-02.opus': BINARY,
       });
@@ -176,8 +177,8 @@ describe('assets-check — budgets de poids', () => {
     const root = tree({
       ...ALL_ASSETS_CREDITED,
       ...vehicleOfSize('demo', 15_000_000),
-      'public/assets/garage/decor.glb': { size: 10_000_000 },
-      'public/assets/city/route.glb': { size: 12_000_000 },
+      'public/assets/garage/decor.bin': { size: 10_000_000 },
+      'public/assets/city/route.bin': { size: 12_000_000 },
       'docs/maquette.bin': { size: 25_000_000 },
     });
     const report = runAssetsCheck({ root });
@@ -188,10 +189,10 @@ describe('assets-check — budgets de poids', () => {
 
   const overweight: Array<[string, TreeSpec, string]> = [
     ['un véhicule', vehicleOfSize('gros', 15_000_001), 'public/assets/vehicles/gros:0 poids-vehicule'],
-    ['le garage', { 'public/assets/garage/decor.glb': { size: 10_000_001 } }, 'public/assets/garage:0 poids-decor'],
+    ['le garage', { 'public/assets/garage/decor.bin': { size: 10_000_001 } }, 'public/assets/garage:0 poids-decor'],
     [
       'la ville',
-      { 'public/assets/city/route.glb': { size: 6_000_000 }, 'public/assets/city/immeubles/tours.glb': { size: 6_000_001 } },
+      { 'public/assets/city/route.bin': { size: 6_000_000 }, 'public/assets/city/immeubles/tours.bin': { size: 6_000_001 } },
       'public/assets/city:0 poids-decor',
     ],
     ['un fichier isolé', { 'docs/maquette.bin': { size: 25_000_001 } }, 'docs/maquette.bin:0 poids-fichier'],
@@ -322,7 +323,8 @@ describe('assets-check — ce qui reste hors contrôle', () => {
   it('dit ce qui n’est pas contrôlé à ce jalon', () => {
     const notes = runAssetsCheck({ root: tree() }).notes.filter((note) => note.rule === NOT_CHECKED_RULE);
     expect(notes.map((note) => note.message)).toEqual([
-      'non contrôlé à ce jalon : triangles, draw calls et tailles de textures des GLB, compression KTX2 (jalon 2, avec glTF Transform)',
+      'non contrôlé à ce jalon : budgets de triangles et de draw calls des décors (garage, route), ' +
+        "textures de 1024 px hors caisse et atlas, appels de dessin réels à l'exécution (instances, fusion)",
     ]);
   });
 });

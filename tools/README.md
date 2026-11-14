@@ -5,7 +5,7 @@ Trois contrôles tournent en CI et se lancent à la main. Chacun passe sur un ar
 | Commande | Script | Ce qui est vérifié |
 |---|---|---|
 | `npm run guard` | `tools/guard.mjs` | requêtes vers un tiers, noms de marques, données personnelles et identifiants |
-| `npm run assets:check` | `tools/assets-check.mjs` | sources lourdes, licences déclarées dans `CREDITS.md`, budgets de poids, structure des véhicules |
+| `npm run assets:check` | `tools/assets-check.mjs` | sources lourdes, licences déclarées dans `CREDITS.md`, budgets de poids, structure des véhicules, triangles, appels de dessin et textures des GLB |
 | `npm run audio:check` | `tools/audio-check.mjs` | synthèse dans la chaîne moteur et la radio, manifestes `engine.json`, licences des fichiers audio |
 
 `npm run check` les enchaîne avec le typage, le lint et les tests. Ce mode d'emploi ne couvre que ces trois contrôles.
@@ -125,7 +125,7 @@ Les règles d'`assets-check` et d'`audio-check`, ainsi que `hote-cdn` et `hote-e
 ### Ce que le garde ne voit pas
 
 - Les requêtes dont l'adresse est calculée à l'exécution : seules les URL écrites en toutes lettres sont vues.
-- Le contenu des fichiers binaires : nœuds et textures des GLB, métadonnées des images et des sons.
+- Le contenu des fichiers binaires : nœuds et textures des GLB, métadonnées des images et des sons (`assets-check` mesure les GLB, mais le garde ne les lit pas).
 
 ## assets-check : assets et budgets
 
@@ -142,7 +142,25 @@ Les règles d'`assets-check` et d'`audio-check`, ainsi que `hote-cdn` et `hote-e
 
 Les mégaoctets sont décimaux (1 Mo vaut un million d'octets) : c'est la lecture la plus stricte des budgets. Dossier absent, aucun véhicule, pas de `dist/` : une note le dit, sans erreur.
 
-Non contrôlé à ce jalon : triangles, draw calls et tailles de textures des GLB, compression KTX2 (jalon 2, avec glTF Transform).
+### Budgets des modèles GLB
+
+Chaque `.glb` sous `public/assets/` est lu en Node pur (en-tête, bloc JSON, bloc binaire ; `tools/lib/glb.mjs`) et reçoit une note chiffrée : triangles, primitives, maillages, nombre de textures, plus grande texture, part de KTX2, poids.
+
+- **Triangles** : somme sur les primitives en mode triangles (indices divisés par 3, ou sommets divisés par 3 sans indices) ; une bande ou un éventail compte n - 2 ; points et lignes n'en comptent pas.
+- **Appels de dessin** : une primitive vaut un appel, tous maillages du fichier confondus. C'est un majorant : les instances et la fusion à l'exécution ne sont pas simulées.
+- **Textures** : les images du JSON, avec leurs dimensions lues dans l'en-tête de l'image (KTX2, PNG, JPEG, WebP), qu'elle soit embarquée, en URI de données ou dans un fichier voisin du GLB.
+
+| Règle | Où | Ce qui la déclenche |
+|---|---|---|
+| `modele` | tout `public/assets/` | GLB illisible (en-tête absent, version autre que 2, fichier ou bloc tronqué, JSON invalide) : erreur. Un fichier vide est refusé par `vehicule`, sans doublon |
+| `modele-triangles` | véhicules : erreur ; banc d'essai : avertissement | plus de 400 000 triangles dans un fichier |
+| `modele-appels` | idem | plus de 80 primitives dans un fichier |
+| `modele-texture` | idem | une texture de plus de 2048 px, de largeur ou de hauteur ; avertissement partout si des dimensions n'ont pas pu être lues |
+| `modele-format` | avertissement | une texture qui n'est pas en KTX2 |
+
+« Véhicules » : `public/assets/vehicles/**`, variantes comprises. « Banc d'essai » : `public/assets/bench/**`, substitut déclaré, qui reçoit les mêmes seuils en avertissements. Les autres dossiers (garage, route) sont mesurés et lisibles, sans seuil. Les seuils sont dans `MODEL_LIMITS` (`tools/lib/models.mjs`).
+
+Non contrôlé à ce jalon : budgets de triangles et de draw calls des décors (garage, route), textures de 1024 px hors caisse et atlas, appels de dessin réels à l'exécution (instances, fusion).
 
 ### Format de `CREDITS.md`
 
@@ -209,6 +227,7 @@ Non contrôlé à ce jalon : niveaux (LUFS, crête vraie), formats et points de 
 | `fs-walk.mjs`, `text.mjs`, `glob.mjs` | parcours de l'arbre, lecture des fichiers texte, motifs de chemins |
 | `guard.mjs`, `third-party.mjs`, `brands.mjs`, `secrets.mjs` | le garde et ses trois familles de règles |
 | `credits.mjs`, `assets.mjs`, `audio.mjs` | lecture de `CREDITS.md`, contrôle des assets, contrôle audio |
+| `glb.mjs`, `models.mjs` | lecture d'un conteneur GLB (comptages, dimensions d'images) ; budgets des modèles |
 
 Les tests sont dans `tests/unit/tools/` et travaillent sur des arbres temporaires :
 

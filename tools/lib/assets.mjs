@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { checkLicenseCoverage, CREDITS_FILE, loadCredits } from './credits.mjs';
 import { isDirectory, isRegularFile, listDirectories, walkTree } from './fs-walk.mjs';
+import { checkModels } from './models.mjs';
 import { countLabel, createReport, finding, mergeInto, notChecked, sortReport } from './report.mjs';
 import { parseJson } from './text.mjs';
 
@@ -322,6 +323,7 @@ export function runAssetsCheck({ root, limits: overrides = {} }) {
   checkVehicles(report, root, tree.files, limits);
   checkScenery(report, root, tree.files, limits);
   checkBuiltSite(report, root, limits);
+  checkModels(report, tree.files, formatBytes);
 
   for (const link of tree.links) {
     if (link.rel === 'public' || link.rel.startsWith('public/')) {
@@ -338,7 +340,8 @@ export function runAssetsCheck({ root, limits: overrides = {} }) {
 
   report.notes.push(
     notChecked(
-      'triangles, draw calls et tailles de textures des GLB, compression KTX2 (jalon 2, avec glTF Transform)',
+      'budgets de triangles et de draw calls des décors (garage, route), textures de 1024 px hors caisse et atlas, ' +
+        "appels de dessin réels à l'exécution (instances, fusion)",
     ),
   );
   return sortReport(report);
