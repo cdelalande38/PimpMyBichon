@@ -1,8 +1,9 @@
-// Relevés pour « Sous le capot » : processeur graphique, pixel ratio, cadence.
+// Relevés pour « Sous le capot » : processeur graphique, pixel ratio, cadence, coût d'une image.
 // Ne rend rien à l'écran.
 
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useRef } from 'react';
+import type { WebGLRenderer } from 'three';
 import { useRenderStats } from '../render/renderStats.ts';
 
 /**
@@ -24,6 +25,14 @@ function readRendererName(context: WebGLRenderingContext | WebGL2RenderingContex
   }
 }
 
+/** Le compteur du moteur cesse de se remettre à zéro à chaque passe ; rend la remise d'origine. */
+function countWholeFrames(renderer: WebGLRenderer): () => void {
+  renderer.info.autoReset = false;
+  return () => {
+    renderer.info.autoReset = true;
+  };
+}
+
 export function SceneProbe() {
   const gl = useThree((state) => state.gl);
   const dpr = useThree((state) => state.viewport.dpr);
@@ -43,6 +52,19 @@ export function SceneProbe() {
   useEffect(() => {
     useRenderStats.setState({ dpr });
   }, [dpr]);
+
+  // Coût d'une image, toutes passes comprises (la chaîne d'image en fait plusieurs) : le compteur
+  // n'est plus remis à zéro par chaque passe, mais avant chaque image, après lecture de la précédente.
+  useEffect(() => countWholeFrames(gl), [gl]);
+  useFrame((state) => {
+    const { info } = state.gl;
+    const { calls, triangles } = info.render;
+    if (calls > 0) {
+      const previous = useRenderStats.getState().frame;
+      if (previous?.calls !== calls || previous.triangles !== triangles) useRenderStats.setState({ frame: { calls, triangles } });
+    }
+    info.reset();
+  }, -1);
 
   // Le rendu est à la demande : on ne mesure que pendant que la scène bouge, et on garde
   // la dernière valeur (le panneau « Sous le capot » met lui-même la scène à l'arrêt).

@@ -26,6 +26,8 @@ export interface BenchModel {
    * teintés (un verre clair paraît laiteux sous les reflets du garage).
    */
   glass: { materials: readonly string[]; color: string; opacity: number };
+  /** Optiques allumées : matériaux du GLB, couleur et force de l'émission (au-delà de 1 : bloom). */
+  lamps: ReadonlyArray<{ materials: readonly string[]; color: string; intensity: number }>;
   /** Demi-longueur attendue avant chargement (cadrage d'attente), en mètres. */
   halfLengthHint: number;
   /** Quart de tour à ajouter après la mise à plat, pour présenter l'avant à la caméra de départ. */
@@ -46,6 +48,11 @@ export const BENCH_MODEL: BenchModel = {
     { material: 'Tireside', maps: ['map', 'normalMap'], color: '#1a1a1c' },
   ],
   glass: { materials: ['Glass'], color: '#0c0e14', opacity: 0.55 },
+  lamps: [
+    { materials: ['Headlight'], color: '#fff3e0', intensity: 7 },
+    { materials: ['Brakelight'], color: '#ff1206', intensity: 6 },
+    { materials: ['Signallight'], color: '#ff8a10', intensity: 4 },
+  ],
   halfLengthHint: 2.3,
   yawQuarterTurns: 0,
 };

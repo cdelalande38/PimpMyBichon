@@ -36,7 +36,18 @@ describe('données du banc d’essai', () => {
   });
 
   it('les finitions de départ sont des réglages physiques bornés', () => {
-    expect(FINISHES.map((item) => item.id)).toEqual(['brillant', 'mat', 'metallise', 'paillete', 'candy', 'chrome']);
+    expect(FINISHES.map((item) => item.id)).toEqual([
+      'brillant',
+      'satine',
+      'mat',
+      'metallise',
+      'paillete',
+      'candy',
+      'nacre',
+      'cameleon',
+      'chrome',
+      'chrome-colore',
+    ]);
     expect(unique(FINISHES.map((item) => item.label))).toBe(true);
     for (const item of FINISHES) {
       for (const key of ['metalness', 'roughness', 'clearcoat', 'clearcoatRoughness', 'iridescence', 'tint'] as const) {
@@ -45,10 +56,13 @@ describe('données du banc d’essai', () => {
       }
       expect(item.hint.length, item.id).toBeGreaterThan(0);
     }
-    // Chrome : métal pur, rugosité de 0,03 à 0,08 (§ 8).
-    expect(finish('chrome').metalness).toBe(1);
-    expect(finish('chrome').roughness).toBeGreaterThanOrEqual(0.03);
-    expect(finish('chrome').roughness).toBeLessThanOrEqual(0.08);
+    // Chrome et chrome coloré : métal pur, rugosité de 0,03 à 0,08 (§ 8), teinte libre.
+    for (const id of ['chrome', 'chrome-colore'] as const) {
+      expect(finish(id).metalness).toBe(1);
+      expect(finish(id).roughness).toBeGreaterThanOrEqual(0.03);
+      expect(finish(id).roughness).toBeLessThanOrEqual(0.08);
+    }
+    expect(finish('chrome-colore').tint).toBe(1);
     expect(FINISHES.some((item) => item.id === DEFAULT_FINISH)).toBe(true);
   });
 

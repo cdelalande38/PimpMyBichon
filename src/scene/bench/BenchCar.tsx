@@ -124,7 +124,15 @@ function prepare(source: Group, model: BenchModel): Prepared {
     material.needsUpdate = true;
   }
 
-  // 4. Budget de draw calls (§ 8) : le modèle est immobile, ses pièces sont fusionnées par
+  // 4. Phares, feux stop et clignotants allumés.
+  for (const material of all) {
+    const lamp = model.lamps.find((item) => item.materials.includes(material.name));
+    if (!lamp || !(material instanceof MeshStandardMaterial)) continue;
+    material.emissive.set(lamp.color);
+    material.emissiveIntensity = lamp.intensity;
+  }
+
+  // 5. Budget de draw calls (§ 8) : le modèle est immobile, ses pièces sont fusionnées par
   //    matériau. Seules les géométries aux attributs identiques se fusionnent.
   scene.updateMatrixWorld(true);
   const groups = new Map<string, Mesh[]>();
@@ -153,9 +161,11 @@ function prepare(source: Group, model: BenchModel): Prepared {
     for (const part of parts) part.removeFromParent();
   }
 
-  // 5. Pose : longueur sur X, au sol, centré. Orientation mesurée, jamais supposée.
+  // 6. Pose : longueur sur X, au sol, centré. Orientation mesurée, jamais supposée.
   const root = new Group();
   root.name = 'placeholder_banc';
+  // Le véhicule ne se reflète pas lui-même : la sonde de réflexion le masque.
+  root.userData.hideInProbe = true;
   const turn = new Group();
   // Les pièces fusionnées sont déjà dans le repère du parent du modèle : elles vont à côté.
   turn.add(scene, merged);

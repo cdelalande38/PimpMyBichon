@@ -1,23 +1,24 @@
 // Scène du garage. Chargée à la demande (three.js pèse lourd) : la coque de l'app s'affiche avant.
-// Au jalon 1, le modèle de banc d'essai dans le décor de substitut, sous l'ambiance choisie.
-// Tout est servi par l'app : modèle, textures KTX2 et transcodeur.
+// Au jalon 1, le modèle de banc d'essai dans le garage du § 4, sous l'ambiance choisie, avec
+// sa sonde de réflexion et sa chaîne d'image. Tout est servi par l'app : modèle, textures KTX2
+// et transcodeur ; les textures du garage sont dessinées sur place.
 
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Bloom, EffectComposer, ToneMapping } from '@react-three/postprocessing';
-import { ToneMappingMode } from 'postprocessing';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SceneBoundary } from '../app/SceneBoundary.tsx';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
 import { BENCH_MODEL } from '../data/bench.ts';
+import { GARAGE } from '../data/garage.ts';
+import { PostChain } from '../render/PostChain.tsx';
 import { QUALITY_PROFILES, resolveQuality, type QualityProfile } from '../render/quality.ts';
+import { ReflectionProbe } from '../render/ReflectionProbe.tsx';
 import { useBench } from '../state/bench.ts';
 import { useSettings } from '../state/store.ts';
 import { BenchCar, type BenchMeasure } from './bench/BenchCar.tsx';
-import { createGarageEnvironment } from './environment.ts';
 import { fitCamera, orbitPosition } from './fit.ts';
-import { PlaceholderGarage } from './PlaceholderGarage.tsx';
+import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
 
 /** Cible de l'orbite : sous le centre du véhicule, pour le remonter au-dessus du dock. */
@@ -47,9 +48,8 @@ function Stage({ profile, mayRotate }: StageProps) {
   const onMeasured = useCallback((measure: BenchMeasure) => setHalfLength(measure.halfLength), []);
   const fit = useMemo(() => fitCamera(width, height, halfLength * FRAME_MARGIN), [width, height, halfLength]);
 
-  // Ambiance : tubes, lumières et reflets du décor. L'environnement est refait à chaque changement.
+  // Ambiance : sources, lumières et étalonnage. La sonde de réflexion se refait à chaque changement.
   const ambiance = findAmbiance(useBench((state) => state.ambiance));
-  const getThree = useThree((state) => state.get);
   const setStatus = useBench((state) => state.setStatus);
   const position = useMemo(() => orbitPosition(TARGET, fit.distance), [fit.distance]);
 
@@ -63,16 +63,6 @@ function Stage({ profile, mayRotate }: StageProps) {
   const rotating = mayRotate && idle;
   const invalidate = useThree((state) => state.invalidate);
   useEffect(() => {
-    const { gl, scene } = getThree();
-    const environment = createGarageEnvironment(gl, ambiance);
-    scene.environment = environment;
-    invalidate();
-    return () => {
-      if (scene.environment === environment) scene.environment = null;
-      environment.dispose();
-    };
-  }, [getThree, ambiance, invalidate]);
-  useEffect(() => {
     if (rotating) invalidate();
   }, [rotating, invalidate]);
   useFrame(() => {
@@ -82,7 +72,6 @@ function Stage({ profile, mayRotate }: StageProps) {
   return (
     <>
       <color attach="background" args={[ambiance.night]} />
-      <fog attach="fog" args={[ambiance.night, fit.distance + 3, fit.distance + 30]} />
 
       <PerspectiveCamera makeDefault fov={fit.fov} near={0.1} far={80} position={position} />
       <OrbitControls
@@ -107,7 +96,8 @@ function Stage({ profile, mayRotate }: StageProps) {
         }}
       />
 
-      <PlaceholderGarage ambiance={ambiance} />
+      <Garage ambiance={ambiance} />
+      <ReflectionProbe size={profile.probeSize} position={GARAGE.probe} version={ambiance.id} />
       {/* Le modèle arrive après le décor ; s'il manque (première visite sans réseau), le garage
           reste et l'étiquette le dit. */}
       <SceneBoundary onFail={() => setStatus('erreur')}>
@@ -116,12 +106,7 @@ function Stage({ profile, mayRotate }: StageProps) {
         </Suspense>
       </SceneBoundary>
 
-      {profile.bloom && (
-        <EffectComposer multisampling={profile.multisampling}>
-          <Bloom mipmapBlur luminanceThreshold={1} luminanceSmoothing={0.2} intensity={0.9} />
-          <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
-        </EffectComposer>
-      )}
+      <PostChain ambiance={ambiance} profile={profile} />
 
       <SceneProbe />
     </>

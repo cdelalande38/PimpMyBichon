@@ -1,6 +1,6 @@
 // Niveaux de qualité graphique (§ 8). Module pur.
-// Au jalon 0, un niveau ne règle que la densité de pixels et le bloom de la scène de substitut ;
-// le contenu réel de chaque niveau (réflexion planaire, occlusion, brume…) se décide au jalon 1.
+// La peinture multicouche et la sonde de réflexion sont de tous les niveaux ; l'économie coupe
+// la chaîne d'image. Réflexion planaire, occlusion et brume viendront s'ajouter ici.
 
 import type { QualitySetting } from '../state/settings.ts';
 
@@ -10,16 +10,18 @@ export type QualityLevel = (typeof QUALITY_LEVELS)[number];
 export interface QualityProfile {
   /** Plafond du pixel ratio. Jamais au-dessus de 2 (§ 8, budgets). */
   dprMax: number;
-  /** Bloom sur les sources émissives. */
-  bloom: boolean;
+  /** Chaîne d'image : bloom, tone mapping, étalonnage, vignettage, grain, SMAA. */
+  post: boolean;
   /** Échantillons MSAA du rendu hors écran (0 : aucun). */
   multisampling: number;
+  /** Côté d'une face de la sonde de réflexion, en pixels (§ 8 : 256 à 512). */
+  probeSize: number;
 }
 
 export const QUALITY_PROFILES: Readonly<Record<QualityLevel, QualityProfile>> = Object.freeze({
-  eco: { dprMax: 1.25, bloom: false, multisampling: 0 },
-  standard: { dprMax: 2, bloom: true, multisampling: 0 },
-  max: { dprMax: 2, bloom: true, multisampling: 4 },
+  eco: { dprMax: 1.25, post: false, multisampling: 0, probeSize: 256 },
+  standard: { dprMax: 2, post: true, multisampling: 0, probeSize: 256 },
+  max: { dprMax: 2, post: true, multisampling: 4, probeSize: 512 },
 });
 
 /**

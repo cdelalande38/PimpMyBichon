@@ -9,7 +9,7 @@ export interface PaintColor {
 }
 
 export const PAINT_COLORS = [
-  { id: 'teal', label: 'Vert Bichon', hex: '#0c6f66' },
+  { id: 'teal', label: 'Vert Bichon', hex: '#0a3a46' },
   { id: 'noir', label: 'Noir', hex: '#0b0b0e' },
   { id: 'rouge', label: 'Rouge sang', hex: '#b0121c' },
   { id: 'orange', label: 'Orange piste', hex: '#ff6a00' },

@@ -62,6 +62,8 @@ export function UnderHoodPanel() {
   const gpu = useRenderStats((state) => state.gpu);
   const fps = useRenderStats((state) => state.fps);
   const dpr = useRenderStats((state) => state.dpr);
+  const frame = useRenderStats((state) => state.frame);
+  const probe = useRenderStats((state) => state.probe);
   const quality = useSettings((state) => state.quality);
   const storage = useStorageStatus();
 
@@ -101,8 +103,26 @@ export function UnderHoodPanel() {
       <dd>
         {typo(
           fps === null
-            ? 'Pas encore mesurée : fais tourner la forme.'
+            ? 'Pas encore mesurée : fais tourner le véhicule.'
             : `${fps} i/s à la dernière mesure.`,
+        )}
+      </dd>
+
+      <dt>Image</dt>
+      <dd data-fact="image">
+        {typo(
+          frame === null
+            ? 'Pas encore dessinée.'
+            : `${frame.calls.toLocaleString('fr-FR')} appels de dessin · ${frame.triangles.toLocaleString('fr-FR')} triangles.`,
+        )}
+      </dd>
+
+      <dt>Reflets</dt>
+      <dd data-fact="sonde">
+        {typo(
+          probe === null
+            ? 'Sonde pas encore calculée.'
+            : `Sonde de ${probe.size} px par face, calculée en ${probe.ms} ms (${probe.updates} calcul${probe.updates > 1 ? 's' : ''}).`,
         )}
       </dd>
 

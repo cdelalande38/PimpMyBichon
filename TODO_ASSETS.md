@@ -27,10 +27,33 @@ Claude Code tient ce fichier à jour : chaque substitut encore en place y figure
 
 Format : `placeholder_<nom>` · ce qu'il remplace · depuis quel jalon.
 
-- `placeholder_garage` · le garage du § 4 (décor, objets, éclairage par ambiance) : un sol, un mur et deux tubes néon rouge et bleu · depuis le jalon 0
+- `placeholder_garage` · retiré au jalon 1 : le garage du § 4 est construit d'après `src/data/garage.ts` (enveloppe, retombées, spots, halos, textures dessinées au canvas). Son mobilier reste en volumes simples, listés ci-dessous, en attendant des modèles :
+  - `placeholder_meubles_atelier` · meubles blancs à tiroirs, plan de travail, outils posés · depuis le jalon 1
+  - `placeholder_servante` · servante noire à tiroirs · depuis le jalon 1
+  - `placeholder_enceintes` · enceintes noires murales · depuis le jalon 1
+  - `placeholder_applique` · applique articulée · depuis le jalon 1
+  - `placeholder_colonne_ecran` · colonne noire toute hauteur · depuis le jalon 1
+  - `placeholder_ecran` · grand écran (en attendant la photo du dernier build livré, un coucher de soleil dessiné) · depuis le jalon 1
+  - `placeholder_toile_pop_art` · toile pop art (motif original à créer) · depuis le jalon 1
+  - `placeholder_credence` · crédence noire à bouts en escalier de carreaux blancs (texture dessinée) · depuis le jalon 1
+  - `placeholder_moto_supermotard` · moto supermotard orange sur béquille · depuis le jalon 1
+  - `placeholder_flipper` · flipper ancien et son fronton éclairé · depuis le jalon 1
+  - `placeholder_peluche` · peluche posée sur le flipper · depuis le jalon 1
+  - `placeholder_panneau_cible` · panneau de bois à bords étagés, rétroéclairé · depuis le jalon 1
+  - `placeholder_cible` · cible de fléchettes (texture dessinée) · depuis le jalon 1
+  - `placeholder_caisses` · caisses empilées · depuis le jalon 1
+  - `placeholder_fut` · fût métallique rouge · depuis le jalon 1
+  - `placeholder_quad` · quad noir à phares ronds · depuis le jalon 1
+  - `placeholder_table_basse` · table basse en sapin brut · depuis le jalon 1
+  - `placeholder_bloc_moteur` · bloc 4 cylindres à cornets rouges · depuis le jalon 1
+  - `placeholder_tabouret_frein` · tabouret disque de frein à assise rouge · depuis le jalon 1
+  - `placeholder_pouf_pneu` · pouf pneu, sans marque · depuis le jalon 1
+  - `placeholder_fauteuils` · fauteuil en cuir brun · depuis le jalon 1
+  - `placeholder_casiers_casques` · casiers rétroéclairés à quatre casques · depuis le jalon 1
+  - `placeholder_pieds_tubes` · pieds des tubes LED de l'ambiance « Néon » · depuis le jalon 1
 - `placeholder_banc` · les véhicules du catalogue : un modèle de banc d'essai sous licence CC-BY 4.0 (`public/assets/bench/carconcept/`, crédit dans `CREDITS.md`), sans rapport avec un véhicule du catalogue ; sa plaque à logos est remplacée par une plaque unie · depuis le jalon 1
 
-Le garage est généré par le code (`src/scene/`), le banc d'essai est décrit dans `src/data/bench.ts`. Les deux sont annoncés à l'écran (« Substitut · modèle de banc d'essai », et dans « Sous le capot »).
+Le garage est généré par le code (`src/scene/garage/`, d'après `src/data/garage.ts`), le banc d'essai est décrit dans `src/data/bench.ts`. Les deux sont annoncés à l'écran (« Substitut · modèle de banc d'essai », et dans « Sous le capot »).
 
 ## Emplacements audio
 
