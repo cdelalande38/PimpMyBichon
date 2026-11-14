@@ -32,7 +32,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Ambiance } from '../../data/ambiances.ts';
-import { createSurfaceUniforms, patchSurface, setReflection, type SurfaceUniforms } from '../../render/floor.ts';
+import { createSurfaceUniforms, patchDiffuseIbl, patchSurface, setReflection, type SurfaceUniforms } from '../../render/floor.ts';
 import {
   colorOf,
   GARAGE_MATERIALS,
@@ -158,11 +158,13 @@ export interface GarageScene {
 export function createGarage(layout: GarageLayout): GarageScene {
   const root = new Group();
   root.name = 'garage';
+  const surfaceUniforms = createSurfaceUniforms(layout.room, layout.outside.falloff);
   const materials = new Map<GarageMaterialId, MeshStandardMaterial>();
   const material = (id: GarageMaterialId) => {
     let found = materials.get(id);
     if (!found) {
       found = createMaterial(id);
+      patchDiffuseIbl(found, surfaceUniforms);
       materials.set(id, found);
     }
     return found;
@@ -184,8 +186,7 @@ export function createGarage(layout: GarageLayout): GarageScene {
   const shell = new Group();
   shell.name = 'garage_enveloppe';
   // Sol et plafond prolongés : mêmes carreaux, mêmes lames, perdus dans la brume au-delà des murs.
-  const { extent, falloff } = layout.outside;
-  const surfaceUniforms = createSurfaceUniforms(layout.room, falloff);
+  const { extent } = layout.outside;
   const floorMaterial = material(surfaces.floor);
   const ceilingMaterial = material(surfaces.ceiling);
   patchSurface(floorMaterial, surfaceUniforms);

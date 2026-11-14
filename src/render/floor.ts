@@ -117,6 +117,19 @@ export function patchSurface(material: MeshStandardMaterial, uniforms: SurfaceUn
   material.customProgramCacheKey = () => 'pmb-surface-2';
 }
 
+/**
+ * Pour le reste du décor : seule la part diffuse de la sonde est réduite (ses reflets restent).
+ * Les rampes qu'elle voit laveraient sinon les murs d'une lumière uniforme et éteindraient les halos.
+ */
+export function patchDiffuseIbl(material: MeshStandardMaterial, uniforms: SurfaceUniforms): void {
+  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+    shader.uniforms.pmbIblDiffuse = uniforms.pmbIblDiffuse;
+    shader.fragmentShader = inject(shader.fragmentShader, '#include <common>', 'uniform float pmbIblDiffuse;');
+    shader.fragmentShader = inject(shader.fragmentShader, '#include <lights_fragment_maps>', 'iblIrradiance *= pmbIblDiffuse;');
+  };
+  material.customProgramCacheKey = () => 'pmb-decor-1';
+}
+
 /** Active ou coupe la réflexion planaire d'un matériau patché (recompile une fois). */
 export function setReflection(material: MeshStandardMaterial, on: boolean): void {
   const has = material.defines?.PMB_REFLECTION !== undefined;
