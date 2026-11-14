@@ -206,11 +206,12 @@ describe('coupe : fondu et volume protégé', () => {
   });
 
   it('P : boîte mesurée tournée dans la pièce, gonflée, prolongée sous le sol ; boîte d’attente sinon', () => {
-    const settings = { waiting: VEHICLE, side: 0.3, top: 0.2, below: 0.6, hysteresis: 0.25 };
+    const settings = { waiting: VEHICLE, side: 0.3, top: 0.2, reflection: 0.5, hysteresis: 0.25 };
     const turned = protectedBoxes({ halfLength: 2, halfWidth: 1, height: 1.4 }, Math.PI / 2, settings);
     expect(turned.vehicle.max[0]).toBeCloseTo(1, 9);
     expect(turned.vehicle.max[2]).toBeCloseTo(2, 9);
-    expect(turned.small.min[1]).toBeCloseTo(-0.6, 9);
+    // La moitié du reflet : 0,5 × 1,4 m sous le sol.
+    expect(turned.small.min[1]).toBeCloseTo(-0.7, 9);
     expect(turned.small.max[1]).toBeCloseTo(1.6, 9);
     expect(turned.big.max[0]).toBeCloseTo(1.55, 9);
     const waiting = protectedBoxes(null, Math.PI, settings);
@@ -355,19 +356,28 @@ describe('coupe : garage réel', () => {
     });
   });
 
-  it('bandeau porté : œil au-dessus du plafond, il disparaît avec sa retombée au lieu de flotter', () => {
+  it('bandeau porté : il suit sa retombée, qui reste sur son mur vue d’au-dessus et part quand l’œil passe derrière', () => {
     const carried = GARAGE.strips.flatMap((strip, index) => (strip.on ? [{ name: `bandeau_${index + 1}`, on: strip.on }] : []));
     expect(carried.length).toBeGreaterThan(0);
-    // Zoom arrière en portrait, côté de départ : l'œil passe au-dessus du plafond.
+    for (const { name, on } of carried) expect(supportsOf(structure, name)).toEqual([...on]);
+    // Tour complet au recul maximal en portrait, hauteur de départ : l'œil est au-dessus du plafond.
     const fit = fitCamera(390, 844, halfLength * frameMargin);
-    const [x, y, z] = orbitPosition(target, fit.maxDistance);
-    expect(y).toBeGreaterThan(GARAGE.room.height);
-    const hidden = new Set(hiddenNames(structure, decideCut(structure, eye(x, y, z), protect, GARAGE.cut.wallBand, createCutState(structure))));
-    for (const { name, on } of carried) {
-      expect(supportsOf(structure, name)).toEqual([...on]);
-      for (const support of on) expect(hidden.has(support), support).toBe(true);
-      expect(hidden.has(name), name).toBe(true);
+    let kept = 0;
+    let gone = 0;
+    for (let a = 0; a < 72; a += 1) {
+      const [x, y, z] = orbitPosition(target, fit.maxDistance, (a / 72) * Math.PI * 2);
+      expect(y).toBeGreaterThan(GARAGE.room.height);
+      const hidden = new Set(hiddenNames(structure, decideCut(structure, eye(x, y, z), protect, GARAGE.cut.wallBand, createCutState(structure))));
+      for (const { name, on } of carried) {
+        const supportHidden = on.some((support) => hidden.has(support));
+        expect(hidden.has(name), `${name}, azimut ${a}`).toBe(supportHidden);
+        if (supportHidden) gone += 1;
+        else kept += 1;
+      }
     }
+    // La retombée garde son bandeau tant que l'œil n'a pas passé son mur, et part avec lui ensuite.
+    expect(kept).toBeGreaterThan(0);
+    expect(gone).toBeGreaterThan(0);
   });
 
   it('aucun élément ne coupe P : il serait masqué en permanence', () => {
@@ -452,7 +462,8 @@ const halfLength = GARAGE.vehicle.protect.waiting.max[0];
 const { target, minPolar, maxPolar, frameMargin } = GARAGE.orbit;
 
 describe('coupe : balayage autour du véhicule', () => {
-  it('aucun élément laissé visible ne coupe la vue vers le véhicule (orbite et cadrages photo)', () => {
+  // Preuve par lancer de rayons sur tout le balayage : lente par nature, d'où le délai large.
+  it('aucun élément laissé visible ne coupe la vue vers le véhicule (orbite et cadrages photo)', { timeout: 120_000 }, () => {
     const points = vehiclePoints(protect.vehicle);
     const failures: string[] = [];
     let eyes = 0;

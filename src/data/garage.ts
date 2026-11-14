@@ -217,13 +217,13 @@ export interface GarageLayout {
   /**
    * Pose du véhicule : rotation de son groupe autour de la verticale (π : l'avant vers la gauche).
    * `protect` : volume protégé de la coupe caméra (src/scene/garage/cut.ts), la boîte mesurée du
-   * véhicule gonflée sur les côtés et au-dessus, prolongée sous le sol (son reflet dans le
-   * carrelage) ; `waiting` la remplace tant que le modèle n'est pas mesuré, ou s'il manque.
+   * véhicule gonflée sur les côtés et au-dessus, prolongée sous le sol de `reflection` fois sa
+   * hauteur (son reflet dans le carrelage) ; `waiting` la remplace tant que le modèle n'est pas mesuré, ou s'il manque.
    * `hysteresis` : gonflement du second volume, dont un élément masqué doit sortir pour revenir.
    */
   vehicle: {
     turn: number;
-    protect: { waiting: { min: Vec3; max: Vec3 }; side: number; top: number; below: number; hysteresis: number };
+    protect: { waiting: { min: Vec3; max: Vec3 }; side: number; top: number; reflection: number; hysteresis: number };
   };
   /**
    * Coupe caméra : ce qui passerait entre l'œil et le véhicule quitte l'image.
@@ -329,7 +329,8 @@ export const GARAGE: GarageLayout = {
       waiting: { min: [-2.3, 0, -0.95], max: [2.3, 1.3, 0.95] },
       side: 0.15,
       top: 0.2,
-      below: 0.6,
+      // Le reflet entier du véhicule est protégé : le toit se lit dans le carrelage.
+      reflection: 1,
       hysteresis: 0.15,
     },
   },

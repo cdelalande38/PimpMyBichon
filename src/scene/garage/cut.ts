@@ -194,11 +194,12 @@ export function analyzeCut(room: CutRoom, elements: readonly CutElement[], toler
     if (!box) return;
     const bits = planesTouched(box, room, tolerances.wall);
     contacts[i] = bits;
-    // Le plafond ne compte que pour ce qui y est suspendu : ce qui monte du sol jusqu'à lui (la
-    // colonne) se voit d'en haut comme un mur se voit par sa tranche.
-    const ceiling = bits & PLANE.floor ? 0 : bits & PLANE.ceiling;
     let walls = 0;
     for (const part of solid[i] ?? []) walls |= wallsAlong(part, room, tolerances.wall);
+    // Le plafond ne compte que pour ce qui n'a que lui : ce qui monte du sol jusqu'à lui (la
+    // colonne) se voit d'en haut comme un mur se voit par sa tranche, et ce qui court le long
+    // d'un mur (une retombée, avec ses spots) reste avec ce mur tant que l'œil ne l'a pas passé.
+    const ceiling = bits & PLANE.floor || walls !== 0 ? 0 : bits & PLANE.ceiling;
     r1Planes[i] = walls | ceiling;
   });
 
@@ -377,8 +378,11 @@ export interface ProtectSettings {
   /** Marge autour du véhicule sur les côtés et au-dessus, en mètres. */
   side: number;
   top: number;
-  /** Profondeur sous le sol (le reflet du véhicule dans le carrelage). */
-  below: number;
+  /**
+   * Part du reflet du véhicule dans le carrelage qui est protégée, de 0 à 1 : le volume descend
+   * sous le sol de cette fraction de la hauteur du véhicule (1 : son image entière, toit compris).
+   */
+  reflection: number;
   /** Gonflement supplémentaire du grand volume (hystérésis de R2). */
   hysteresis: number;
 }
@@ -414,7 +418,8 @@ export function protectedBoxes(measure: VehicleMeasure | null, turn: number, set
     vehicle = { min: [-hx, 0, -hz], max: [hx, measure.height, hz] };
   }
   const small = inflate(vehicle, settings.side, settings.top, 0);
-  const prolonged: Box = { min: [small.min[0], Math.min(small.min[1], -settings.below), small.min[2]], max: small.max };
+  const below = settings.reflection * vehicle.max[1];
+  const prolonged: Box = { min: [small.min[0], Math.min(small.min[1], -below), small.min[2]], max: small.max };
   const h = settings.hysteresis;
   return { vehicle, small: prolonged, big: inflate(prolonged, h, h, h) };
 }
