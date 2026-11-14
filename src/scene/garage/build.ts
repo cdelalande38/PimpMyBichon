@@ -237,7 +237,7 @@ export function createGarage(layout: GarageLayout): GarageScene {
   lights.right.position.set(...layout.lights.right);
   lights.key.position.set(...layout.lights.key);
   lights.key.target.position.set(...layout.lights.keyTarget);
-  lights.key.angle = 0.75;
+  lights.key.angle = 0.55;
   lights.key.penumbra = 0.85;
   for (const light of [lights.left, lights.right, lights.key]) light.decay = 2;
   root.add(lights.ambient, lights.left, lights.right, lights.key, lights.key.target);
@@ -304,7 +304,7 @@ export function createGarage(layout: GarageLayout): GarageScene {
       // Cœur du halo, plus petit et d'une teinte plus claire (cyan sous le bleu, orange sous le rouge).
       const core = ambiance.spotCores[slot] ?? colorOf(ambiance, spot.color);
       const coreAt: Vec3 = [at[0], spot.at[1] - hh * 0.22, at[2] + 0.001];
-      halos.goutte.push(paint(plane(hw * 0.5, hh * 0.44, coreAt, '+z', false), new Color(core).multiplyScalar(gain * 0.45)));
+      halos.goutte.push(paint(plane(hw * 0.5, hh * 0.44, coreAt, '+z', false), new Color(core).multiplyScalar(gain * 0.38)));
     }
     for (const kind of ['rond', 'goutte'] as const) {
       const parts = halos[kind];

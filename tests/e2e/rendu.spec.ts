@@ -8,7 +8,11 @@ const dock = (page: Page) => page.locator('footer.dock');
 
 async function pick(page: Page, tab: string, choice: string): Promise<void> {
   await dock(page).getByRole('navigation', { name: 'Banc d’essai' }).getByRole('button', { name: tab }).tap();
-  const button = dock(page).getByRole('group', { name: tab }).getByRole('button', { name: new RegExp(`^${choice}`) });
+  // Le nom exact (« Chrome » n'est pas « Chrome coloré ») est dans le <b> du bouton.
+  const button = dock(page)
+    .getByRole('group', { name: tab })
+    .getByRole('button')
+    .filter({ has: page.locator('b', { hasText: new RegExp(`^${choice}$`) }) });
   await button.tap();
   await expect(button).toHaveAttribute('aria-pressed', 'true');
 }

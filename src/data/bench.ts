@@ -49,8 +49,8 @@ export const BENCH_MODEL: BenchModel = {
   ],
   glass: { materials: ['Glass'], color: '#0c0e14', opacity: 0.55 },
   lamps: [
-    { materials: ['Headlight'], color: '#fff3e0', intensity: 7 },
-    { materials: ['Brakelight'], color: '#ff1206', intensity: 6 },
+    { materials: ['Headlight'], color: '#fff3e0', intensity: 12 },
+    { materials: ['Brakelight'], color: '#ff1206', intensity: 10 },
     { materials: ['Signallight'], color: '#ff8a10', intensity: 4 },
   ],
   halfLengthHint: 2.3,

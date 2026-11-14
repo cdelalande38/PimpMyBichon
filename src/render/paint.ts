@@ -93,14 +93,16 @@ vec3 pmbFlakeA = pmbHash3( floor( pmbCell / exp2( pmbLod0 ) ) );
 vec3 pmbFlakeB = pmbHash3( floor( pmbCell / exp2( pmbLod0 + 1.0 ) ) + 17.0 );
 vec3 pmbFlakeDir = mix( pmbFlakeA, pmbFlakeB, fract( pmbLod ) ) * 2.0 - 1.0;
 float pmbResolved = sqrt( clamp( 1.0 / max( pmbFootprint, 1e-4 ), 0.0, 1.0 ) );
-normal = normalize( normal + ( viewMatrix * vec4( pmbFlakeDir, 0.0 ) ).xyz * pmbFlake * mix( 0.12, 0.5, pmbResolved ) );
+normal = normalize( normal + ( viewMatrix * vec4( pmbFlakeDir, 0.0 ) ).xyz * pmbFlake * mix( 0.06, 0.28, pmbResolved ) );
 float pmbFlakeBlur = pmbFlake * ( 1.0 - pmbResolved ) * 0.22;
-// Une paillette sur deux est un éclat d'alu nu : il renvoie la couleur de la lumière (argent
-// sous le blanc, rouge ou bleu sous les LED) au lieu de la teinte. Trop fines pour être vues
-// une à une, elles éclaircissent le reflet en moyenne.
-float pmbSpark = pmbFlake * mix( 0.15, step( 0.5, mix( pmbFlakeA.z, pmbFlakeB.z, fract( pmbLod ) ) ), pmbResolved );
-diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.92 ), pmbSpark * 0.6 );
+// Une paillette sur huit est un éclat d'alu nu, lisse comme un miroir : il renvoie la couleur
+// de la lumière (argent sous le blanc, rouge ou bleu sous les LED) et ne brille que tourné vers
+// une source. Trop fines pour être vues une à une, elles éclaircissent le reflet en moyenne.
+float pmbSparkCell = step( 0.88, mix( pmbFlakeA.z, pmbFlakeB.z, fract( pmbLod ) ) );
+float pmbSpark = pmbFlake * mix( 0.06, pmbSparkCell, pmbResolved );
+diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.92 ), pmbSpark * 0.5 );
 metalnessFactor = mix( metalnessFactor, 1.0, pmbSpark );
+roughnessFactor = mix( roughnessFactor, 0.1, pmbFlake * pmbSparkCell * pmbResolved );
 
 // Peau d'orange : ondulation douce de la normale du vernis, période d'environ 2 cm,
 // effacée quand elle devient plus fine qu'un pixel (elle ne ferait que du bruit).

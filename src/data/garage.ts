@@ -55,7 +55,7 @@ export const GARAGE_MATERIALS = {
   caisse: { color: '#b88a55', roughness: 0.8, metalness: 0 },
   optique: { color: '#ffffff', roughness: 0.2, metalness: 0, emissive: '#fff2dc', emissiveIntensity: 3 },
   fronton: { color: '#ffffff', roughness: 0.4, metalness: 0, map: 'popart', repeat: [1 / 0.7, 1 / 0.45], emissive: '#ffffff', emissiveIntensity: 0.9 },
-  carrelage: { color: '#ffffff', roughness: 0.3, metalness: 0, map: 'carrelage', repeat: [1 / 0.9, 1 / 0.9], env: 0.55 },
+  carrelage: { color: '#ffffff', roughness: 0.3, metalness: 0, map: 'carrelage', repeat: [1 / 0.9, 1 / 0.9], env: 0.45 },
   osb: { color: '#ffffff', roughness: 0.85, metalness: 0, map: 'osb', repeat: [1 / 1.25, 1 / 2.5] },
   lambris: { color: '#5a4a3c', roughness: 0.8, metalness: 0, map: 'lambris', repeat: [1 / 1.6, 1 / 1.6] },
   murRouge: { color: '#b00010', roughness: 0.85, metalness: 0 },
@@ -210,7 +210,7 @@ export const GARAGE: GarageLayout = {
   surfaces: { floor: 'carrelage', ceiling: 'lambris', back: 'murBlanc', front: 'osb', left: 'osb', right: 'murRouge' },
   spotHalo: { size: [0.62, 1.05], gain: 1.6 },
   probe: [0, 0.7, 0],
-  lights: { left: [-2.4, 2.1, -1.6], right: [1.8, 2.1, -1.3], key: [-0.3, 2.8, 1.2], keyTarget: [0, 0.5, 0] },
+  lights: { left: [-2.4, 2.1, -1.6], right: [1.8, 2.1, -1.3], key: [-0.2, 2.85, 0.9], keyTarget: [0, 0.6, 0] },
   spots: [
     // Paires espacées de 0,4 m : bleu à gauche, blanc au centre, rouge à droite.
     { at: [-1.9, SPOT_Y, SPOT_Z], color: 'spotLeft', radius: 0.045, wallHalo: true },
@@ -256,8 +256,8 @@ export const GARAGE: GarageLayout = {
     // Mur du fond lavé en trois zones : bleu-violet, blanc, rouge, passages violet et magenta.
     { kind: 'rond', size: [4.2, 3.6], at: [-2.6, 1.5, BACK + 0.004], facing: '+z', color: 'left', gain: 0.6 },
     { kind: 'rond', size: [2.6, 2.6], at: [-1.0, 1.5, BACK + 0.005], facing: '+z', color: 'violet', gain: 0.45 },
-    { kind: 'rond', size: [1.8, 2.6], at: [-0.35, 1.6, BACK + 0.006], facing: '+z', color: 'spotCenter', gain: 0.3 },
-    { kind: 'rond', size: [1.4, 2.4], at: [0.3, 1.6, BACK + 0.007], facing: '+z', color: 'center', gain: 0.35 },
+    { kind: 'rond', size: [1.8, 2.6], at: [-0.35, 1.6, BACK + 0.006], facing: '+z', color: 'spotCenter', gain: 0.22 },
+    { kind: 'rond', size: [1.4, 2.4], at: [0.3, 1.6, BACK + 0.007], facing: '+z', color: 'center', gain: 0.28 },
     { kind: 'rond', size: [2.2, 3.4], at: [1.05, 1.5, BACK + 0.008], facing: '+z', color: 'right', gain: 1.0 },
     // Mur rouge : nappe sur toute la hauteur et festons sous les spots du rail.
     { kind: 'rond', size: [7.5, 4.2], at: [RIGHT - 0.004, 1.3, -0.2], facing: '-x', color: 'right', gain: 0.55 },
