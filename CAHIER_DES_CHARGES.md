@@ -496,6 +496,7 @@ Un jeu de sons par véhicule, rangé dans son dossier. Signatures de la vague 1,
 
 1. **Dossier de lecture** (au build) : un dossier par station, `radio/<station>/`. On y dépose des fichiers audio ; le build les indexe, les normalise et les encode. Trois stations prévues par défaut (hip-hop et R&B, rock, électro), mais le nombre de stations suit le nombre de dossiers. Une station vide n'apparaît pas.
 2. **Import depuis le téléphone** (dans l'app) : « Ajouter mes morceaux » ouvre le sélecteur de fichiers ; les morceaux choisis sont copiés dans le stockage privé de l'app (OPFS), restent sur l'appareil, fonctionnent hors ligne et forment la station **« Ma playlist »**. Rien n'est envoyé ni partagé.
+3. **Pack de musique** (décidé le 14 novembre 2026) : un fichier ZIP par style, non chiffré, que l'on remet à l'utilisateur en privé, par messagerie. L'app l'importe en un geste, depuis son sélecteur de fichiers ou comme cible de partage du téléphone, copie les morceaux dans le stockage privé de l'appareil et en fait une **station personnelle par pack** (le dossier du ZIP donne son nom à la station). Les packs ne passent jamais par le dépôt ni par le site ; `npm run radio:pack` les fabrique sur le poste à partir du dossier privé `ma-playlist/`.
 
 - Niveau : normalisation automatique vers −14 LUFS environ, crête vraie ≤ −1 dBTP.
 - Dossier de lecture : encodage **Opus** à 128–160 kbit/s, mise en cache station par station à la première écoute.
