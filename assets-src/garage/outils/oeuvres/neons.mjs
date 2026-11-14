@@ -77,7 +77,8 @@ function neonGoodVibesOnly() {
   });
 }
 
+// `servie: false` : les enseignes ne sont pas copiées dans public/ ; l'app en tire des tubes.
 export default [
-  { fichier: 'neon-pimp-my-bichon.svg', ordre: 2, lueur: true, dessin: neonPimpMyBichon },
-  { fichier: 'neon-good-vibes-only.svg', ordre: 3, lueur: true, dessin: neonGoodVibesOnly },
+  { fichier: 'neon-pimp-my-bichon.svg', ordre: 2, lueur: true, servie: false, dessin: neonPimpMyBichon },
+  { fichier: 'neon-good-vibes-only.svg', ordre: 3, lueur: true, servie: false, dessin: neonGoodVibesOnly },
 ];

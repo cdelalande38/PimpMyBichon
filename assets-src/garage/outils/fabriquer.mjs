@@ -8,13 +8,19 @@
 // L'écriture des SVG n'a aucune dépendance ; la planche et les essais passent par sharp.
 // Contrôles faits à chaque passage : 40 ko au plus, viewBox présent, aucun texte ni police, aucune
 // image, aucun lien autre qu'interne, aucun identifiant en double. Code de sortie 1 au premier échec.
+//
+// Copie servie : chaque œuvre qui passe les contrôles et n'est pas marquée `servie: false` (les
+// enseignes néon, qui deviennent des tubes) est aussi écrite, octet pour octet, dans
+// public/assets/garage/art/ : l'app ne lit jamais assets-src/. Un SVG de ce dossier qui ne
+// correspond plus à aucune œuvre servie est retiré. Registre côté app : src/data/garageArt.ts.
 
-import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SORTIE = resolve(ICI, '..');
+const SERVIES = resolve(ICI, '../../../public/assets/garage/art');
 const POIDS_MAX = 40 * 1024;
 const FOND = '#14121d';
 const CARTE = '#1d1a2a';
@@ -65,6 +71,27 @@ for (const o of oeuvres) {
     echec = true;
     console.log(`ÉCHEC ${o.fichier} : ${erreur.stack}`);
   }
+}
+
+// --- Copie servie par l'app ---------------------------------------------------------------------
+
+// Aucune copie tant qu'une œuvre échoue : public/ ne reçoit que des fichiers contrôlés.
+if (!echec) {
+  mkdirSync(SERVIES, { recursive: true });
+  const servies = faits.filter((o) => o.servie !== false);
+  let poidsServi = 0;
+  for (const o of servies) {
+    writeFileSync(join(SERVIES, o.fichier), o.texte);
+    poidsServi += o.poids;
+  }
+  const attendus = new Set(servies.map((o) => o.fichier));
+  for (const nom of existsSync(SERVIES) ? readdirSync(SERVIES) : []) {
+    if (nom.endsWith('.svg') && !attendus.has(nom)) {
+      rmSync(join(SERVIES, nom));
+      console.log(`retiré ${nom} (plus servi)`);
+    }
+  }
+  console.log(`servis : ${servies.length} fichiers, ${(poidsServi / 1024).toFixed(1)} ko dans public/assets/garage/art/`);
 }
 
 // --- Rendus de contrôle -----------------------------------------------------------------------

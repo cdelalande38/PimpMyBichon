@@ -105,6 +105,11 @@ export interface Prop {
   turn?: number;
   /** Petit objet ou décor en hauteur : absent du reflet du sol (un appel de dessin de moins). */
   small?: boolean;
+  /**
+   * Coupe caméra (src/scene/garage/cut.ts) : objets qui le portent, quand la déduction par les
+   * boîtes (posé dessus, pendu dessous, adossé) ne suffit pas. Il disparaît avec eux.
+   */
+  on?: readonly string[];
   parts: readonly Part[];
 }
 
@@ -199,6 +204,11 @@ export interface Strip {
   to: Vec3;
   color: ColorKey;
   facing: Facing;
+  /**
+   * Coupe caméra : éléments qui le portent (un bandeau collé sous une retombée), dont il suit la
+   * disparition. Sans cela, il reste collé à son mur, à face unique, et ne cache jamais rien.
+   */
+  on?: readonly string[];
 }
 
 export interface GarageLayout {
@@ -206,11 +216,30 @@ export interface GarageLayout {
   room: { width: number; depth: number; height: number };
   /**
    * Pose du véhicule : rotation de son groupe autour de la verticale (π : l'avant vers la gauche).
-   * `cutaway` : volumes qu'il occupe (bas de caisse, habitacle), repère de la pièce. Un objet du
-   * mobilier qui les masque à la caméra s'efface : le coin salon du premier plan ne cache jamais
-   * la voiture (src/render/floor.ts).
+   * `protect` : volume protégé de la coupe caméra (src/scene/garage/cut.ts), la boîte mesurée du
+   * véhicule gonflée sur les côtés et au-dessus, prolongée sous le sol (son reflet dans le
+   * carrelage) ; `waiting` la remplace tant que le modèle n'est pas mesuré, ou s'il manque.
+   * `hysteresis` : gonflement du second volume, dont un élément masqué doit sortir pour revenir.
    */
-  vehicle: { turn: number; cutaway: ReadonlyArray<{ min: Vec3; max: Vec3 }> };
+  vehicle: {
+    turn: number;
+    protect: { waiting: { min: Vec3; max: Vec3 }; side: number; top: number; below: number; hysteresis: number };
+  };
+  /**
+   * Coupe caméra : ce qui passerait entre l'œil et le véhicule quitte l'image.
+   * `wallTolerance` : écart au plan d'un mur, du plafond ou du sol en deçà duquel un élément y est
+   * adossé ; il disparaît avec le mur quand l'œil passe derrière (R1). `contactTolerance` : écart
+   * entre deux éléments en deçà duquel l'un porte l'autre (R3). `wallBand` : bande d'hystérésis
+   * de part et d'autre du plan d'un mur. `fadeMs` : durée du fondu (aucun en mouvement réduit et
+   * en mode photo).
+   */
+  cut: { wallTolerance: number; contactTolerance: number; wallBand: number; fadeMs: number };
+  /**
+   * Caméra d'orbite : cible (sous le centre du véhicule, pour le remonter au-dessus du dock),
+   * angle polaire borné (§ 5.1 : ni sous le sol, ni à la verticale) et marge de cadrage (vue de
+   * trois quarts, le véhicule paraît plus long que de profil).
+   */
+  orbit: { target: Vec3; minPolar: number; maxPolar: number; frameMargin: number };
   /**
    * Part du reflet de la sonde gardée sur le sol quand la réflexion planaire est active : c'est
    * elle qui fait le reflet, la sonde (qui voit les rampes du plafond) le blanchirait.
@@ -295,14 +324,17 @@ export const GARAGE: GarageLayout = {
   room: { width: W, depth: D, height: H },
   vehicle: {
     turn: Math.PI,
-    // Bas de caisse et habitacle du modèle de banc d'essai (4,6 × 1,9 × 1,3 m), élargis de 0,2 m :
-    // le test porte sur le centre de chaque objet, pas sur ses bords. Le bas de caisse descend
-    // sous le sol : ce qui masquerait le reflet de la voiture s'efface aussi.
-    cutaway: [
-      { min: [-2.6, -0.6, -1.2], max: [2.6, 0.8, 1.2] },
-      { min: [-1.5, 0.7, -1.0], max: [1.35, 1.45, 1.0] },
-    ],
+    protect: {
+      // Gabarit du modèle de banc d'essai (4,6 × 1,9 × 1,3 m), posé dans la pièce.
+      waiting: { min: [-2.3, 0, -0.95], max: [2.3, 1.3, 0.95] },
+      side: 0.15,
+      top: 0.2,
+      below: 0.6,
+      hysteresis: 0.15,
+    },
   },
+  cut: { wallTolerance: 0.15, contactTolerance: 0.02, wallBand: 0.1, fadeMs: 180 },
+  orbit: { target: [0, 0.12, 0], minPolar: 0.55, maxPolar: 1.52, frameMargin: 1.22 },
   mirrorIbl: 0.2,
   outside: { extent: 70, falloff: 4 },
   fog: { near: 12, far: 46 },
@@ -360,8 +392,9 @@ export const GARAGE: GarageLayout = {
     })),
   ],
   strips: [
-    // Bandeau rouge sous la retombée du mur droit.
-    { from: [RIGHT - 0.36, SOFFIT - 0.015, BACK + 0.5], to: [RIGHT - 0.36, SOFFIT - 0.015, D / 2 - 0.1], color: 'right', facing: '-x' },
+    // Bandeau rouge sous la retombée du mur droit : il disparaît avec elle (œil au-dessus du
+    // plafond), sinon il flotterait seul dans le vide.
+    { from: [RIGHT - 0.36, SOFFIT - 0.015, BACK + 0.5], to: [RIGHT - 0.36, SOFFIT - 0.015, D / 2 - 0.1], color: 'right', facing: '-x', on: ['retombee_2'] },
     // Bandeaux en haut du mur gauche et du mur du canapé, et derrière le canapé : ce sont eux
     // que la caisse reflète vers la caméra (le mur du fond ne se voit que dans les dessus).
     { from: [LEFT + 0.03, H - 0.05, BACK + 0.4], to: [LEFT + 0.03, H - 0.05, D / 2 - 0.05], color: 'left', facing: '+x' },
@@ -577,10 +610,11 @@ export const GARAGE: GarageLayout = {
       ],
     },
     {
-      // Quad noir garé devant l'angle fond-gauche, presque parallèle au mur du fond.
+      // Quad noir garé devant l'angle fond-gauche, presque parallèle au mur du fond, hors du
+      // volume protégé du véhicule (coupe caméra).
       name: 'placeholder_quad',
-      at: [-2.85, 0, -1.85],
-      turn: -0.15,
+      at: [-2.85, 0, -1.9],
+      turn: -0.06,
       parts: [
         ...wheel(-0.5, 0.27, 0.42, 0.27, 0.24),
         ...wheel(-0.5, 0.27, -0.42, 0.27, 0.24),
@@ -596,14 +630,16 @@ export const GARAGE: GarageLayout = {
     },
     // Coin salon, angle avant-gauche : deux canapés en L (A contre le mur avant, face au fond ;
     // B contre le mur gauche), table au bloc moteur dans l'angle du L, tabouret et pouf à côté.
-    // Au premier plan de la vue de départ : la découpe (vehicle.cutaway) efface ceux qui
-    // masqueraient la voiture, le temps que la caméra est de ce côté.
+    // Au premier plan de la vue de départ : la coupe caméra efface ceux qui masqueraient la
+    // voiture, le temps que la caméra est de ce côté.
     { name: 'placeholder_canape_a', at: [-2.3, 0, D / 2 - 0.475], turn: Math.PI, parts: sofa() },
     { name: 'placeholder_canape_b', at: [LEFT + 0.475, 0, 0.8], turn: Math.PI / 2, parts: sofa() },
     {
-      // Plateau de sapin de 6 cm qui déborde d'un socle noir fermé.
+      // Plateau de sapin de 6 cm qui déborde d'un socle noir fermé ; en long devant le canapé A,
+      // hors du volume protégé du véhicule (coupe caméra).
       name: 'placeholder_table_basse',
-      at: [-2.22, 0, 1.55],
+      at: [-2.2, 0, 1.6],
+      turn: Math.PI / 2,
       parts: [
         { box: [0.46, 0.42, 0.86], at: [0, 0.21, 0], material: 'noirMat' },
         { box: [0.58, 0.06, 0.98], at: [0, 0.45, 0], material: 'boisClair' },
@@ -611,8 +647,7 @@ export const GARAGE: GarageLayout = {
     },
     {
       name: 'placeholder_bloc_moteur',
-      at: [-2.22, 0.48, 1.55],
-      turn: Math.PI / 2,
+      at: [-2.2, 0.48, 1.55],
       small: true,
       parts: [
         { box: [0.6, 0.22, 0.4], at: [0, 0.11, 0], material: 'alu' },

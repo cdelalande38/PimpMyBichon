@@ -238,3 +238,52 @@ npx eslint tools tests/unit/tools
 ```
 
 Le garde contrôle aussi ses propres sources et ses tests : les chaînes sensibles y sont fabriquées à l'exécution (voir `fake` dans `tests/unit/tools/helpers.ts`), jamais écrites en clair.
+
+## Œuvres du garage : fabrication, copie servie, contrôle
+
+Hors des trois contrôles ci-dessus. Les œuvres originales du garage sont produites dans `assets-src/garage/` (mode d'emploi : `assets-src/garage/LISEZ-MOI.md`) ; l'app ne lit que leur copie servie.
+
+```sh
+node assets-src/garage/outils/fabriquer.mjs   # écrit et contrôle les SVG, puis copie les œuvres servies
+npx vite --port 5193 --strictPort             # serveur de développement (autre terminal)
+node assets-src/garage/outils/capturer.mjs --detail   # captures/deco/oeuvres.png et oeuvres-detail.png
+npx vitest run tests/unit/oeuvres.test.ts
+```
+
+- **Copie servie** : chaque œuvre qui passe les contrôles et n'est pas marquée `servie: false` (les deux enseignes néon, qui deviennent des tubes) est copiée octet pour octet dans `public/assets/garage/art/<id>.svg`. Aucune copie si une œuvre échoue ; un SVG de ce dossier qui ne correspond plus à aucune œuvre est retiré. Précachée par le motif `svg` de `vite.config.ts` (≈ 92 ko, 22 ko compressés).
+- **Registre** : `src/data/garageArt.ts` (fichier, viewBox et rapport, taille réelle, matière, teinte d'attente, résolution de texture, place prévue, cases des planches). Chargement en texture : `acquireArtwork` de `src/scene/garage/artwork.ts`.
+- **Test** : `tests/unit/oeuvres.test.ts` vérifie que chaque entrée a son fichier, copie exacte de sa source, que rapport et taille suivent le viewBox, et que les fichiers servis n'ont ni texte, ni image, ni lien externe et pèsent 40 ko au plus.
+- **Page de contrôle** : `src/dev/oeuvres/index.html` (hors de l'app livrée, servie par le serveur de développement) pose chaque œuvre et chaque case à sa taille réelle sous une lumière ambiante neutre ; `?echelle=<px par mètre>&centre=<id ou id#case>` pour cadrer de près.
+
+## Coupe caméra : planches du tour du véhicule
+
+Hors des trois contrôles ci-dessus. `tools/captures/orbite.mjs` fait le tour du véhicule sur le site construit et range des planches de contrôle de la coupe caméra (le décor qui passerait devant le véhicule quitte l'image, `src/scene/garage/cut.ts`).
+
+```sh
+npm run build                                   # ou npx vite build
+node tools/captures/orbite.mjs                  # captures/jalon-1/orbite/apres-*.jpg
+node tools/captures/orbite.mjs --prefix essai --out captures/autre --port 4180
+```
+
+- **Quatre planches** de douze vues (un tour complet chacune, portrait 390 × 844) : `-depart` (distance et hauteur de départ), `-recul` (recul maximal), `-haut` (recul maximal en plongée), `-pres-bas` (caméra basse, au plus près). Sur chaque vue, le véhicule entier et son reflet doivent être dégagés.
+- **Relevé** `<préfixe>-coupe.json` : pour chaque planche, le nombre d'éléments du décor retirés à chaque vue (attribut `data-coupe` de la scène).
+- Le script lance `vite preview` sur le port donné (4179 par défaut) et le Chromium de Playwright en rendu logiciel, avec les arguments de `playwright.config.ts`. Compter une vingtaine de minutes ; lancer un seul tour à la fois sur une machine partagée.
+- Les preuves chiffrées de la coupe sont dans `tests/unit/coupe.test.ts` (règles, garde-fou de structure, balayage de 2 170 positions d'œil vérifié par lancer de rayons) et `tests/e2e/coupe.spec.ts` (glissés, fondu, repos sans dessin).
+
+## Formes du décor : studio de contrôle
+
+Hors des trois contrôles ci-dessus. Le vocabulaire de formes du décor (`src/data/garageShapes.ts`) se construit par `shapeGeometry` de `src/scene/garage/shapes.ts` : repères, sens des contours, budgets de triangles et un exemple par forme sont écrits en tête de ce fichier. `tools/captures/studio.mjs` photographie une planche de pièces du studio (`src/dev/studio/`, page de développement absente du build).
+
+```sh
+node tools/captures/studio.mjs formes                    # captures/deco/formes-studio.png
+node tools/captures/studio.mjs exemples garage           # captures/deco/exemples-garage.png
+node tools/captures/studio.mjs formes studio --cadre=0-5 --azimut=60 --damier
+npx vitest run tests/unit/formes.test.ts
+```
+
+- **Capture** : 1600 × 1000, écrite dans `captures/deco/<planche>-<éclairage>.png` ; une option ajoute son suffixe (`-a60`, `-c0-5`, `-damier`). Le script lance le serveur de développement sur le port 5191 (ou réutilise celui qui y tourne), le Chromium de Playwright en rendu logiciel avec les arguments de `playwright.config.ts`, attend l'attribut `data-studio-pret` de la page, puis arrête le serveur qu'il a lancé. Une dizaine de secondes par capture.
+- **Éclairages** : `studio` (environnement neutre, une lumière principale) ou `garage` (bande bleu-violet à gauche, rouge à droite, environnement sombre). Sol sombre légèrement brillant, caméra de trois quarts cadrée sur la planche.
+- **Options** : `--azimut=<degrés>` tourne la caméra (20 par défaut, 0 = de face) ; `--cadre=<i>-<j>` cadre les pièces de rang i à j pour les voir de près ; `--damier` pose un damier de 10 cm (ligne rouge au mètre) sur toutes les pièces pour juger les coordonnées de texture.
+- **Page à la main** : `npx vite --port 5191 --strictPort`, puis `/PimpMyBichon/src/dev/studio/index.html?planche=formes&eclairage=garage` ; souris pour tourner autour.
+- **Ajouter une planche** : un fichier dans `src/dev/studio/planches/` qui exporte `planches` (nom → liste de pièces : forme, position, rotation, couleur, rugosité, métal, étiquette). Outils de `src/dev/studio/registre.ts` : `grille` range des pièces isolées sur le sol, `objet` pose un objet composé (décalage et lacet). Planches fournies : `formes` (toutes les formes et variantes, étiquetées avec leur nombre de triangles) et `exemples` (canapé en coussins, roue, casque).
+- **Test** : `tests/unit/formes.test.ts` vérifie chaque forme et ses variantes (nombres finis, normales unitaires et du côté de la face, boîte englobante, budget, surface fermée et tournée vers l'extérieur, volume, coordonnées de texture en mètres), la fusion de toutes les formes, les paramètres refusés, et que les formes d'origine se construisent comme le faisait `partGeometry`.

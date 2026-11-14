@@ -140,7 +140,8 @@ export default defineConfig({
         // Script classique : le type de service worker le plus largement pris en charge.
         rollupFormat: 'iife',
         // Précache : toute la coque de l'app, le modèle de banc d'essai et le transcodeur de ses
-        // textures. Les véhicules et la musique n'y entrent pas, ils se téléchargent à la demande
+        // textures, les œuvres du garage (assets/garage/art/*.svg, ≈ 92 ko, prises par « svg »).
+        // Les véhicules et la musique n'y entrent pas, ils se téléchargent à la demande
         // puis restent hors ligne (§ 7).
         globPatterns: ['**/*.{js,css,html,woff2,svg,png,webp,ico,glb,wasm}'],
         // Copie hachée du transcodeur émise par KTX2Loader (son chemin par défaut, `new URL(…)`) :

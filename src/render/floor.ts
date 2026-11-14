@@ -1,14 +1,29 @@
-// Surfaces prolongées hors de la pièce (sol, plafond) et sol réfléchissant (§ 8).
-// - Dehors : au-delà des murs, la surface se perd dans la brume de l'ambiance (violet très
-//   sombre, jamais noir) ; la pièce n'est plus une maquette posée dans le vide.
+// Matériaux du garage (§ 8) : un seul patch de nuanceur, `patchGarageMaterial`, pour tout ce que
+// le décor ajoute aux matériaux de three.
+// - Dehors (sol, plafond) : au-delà des murs, la surface se perd dans la brume de l'ambiance
+//   (violet très sombre, jamais noir) ; la pièce n'est plus une maquette posée dans le vide.
 // - Sol : la réflexion planaire (src/render/planarReflection.ts) s'ajoute à la lumière du
 //   carrelage, nette sur les carreaux, floue et étirée vers la caméra, éteinte dans les joints :
 //   c'est la carte de rugosité qui décide. Sans réflexion planaire (niveau économie), le sol
 //   reste brillant grâce à la sonde.
+// - Décor : seule la part diffuse de la sonde est réduite (ses reflets restent) ; les rampes
+//   qu'elle voit laveraient sinon les murs d'une lumière uniforme et éteindraient les halos.
+// - Coupe caméra (src/render/cut.ts) : chaque élément du décor s'efface quand il passerait entre
+//   l'œil et le véhicule.
 
-import { Color, Matrix4, Vector2, Vector3, type MeshStandardMaterial, type Texture, type WebGLProgramParametersWithUniforms } from 'three';
+import {
+  AdditiveBlending,
+  Color,
+  Matrix4,
+  MeshStandardMaterial,
+  Vector2,
+  type MeshBasicMaterial,
+  type Texture,
+  type WebGLProgramParametersWithUniforms,
+} from 'three';
+import { createCutUniforms, patchCutShader, type CutUniforms } from './cut.ts';
 
-export interface SurfaceUniforms {
+export interface SurfaceUniforms extends CutUniforms {
   pmbHazeColor: { value: Color };
   /** Centre et demi-côtés de la pièce, au sol (x, z). */
   pmbRoomCenter: { value: Vector2 };
@@ -26,12 +41,6 @@ export interface SurfaceUniforms {
    * blanchirait tout le carrelage.
    */
   pmbIblSpecular: { value: number };
-  /**
-   * Volumes du véhicule (coins min et max, repère de la pièce) : le mobilier qui le masque à la
-   * caméra s'efface (voir `patchDecorShader`).
-   */
-  pmbCutMin: { value: Vector3[] };
-  pmbCutMax: { value: Vector3[] };
   pmbReflection: { value: Texture | null };
   pmbReflectionBlur: { value: Texture | null };
   /** Projection monde → coordonnées de la cible de réflexion. */
@@ -41,31 +50,15 @@ export interface SurfaceUniforms {
   pmbReflectionTexel: { value: Vector2 };
 }
 
-/** Nombre de volumes du véhicule pour la découpe du décor (fixe : c'est une taille de tableau GLSL). */
-export const CUTAWAY_BOXES = 2;
-
-export interface CutBox {
-  min: readonly [number, number, number];
-  max: readonly [number, number, number];
-}
-
-export function createSurfaceUniforms(
-  room: { width: number; depth: number },
-  falloff: number,
-  cutaway: readonly CutBox[] = [],
-): SurfaceUniforms {
-  // Un volume absent est vide (min > max) : il ne découpe rien.
-  const box = (index: number) => cutaway[index] ?? { min: [1, 1, 1] as const, max: [-1, -1, -1] as const };
-  const boxes = Array.from({ length: CUTAWAY_BOXES }, (_, index) => box(index));
+export function createSurfaceUniforms(room: { width: number; depth: number }, falloff: number): SurfaceUniforms {
   return {
+    ...createCutUniforms(),
     pmbHazeColor: { value: new Color('#170a28') },
     pmbRoomCenter: { value: new Vector2(0, 0) },
     pmbRoomHalf: { value: new Vector2(room.width / 2, room.depth / 2) },
     pmbHazeFalloff: { value: falloff },
     pmbIblDiffuse: { value: 0.08 },
     pmbIblSpecular: { value: 1 },
-    pmbCutMin: { value: boxes.map(({ min }) => new Vector3(...min)) },
-    pmbCutMax: { value: boxes.map(({ max }) => new Vector3(...max)) },
     pmbReflection: { value: null },
     pmbReflectionBlur: { value: null },
     pmbReflectionMatrix: { value: new Matrix4() },
@@ -130,8 +123,25 @@ function inject(source: string, anchor: string, code: string, after = true): str
   return source.replace(anchor, after ? `${anchor}\n${code}` : `${code}\n${anchor}`);
 }
 
-/** Modifie les sources d'un MeshStandardMaterial (exporté pour les tests). */
-export function patchSurfaceShader(shader: { vertexShader: string; fragmentShader: string }): void {
+/** Variante de nuanceur d'un matériau du garage (chacune a son programme). */
+export interface GarageShaderVariant {
+  /** Matériau standard (sinon basique : émissifs, cônes). */
+  standard: boolean;
+  /** Sol ou plafond : brume du dehors, reflet planaire, reflet de la sonde réglable. */
+  surface: boolean;
+  /** S'ajoute à l'image (fondu de la coupe par atténuation). */
+  additive: boolean;
+}
+
+/** Modifie les sources d'un matériau du garage selon sa variante (exporté pour les tests). */
+export function patchGarageShader(shader: { vertexShader: string; fragmentShader: string }, variant: GarageShaderVariant): void {
+  patchCutShader(shader, variant.additive);
+  if (!variant.standard) return;
+  if (!variant.surface) {
+    shader.fragmentShader = inject(shader.fragmentShader, '#include <common>', 'uniform float pmbIblDiffuse;');
+    shader.fragmentShader = inject(shader.fragmentShader, '#include <lights_fragment_maps>', 'iblIrradiance *= pmbIblDiffuse;');
+    return;
+  }
   shader.vertexShader = inject(shader.vertexShader, '#include <common>', VERTEX_HEAD);
   shader.vertexShader = inject(shader.vertexShader, '#include <project_vertex>', VERTEX_BODY);
   shader.fragmentShader = inject(shader.fragmentShader, '#include <common>', FRAGMENT_HEAD);
@@ -143,68 +153,37 @@ export function patchSurfaceShader(shader: { vertexShader: string; fragmentShade
   shader.fragmentShader = inject(shader.fragmentShader, '#include <opaque_fragment>', FRAGMENT_BODY, false);
 }
 
-/** Branche la brume du dehors (et la réflexion planaire si `setReflection`) sur un matériau. */
-export function patchSurface(material: MeshStandardMaterial, uniforms: SurfaceUniforms): void {
-  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-    Object.assign(shader.uniforms, uniforms);
-    patchSurfaceShader(shader);
-  };
-  material.customProgramCacheKey = () => 'pmb-surface-3';
+/** Sources du sol et du plafond (exporté pour les tests). */
+export function patchSurfaceShader(shader: { vertexShader: string; fragmentShader: string }): void {
+  patchGarageShader(shader, { standard: true, surface: true, additive: false });
 }
-
-// Découpe : un objet du mobilier qui se trouve entre la caméra et le véhicule (le rayon caméra →
-// centre de l'objet entre dans un volume du véhicule au-delà de ce centre) disparaît en entier.
-// Le coin salon du premier plan, à sa vraie place, ne cache jamais la voiture ni son reflet : on
-// voit à travers, comme à travers les murs qui tournent le dos à la caméra. Chaque sommet porte
-// le centre de son objet (attribut `pmbAnchor`, w = 1 ; w = 0 : jamais découpé). `cameraPosition`
-// est celle de la passe en cours : le reflet du sol découpe de même ; la sonde, placée dans le
-// véhicule, ne découpe rien.
-export const ANCHOR_ATTRIBUTE = 'pmbAnchor';
-
-const CUT_VERTEX_HEAD = /* glsl */ `
-attribute vec4 pmbAnchor;
-uniform vec3 pmbCutMin[ ${CUTAWAY_BOXES} ];
-uniform vec3 pmbCutMax[ ${CUTAWAY_BOXES} ];
-bool pmbHides( vec3 point, vec3 boxMin, vec3 boxMax ) {
-  vec3 inv = 1.0 / ( point - cameraPosition );
-  vec3 t0 = ( boxMin - cameraPosition ) * inv;
-  vec3 t1 = ( boxMax - cameraPosition ) * inv;
-  vec3 near = min( t0, t1 );
-  vec3 far = max( t0, t1 );
-  float enter = max( max( near.x, near.y ), near.z );
-  float leave = min( min( far.x, far.y ), far.z );
-  return enter > 1.0 && enter <= leave;
-}`;
-
-const CUT_VERTEX_BODY = /* glsl */ `
-if ( pmbAnchor.w > 0.5 ) {
-  for ( int i = 0; i < ${CUTAWAY_BOXES}; i ++ ) {
-    // Hors du volume de vue : tous les sommets de l'objet y partent, ses triangles disparaissent.
-    if ( pmbHides( pmbAnchor.xyz, pmbCutMin[ i ], pmbCutMax[ i ] ) ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
-  }
-}`;
 
 /**
- * Pour le reste du décor : seule la part diffuse de la sonde est réduite (ses reflets restent).
- * Les rampes qu'elle voit laveraient sinon les murs d'une lumière uniforme et éteindraient les halos.
- * Le mobilier qui masque le véhicule s'efface (découpe ci-dessus).
+ * Branche un matériau sur le garage : coupe caméra toujours ; part diffuse de la sonde pour un
+ * matériau standard ; brume du dehors et réflexion planaire (si `setReflection`) pour une surface.
+ * Seul patch des matériaux du décor : la clé de programme dit la variante.
  */
-export function patchDiffuseIbl(material: MeshStandardMaterial, uniforms: SurfaceUniforms): void {
+export function patchGarageMaterial(
+  material: MeshStandardMaterial | MeshBasicMaterial,
+  uniforms: SurfaceUniforms,
+  options: { surface?: boolean } = {},
+): void {
+  const standard = material instanceof MeshStandardMaterial;
+  const surface = standard && options.surface === true;
+  const variant = (): GarageShaderVariant => ({ standard, surface, additive: material.blending === AdditiveBlending });
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-    shader.uniforms.pmbIblDiffuse = uniforms.pmbIblDiffuse;
-    shader.uniforms.pmbCutMin = uniforms.pmbCutMin;
-    shader.uniforms.pmbCutMax = uniforms.pmbCutMax;
-    patchDecorShader(shader);
+    if (surface) Object.assign(shader.uniforms, uniforms);
+    else {
+      shader.uniforms.pmbCutFade = uniforms.pmbCutFade;
+      shader.uniforms.pmbIblDiffuse = uniforms.pmbIblDiffuse;
+    }
+    patchGarageShader(shader, variant());
   };
-  material.customProgramCacheKey = () => 'pmb-decor-3';
-}
-
-/** Modifie les sources d'un matériau du décor (exporté pour les tests). */
-export function patchDecorShader(shader: { vertexShader: string; fragmentShader: string }): void {
-  shader.vertexShader = inject(shader.vertexShader, '#include <common>', CUT_VERTEX_HEAD);
-  shader.vertexShader = inject(shader.vertexShader, '#include <project_vertex>', CUT_VERTEX_BODY);
-  shader.fragmentShader = inject(shader.fragmentShader, '#include <common>', 'uniform float pmbIblDiffuse;');
-  shader.fragmentShader = inject(shader.fragmentShader, '#include <lights_fragment_maps>', 'iblIrradiance *= pmbIblDiffuse;');
+  material.customProgramCacheKey = () => {
+    const { additive } = variant();
+    return `pmb-garage-1:${surface ? 'surface' : standard ? 'decor' : 'basique'}:${additive ? 'additif' : 'opaque'}`;
+  };
+  material.userData.pmbCut = true;
 }
 
 /** Active ou coupe la réflexion planaire d'un matériau patché (recompile une fois). */

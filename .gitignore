@@ -9,7 +9,7 @@ test-results/
 playwright-report/
 blob-report/
 coverage/
-captures/
+/captures/
 
 # Dépôt privé d'assets (sons, musique, modèles sous licence) : jamais versionné ici
 .private-assets/

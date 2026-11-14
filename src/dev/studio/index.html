@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Studio des formes</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0b0b0e;
+        color: #e9e7e2;
+        font: 13px/1.35 system-ui, sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+      #info {
+        position: fixed;
+        left: 12px;
+        top: 10px;
+        padding: 6px 10px;
+        background: rgb(0 0 0 / 55%);
+        border-radius: 6px;
+        white-space: pre;
+      }
+      #etiquettes {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+      }
+      .etiquette {
+        position: absolute;
+        transform: translate(-50%, 0);
+        padding: 1px 6px;
+        background: rgb(0 0 0 / 60%);
+        border-radius: 4px;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      #erreur {
+        position: fixed;
+        inset: 40px;
+        color: #ff8080;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="etiquettes"></div>
+    <div id="info"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

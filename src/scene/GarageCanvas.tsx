@@ -4,7 +4,8 @@
 // niveau de qualité (src/render/quality.ts). Tout est servi par l'app : modèle, textures KTX2 et
 // transcodeur ; les textures du garage sont dessinées sur place.
 // Vue de départ : le véhicule nez à gauche, la caméra côté gauche (trois quarts avant), le mur
-// du fond et ses halos, le mur rouge à droite : la signature du lieu.
+// du fond et ses halos, le mur rouge à droite : la signature du lieu. Quand on tourne autour, le
+// décor qui passerait devant le véhicule quitte l'image (coupe caméra, src/scene/garage/cut.ts).
 
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
@@ -34,16 +35,9 @@ import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
 
-/** Cible de l'orbite : sous le centre du véhicule, pour le remonter au-dessus du dock. */
-const TARGET: [number, number, number] = [0, 0.12, 0];
-/** Angle vertical borné (§ 5.1) : ni sous le sol, ni à la verticale. */
-const MIN_POLAR = 0.55;
-const MAX_POLAR = 1.52;
-/**
- * Marge de cadrage : vue de trois quarts, un véhicule paraît plus long que de profil
- * (sa largeur s'ajoute, l'avant est plus près). Il doit tenir dans la largeur avec un peu d'air.
- */
-const FRAME_MARGIN = 1.22;
+/** Cible, angle vertical borné et marge de cadrage de l'orbite (src/data/garage.ts). */
+const TARGET: [number, number, number] = [...GARAGE.orbit.target];
+const { minPolar: MIN_POLAR, maxPolar: MAX_POLAR, frameMargin: FRAME_MARGIN } = GARAGE.orbit;
 /** Délai sans toucher avant que la rotation lente reprenne. */
 const IDLE_DELAY_MS = 2500;
 
@@ -58,17 +52,21 @@ interface StageProps {
   autoLevel: boolean;
   /** Cibles de rendu en demi-flottants disponibles (sinon composeur en 8 bits). */
   floatTargets: boolean;
+  /** Le système demande moins de mouvement : la coupe caméra bascule sans fondu. */
+  reducedMotion: boolean;
 }
 
 /** Sens de l'avant du véhicule dans la pièce : les cadrages photo en dépendent. */
 const FRONT_X = frontFromTurn(GARAGE.vehicle.turn);
 
-function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets }: StageProps) {
+function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, reducedMotion }: StageProps) {
   const width = useThree((state) => state.size.width);
   const height = useThree((state) => state.size.height);
-  // Cadrage d'attente, puis cadrage sur la demi-longueur mesurée une fois le modèle posé.
-  const [halfLength, setHalfLength] = useState(BENCH_MODEL.halfLengthHint);
-  const onMeasured = useCallback((measure: BenchMeasure) => setHalfLength(measure.halfLength), []);
+  // Cadrage d'attente, puis cadrage sur la demi-longueur mesurée une fois le modèle posé. La
+  // mesure entière sert aussi à la coupe caméra (volume protégé autour du véhicule).
+  const [measure, setMeasure] = useState<BenchMeasure | null>(null);
+  const halfLength = measure?.halfLength ?? BENCH_MODEL.halfLengthHint;
+  const onMeasured = useCallback((next: BenchMeasure) => setMeasure(next), []);
   const fit = useMemo(() => fitCamera(width, height, halfLength * FRAME_MARGIN), [width, height, halfLength]);
 
   // Ambiance : sources, lumières et étalonnage. La sonde de réflexion se refait à chaque changement.
@@ -139,7 +137,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets }: St
         }}
       />
 
-      <Garage ambiance={ambiance} profile={profile} />
+      <Garage ambiance={ambiance} profile={profile} vehicle={measure} instantCut={reducedMotion || photo} />
       {/* En photo, la sonde passe en haute résolution (src/render/photo/plan.ts). */}
       <ReflectionProbe size={photo ? plan.probeSize : profile.probeSize} position={GARAGE.probe} version={ambiance.id} epoch={epoch} />
       {/* Le modèle arrive après le décor ; s'il manque (première visite sans réseau), le garage
@@ -207,8 +205,23 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
   const level = resolveQuality(quality, autoLevel, floatTargets);
   const profile = QUALITY_PROFILES[level];
 
+  // Nombre d'éléments du décor retirés par la coupe caméra (tests, diagnostic) : posé à la main
+  // sur la scène, pour ne pas refaire le rendu React de toute la scène pendant un glissé.
+  const stage = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const show = ({ cut }: { cut: { hidden: number } | null }) => {
+      const element = stage.current;
+      if (!element) return;
+      if (cut === null) delete element.dataset.coupe;
+      else if (element.dataset.coupe !== String(cut.hidden)) element.dataset.coupe = String(cut.hidden);
+    };
+    show(useRenderStats.getState());
+    return useRenderStats.subscribe(show);
+  }, []);
+
   return (
     <div
+      ref={stage}
       className="stage"
       role="img"
       data-bench={benchStatus}
@@ -235,6 +248,7 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
           photo={photo}
           autoLevel={quality === 'auto'}
           floatTargets={floatTargets}
+          reducedMotion={reducedMotion}
         />
       </Canvas>
     </div>

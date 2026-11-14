@@ -7,6 +7,11 @@
 // Calques (src/render/layers.ts) : l'atmosphère (cônes sous les spots, nappes au ras du sol)
 // n'est vue que de la caméra ; les rampes du plafond, que de la sonde ; les petits objets et le
 // décor en hauteur sont absents du reflet du sol.
+// Coupe caméra (src/scene/garage/cut.ts, src/render/cut.ts) : chaque objet du mobilier, chaque
+// retombée, chaque optique de spot, chaque cône et chaque pied de tube est un élément ; ses
+// sommets portent son identifiant (attribut `pmbCut`), même fusionnés avec d'autres. Un nouveau
+// maillage du décor passe par `register` et `tagCut`, ou prouve qu'il ne peut pas cacher le
+// véhicule (tests/unit/coupe.test.ts, garde-fou de structure).
 
 import {
   AdditiveBlending,
@@ -34,7 +39,8 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Ambiance } from '../../data/ambiances.ts';
-import { ANCHOR_ATTRIBUTE, createSurfaceUniforms, patchDiffuseIbl, patchSurface, setReflection, type SurfaceUniforms } from '../../render/floor.ts';
+import { CUT_ATTRIBUTE, CUT_CAPACITY } from '../../render/cut.ts';
+import { createSurfaceUniforms, patchGarageMaterial, setReflection, type SurfaceUniforms } from '../../render/floor.ts';
 import { ATMOSPHERE_LAYER, NO_MIRROR_LAYER, PROBE_ONLY_LAYER } from '../../render/layers.ts';
 import {
   colorOf,
@@ -45,8 +51,10 @@ import {
   type GarageMaterial,
   type GarageMaterialId,
   type Part,
+  type Spot,
   type Vec3,
 } from '../../data/garage.ts';
+import { analyzeCut, type Box, type CutElement, type CutStructure } from './cut.ts';
 import { garageTexture, haloTexture, signTexture, type HaloKind } from './textures.ts';
 
 /** Spots de la retombée, de gauche à droite : leur rang dans les listes de l'ambiance. */
@@ -103,17 +111,47 @@ function floorUv(geometry: BufferGeometry, left: number, back: number): BufferGe
   return geometry;
 }
 
-/**
- * Centre de l'objet porté par chaque sommet, pour la découpe de ce qui masque le véhicule
- * (src/render/floor.ts) ; sans centre, jamais découpé.
- */
-function anchor(geometry: BufferGeometry, center: Vector3 | null): BufferGeometry {
-  if (!center && geometry.getAttribute(ANCHOR_ATTRIBUTE)) return geometry;
+/** Identifiant de coupe porté par chaque sommet (0 : jamais masqué). */
+export function tagCut(geometry: BufferGeometry, id: number): BufferGeometry {
   const count = geometry.getAttribute('position').count;
-  const values = new Float32Array(count * 4);
-  if (center) for (let i = 0; i < count; i += 1) values.set([center.x, center.y, center.z, 1], i * 4);
-  geometry.setAttribute(ANCHOR_ATTRIBUTE, new Float32BufferAttribute(values, 4));
+  geometry.setAttribute(CUT_ATTRIBUTE, new Float32BufferAttribute(new Float32Array(count).fill(id), 1));
   return geometry;
+}
+
+/** Boîte englobante d'une géométrie, repère de la pièce. */
+function boxOf(geometry: BufferGeometry): Box {
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox ?? new Box3();
+  return { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] };
+}
+
+/** Épaisseur de l'optique d'un spot. */
+const SPOT_THICKNESS = 0.012;
+
+function spotGeometry(spot: Spot): BufferGeometry {
+  return new CylinderGeometry(spot.radius, spot.radius, SPOT_THICKNESS, 16).translate(...spot.at);
+}
+
+/** Cône de lumière sous un spot : deux plans croisés. */
+function beamGeometries(spot: Spot, layout: GarageLayout): [BufferGeometry, BufferGeometry] {
+  const { height: bh, radius: br } = layout.beam;
+  const at: Vec3 = [spot.at[0], spot.at[1] - bh / 2, spot.at[2] + br * 0.7];
+  return [plane(br * 2, bh, at, '+z', false), plane(br * 2, bh, at, '+x', false)];
+}
+
+/** Pied de tube LED : socle, tige, tube (émissif). */
+function standGeometries(x: number, z: number, height: number): { foot: BufferGeometry[]; tube: BufferGeometry } {
+  return {
+    foot: [new CylinderGeometry(0.16, 0.18, 0.04, 20).translate(x, 0.02, z), new CylinderGeometry(0.03, 0.03, 0.14, 10).translate(x, 0.09, z)],
+    tube: new CylinderGeometry(0.024, 0.024, height, 12).translate(x, 0.14 + height / 2, z),
+  };
+}
+
+/** Boîtes de géométries jetables (elles sont libérées). */
+function boxesOf(geometries: BufferGeometry[]): Box[] {
+  const boxes = geometries.map(boxOf);
+  for (const geometry of geometries) geometry.dispose();
+  return boxes;
 }
 
 function merge(geometries: BufferGeometry[]): BufferGeometry {
@@ -156,11 +194,21 @@ function paint(geometry: BufferGeometry, color: Color): BufferGeometry {
   return geometry;
 }
 
+export interface GarageCut {
+  /** Éléments de la coupe : l'identifiant de l'élément i est i + 1. */
+  elements: readonly CutElement[];
+  /** Adossements et supports, déduits des boîtes. */
+  structure: CutStructure;
+  /** Fondu par identifiant (uniforme partagé par tous les matériaux du décor). */
+  fades: Float32Array;
+}
+
 export interface GarageScene {
   root: Group;
   /** Le sol (miroir de la réflexion planaire) et les réglages de ses surfaces. */
   floor: Mesh;
   surfaces: SurfaceUniforms;
+  cut: GarageCut;
   /** Applique une ambiance : couleurs des sources, halos, tubes, lumières, brume. */
   update: (ambiance: Ambiance) => void;
   /** Niveau de qualité : réflexion planaire du sol, atmosphère. */
@@ -171,30 +219,50 @@ export interface GarageScene {
 export function createGarage(layout: GarageLayout): GarageScene {
   const root = new Group();
   root.name = 'garage';
-  const surfaceUniforms = createSurfaceUniforms(layout.room, layout.outside.falloff, layout.vehicle.cutaway);
+  const surfaceUniforms = createSurfaceUniforms(layout.room, layout.outside.falloff);
+  const fades = surfaceUniforms.pmbCutFade.value;
+  const fadesBeforeProbe = new Float32Array(fades.length);
   // La sonde de réflexion ne doit pas voir le reflet planaire du sol : il date de l'image d'avant
-  // (autre ambiance, véhicule compris). Elle appelle ce crochet avant sa capture (ReflectionProbe).
+  // (autre ambiance, véhicule compris). Elle voit en revanche tout le décor, coupe levée : la
+  // voiture continue de refléter ce qui est masqué (§ 8, ingrédient 2). Elle appelle ce crochet
+  // avant sa capture (ReflectionProbe).
   root.userData.onProbe = () => {
     const strength = surfaceUniforms.pmbReflectionStrength;
     const value = strength.value;
     strength.value = 0;
+    fadesBeforeProbe.set(fades);
+    fades.fill(1);
     return () => {
       strength.value = value;
+      fades.set(fadesBeforeProbe);
     };
   };
+
+  // Éléments de la coupe caméra, dans l'ordre de leur identifiant (1, 2…).
+  const elements: CutElement[] = [];
+  const register = (element: CutElement): number => {
+    elements.push(element);
+    if (elements.length >= CUT_CAPACITY) throw new Error(`Garage : plus de ${CUT_CAPACITY - 1} éléments pour la coupe`);
+    return elements.length;
+  };
+
   const materials = new Map<GarageMaterialId, MeshStandardMaterial>();
   const material = (id: GarageMaterialId) => {
     let found = materials.get(id);
     if (!found) {
       found = createMaterial(id);
-      patchDiffuseIbl(found, surfaceUniforms);
+      patchGarageMaterial(found, surfaceUniforms);
       materials.set(id, found);
     }
     return found;
   };
   const owned: Array<{ dispose: () => void }> = [];
+  /** Tout maillage d'un matériau patché porte l'attribut de coupe (0 par défaut). */
+  const ensureCut = (geometry: BufferGeometry, mat: Material) => {
+    if (mat.userData.pmbCut === true && !geometry.getAttribute(CUT_ATTRIBUTE)) tagCut(geometry, 0);
+  };
   const add = (parent: Group, geometry: BufferGeometry, mat: Material, name: string) => {
-    if (mat instanceof MeshStandardMaterial) anchor(geometry, null);
+    ensureCut(geometry, mat);
     const mesh = new Mesh(geometry, mat);
     mesh.name = name;
     mesh.matrixAutoUpdate = false;
@@ -213,20 +281,20 @@ export function createGarage(layout: GarageLayout): GarageScene {
   const { extent } = layout.outside;
   const floorMaterial = material(surfaces.floor);
   const ceilingMaterial = material(surfaces.ceiling);
-  patchSurface(floorMaterial, surfaceUniforms);
-  patchSurface(ceilingMaterial, surfaceUniforms);
+  patchGarageMaterial(floorMaterial, surfaceUniforms, { surface: true });
+  patchGarageMaterial(ceilingMaterial, surfaceUniforms, { surface: true });
   const floor = add(shell, floorUv(plane(extent, extent, [0, -0.002, 0], '+y'), -W / 2, -D / 2), floorMaterial, 'sol');
   add(shell, floorUv(plane(extent, extent, [0, H, 0], '-y'), -W / 2, -D / 2), ceilingMaterial, 'plafond');
   add(shell, plane(W, H, [0, H / 2, -D / 2], '+z'), material(surfaces.back), 'mur_fond');
   add(shell, plane(W, H, [0, H / 2, D / 2], '-z'), material(surfaces.front), 'mur_avant');
   add(shell, plane(D, H, [-W / 2, H / 2, 0], '+x'), material(surfaces.left), 'mur_gauche');
   add(shell, plane(D, H, [W / 2, H / 2, 0], '-x'), material(surfaces.right), 'mur_droit');
-  add(
-    shell,
-    merge(layout.soffits.map(({ size, at }) => partGeometry({ box: size, at, material: surfaces.back }))),
-    material(surfaces.back),
-    'retombees',
-  );
+  // Retombées : un élément chacune, un seul appel de dessin pour toutes.
+  const soffits = layout.soffits.map(({ size, at }, index) => {
+    const geometry = partGeometry({ box: size, at, material: surfaces.back });
+    return tagCut(geometry, register({ name: `retombee_${index + 1}`, parts: [boxOf(geometry)] }));
+  });
+  add(shell, merge(soffits), material(surfaces.back), 'retombees');
   root.add(shell);
 
   // 2. Mobilier : immobile, fusionné par matériau sur toute la pièce (un appel de dessin par
@@ -240,18 +308,13 @@ export function createGarage(layout: GarageLayout): GarageScene {
     );
     const small = prop.small === true;
     const geometries = prop.parts.map((part) => partGeometry(part).applyMatrix4(placement));
-    const bounds = new Box3();
-    for (const geometry of geometries) {
-      geometry.computeBoundingBox();
-      if (geometry.boundingBox) bounds.union(geometry.boundingBox);
-    }
-    const center = bounds.getCenter(new Vector3());
+    const id = register({ name: prop.name, parts: geometries.map(boxOf), ...(prop.on ? { on: prop.on } : {}) });
     prop.parts.forEach((part, index) => {
       const geometry = geometries[index];
       if (!geometry) return;
       const key = small ? `${part.material}_hors_reflet` : part.material;
       const entry = furniture.get(key) ?? { id: part.material, small, geometries: [] };
-      entry.geometries.push(anchor(geometry, center));
+      entry.geometries.push(tagCut(geometry, id));
       furniture.set(key, entry);
     });
   }
@@ -288,6 +351,7 @@ export function createGarage(layout: GarageLayout): GarageScene {
     return mat;
   });
   const emissive = new MeshBasicMaterial({ vertexColors: true });
+  patchGarageMaterial(emissive, surfaceUniforms);
   const halo = (kind: HaloKind) =>
     new MeshBasicMaterial({
       map: haloTexture(kind),
@@ -303,6 +367,8 @@ export function createGarage(layout: GarageLayout): GarageScene {
     mat.fog = false;
     mat.polygonOffset = false;
   }
+  // Les cônes s'effacent avec leur spot ; les nappes de brume restent (choix d'image).
+  patchGarageMaterial(haloMaterials.cone, surfaceUniforms);
   const stands = material('noir');
   owned.push(emissive, ...Object.values(haloMaterials));
 
@@ -310,6 +376,28 @@ export function createGarage(layout: GarageLayout): GarageScene {
   atmosphere.name = 'garage_atmosphere';
   root.add(atmosphere);
   let atmosphereGeometries: BufferGeometry[] = [];
+
+  // Sources refaites à chaque ambiance, mais à place fixe : leurs éléments sont posés une fois.
+  const spotIds = layout.spots.map((spot, index) => register({ name: `spot_${index + 1}`, parts: boxesOf([spotGeometry(spot)]) }));
+  const beamIds = layout.spots.map((spot, index) =>
+    spot.beam === true
+      ? register({ name: `cone_${index + 1}`, parts: boxesOf(beamGeometries(spot, layout)), on: [`spot_${index + 1}`], light: true })
+      : 0,
+  );
+  // Bandeaux : collés à leur mur et à face unique, ils restent (identifiant 0), sauf ceux qu'un
+  // autre élément porte (`on`, sous une retombée) : ils disparaissent avec lui.
+  const stripGeometry = (strip: GarageLayout['strips'][number]) => {
+    const length = new Vector3(...strip.from).distanceTo(new Vector3(...strip.to));
+    const middle: Vec3 = [(strip.from[0] + strip.to[0]) / 2, (strip.from[1] + strip.to[1]) / 2, (strip.from[2] + strip.to[2]) / 2];
+    return plane(length, 0.03, middle, strip.facing, false);
+  };
+  const stripIds = layout.strips.map((strip, index) =>
+    strip.on ? register({ name: `bandeau_${index + 1}`, parts: boxesOf([stripGeometry(strip)]), on: strip.on }) : 0,
+  );
+  const standIds = layout.standTubes.at.map(([x, z], index) => {
+    const { foot, tube } = standGeometries(x, z, layout.standTubes.height);
+    return register({ name: `pied_tube_${index + 1}`, parts: boxesOf([...foot, tube]) });
+  });
 
   const lights = {
     ambient: new HemisphereLight(),
@@ -334,9 +422,9 @@ export function createGarage(layout: GarageLayout): GarageScene {
     dynamic.clear();
     const put = (geometry: BufferGeometry, mat: Material, name: string) => {
       dynamicGeometries.push(geometry);
+      ensureCut(geometry, mat);
       const mesh = new Mesh(geometry, mat);
       mesh.name = name;
-      if (mat === stands) anchor(geometry, null);
       mesh.renderOrder = mat === emissive || mat === stands ? 0 : -1;
       dynamic.add(mesh);
       return mesh;
@@ -344,40 +432,33 @@ export function createGarage(layout: GarageLayout): GarageScene {
 
     // Spots, bandeaux et tubes : une seule géométrie colorée par sommet.
     const sources: BufferGeometry[] = [];
-    for (const spot of layout.spots) {
-      const disc = new CylinderGeometry(spot.radius, spot.radius, 0.012, 16).translate(...spot.at);
-      sources.push(paint(disc, hdr(ambiance, spot.color, ambiance.spotGain)));
-    }
+    layout.spots.forEach((spot, index) => {
+      sources.push(tagCut(paint(spotGeometry(spot), hdr(ambiance, spot.color, ambiance.spotGain)), spotIds[index] ?? 0));
+    });
     if (ambiance.stripGain > 0) {
-      for (const strip of layout.strips) {
-        const length = new Vector3(...strip.from).distanceTo(new Vector3(...strip.to));
-        const middle: Vec3 = [
-          (strip.from[0] + strip.to[0]) / 2,
-          (strip.from[1] + strip.to[1]) / 2,
-          (strip.from[2] + strip.to[2]) / 2,
-        ];
-        sources.push(paint(plane(length, 0.03, middle, strip.facing, false), hdr(ambiance, strip.color, ambiance.stripGain)));
-      }
+      layout.strips.forEach((strip, index) => {
+        sources.push(tagCut(paint(stripGeometry(strip), hdr(ambiance, strip.color, ambiance.stripGain)), stripIds[index] ?? 0));
+      });
     }
     const tubes = ambiance.standTubes;
-    const standGeometries: BufferGeometry[] = [];
+    const footGeometries: BufferGeometry[] = [];
     const { height } = layout.standTubes;
     layout.standTubes.at.forEach(([x, z], index) => {
       const hex = tubes[index % Math.max(1, tubes.length)];
       if (!hex) return;
-      const tube = new CylinderGeometry(0.024, 0.024, height, 12).translate(x, 0.14 + height / 2, z);
-      sources.push(paint(tube, new Color(hex).multiplyScalar(ambiance.tubeGain)));
-      standGeometries.push(new CylinderGeometry(0.16, 0.18, 0.04, 20).translate(x, 0.02, z));
-      standGeometries.push(new CylinderGeometry(0.03, 0.03, 0.14, 10).translate(x, 0.09, z));
+      const id = standIds[index] ?? 0;
+      const { foot, tube } = standGeometries(x, z, height);
+      sources.push(tagCut(paint(tube, new Color(hex).multiplyScalar(ambiance.tubeGain)), id));
+      footGeometries.push(...foot.map((geometry) => tagCut(geometry, id)));
     });
     put(merge(sources), emissive, 'garage_sources_emissives');
     // Rampes lumineuses douces au-dessus du véhicule, tournées vers le sol : vues de la sonde
     // seule. Elles tracent les longs reflets de la caisse sans barrer le haut de l'image.
     const bars = layout.lightBars.map((bar) =>
-      paint(plane(bar.size[0], bar.size[1], bar.at, bar.facing ?? '-y', false), hdr(ambiance, 'bar', ambiance.barGain)),
+      tagCut(paint(plane(bar.size[0], bar.size[1], bar.at, bar.facing ?? '-y', false), hdr(ambiance, 'bar', ambiance.barGain)), 0),
     );
     if (bars.length > 0) put(merge(bars), emissive, 'garage_rampes').layers.set(PROBE_ONLY_LAYER);
-    if (standGeometries.length > 0) put(merge(standGeometries), stands, 'placeholder_pieds_tubes');
+    if (footGeometries.length > 0) put(merge(footGeometries), stands, 'placeholder_pieds_tubes');
 
     // Halos additifs : flaques au sol et sur les murs, halos doubles sous les spots.
     const halos: Record<'rond' | 'goutte', BufferGeometry[]> = { rond: [], goutte: [] };
@@ -409,14 +490,13 @@ export function createGarage(layout: GarageLayout): GarageScene {
     atmosphereGeometries = [];
     atmosphere.clear();
     const beams: BufferGeometry[] = [];
-    const { height: bh, radius: br } = layout.beam;
-    for (const spot of layout.spots) {
-      if (!spot.beam) continue;
+    layout.spots.forEach((spot, index) => {
+      const id = beamIds[index] ?? 0;
+      if (id === 0) return;
       const slot = SPOT_SLOTS.indexOf(spot.color);
       const color = hdr(ambiance, spot.color, ambiance.beamGain * (ambiance.spotHaloGain[slot] ?? 1));
-      const at: Vec3 = [spot.at[0], spot.at[1] - bh / 2, spot.at[2] + br * 0.7];
-      beams.push(paint(plane(br * 2, bh, at, '+z', false), color), paint(plane(br * 2, bh, at, '+x', false), color));
-    }
+      beams.push(...beamGeometries(spot, layout).map((geometry) => tagCut(paint(geometry, color), id)));
+    });
     const mists = layout.mists.map((mist) => paint(plane(mist.size[0], mist.size[1], mist.at, mist.facing, false), hdr(ambiance, mist.color, mist.gain * ambiance.mistGain)));
     for (const [parts, kind] of [[beams, 'cone'], [mists, 'nappe']] as const) {
       if (parts.length === 0) continue;
@@ -458,5 +538,6 @@ export function createGarage(layout: GarageLayout): GarageScene {
     for (const mat of materials.values()) mat.dispose();
   }
 
-  return { root, floor, surfaces: surfaceUniforms, update, setQuality, dispose };
+  const structure = analyzeCut(layout.room, elements, { wall: layout.cut.wallTolerance, contact: layout.cut.contactTolerance });
+  return { root, floor, surfaces: surfaceUniforms, cut: { elements, structure, fades }, update, setQuality, dispose };
 }

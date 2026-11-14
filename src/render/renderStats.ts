@@ -35,6 +35,12 @@ export interface RenderStatsState {
   floatTargets: boolean | null;
   /** Compte les contextes WebGL rendus après une perte : sonde et ombre se refont. */
   gpuEpoch: number;
+  /**
+   * Coupe caméra (src/scene/garage/cut.ts) : éléments du décor retirés de l'image parce qu'ils
+   * passeraient devant le véhicule, sur le nombre d'éléments surveillés, et boîte du véhicule
+   * protégée (mesurée, ou d'attente) ; `null` avant la scène.
+   */
+  cut: { hidden: number; total: number; vehicle: { min: readonly number[]; max: readonly number[] } } | null;
 }
 
 export const useRenderStats = create<RenderStatsState>()(() => ({
@@ -48,6 +54,7 @@ export const useRenderStats = create<RenderStatsState>()(() => ({
   meter: { running: false, result: null },
   floatTargets: null,
   gpuEpoch: 0,
+  cut: null,
 }));
 
 /** Applique une décision du moniteur de cadence au niveau « auto ». */

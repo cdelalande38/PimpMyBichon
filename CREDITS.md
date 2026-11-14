@@ -12,6 +12,7 @@ Tout fichier qui n'a pas été créé pour le projet est tracé ici : source, au
 | `@fontsource/russo-one` | paquet npm 5.3.0, police Russo One | Jovanny Lemonad | OFL-1.1 | 2026-11-14 | police d'affichage, embarquée dans le bundle ; nom de police réservé « Russo » |
 | `@fontsource/chakra-petch` | paquet npm 5.3.0, police Chakra Petch | The Chakra Petch Project Authors | OFL-1.1 | 2026-11-14 | police de texte, embarquée dans le bundle |
 | `public/assets/bench/carconcept/**` | modèle « Car Concept » des exemples glTF (GLB, textures KTX2), avec son `LICENSE.md` | Eric Chadwick, Darmstadt Graphics Group GmbH, 2024 | CC-BY-4.0 | 2026-11-14 | modèle de banc d'essai du jalon 1 (`placeholder_banc`) ; les logos sont exclus de la licence et masqués à l'écran (plaque unie, textures de logos retirées à l'exécution) |
+| `public/assets/garage/**` | dessinées pour le projet, copies servies des sources `assets-src/garage/` écrites par `assets-src/garage/outils/fabriquer.mjs` | projet PimpMyBichon | création projet | 2026-11-14 | œuvres du garage en SVG (toile, cible, fronton et plateau du flipper, plaques, affiche, motifs de casque) ; aucune police, aucun logo ; registre dans `src/data/garageArt.ts` |
 | `three/examples/jsm/libs/basis/` | transcodeur Basis Universal fourni par le paquet three 0.187.0, émis dans le build sous `libs/basis/` | Binomial LLC | Apache-2.0 | 2026-11-14 | décode les textures KTX2 sur le téléphone ; aucune copie versionnée dans le dépôt |
 
 ## Sources graphiques en attente

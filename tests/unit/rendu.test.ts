@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { AMBIANCES } from '../../src/data/ambiances.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import { colorOf, GARAGE, GARAGE_MATERIALS, type ColorKey } from '../../src/data/garage.ts';
-import { ANCHOR_ATTRIBUTE, CUTAWAY_BOXES, patchDecorShader, patchSurfaceShader } from '../../src/render/floor.ts';
+import { CUT_ATTRIBUTE } from '../../src/render/cut.ts';
+import { patchGarageShader, patchSurfaceShader } from '../../src/render/floor.ts';
 import { CAMERA_LAYERS, PROBE_LAYERS, PROBE_ONLY_LAYER } from '../../src/render/layers.ts';
 import { gradeColor, gradeLutData } from '../../src/render/lut.ts';
 import { applyPaint, createPaintMaterial, paintUniforms, patchPaintShader } from '../../src/render/paint.ts';
@@ -143,12 +144,11 @@ describe('étape C1 : décor', () => {
     expect(CAMERA_LAYERS).not.toContain(PROBE_ONLY_LAYER);
   });
 
-  it('les repères du shader du décor (découpe, diffus de la sonde) existent dans three.js', () => {
+  it('les repères du shader du décor (coupe caméra, diffus de la sonde) existent dans three.js', () => {
     const shader = { vertexShader: ShaderLib.standard.vertexShader, fragmentShader: ShaderLib.standard.fragmentShader };
-    expect(() => patchDecorShader(shader)).not.toThrow();
-    expect(shader.vertexShader).toContain(`attribute vec4 ${ANCHOR_ATTRIBUTE}`);
+    expect(() => patchGarageShader(shader, { standard: true, surface: false, additive: false })).not.toThrow();
+    expect(shader.vertexShader).toContain(`attribute float ${CUT_ATTRIBUTE}`);
     expect(shader.fragmentShader).toContain('iblIrradiance *= pmbIblDiffuse');
-    expect(GARAGE.vehicle.cutaway.length).toBeLessThanOrEqual(CUTAWAY_BOXES);
   });
 
   it('pièce fermée : lambris de pin à gauche et à l’avant, rien de noir sur l’enveloppe', () => {
@@ -169,11 +169,10 @@ describe('étape C1 : décor', () => {
     const casier = at('placeholder_casiers_casques');
     const dots = GARAGE.spots.filter((spot) => spot.color === 'left' && Math.abs(spot.at[2] - casier[2]) < 0.8 && spot.at[1] > casier[1]);
     expect(dots).toHaveLength(4);
-    // Aucun meuble posé au sol n'a son centre dans le volume du véhicule (sans l'air ajouté).
-    const [body] = GARAGE.vehicle.cutaway;
-    if (!body) throw new Error('volume du véhicule absent');
+    // Aucun meuble posé au sol n'a son centre dans le gabarit d'attente du véhicule.
+    const body = GARAGE.vehicle.protect.waiting;
     for (const prop of GARAGE.props.filter((item) => item.at[1] === 0 && item.small !== true)) {
-      const inside = Math.abs(prop.at[0]) < body.max[0] - 0.2 && Math.abs(prop.at[2]) < body.max[2] - 0.2;
+      const inside = Math.abs(prop.at[0]) < body.max[0] && Math.abs(prop.at[2]) < body.max[2];
       expect(inside, prop.name).toBe(false);
     }
   });

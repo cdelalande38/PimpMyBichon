@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Œuvres du garage · contrôle</title>
+    <!--
+      Page de développement, hors de l'app livrée (le build ne part que de index.html) :
+      chaque œuvre de src/data/garageArt.ts posée sur un plan à sa taille réelle, sous une lumière
+      neutre. Servie par le serveur de développement :
+        npx vite --port 5193 --strictPort
+        puis, sur ce serveur : /PimpMyBichon/src/dev/oeuvres/index.html
+      Paramètres : ?echelle=<pixels par mètre> (défaut : tout le tableau dans la fenêtre),
+      &centre=<id ou id#case> (cadre sur une œuvre), &fond=<couleur hexadécimale sans #>.
+    -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #3a3a3e;
+        color: #ece9f4;
+        font: 12px/1.3 system-ui, sans-serif;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+      }
+      .etiquette {
+        position: absolute;
+        transform: translateX(-50%);
+        white-space: nowrap;
+        text-align: center;
+        pointer-events: none;
+      }
+      .etiquette small {
+        color: #b3aecb;
+      }
+      #bilan {
+        position: absolute;
+        left: 8px;
+        top: 6px;
+        color: #b3aecb;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bilan">chargement…</div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

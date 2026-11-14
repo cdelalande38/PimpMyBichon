@@ -75,6 +75,16 @@ function meterLine(meter: RenderStatsState['meter']): string {
   );
 }
 
+function cutLine(cut: RenderStatsState['cut']): string {
+  if (cut === null) return 'Pas encore décidée.';
+  const { min, max } = cut.vehicle;
+  const size = [0, 2, 1].map((k) => decimal((max[k] ?? 0) - (min[k] ?? 0))).join(' × ');
+  const protectedBox = ` Véhicule protégé : ${size} m.`;
+  if (cut.hidden === 0) return `Rien ne passe devant le véhicule : aucun des ${cut.total} éléments du décor n’est retiré.${protectedBox}`;
+  const verb = cut.hidden > 1 ? 'retirés de l’image : ils passeraient' : 'retiré de l’image : il passerait';
+  return `${count(cut.hidden, 'élément')} du décor sur ${cut.total} ${verb} devant le véhicule.${protectedBox}`;
+}
+
 /** « Mesurer » : cinq secondes de rotation, cadence et coût par image au niveau en cours. */
 export function MeterButton() {
   const running = useRenderStats((state) => state.meter.running);
@@ -102,6 +112,7 @@ export function UnderHoodPanel() {
   const auto = useRenderStats((state) => state.auto);
   const floatTargets = useRenderStats((state) => state.floatTargets);
   const meter = useRenderStats((state) => state.meter);
+  const cut = useRenderStats((state) => state.cut);
   const storage = useStorageStatus();
 
   const date = formatBuildDate(BUILD.date);
@@ -170,6 +181,9 @@ export function UnderHoodPanel() {
             : `Réflexion du sol sur ${reflection.width} × ${reflection.height} px.`,
         )}
       </dd>
+
+      <dt>Coupe</dt>
+      <dd data-fact="coupe">{typo(cutLine(cut))}</dd>
 
       <dt>Qualité</dt>
       <dd data-fact="qualite">
