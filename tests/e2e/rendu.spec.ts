@@ -5,7 +5,7 @@ import sharp from 'sharp';
 import { capture, changedRatio, openApp, sceneBand, VIEWPORT, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 // Jalon 1, rendu cible : une capture par ambiance, la planche de revue (3 ambiances × 4
-// peintures, captures/jalon-1/planche-b.jpg) et les relevés de « Sous le capot » (coût d'une
+// peintures, captures/jalon-1/planche-c.jpg) et les relevés de « Sous le capot » (coût d'une
 // image, sonde, réflexion du sol) en standard et en max.
 
 const dock = (page: Page) => page.locator('footer.dock');
@@ -145,7 +145,7 @@ test.describe('rendu cible', () => {
         ];
       }),
     );
-    const file = resolve('captures', 'jalon-1', 'planche-b.jpg');
+    const file = resolve('captures', 'jalon-1', 'planche-c.jpg');
     mkdirSync(resolve('captures', 'jalon-1'), { recursive: true });
     await sharp({ create: { width, height, channels: 3, background: '#000' } })
       .composite(tiles.flat())
@@ -159,6 +159,6 @@ test.describe('rendu cible', () => {
     const max = await facts(page);
     expect(max.sonde).toMatch(/Sonde de 512 px/);
     expect(max.sol).toMatch(/Réflexion du sol sur \d+ × \d+ px/);
-    writeFileSync(resolve('captures', 'jalon-1', 'planche-b.json'), JSON.stringify({ standard, max, stats }, null, 2));
+    writeFileSync(resolve('captures', 'jalon-1', 'planche-c.json'), JSON.stringify({ standard, max, stats }, null, 2));
   });
 });

@@ -4,11 +4,13 @@
 // L'enveloppe est faite de faces simples tournées vers l'intérieur : la caméra, qui orbite
 // hors de la pièce, voit à travers les murs proches. Le sol et le plafond se prolongent au-delà
 // des murs et s'y perdent dans la brume de l'ambiance (src/render/floor.ts).
-// L'atmosphère (cônes sous les spots, nappes au ras du sol) est sur le calque 1 : ni la sonde
-// ni la réflexion du sol ne la voient, seule la caméra (qui active ce calque).
+// Calques (src/render/layers.ts) : l'atmosphère (cônes sous les spots, nappes au ras du sol)
+// n'est vue que de la caméra ; les rampes du plafond, que de la sonde ; les petits objets et le
+// décor en hauteur sont absents du reflet du sol.
 
 import {
   AdditiveBlending,
+  Box3,
   BoxGeometry,
   BufferGeometry,
   Color,
@@ -32,7 +34,8 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Ambiance } from '../../data/ambiances.ts';
-import { createSurfaceUniforms, patchDiffuseIbl, patchSurface, setReflection, type SurfaceUniforms } from '../../render/floor.ts';
+import { ANCHOR_ATTRIBUTE, createSurfaceUniforms, patchDiffuseIbl, patchSurface, setReflection, type SurfaceUniforms } from '../../render/floor.ts';
+import { ATMOSPHERE_LAYER, NO_MIRROR_LAYER, PROBE_ONLY_LAYER } from '../../render/layers.ts';
 import {
   colorOf,
   GARAGE_MATERIALS,
@@ -45,9 +48,6 @@ import {
   type Vec3,
 } from '../../data/garage.ts';
 import { garageTexture, haloTexture, signTexture, type HaloKind } from './textures.ts';
-
-/** Calque des objets d'atmosphère : vus par la caméra seule. */
-export const ATMOSPHERE_LAYER = 1;
 
 /** Spots de la retombée, de gauche à droite : leur rang dans les listes de l'ambiance. */
 const SPOT_SLOTS: readonly ColorKey[] = ['spotLeft', 'spotCenter', 'spotRight'];
@@ -100,6 +100,19 @@ function floorUv(geometry: BufferGeometry, left: number, back: number): BufferGe
   const position = geometry.getAttribute('position');
   const uv = geometry.getAttribute('uv');
   for (let i = 0; i < position.count; i += 1) uv.setXY(i, position.getX(i) - left, back - position.getZ(i));
+  return geometry;
+}
+
+/**
+ * Centre de l'objet porté par chaque sommet, pour la découpe de ce qui masque le véhicule
+ * (src/render/floor.ts) ; sans centre, jamais découpé.
+ */
+function anchor(geometry: BufferGeometry, center: Vector3 | null): BufferGeometry {
+  if (!center && geometry.getAttribute(ANCHOR_ATTRIBUTE)) return geometry;
+  const count = geometry.getAttribute('position').count;
+  const values = new Float32Array(count * 4);
+  if (center) for (let i = 0; i < count; i += 1) values.set([center.x, center.y, center.z, 1], i * 4);
+  geometry.setAttribute(ANCHOR_ATTRIBUTE, new Float32BufferAttribute(values, 4));
   return geometry;
 }
 
@@ -158,7 +171,7 @@ export interface GarageScene {
 export function createGarage(layout: GarageLayout): GarageScene {
   const root = new Group();
   root.name = 'garage';
-  const surfaceUniforms = createSurfaceUniforms(layout.room, layout.outside.falloff);
+  const surfaceUniforms = createSurfaceUniforms(layout.room, layout.outside.falloff, layout.vehicle.cutaway);
   const materials = new Map<GarageMaterialId, MeshStandardMaterial>();
   const material = (id: GarageMaterialId) => {
     let found = materials.get(id);
@@ -171,6 +184,7 @@ export function createGarage(layout: GarageLayout): GarageScene {
   };
   const owned: Array<{ dispose: () => void }> = [];
   const add = (parent: Group, geometry: BufferGeometry, mat: Material, name: string) => {
+    if (mat instanceof MeshStandardMaterial) anchor(geometry, null);
     const mesh = new Mesh(geometry, mat);
     mesh.name = name;
     mesh.matrixAutoUpdate = false;
@@ -205,19 +219,40 @@ export function createGarage(layout: GarageLayout): GarageScene {
   );
   root.add(shell);
 
-  // 2. Mobilier : un groupe nommé par objet, ses volumes fusionnés par matériau.
+  // 2. Mobilier : immobile, fusionné par matériau sur toute la pièce (un appel de dessin par
+  //    matériau, § 8). Les petits objets (`small`) forment des volumes à part, hors du reflet du sol.
+  const furniture = new Map<string, { id: GarageMaterialId; small: boolean; geometries: BufferGeometry[] }>();
   for (const prop of layout.props) {
-    const group = new Group();
-    group.name = prop.name;
-    group.position.set(...prop.at);
-    group.rotation.y = prop.turn ?? 0;
-    const byMaterial = new Map<GarageMaterialId, BufferGeometry[]>();
-    for (const part of prop.parts) byMaterial.set(part.material, [...(byMaterial.get(part.material) ?? []), partGeometry(part)]);
-    for (const [id, geometries] of byMaterial) add(group, merge(geometries), material(id), `${prop.name}_${id}`);
-    group.updateMatrix();
-    group.matrixAutoUpdate = false;
-    root.add(group);
+    const placement = new Matrix4().compose(
+      new Vector3(...prop.at),
+      new Quaternion().setFromEuler(new Euler(0, prop.turn ?? 0, 0)),
+      new Vector3(1, 1, 1),
+    );
+    const small = prop.small === true;
+    const geometries = prop.parts.map((part) => partGeometry(part).applyMatrix4(placement));
+    const bounds = new Box3();
+    for (const geometry of geometries) {
+      geometry.computeBoundingBox();
+      if (geometry.boundingBox) bounds.union(geometry.boundingBox);
+    }
+    const center = bounds.getCenter(new Vector3());
+    prop.parts.forEach((part, index) => {
+      const geometry = geometries[index];
+      if (!geometry) return;
+      const key = small ? `${part.material}_hors_reflet` : part.material;
+      const entry = furniture.get(key) ?? { id: part.material, small, geometries: [] };
+      entry.geometries.push(anchor(geometry, center));
+      furniture.set(key, entry);
+    });
   }
+  const furnitureGroup = new Group();
+  furnitureGroup.name = 'garage_mobilier';
+  furnitureGroup.userData.props = layout.props.map((prop) => prop.name);
+  for (const [key, { id, small, geometries }] of furniture) {
+    const mesh = add(furnitureGroup, merge(geometries), material(id), `garage_mobilier_${key}`);
+    if (small) mesh.layers.set(NO_MIRROR_LAYER);
+  }
+  root.add(furnitureGroup);
 
   // 3. Panneaux à texture : crédence, écran, toile, cible.
   for (const panel of layout.panels) {
@@ -227,7 +262,8 @@ export function createGarage(layout: GarageLayout): GarageScene {
         ? new MeshStandardMaterial({ map, roughness: 0.55, metalness: 0 })
         : new MeshBasicMaterial({ map, color: new Color(1, 1, 1).multiplyScalar(panel.glow) });
     owned.push(mat);
-    add(root, plane(panel.size[0], panel.size[1], panel.at, panel.facing), mat, panel.name);
+    const mesh = add(root, plane(panel.size[0], panel.size[1], panel.at, panel.facing), mat, panel.name);
+    if (panel.small === true) mesh.layers.set(NO_MIRROR_LAYER);
   }
 
   // 4. Sources pilotées par l'ambiance : refaites à chaque changement.
@@ -290,8 +326,10 @@ export function createGarage(layout: GarageLayout): GarageScene {
       dynamicGeometries.push(geometry);
       const mesh = new Mesh(geometry, mat);
       mesh.name = name;
+      if (mat === stands) anchor(geometry, null);
       mesh.renderOrder = mat === emissive || mat === stands ? 0 : -1;
       dynamic.add(mesh);
+      return mesh;
     };
 
     // Spots, bandeaux et tubes : une seule géométrie colorée par sommet.
@@ -322,11 +360,13 @@ export function createGarage(layout: GarageLayout): GarageScene {
       standGeometries.push(new CylinderGeometry(0.16, 0.18, 0.04, 20).translate(x, 0.02, z));
       standGeometries.push(new CylinderGeometry(0.03, 0.03, 0.14, 10).translate(x, 0.09, z));
     });
-    // Rampes lumineuses douces au-dessus du véhicule, tournées vers le sol.
-    for (const bar of layout.lightBars) {
-      sources.push(paint(plane(bar.size[0], bar.size[1], bar.at, bar.facing ?? '-y', false), hdr(ambiance, 'bar', ambiance.barGain)));
-    }
     put(merge(sources), emissive, 'garage_sources_emissives');
+    // Rampes lumineuses douces au-dessus du véhicule, tournées vers le sol : vues de la sonde
+    // seule. Elles tracent les longs reflets de la caisse sans barrer le haut de l'image.
+    const bars = layout.lightBars.map((bar) =>
+      paint(plane(bar.size[0], bar.size[1], bar.at, bar.facing ?? '-y', false), hdr(ambiance, 'bar', ambiance.barGain)),
+    );
+    if (bars.length > 0) put(merge(bars), emissive, 'garage_rampes').layers.set(PROBE_ONLY_LAYER);
     if (standGeometries.length > 0) put(merge(standGeometries), stands, 'placeholder_pieds_tubes');
 
     // Halos additifs : flaques au sol et sur les murs, halos doubles sous les spots.
@@ -397,6 +437,8 @@ export function createGarage(layout: GarageLayout): GarageScene {
 
   function setQuality({ reflection, atmosphere: misty }: { reflection: boolean; atmosphere: boolean }): void {
     setReflection(floorMaterial, reflection);
+    // Avec la réflexion planaire, le reflet de la sonde sur le sol s'efface devant elle.
+    surfaceUniforms.pmbIblSpecular.value = reflection ? layout.mirrorIbl : 1;
     atmosphere.visible = misty;
   }
 

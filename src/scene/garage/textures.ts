@@ -106,6 +106,39 @@ const osb: Draw = (c, s) => {
   c.fillRect(0, 0, 3, s);
 };
 
+// Lambris de pin vertical des murs gauche et avant : 8 lames de 15 cm sur 1,2 m, veinées,
+// rainures sombres, quelques nœuds.
+const pin: Draw = (c, s) => {
+  const rand = random(37);
+  const planks = 8;
+  const w = s / planks;
+  for (let p = 0; p < planks; p += 1) {
+    const r = 206 + Math.round((rand() - 0.5) * 26);
+    c.fillStyle = `rgb(${r},${Math.round(r * 0.84)},${Math.round(r * 0.62)})`;
+    c.fillRect(p * w, 0, w, s);
+    c.strokeStyle = 'rgba(150,100,55,0.28)';
+    c.lineWidth = 1;
+    for (let v = 0; v < 7; v += 1) {
+      const x = p * w + 4 + rand() * (w - 8);
+      c.beginPath();
+      c.moveTo(x, 0);
+      for (let y = 0; y <= s; y += 24) c.lineTo(x + Math.sin(y / 50 + v + p) * 2.5, y);
+      c.stroke();
+    }
+    for (let k = 0; k < 2; k += 1) {
+      if (rand() < 0.4) continue;
+      const x = p * w + 10 + rand() * (w - 20);
+      const y = rand() * s;
+      c.fillStyle = 'rgba(120,70,30,0.75)';
+      c.beginPath();
+      c.ellipse(x, y, 3 + rand() * 3, 5 + rand() * 4, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillStyle = 'rgba(70,40,18,0.85)';
+    c.fillRect(p * w, 0, 2, s);
+  }
+};
+
 // Lambris du plafond : lames de bois chaud, veinées.
 const lambris: Draw = (c, s) => {
   const rand = random(23);
@@ -272,6 +305,7 @@ const DRAWINGS: Record<GarageTextureId, [size: number, draw: Draw, ratio?: numbe
   carrelageRugosite: [512, carrelageRugosite, 1, true],
   osb: [512, osb],
   lambris: [512, lambris],
+  pin: [512, pin],
   tiroirs: [256, tiroirs],
   credence: [1024, credence, CREDENCE.height / CREDENCE.width],
   ecran: [512, ecran],

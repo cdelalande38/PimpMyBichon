@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { AMBIANCES } from '../../src/data/ambiances.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import { colorOf, GARAGE, GARAGE_MATERIALS, type ColorKey } from '../../src/data/garage.ts';
-import { patchSurfaceShader } from '../../src/render/floor.ts';
+import { ANCHOR_ATTRIBUTE, CUTAWAY_BOXES, patchDecorShader, patchSurfaceShader } from '../../src/render/floor.ts';
+import { CAMERA_LAYERS, PROBE_LAYERS, PROBE_ONLY_LAYER } from '../../src/render/layers.ts';
 import { gradeColor, gradeLutData } from '../../src/render/lut.ts';
 import { applyPaint, createPaintMaterial, paintUniforms, patchPaintShader } from '../../src/render/paint.ts';
 import { QUALITY_PROFILES } from '../../src/render/quality.ts';
@@ -132,5 +133,53 @@ describe('étape B : niveaux de qualité, étalonnage, sol', () => {
       expect(ambiance.barGain, ambiance.id).toBeGreaterThan(1);
       expect(ambiance.exposure, ambiance.id).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('étape C1 : décor', () => {
+  it('les rampes du plafond ne sont vues que de la sonde ; le haut de l’image reste calme', () => {
+    expect(PROBE_LAYERS).toContain(PROBE_ONLY_LAYER);
+    expect(CAMERA_LAYERS).not.toContain(PROBE_ONLY_LAYER);
+  });
+
+  it('les repères du shader du décor (découpe, diffus de la sonde) existent dans three.js', () => {
+    const shader = { vertexShader: ShaderLib.standard.vertexShader, fragmentShader: ShaderLib.standard.fragmentShader };
+    expect(() => patchDecorShader(shader)).not.toThrow();
+    expect(shader.vertexShader).toContain(`attribute vec4 ${ANCHOR_ATTRIBUTE}`);
+    expect(shader.fragmentShader).toContain('iblIrradiance *= pmbIblDiffuse');
+    expect(GARAGE.vehicle.cutaway.length).toBeLessThanOrEqual(CUTAWAY_BOXES);
+  });
+
+  it('pièce fermée : lambris de pin à gauche et à l’avant, rien de noir sur l’enveloppe', () => {
+    expect(GARAGE.surfaces.left).toBe('pin');
+    expect(GARAGE.surfaces.front).toBe('pin');
+    for (const id of Object.values(GARAGE.surfaces)) expect(id).not.toMatch(/^noir/);
+    expect(GARAGE.props.some((prop) => prop.parts.some((part) => part.material === 'osb'))).toBe(true);
+  });
+
+  it('coin salon dans l’angle avant-gauche, casier à quatre points bleus, rien dans la voiture', () => {
+    const at = (name: string) => GARAGE.props.find((prop) => prop.name === name)?.at ?? [0, 0, 0];
+    for (const name of ['placeholder_canape_a', 'placeholder_canape_b', 'placeholder_table_basse']) {
+      expect(at(name)[0], name).toBeLessThan(0);
+      expect(at(name)[2], name).toBeGreaterThan(0);
+    }
+    expect(at('placeholder_canape_a')[2]).toBeGreaterThan(GARAGE.room.depth / 2 - 0.6);
+    expect(at('placeholder_canape_b')[0]).toBeLessThan(-GARAGE.room.width / 2 + 0.6);
+    const casier = at('placeholder_casiers_casques');
+    const dots = GARAGE.spots.filter((spot) => spot.color === 'left' && Math.abs(spot.at[2] - casier[2]) < 0.8 && spot.at[1] > casier[1]);
+    expect(dots).toHaveLength(4);
+    // Aucun meuble posé au sol n'a son centre dans le volume du véhicule (sans l'air ajouté).
+    const [body] = GARAGE.vehicle.cutaway;
+    if (!body) throw new Error('volume du véhicule absent');
+    for (const prop of GARAGE.props.filter((item) => item.at[1] === 0 && item.small !== true)) {
+      const inside = Math.abs(prop.at[0]) < body.max[0] - 0.2 && Math.abs(prop.at[2]) < body.max[2] - 0.2;
+      expect(inside, prop.name).toBe(false);
+    }
+  });
+
+  it('« Atelier » reste un blanc neutre pour juger une teinte', () => {
+    const atelier = AMBIANCES.find((item) => item.id === 'atelier');
+    expect(atelier?.grade).toMatchObject({ amount: 0, saturation: 1, contrast: 1 });
+    expect(atelier?.key).toBe('#ffffff');
   });
 });

@@ -21,7 +21,7 @@ import { useBench } from '../state/bench.ts';
 import { useSettings } from '../state/store.ts';
 import { BenchCar, type BenchMeasure } from './bench/BenchCar.tsx';
 import { fitCamera, orbitPosition } from './fit.ts';
-import { ATMOSPHERE_LAYER } from './garage/build.ts';
+import { CAMERA_LAYERS } from '../render/layers.ts';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
 
@@ -69,10 +69,11 @@ function Stage({ profile, mayRotate }: StageProps) {
   useEffect(() => {
     if (rotating) invalidate();
   }, [rotating, invalidate]);
-  // La caméra voit l'atmosphère (calque 1) ; la sonde et le reflet du sol, non.
+  // La caméra voit l'atmosphère et les petits objets ; le reflet du sol, ni l'un ni l'autre ;
+  // les rampes du plafond, seule la sonde les voit (src/render/layers.ts).
   const camera = useThree((state) => state.camera);
   useEffect(() => {
-    camera.layers.enable(ATMOSPHERE_LAYER);
+    for (const layer of CAMERA_LAYERS) camera.layers.enable(layer);
     invalidate();
   }, [camera, invalidate]);
   useFrame(() => {

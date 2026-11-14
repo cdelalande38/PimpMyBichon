@@ -2,7 +2,8 @@
 // position du véhicule, véhicule masqué, préfiltrée (PMREM) et posée comme environnement de la
 // scène. C'est elle qui fait lire les tubes, les spots et les halos du décor dans la carrosserie.
 // Elle se refait quand l'ambiance ou la qualité change, jamais à chaque image.
-// Un objet marqué `userData.hideInProbe` (le véhicule) n'y apparaît pas.
+// Un objet marqué `userData.hideInProbe` (le véhicule) n'y apparaît pas. Elle voit en plus les
+// calques PROBE_ONLY (rampes du plafond) et NO_MIRROR (petits objets) : src/render/layers.ts.
 
 import { useThree } from '@react-three/fiber';
 import { useEffect } from 'react';
@@ -17,6 +18,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import type { Vec3 } from '../data/garage.ts';
+import { PROBE_LAYERS } from './layers.ts';
 import { useRenderStats } from './renderStats.ts';
 
 interface Capture {
@@ -30,6 +32,8 @@ function capture(gl: WebGLRenderer, scene: Scene, size: number, position: Vec3):
   const cube = new WebGLCubeRenderTarget(size, { type: HalfFloatType, generateMipmaps: false });
   const camera = new CubeCamera(0.05, 60, cube);
   camera.position.set(...position);
+  // Les six caméras partagent les calques du support : rampes du plafond et petits objets en plus.
+  for (const layer of PROBE_LAYERS) camera.layers.enable(layer);
 
   const hidden: Object3D[] = [];
   scene.traverse((object) => {
