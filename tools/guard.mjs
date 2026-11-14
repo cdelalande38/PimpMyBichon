@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import { addBrandTerm, loadBrandHashes } from './lib/brands.mjs';
 import { displayPath, lastValue, REPO_ROOT, runCli, UsageError } from './lib/cli.mjs';
 import { runGuard } from './lib/guard.mjs';
+import { countLabel } from './lib/report.mjs';
 
 /** @typedef {import('./lib/cli.mjs').ParsedArgs} ParsedArgs */
 
@@ -48,7 +49,7 @@ function addBrands(args) {
       lines.push(`« ${item.form} » : ${status} — ${item.hash.slice(0, 12)}…`);
     }
   }
-  lines.push(`${total} empreintes dans ${displayPath(file)}`);
+  lines.push(`${countLabel(total, 'empreinte')} dans ${displayPath(file)}`);
   return lines;
 }
 

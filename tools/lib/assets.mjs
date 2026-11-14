@@ -172,7 +172,7 @@ function checkLicenses(report, root, files) {
         0,
         'licence',
         `${countLabel(assets.length, 'fichier')} sous ${ASSETS_DIR}/, ` +
-          `${countLabel(credits.rows.length, 'ligne')} de licence lues dans ${CREDITS_FILE}`,
+          `${countLabel(credits.rows.length, 'ligne de licence lue', 'lignes de licence lues')} dans ${CREDITS_FILE}`,
       ),
     );
   }

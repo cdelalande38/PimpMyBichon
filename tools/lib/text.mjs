@@ -7,6 +7,21 @@ import { closeSync, openSync, readFileSync, readSync } from 'node:fs';
 const SNIFF_BYTES = 8000;
 
 /**
+ * Lit le début d'un fichier : l'échantillon qui sert à reconnaître un binaire.
+ * @param {string} abs
+ * @returns {Buffer}
+ */
+function readHead(abs) {
+  const head = Buffer.alloc(SNIFF_BYTES);
+  const fd = openSync(abs, 'r');
+  try {
+    return head.subarray(0, readSync(fd, head, 0, SNIFF_BYTES, 0));
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
  * Lit un fichier s'il contient du texte.
  * Un octet nul dans le début du fichier désigne un binaire (modèle, image, son, police).
  * Les fichiers UTF-16 (reconnus à leur marque d'ordre) sont décodés comme du texte.
@@ -14,15 +29,7 @@ const SNIFF_BYTES = 8000;
  * @returns {string | null}  le texte, ou null pour un fichier binaire
  */
 export function readTextFile(abs) {
-  const head = Buffer.alloc(SNIFF_BYTES);
-  const fd = openSync(abs, 'r');
-  let length = 0;
-  try {
-    length = readSync(fd, head, 0, SNIFF_BYTES, 0);
-  } finally {
-    closeSync(fd);
-  }
-  const sample = head.subarray(0, length);
+  const sample = readHead(abs);
 
   if (sample.length >= 2 && sample[0] === 0xff && sample[1] === 0xfe) {
     return new TextDecoder('utf-16le').decode(readFileSync(abs));

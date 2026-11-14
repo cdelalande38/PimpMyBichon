@@ -33,20 +33,21 @@ Les sons de banque, la musique et les modèles sous licence ne vont jamais dans 
 Au jalon 0, le build se contente de constater sa présence et de compter ce qu'il contient (visible dans « Sous le capot »). L'empaquetage des sons arrive avec le jalon 9.
 
 ```bash
-# 1. Créer le dépôt privé
-gh repo create PimpMyBichon-assets --private --description "Assets sous licence de PimpMyBichon"
+# 1. Créer le dépôt privé, avec un premier commit : la CI ne sait pas récupérer un dépôt vide
+gh repo create PimpMyBichon-assets --private --add-readme --description "Assets sous licence de PimpMyBichon"
 
-# 2. Créer une clé de déploiement, sans phrase secrète
-ssh-keygen -t ed25519 -N "" -C "pimpmybichon-assets" -f ./assets_deploy_key
+# 2. Créer une clé de déploiement, sans phrase secrète, hors de tout dépôt
+CLE=$(mktemp -d)
+ssh-keygen -t ed25519 -N "" -C "pimpmybichon-assets" -f "$CLE/assets_deploy_key"
 
 # 3. Clé publique sur le dépôt privé (lecture seule par défaut)
-gh repo deploy-key add ./assets_deploy_key.pub --repo <compte>/PimpMyBichon-assets --title "CI PimpMyBichon"
+gh repo deploy-key add "$CLE/assets_deploy_key.pub" --repo <compte>/PimpMyBichon-assets --title "CI PimpMyBichon"
 
 # 4. Clé privée en secret du dépôt public (à lancer depuis ce dépôt)
-gh secret set ASSETS_DEPLOY_KEY < ./assets_deploy_key
+gh secret set ASSETS_DEPLOY_KEY < "$CLE/assets_deploy_key"
 
 # 5. Ne rien laisser traîner
-rm ./assets_deploy_key ./assets_deploy_key.pub
+rm -r "$CLE"
 ```
 
 En local, clone-le dans `.private-assets/` (dossier ignoré par git), ou pointe ailleurs avec la variable `PMB_ASSETS_DIR` :
@@ -62,7 +63,8 @@ Arborescence attendue :
 ├─ engines/<famille>/     un dossier par famille de moteur (raw/ pour les prises brutes)
 ├─ sfx/                   bruitages d'atelier et de route
 ├─ radio/<station>/       un dossier par station ; une station vide n'apparaît pas
-└─ models/                modèles 3D sous licence
+├─ models/                modèles 3D sous licence
+└─ references/            photos et vidéos de cadrage : jamais publiées, jamais utilisées comme textures
 ```
 
 ## 4. Recette du jalon 0 sur Android
@@ -107,6 +109,6 @@ Puis ouvre `chrome://inspect` dans Chrome sur le poste : console, réseau, perfo
 ## 8. Revenir en arrière
 
 - Le plus simple : `git revert <commit>` puis push. Le workflow republie la version précédente.
-- Sans toucher au code : onglet **Actions**, ouvrir le dernier run vert, **Re-run all jobs**.
+- Sans toucher au code : onglet **Actions**, ouvrir le run vert du dernier commit qui marchait (pas forcément le plus récent), **Re-run all jobs**. Possible tant que GitHub conserve ce run ; au-delà, `git revert`.
 
 Les téléphones déjà installés recevront la version republiée comme une mise à jour ordinaire.

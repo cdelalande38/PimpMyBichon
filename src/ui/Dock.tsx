@@ -1,6 +1,6 @@
 // Dock : toutes les commandes de l'écran principal, dans le tiers bas (§ 2).
 
-import { openSheet } from '../app/useRoute.ts';
+import { openSheet, useSettling } from '../app/useRoute.ts';
 import { usePwa } from '../pwa/pwaStore.ts';
 import { applyUpdate, promptInstall } from '../pwa/register.ts';
 
@@ -12,9 +12,11 @@ interface DockProps {
 export function Dock({ sceneFailed }: DockProps) {
   const canInstall = usePwa((state) => state.canInstall);
   const updateReady = usePwa((state) => state.updateReady);
+  // Double appui sur « Retour à l'atelier » : le second ne doit pas rouvrir un panneau.
+  const settling = useSettling();
 
   return (
-    <footer className="dock">
+    <footer className="dock" inert={settling}>
       <div className="dock-text">
         <p className="eyebrow">Atelier en chantier · jalon 0</p>
         <h2>Les fondations sont coulées</h2>

@@ -61,6 +61,50 @@ function watchForUpdates(registration: ServiceWorkerRegistration): void {
   });
 }
 
+/** Délai avant de retenter une installation ratée, si le réseau ne s'est pas manifesté d'ici là. */
+const INSTALL_RETRY_MS = 30_000;
+
+/**
+ * Suit chaque installation de service worker, sans s'en remettre aux déductions de la
+ * bibliothèque d'enregistrement :
+ * - précache interrompu à la première visite (réseau coupé) : on le dit, et on réessaie ;
+ * - nouvelle version installée alors qu'une autre est aux commandes : on propose de recharger.
+ */
+function watchInstalls(swUrl: string, registration: ServiceWorkerRegistration): void {
+  const follow = (worker: ServiceWorker | null) => {
+    if (!worker) return;
+    worker.addEventListener('statechange', () => {
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+        usePwa.setState({ updateReady: true });
+      }
+      if (worker.state === 'redundant' && !registration.active) {
+        usePwa.setState({ offline: 'erreur', done: 0, total: 0 });
+        retryInstall(swUrl);
+      }
+    });
+  };
+  follow(registration.installing);
+  registration.addEventListener('updatefound', () => follow(registration.installing));
+}
+
+/** Relance l'installation au retour du réseau, ou au bout d'un moment. */
+function retryInstall(swUrl: string): void {
+  let timer = 0;
+  const retry = () => {
+    window.removeEventListener('online', retry);
+    window.clearTimeout(timer);
+    navigator.serviceWorker
+      .register(swUrl, { scope: import.meta.env.BASE_URL })
+      .then((registration) => {
+        usePwa.setState((state) => (state.offline === 'erreur' ? { offline: 'preparation' } : state));
+        watchInstalls(swUrl, registration);
+      })
+      .catch(() => retryInstall(swUrl));
+  };
+  window.addEventListener('online', retry);
+  timer = window.setTimeout(retry, INSTALL_RETRY_MS);
+}
+
 function watchServiceWorker(): void {
   if (import.meta.env.DEV) {
     usePwa.setState({ offline: 'dev' });
@@ -100,10 +144,11 @@ function watchServiceWorker(): void {
     onNeedRefresh: () => usePwa.setState({ updateReady: true }),
     // Pas de rechargement décidé par la bibliothèque : voir `controllerchange` ci-dessus.
     onNeedReload: () => {},
-    onRegisteredSW: (_url, registration) => {
+    onRegisteredSW: (swUrl, registration) => {
       if (!registration) return;
       if (registration.active) usePwa.setState({ offline: 'pret' });
       else usePwa.setState((state) => (state.offline === 'inconnu' ? { offline: 'preparation' } : state));
+      watchInstalls(swUrl, registration);
       watchForUpdates(registration);
     },
     onRegisterError: () => usePwa.setState({ offline: 'erreur' }),

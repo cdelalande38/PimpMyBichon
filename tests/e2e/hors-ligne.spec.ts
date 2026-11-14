@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import sharp from 'sharp';
 import { capture, openApp, waitForScene, waitOfflineReady } from './helpers.ts';
 
 // Critère d'acceptation du jalon 0 : l'app s'installe et s'ouvre en mode avion
@@ -19,6 +20,12 @@ test.describe('hors ligne et installation', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
     await waitForScene(page);
     await expect(page.locator('.pill')).toHaveText('Hors ligne · tout est là');
+
+    // Ce libellé est le plus long de l'indicateur : sur un écran étroit, il ne doit rien pousser hors champ.
+    await page.setViewportSize({ width: 360, height: 780 });
+    const settings = await page.getByRole('button', { name: 'Réglages' }).boundingBox();
+    expect((settings?.x ?? 0) + (settings?.width ?? 0), 'dock entier à l’écran').toBeLessThanOrEqual(360);
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Sous le capot' }).click();
     await expect(page.getByRole('dialog').getByText('Prêt : l’atelier s’ouvre sans réseau.')).toBeVisible();
     await expect(page.getByRole('dialog').getByText('Hors ligne.', { exact: true })).toBeVisible();
@@ -75,6 +82,8 @@ test.describe('hors ligne et installation', () => {
       const response = await page.request.get(`./${icon.src}`);
       expect(response.ok(), `icône ${icon.src}`).toBe(true);
       expect(response.headers()['content-type']).toContain('image/png');
+      const { width, height } = await sharp(await response.body()).metadata();
+      expect(`${width}x${height}`, `taille réelle de ${icon.src}`).toBe(icon.sizes);
     }
     expect((parsed.icons ?? []).some((icon) => icon.purpose === 'maskable')).toBe(true);
 

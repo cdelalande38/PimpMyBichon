@@ -50,6 +50,11 @@ export function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024 * 1024)).toLocaleString('fr-FR', { maximumFractionDigits: 1 })}${NBSP}Go`;
 }
 
+/** Typographie française : espace insécable devant « : ; ? ! % » et à l'intérieur des guillemets. */
+export function typo(text: string): string {
+  return text.replace(/ ([:;?!%»])/g, `${NBSP}$1`).replace(/« /g, `«${NBSP}`);
+}
+
 /** Accord simple : « 1 moteur », « 3 moteurs ». */
 export function count(n: number, singular: string, plural = `${singular}s`): string {
   return `${n.toLocaleString('fr-FR')} ${n > 1 ? plural : singular}`;

@@ -1,7 +1,7 @@
 // Réglages (§ 5.9), sur le motif du dock du prototype : une rangée d'onglets, une rangée de choix.
 // Tout tient dans le tiers bas et se règle d'un pouce. La liste est décrite par des données.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import type { Settings } from '../state/settings.ts';
 import { useSettings } from '../state/store.ts';
@@ -54,8 +54,20 @@ type TabKey = (typeof TABS)[number]['key'];
 function Choices<K extends keyof Settings>({ tab }: { tab: SettingTab<K> }) {
   const current = useSettings((state) => state[tab.key]);
   const change = useSettings((state) => state.change);
+  // La rangée défile : on amène le choix en cours dans le champ, sinon rien ne paraît sélectionné.
+  // À l'image suivante seulement : un changement de taille du texte élargit d'abord la rangée.
+  const row = useRef<HTMLDivElement>(null);
+  const textSize = useSettings((state) => state.textSize);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      row.current
+        ?.querySelector('[aria-pressed="true"]')
+        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [tab.key, current, textSize]);
   return (
-    <div className="chips" role="group" aria-label={tab.label}>
+    <div ref={row} className="chips" role="group" aria-label={tab.label}>
       {tab.choices.map((choice) => (
         <button
           key={String(choice.value)}
@@ -81,7 +93,7 @@ export function SettingsPanel() {
       {/* La note passe au-dessus : les commandes restent les éléments les plus bas du panneau. */}
       <p className="note">
         {active === 'autoRotate' && reducedMotion
-          ? 'Ton téléphone demande moins de mouvement : la rotation reste coupée, quel que soit ce réglage.'
+          ? 'Ton téléphone demande moins de mouvement\u00a0: la rotation reste coupée, quel que soit ce réglage.'
           : 'Les volumes et le pilote automatique arriveront avec le son et la sortie de nuit.'}
       </p>
 

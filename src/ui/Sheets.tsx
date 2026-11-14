@@ -39,7 +39,7 @@ const CONTENT: Record<SheetRouteName, SheetContent> = {
     title: 'Tu as reçu un build',
     body: (
       <p>
-        Cette version de l’atelier ne sait pas encore l’ouvrir : la lecture des builds arrive avec le
+        Cette version de l’atelier ne sait pas encore l’ouvrir&nbsp;: la lecture des builds arrive avec le
         jalon 10. Garde le lien sous le coude.
       </p>
     ),

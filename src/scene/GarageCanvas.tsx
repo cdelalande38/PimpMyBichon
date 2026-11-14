@@ -3,7 +3,7 @@
 // (WebGL 2, React Three Fiber, post-traitement) tourne sur le téléphone, sans rien télécharger d'ailleurs.
 
 import { ContactShadows, OrbitControls, PerspectiveCamera } from '@react-three/drei';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Bloom, EffectComposer, ToneMapping } from '@react-three/postprocessing';
 import { ToneMappingMode } from 'postprocessing';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -44,6 +44,17 @@ function Stage({ profile, mayRotate }: StageProps) {
   const idleTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(idleTimer.current), []);
 
+  // Rendu à la demande : tant que la rotation lente est due, chaque image en demande une autre.
+  // Sans cela elle ne repartirait pas après un geste, les contrôles n'émettant plus rien au repos.
+  const rotating = mayRotate && idle;
+  const invalidate = useThree((state) => state.invalidate);
+  useEffect(() => {
+    if (rotating) invalidate();
+  }, [rotating, invalidate]);
+  useFrame(() => {
+    if (rotating) invalidate();
+  });
+
   return (
     <>
       <color attach="background" args={['#06050b']} />
@@ -60,7 +71,7 @@ function Stage({ profile, mayRotate }: StageProps) {
         maxDistance={fit.maxDistance}
         minPolarAngle={MIN_POLAR}
         maxPolarAngle={MAX_POLAR}
-        autoRotate={mayRotate && idle}
+        autoRotate={rotating}
         autoRotateSpeed={0.9}
         onStart={() => {
           window.clearTimeout(idleTimer.current);

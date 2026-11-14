@@ -7,6 +7,8 @@
   --sheet: #12101d;
   --panel: rgba(16, 14, 26, 0.86);
   --line: rgba(233, 230, 242, 0.16);
+  /* Contour des commandes : au moins 3:1 sur le fond, pour qu'on voie où appuyer. */
+  --edge: rgba(233, 230, 242, 0.42);
   --rouge: #ff2d3f;
   --bleu: #3b7bff;
   --chrome: #ece9f4;
@@ -98,6 +100,8 @@ button {
   inset: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
+  /* Colonne bornée : un libellé long ne doit jamais élargir la coque au-delà de l'écran. */
+  grid-template-columns: minmax(0, 1fr);
   max-width: 56.25rem;
   margin: 0 auto;
   overflow: hidden;
@@ -148,6 +152,7 @@ button {
 }
 
 .brand {
+  flex: none;
   margin: 0;
   font-family: var(--display);
   font-weight: 400;
@@ -187,8 +192,10 @@ button {
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.05em;
+  line-height: 1.15;
   text-transform: uppercase;
-  white-space: nowrap;
+  /* Sur un écran étroit, le libellé passe sur deux lignes plutôt que de pousser le reste. */
+  min-width: 0;
   font-variant-numeric: tabular-nums;
 }
 
@@ -234,7 +241,7 @@ button {
   margin: 0;
   padding: 0.2rem 0.5rem;
   border-left: 2px solid var(--ambre);
-  background: rgba(10, 9, 17, 0.55);
+  background: var(--panel);
   color: var(--mute);
   font-size: 0.6875rem;
   letter-spacing: 0.12em;
@@ -264,7 +271,7 @@ button {
   background: linear-gradient(
     180deg,
     rgba(10, 9, 17, 0),
-    rgba(10, 9, 17, 0.9) 26%,
+    rgba(10, 9, 17, 0.9) 1.75rem,
     rgba(10, 9, 17, 0.97)
   );
   /* Le dégradé ne bloque pas l'orbite : seuls les boutons prennent le toucher. */
@@ -318,7 +325,7 @@ button {
   min-width: 48px;
   min-height: var(--tap);
   padding: 0 0.75rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   border-radius: 4px;
   background: var(--panel);
   font-size: 0.875rem;
@@ -347,7 +354,7 @@ button {
 
 @media (hover: hover) {
   .btn:hover {
-    border-color: rgba(233, 230, 242, 0.42);
+    border-color: rgba(233, 230, 242, 0.8);
   }
 
   .btn.cta:hover {
@@ -412,9 +419,11 @@ button {
 .card {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  --pad-l: calc(1rem + var(--safe-l));
+  --pad-r: calc(1rem + var(--safe-r));
+  gap: 0.5rem;
   max-height: 82dvh;
-  padding: 1.125rem calc(1rem + var(--safe-r)) calc(1rem + var(--safe-b)) calc(1rem + var(--safe-l));
+  padding: 1rem 0 calc(0.875rem + var(--safe-b));
   border-top: 3px solid var(--ambre);
   border-radius: 10px 10px 0 0;
   background: var(--sheet);
@@ -423,10 +432,18 @@ button {
 .card-scroll {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.5rem;
   min-height: 0;
+  /* Le rembourrage latéral est porté par la zone défilante : les rangées y débordent jusqu'aux
+     bords du panneau sans créer de défilement horizontal. */
+  padding: 0 var(--pad-r) 0 var(--pad-l);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.card > .btn {
+  flex: none;
+  margin: 0 var(--pad-r) 0 var(--pad-l);
 }
 
 .card h2 {
@@ -455,8 +472,8 @@ button {
   gap: 0.5rem;
   flex: none;
   /* Débord jusqu'aux bords du panneau, pour montrer que la rangée défile. */
-  margin: 0 -1rem;
-  padding: 0.25rem 1rem;
+  margin: 0 calc(-1 * var(--pad-r)) 0 calc(-1 * var(--pad-l));
+  padding: 0.125rem var(--pad-r) 0.125rem var(--pad-l);
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
@@ -495,7 +512,7 @@ button {
   min-width: 5.75rem;
   min-height: var(--tap-chip);
   padding: 0.5rem 1rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--edge);
   background: var(--panel);
   text-align: left;
   /* Parallélogramme : la signature de l'interface (§ 4). */
@@ -552,5 +569,17 @@ button {
 @media (min-width: 700px) {
   .dock {
     padding-bottom: calc(1.125rem + var(--safe-b));
+  }
+}
+
+/* Écrans bas (téléphone en paysage) : le texte du dock s'efface, les commandes restent. */
+@media (max-height: 480px) {
+  .dock-text {
+    display: none;
+  }
+
+  .card {
+    max-height: calc(100dvh - var(--safe-t));
+    padding-top: 0.5rem;
   }
 }

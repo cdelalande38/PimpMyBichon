@@ -76,12 +76,49 @@ test.describe('coque de l’app', () => {
 
     expect(await motion(), 'rotation lente visible').toBeGreaterThan(0.002);
 
+    // Après un geste, la rotation doit repartir toute seule. Le rendu est à la demande :
+    // sans relance explicite, la scène resterait figée une fois le geste amorti.
+    await page.mouse.move(195, 360);
+    await page.mouse.down();
+    await page.mouse.move(275, 360, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(12_000);
+    expect(await motion(), 'rotation reprise après un geste').toBeGreaterThan(0.002);
+
     await page.emulateMedia({ reducedMotion: 'reduce' });
     // La rotation s'amortit sur quelques dizaines d'images, puis le rendu à la demande se tait.
     // En rendu logiciel, ces images prennent du temps : on attend l'immobilité au lieu de la supposer.
     await expect
       .poll(motion, { message: 'scène immobile', timeout: 60_000, intervals: [500] })
       .toBeLessThan(0.0005);
+  });
+
+  test('au repos, la scène ne dessine plus rien (rendu à la demande)', async ({ page }) => {
+    // Compte les appels de dessin WebGL de la page.
+    await page.addInitScript({
+      content: `
+        window.__draws = 0;
+        for (const name of ['drawElements', 'drawArrays', 'drawElementsInstanced', 'drawArraysInstanced']) {
+          const original = WebGL2RenderingContext.prototype[name];
+          WebGL2RenderingContext.prototype[name] = function (...args) {
+            window.__draws += 1;
+            return original.apply(this, args);
+          };
+        }`,
+    });
+    await openApp(page);
+    await waitForScene(page);
+
+    const draws = () => page.evaluate(() => (window as unknown as { __draws: number }).__draws);
+    const drawsOverTwoSeconds = async () => {
+      const before = await draws();
+      await page.waitForTimeout(2000);
+      return (await draws()) - before;
+    };
+    expect(await draws(), 'la scène a bien été dessinée').toBeGreaterThan(0);
+    await expect
+      .poll(drawsOverTwoSeconds, { message: 'aucun dessin au repos', timeout: 60_000, intervals: [250] })
+      .toBe(0);
   });
 
   test('si la 3D ne se charge pas, le reste de l’app tient et propose de relancer', async ({

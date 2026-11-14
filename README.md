@@ -59,4 +59,4 @@ proto/        prototype v0.1 : référence d'ergonomie uniquement
 
 ## Règles du dépôt
 
-Le dépôt est public. Aucun nom de marque, aucune donnée personnelle, aucun secret, aucun fichier sous licence restrictive : les sons de banque, la musique et les modèles achetés vivent dans un dépôt privé, et le build passe sans lui. Détail dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) et [CREDITS.md](CREDITS.md).
+Le dépôt est public. Aucun nom de marque dans l'app (code, textes, assets), aucune donnée personnelle, aucun secret, aucun fichier sous licence restrictive : les sons de banque, la musique et les modèles achetés vivent dans un dépôt privé, et le build passe sans lui. Détail dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md) et [CREDITS.md](CREDITS.md).

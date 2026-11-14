@@ -24,8 +24,8 @@ const NIGHT = '#0a0911';
 const SOURCE_SIZE = 512;
 /** Le SVG est tracé quatre fois trop grand puis réduit : bords et halos plus propres. */
 const OVERSAMPLING = 4;
-/** Poids maximal d'un PNG, en octets. */
-const MAX_BYTES = 60 * 1024;
+/** Plafond de poids d'un PNG, en octets : il doit peser moins de 60 ko (1 ko = 1000 octets, la lecture la plus stricte). */
+const MAX_BYTES = 60 * 1000;
 /** Découpe arrondie de icon.svg, retirée pour l'icône iOS (le système arrondit lui-même). */
 const TILE_CLIP = ' clip-path="url(#tile-clip)"';
 /** Premiers octets de tout fichier PNG. */
@@ -149,7 +149,7 @@ async function verify(target, png) {
   }
   if (target.opaque && header.hasAlpha) problems.push('canal alpha présent alors que le fichier doit être opaque');
   if (!target.opaque && !header.hasAlpha) problems.push('canal alpha absent alors que le fichier doit être transparent');
-  if (png.length > MAX_BYTES) problems.push(`${png.length} octets, plafond ${MAX_BYTES}`);
+  if (png.length >= MAX_BYTES) problems.push(`${png.length} octets, il en faut moins de ${MAX_BYTES}`);
 
   const decoded = await sharp(png).ensureAlpha().raw().toBuffer();
   if (!target.opaque && decoded.readUInt8(3) !== 0) problems.push('le coin haut gauche devrait être transparent');
@@ -222,7 +222,7 @@ async function main() {
         relative(ROOT, path).padEnd(40),
         `${target.size} x ${target.size}`.padEnd(9),
         (target.opaque ? 'opaque' : 'alpha').padEnd(6),
-        `${(png.length / 1024).toFixed(1)} ko`.padStart(7),
+        `${(png.length / 1000).toFixed(1)} ko`.padStart(7),
         shortHash(png),
       ].join('  '),
     );

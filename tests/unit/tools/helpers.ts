@@ -50,6 +50,26 @@ export function rulesOf(findings: Finding[]): string[] {
   return findings.map((item) => item.rule);
 }
 
+/** Texte de tous les messages d'une liste de constats, pour y chercher une formule. */
+export function messagesOf(findings: Finding[]): string {
+  return findings.map((item) => item.message).join('\n');
+}
+
+/**
+ * Contenu d'un CREDITS.md au format du projet : colonnes « Fichier(s) | Origine | Auteur |
+ * Licence | Date | Note ». La première ligne de licence est la ligne 5 du fichier.
+ */
+export function creditsFile(...rows: Array<[pattern: string, license: string]>): string {
+  return [
+    '# Crédits et licences',
+    '',
+    '| Fichier(s) | Origine | Auteur | Licence | Date | Note |',
+    '|---|---|---|---|---|---|',
+    ...rows.map(([pattern, license]) => `| \`${pattern}\` | origine fictive | auteur fictif | ${license} | 2026-01-01 | |`),
+    '',
+  ].join('\n');
+}
+
 /** Empreintes d'une liste de termes, comme les écrirait la commande --add-brand. */
 export function hashesOf(...terms: string[]): Set<string> {
   return new Set(terms.flatMap((term) => brandForms(term).map(hashForm)));

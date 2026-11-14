@@ -5,7 +5,7 @@ import { precachePercent } from '../../src/pwa/pwaStore.ts';
 import { QUALITY_LEVELS, QUALITY_PROFILES, resolveQuality } from '../../src/render/quality.ts';
 import { fitCamera, orbitPosition } from '../../src/scene/fit.ts';
 import { QUALITY_SETTINGS } from '../../src/state/settings.ts';
-import { count, formatBytes, offlineDetail, offlineLabel } from '../../src/ui/labels.ts';
+import { count, formatBytes, offlineDetail, offlineLabel, typo } from '../../src/ui/labels.ts';
 
 describe('fitCamera', () => {
   it('ouvre le champ et recule en portrait', () => {
@@ -107,6 +107,13 @@ describe('textes', () => {
     expect(formatBytes(340 * 1024)).toBe('340\u00a0ko');
     expect(formatBytes(1.25 * 1024 * 1024)).toMatch(/^1,[23]\u00a0Mo$/);
     expect(formatBytes(3 * 1024 * 1024 * 1024)).toBe('3\u00a0Go');
+  });
+
+  it('pose les espaces insécables de la typographie française', () => {
+    expect(typo('Prêt : tout est là.')).toBe('Prêt\u00a0: tout est là.');
+    expect(typo('Le bouton « Installer » est en bas ?')).toBe('Le bouton «\u00a0Installer\u00a0» est en bas\u00a0?');
+    expect(typo('42 %')).toBe('42\u00a0%');
+    expect(typo('Rien à changer.')).toBe('Rien à changer.');
   });
 
   it('accorde les quantités', () => {

@@ -18,7 +18,8 @@ declare const self: ServiceWorkerGlobalScope & {
 };
 
 const manifest = self.__WB_MANIFEST;
-const total = manifest.length;
+// On compte les fichiers, pas les lignes : une adresse listée deux fois ne s'installe qu'une fois.
+const total = new Set(manifest.map((entry) => (typeof entry === 'string' ? entry : entry.url))).size;
 let done = 0;
 
 async function tellPages(message: PrecacheProgressMessage): Promise<void> {

@@ -157,7 +157,7 @@ export function runAudioCheck({ root }) {
       '',
       0,
       'licence',
-      `${countLabel(audioFiles.length, 'fichier audio')} sous public/` +
+      `${countLabel(audioFiles.length, 'fichier audio', 'fichiers audio')} sous public/` +
         (audioFiles.length > 0 ? ` : licence vérifiée dans ${CREDITS_FILE}` : ''),
     ),
   );

@@ -57,6 +57,8 @@ export default defineConfig({
       // Jamais de rechargement surprise : la nouvelle version attend un geste ou le prochain lancement.
       registerType: 'prompt',
       injectRegister: false,
+      // Les icônes entrent déjà dans le précache par le motif de fichiers : pas de doublon.
+      includeManifestIcons: false,
       manifest: {
         name: 'PimpMyBichon',
         short_name: 'PimpMyBichon',

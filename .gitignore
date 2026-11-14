@@ -23,6 +23,9 @@ captures/
 *.aiff
 
 # Environnement local
+*.code-workspace
+.vscode/
+.idea/
 .env
 .env.*
 !.env.example

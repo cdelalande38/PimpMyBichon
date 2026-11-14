@@ -10,6 +10,8 @@ const STORE_NAME = 'kv';
 
 let store: UseStore | null = null;
 const memory = new Map<string, string>();
+/** Faux dès qu'IndexedDB a refusé une lecture ou une écriture : plus rien ne survit à la fermeture. */
+let writable = true;
 
 function db(): UseStore {
   store ??= createStore(DB_NAME, STORE_NAME);
@@ -22,6 +24,7 @@ export const idbStorage: StateStorage = {
     try {
       return (await get<string>(name, db())) ?? null;
     } catch {
+      writable = false;
       return memory.get(name) ?? null;
     }
   },
@@ -29,6 +32,7 @@ export const idbStorage: StateStorage = {
     try {
       await set(name, value, db());
     } catch {
+      writable = false;
       memory.set(name, value);
     }
   },
@@ -46,6 +50,8 @@ export interface StorageStatus {
   persisted: boolean | null;
   usage: number | null;
   quota: number | null;
+  /** Faux si IndexedDB refuse d'écrire : les réglages ne survivront pas à la fermeture. */
+  writable: boolean;
 }
 
 /**
@@ -64,7 +70,7 @@ export async function askPersistentStorage(): Promise<boolean | null> {
 }
 
 export async function readStorageStatus(): Promise<StorageStatus> {
-  const status: StorageStatus = { persisted: null, usage: null, quota: null };
+  const status: StorageStatus = { persisted: null, usage: null, quota: null, writable };
   try {
     if (navigator.storage?.persisted) status.persisted = await navigator.storage.persisted();
     if (navigator.storage?.estimate) {

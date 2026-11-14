@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { capture, openApp, VIEWPORT, waitForScene } from './helpers.ts';
 
-async function expectControlsInThumbZone(page: Page): Promise<void> {
+async function expectControlsInThumbZone(page: Page, height: number = VIEWPORT.height): Promise<void> {
   const buttons = page.locator('dialog[open] button:visible');
   const count = await buttons.count();
   expect(count).toBeGreaterThan(0);
@@ -13,7 +13,7 @@ async function expectControlsInThumbZone(page: Page): Promise<void> {
     if (!box) continue;
     expect(box.height, `hauteur de « ${label} »`).toBeGreaterThanOrEqual(48);
     expect(box.width, `largeur de « ${label} »`).toBeGreaterThanOrEqual(48);
-    expect(box.y, `« ${label} » dans le tiers bas`).toBeGreaterThanOrEqual((VIEWPORT.height * 2) / 3);
+    expect(box.y, `« ${label} » dans le tiers bas`).toBeGreaterThanOrEqual((height * 2) / 3);
   }
 }
 
@@ -28,7 +28,7 @@ test.describe('panneaux', () => {
     await expect(page).toHaveURL(/#\/capot$/);
     await expect(dialog.getByText('Version')).toBeVisible();
     await expect(dialog.getByText(/WebGL 2/)).toBeVisible();
-    await expect(dialog.getByText(/Absents : sons et musique muets|Présents :/)).toBeVisible();
+    await expect(dialog.getByText(/Absents\s: sons et musique muets|Dossier privé présent|Présents\s:/)).toBeVisible();
     await expect(dialog.getByText(/placeholder_garage, placeholder_speedshape/)).toBeVisible();
     await expectControlsInThumbZone(page);
     await capture(page, '02-sous-le-capot');
@@ -69,6 +69,22 @@ test.describe('panneaux', () => {
     await expect(
       page.getByRole('dialog').getByRole('button', { name: /Économie/ }),
     ).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('sur un écran plus petit (360 × 780), les réglages restent sous le pouce à toutes les tailles de texte', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 780 });
+    await openApp(page, '#/reglages');
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Texte' }).click();
+    for (const size of ['Normal', 'Grand', 'Très grand']) {
+      await dialog.getByRole('button', { name: new RegExp(`^${size}`) }).click();
+      await expectControlsInThumbZone(page, 780);
+    }
+    // Le choix en cours reste visible dans la rangée qui défile.
+    await expect(dialog.getByRole('button', { name: /^Très grand/ })).toBeInViewport({ ratio: 0.9 });
   });
 
   test('le retour du navigateur et la touche Échap ferment le panneau', async ({ page }) => {

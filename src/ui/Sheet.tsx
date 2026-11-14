@@ -9,25 +9,24 @@ interface SheetProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  closeLabel?: string;
 }
 
-export function Sheet({
-  open,
-  eyebrow,
-  title,
-  onClose,
-  children,
-  closeLabel = 'Retour à l’atelier',
-}: SheetProps) {
+export function Sheet({ open, eyebrow, title, onClose, children }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const pressedOnBackdrop = useRef(false);
   const titleId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    else if (!open && dialog.open) dialog.close();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      // Le focus va sur le bouton du bas, sous le pouce, pas sur la zone défilante.
+      closeRef.current?.focus({ preventScroll: true });
+    } else if (!open && dialog.open) {
+      dialog.close();
+    }
   }, [open]);
 
   return (
@@ -39,9 +38,14 @@ export function Sheet({
       onClose={() => {
         if (open) onClose();
       }}
-      // Un appui sur le fond assombri ferme le panneau.
+      // Un appui sur le fond assombri ferme le panneau, s'il a commencé sur le fond :
+      // relâcher une sélection de texte au-dessus du panneau ne doit pas le fermer.
+      onPointerDown={(event) => {
+        pressedOnBackdrop.current = event.target === event.currentTarget;
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget && pressedOnBackdrop.current) onClose();
+        pressedOnBackdrop.current = false;
       }}
     >
       {open && (
@@ -51,8 +55,8 @@ export function Sheet({
             <h2 id={titleId}>{title}</h2>
             {children}
           </div>
-          <button type="button" className="btn cta" onClick={onClose}>
-            {closeLabel}
+          <button ref={closeRef} type="button" className="btn cta" onClick={onClose}>
+            Retour à l’atelier
           </button>
         </div>
       )}
