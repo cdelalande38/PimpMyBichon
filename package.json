@@ -20,6 +20,7 @@
     "assets:check": "node tools/assets-check.mjs",
     "audio:check": "node tools/audio-check.mjs",
     "icons": "node tools/make-icons.mjs",
+    "radio:pack": "node tools/radio/pack.mjs",
     "check": "npm run typecheck && npm run lint && npm run guard && npm run assets:check && npm run audio:check && npm run test"
   },
   "dependencies": {

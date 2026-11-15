@@ -6,6 +6,7 @@ import { closeSheet } from '../app/useRoute.ts';
 import { SettingsPanel } from './SettingsPanel.tsx';
 import { Sheet } from './Sheet.tsx';
 import { MeterButton, UnderHoodPanel } from './UnderHoodPanel.tsx';
+import { RadioPanel } from './radio/RadioPanel.tsx';
 
 interface SheetContent {
   eyebrow: string;
@@ -37,6 +38,7 @@ const CONTENT: Record<SheetRouteName, SheetContent> = {
       </p>
     ),
   },
+  radio: { eyebrow: 'Atelier', title: 'Radio', body: <RadioPanel /> },
   build: {
     eyebrow: 'Lien de build',
     title: 'Tu as reçu un build',

@@ -1,0 +1,95 @@
+// Petit hébergement d'essai pour les parcours de la radio, sur une autre origine que l'app.
+// /cors/… envoie l'en-tête CORS (et accepte HEAD et Range), /nocors/… ne l'envoie pas,
+// /coupe/… coupe la connexion à mi-chemin d'une requête sans Range (la reprise passe).
+// Les packs viennent d'un tampon en mémoire ou d'un fichier sur le disque (épreuve de taille).
+
+import { createReadStream, statSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import { buildZip, type FixtureEntry } from './fixtures.ts';
+
+export type PackSource = { buffer: Uint8Array } | { file: string };
+
+export function startPackServer(port: number, packs: Map<string, PackSource>, log: string[] = []): Promise<Server> {
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? '/', 'http://localhost');
+    const [, mode, name] = url.pathname.split('/');
+    const source = name ? packs.get(name) : undefined;
+    log.push(`${req.method} ${url.pathname}${req.headers.range ? ` ${req.headers.range}` : ''}`);
+    if (mode === 'cors' || mode === 'coupe') {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Headers', 'Range');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+    }
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204).end();
+      return;
+    }
+    if (!source || (mode !== 'cors' && mode !== 'nocors' && mode !== 'coupe')) {
+      res.writeHead(404).end();
+      return;
+    }
+    const size = 'buffer' in source ? source.buffer.length : statSync(source.file).size;
+    const range = /bytes=(\d+)-/.exec(req.headers.range ?? '');
+    const start = range ? Number(range[1]) : 0;
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Length', String(size - start));
+    if (range) res.setHeader('Content-Range', `bytes ${start}-${size - 1}/${size}`);
+    res.writeHead(range ? 206 : 200);
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+    if (mode === 'coupe' && !range && 'buffer' in source) {
+      const half = Buffer.from(source.buffer.subarray(0, Math.floor(size / 2)));
+      res.write(half, () => setTimeout(() => res.socket?.destroy(), 150));
+      return;
+    }
+    if ('buffer' in source) res.end(Buffer.from(source.buffer.subarray(start)));
+    else createReadStream(source.file, { start }).pipe(res);
+  });
+  return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(server)));
+}
+
+/** Morceau WAV d'essai : bruit faible produit par le test (8 kHz, mono, 8 bits). Jamais livré. */
+export function noiseWav(seconds: number, seed: number): Uint8Array {
+  const rate = 8000;
+  const samples = rate * seconds;
+  const out = Buffer.alloc(44 + samples);
+  out.write('RIFF', 0, 'latin1');
+  out.writeUInt32LE(36 + samples, 4);
+  out.write('WAVEfmt ', 8, 'latin1');
+  out.writeUInt32LE(16, 16);
+  out.writeUInt16LE(1, 20);
+  out.writeUInt16LE(1, 22);
+  out.writeUInt32LE(rate, 24);
+  out.writeUInt32LE(rate, 28);
+  out.writeUInt16LE(1, 32);
+  out.writeUInt16LE(8, 34);
+  out.write('data', 36, 'latin1');
+  out.writeUInt32LE(samples, 40);
+  let x = seed;
+  for (let i = 0; i < samples; i += 1) {
+    x = (x * 1103515245 + 12345) & 0x7fffffff;
+    out[44 + i] = 128 + ((x >> 16) % 9) - 4;
+  }
+  return new Uint8Array(out);
+}
+
+/** Petit pack version 2 : deux stations de deux morceaux WAV (20 s chacun). */
+export function smallPack(stations: string[] = ['electro', 'rock']): Uint8Array {
+  const entries: FixtureEntry[] = [
+    {
+      name: 'pack.json',
+      data: new Uint8Array(
+        Buffer.from(JSON.stringify({ format: 'pmb-pack', version: 2, stations: stations.map((dossier) => ({ dossier, pistes: 2 })) })),
+      ),
+    },
+  ];
+  stations.forEach((folder, s) => {
+    entries.push({ name: `${folder}/01 - Bruit d’essai ${s + 1}a.wav`, data: noiseWav(20, 11 + s) });
+    // Le second morceau de la seconde station est compressé (deflate) : décompressé une fois à l'import.
+    entries.push({ name: `${folder}/02 - Bruit d’essai ${s + 1}b.wav`, data: noiseWav(20, 23 + s), deflate: s === 1 });
+  });
+  return buildZip(entries);
+}

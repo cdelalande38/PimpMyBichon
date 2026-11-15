@@ -7,6 +7,7 @@ export type Route =
   | { name: 'reglages' }
   | { name: 'capot' }
   | { name: 'commande' }
+  | { name: 'radio' }
   /** Mode photo (§ 5.1) : l'interface s'efface, restent les cadrages, « Enregistrer » et « Retour ». */
   | { name: 'photo' }
   /** Lien de build reçu : `#b=<code>` (§ 5.7). */
@@ -33,6 +34,7 @@ const PAGES = new Map<string, Route>([
   ['/reglages', { name: 'reglages' }],
   ['/capot', { name: 'capot' }],
   ['/commande', { name: 'commande' }],
+  ['/radio', { name: 'radio' }],
   ['/photo', { name: 'photo' }],
 ]);
 

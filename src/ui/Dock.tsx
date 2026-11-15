@@ -4,6 +4,7 @@ import { openSheet, useSettling } from '../app/useRoute.ts';
 import { usePwa } from '../pwa/pwaStore.ts';
 import { applyUpdate, promptInstall } from '../pwa/register.ts';
 import { BenchControls } from './BenchControls.tsx';
+import { RadioDock } from './radio/RadioDock.tsx';
 
 interface DockProps {
   /** La scène 3D n'a pas démarré : le dock propose de relancer. */
@@ -47,6 +48,8 @@ export function Dock({ sceneFailed }: DockProps) {
       )}
 
       {!sceneFailed && <BenchControls />}
+
+      <RadioDock />
 
       <nav className="acts" aria-label="Atelier">
         <button type="button" className="btn" onClick={() => openSheet({ name: 'capot' })}>
