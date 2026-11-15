@@ -198,7 +198,7 @@ const tiroirs: Draw = (c, s) => {
   c.fillRect(0, s * 0.95, s, s * 0.05);
 };
 
-// Crédence noire légèrement brillante, ses deux bouts en escalier de carreaux blancs de 10 cm
+// Crédence noire mate, ses deux bouts en escalier de carreaux blancs de 10 cm
 // (quatre marches, bord pixelisé contre le mur blanc). Le dessin couvre 2,95 × 0,55 m.
 const CREDENCE = { width: 2.95, height: 0.55, tile: 0.1, steps: [4, 3, 2, 1, 0, 0] } as const;
 const credence: Draw = (c, s) => {
@@ -414,16 +414,17 @@ const nidAbeille: Draw = (c, s) => {
   }
 };
 
-// Rugosité de la crédence (canal vert), alignée sur son dessin : carreaux brillants (0,15), joints
-// mats (0,7) au pas de 10 cm, comptés depuis le bas comme les carreaux.
+// Rugosité de la crédence (canal vert), alignée sur son dessin : carreaux mats (0,85), joints plus
+// mats encore (0,95) au pas de 10 cm, comptés depuis le bas comme les carreaux. La vraie crédence est
+// noire mate : brillante, elle renvoyait les néons en reflets qui n'existent pas dans le garage.
 const credenceRugosite: Draw = (c, s) => {
   const h = c.canvas.height;
   const t = CREDENCE.tile * (s / CREDENCE.width);
   const level = (value: number) => Math.round(value * 255);
-  const tile = level(0.15);
+  const tile = level(0.85);
   c.fillStyle = `rgb(${tile},${tile},${tile})`;
   c.fillRect(0, 0, s, h);
-  const joint = level(0.7);
+  const joint = level(0.95);
   c.fillStyle = `rgb(${joint},${joint},${joint})`;
   for (let x = 0; x <= s; x += t) c.fillRect(x - 1, 0, 2, h);
   for (let y = h; y >= 0; y -= t) c.fillRect(0, y - 1, s, 2);

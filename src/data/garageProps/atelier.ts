@@ -572,11 +572,12 @@ const colonne: Prop = {
 };
 
 const credence: Prop = {
-  // Crédence noire en petits carreaux, entre le plan de travail et les enceintes : plaque mince
-  // collée au mur du fond (le dessin entier sur sa face avant, matériau credence).
+  // Crédence noire mate en petits carreaux, entre le plan de travail et les enceintes : plaque mince
+  // collée au mur du fond (le dessin entier sur sa face avant, matériau credence, qui masque les
+  // nappes de lumière du mur : GarageMaterial.overHalos, d'où ses 12 mm d'épaisseur).
   name: 'placeholder_credence',
   at: [-0.025, 1.175, BACK],
-  parts: [{ box: [2.95, 0.55, 0.008], bevel: 0.002, at: [0, 0, 0.004], material: 'credence' }],
+  parts: [{ box: [2.95, 0.55, 0.012], bevel: 0.002, at: [0, 0, 0.006], material: 'credence' }],
 };
 
 // ——— Casier ———

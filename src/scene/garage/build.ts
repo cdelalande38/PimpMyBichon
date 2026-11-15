@@ -456,6 +456,13 @@ function neonBaseColors(geometry: BufferGeometry, groups: ReadonlyArray<{ color:
   return base;
 }
 
+/**
+ * Décalage de profondeur des surfaces qui masquent les halos des murs (GarageMaterial.overHalos) :
+ * deux fois celui des halos. La surface doit aussi dépasser du mur plus que le halo le plus avancé
+ * (9 mm), pour gagner même vue de face, où le décalage ne joue plus.
+ */
+export const OVER_HALOS_OFFSET = -4;
+
 function createMaterial(id: GarageMaterialId): MeshStandardMaterial {
   const spec: GarageMaterial = GARAGE_MATERIALS[id];
   // Couleurs par sommet : l'assombrissement de pied du mobilier (blanches ailleurs).
@@ -473,6 +480,13 @@ function createMaterial(id: GarageMaterialId): MeshStandardMaterial {
   if (spec.emissive) {
     material.emissive = new Color(spec.emissive);
     material.emissiveIntensity = spec.emissiveIntensity ?? 1;
+  }
+  // Surface qui masque les halos des murs : sa profondeur est tirée vers la caméra plus fort que la
+  // leur (les halos ont un décalage de −2), si bien qu'ils échouent au test de profondeur devant elle.
+  if (spec.overHalos) {
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = OVER_HALOS_OFFSET;
+    material.polygonOffsetUnits = OVER_HALOS_OFFSET;
   }
   return material;
 }

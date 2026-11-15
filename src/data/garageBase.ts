@@ -77,6 +77,13 @@ export interface GarageMaterial {
    * pièce éclairée, elle ne doit pas l'éclairer une seconde fois. Défaut : 0,2.
    */
   env?: number;
+  /**
+   * Surface sombre et mate plaquée contre un mur : elle masque les nappes et les halos additifs qui
+   * lavent ce mur. Ces nappes simulent la lumière que renvoie un mur clair ; une surface noire mate
+   * n'en renvoie presque pas. Sa face avant doit dépasser du mur de plus de 9 mm (le halo le plus
+   * avancé).
+   */
+  overHalos?: boolean;
 }
 
 export const GARAGE_MATERIALS = {
@@ -129,7 +136,7 @@ export const GARAGE_MATERIALS = {
   capiton: { color: '#1a181c', roughness: 0.75, metalness: 0, env: 0.2, map: 'nidAbeille', repeat: [1 / 0.12, 1 / 0.104] },
   /** Casque sarcelle pailleté. */
   sarcelle: { color: '#0a3a46', roughness: 0.22, metalness: 0.3, env: 0.9 },
-  /** Crédence : petits carreaux brillants (0,15) aux joints mats (0,7), le dessin entier sur 2,95 × 0,55 m. */
+  /** Crédence : petits carreaux noirs mats (0,85) aux joints plus mats (0,95), le dessin entier sur 2,95 × 0,55 m. */
   credence: {
     color: '#ffffff',
     roughness: 1,
@@ -137,7 +144,8 @@ export const GARAGE_MATERIALS = {
     map: 'credence',
     roughnessMap: 'credenceRugosite',
     repeat: [1 / 2.95, 1 / 0.55],
-    env: 0.7,
+    env: 0.15,
+    overHalos: true,
   },
   /** Plante grasse (ajouts facultatifs). */
   vertCactus: { color: '#3f6b38', roughness: 0.8, metalness: 0, env: 0.2 },
