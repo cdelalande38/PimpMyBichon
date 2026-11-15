@@ -111,6 +111,11 @@ export interface VehicleManifest {
    * du véhicule (avant vers +X, haut vers +Y, droite vers +Z). Absent : pas de vue intérieure.
    */
   interiorView?: { eye: readonly [number, number, number]; target: readonly [number, number, number] };
+  /**
+   * Côté montré dans la vue de départ de l'atelier : 'droite' pose le véhicule nez à droite, la
+   * caméra en miroir (le bobber montre ses échappements). Absent : 'gauche', nez à gauche.
+   */
+  presentSide?: 'gauche' | 'droite';
   adapt?: VehicleAdapt;
 }
 

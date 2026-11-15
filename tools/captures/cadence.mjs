@@ -306,7 +306,9 @@ const readFreq = () => {
  */
 async function chooseLevel(page, level) {
   await page.getByRole('heading', { level: 1, name: 'PimpMyBichon' }).waitFor({ timeout: 60_000 });
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  // Réglages : rubrique du panneau « Atelier » (bouton rond du haut), depuis les menus éclatés.
+  await page.getByRole('navigation', { name: 'Raccourcis' }).getByRole('button', { name: 'Atelier', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Rubriques de l’atelier' }).getByRole('button', { name: 'Réglages', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   const button = dialog.getByRole('group', { name: 'Qualité' }).getByRole('button', { name: new RegExp(`^${LEVEL_LABELS[level]}`) });
   await button.click();

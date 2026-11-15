@@ -123,9 +123,13 @@ export interface GarageProps {
   vehicle: VehicleMeasure | null;
   /** Coupe sans fondu : mouvement réduit, mode photo (l'image s'affine dès l'arrêt). */
   instantCut: boolean;
+  /** Mobilier effacé d'office (GARAGE.hideFor, selon le genre du véhicule du moment), par nom. */
+  hide?: readonly string[];
 }
 
-export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) {
+const NO_HIDE: readonly string[] = [];
+
+export function Garage({ ambiance, profile, vehicle, instantCut, hide = NO_HIDE }: GarageProps) {
   const invalidate = useThree((state) => state.invalidate);
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
@@ -267,10 +271,25 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
       }),
     [garage],
   );
+  // Mobilier effacé d'office : masque par élément, refait seulement quand la liste change.
+  const hideKey = hide.join('|');
+  const forced = useMemo(() => {
+    const { names, count } = garage.cut.structure;
+    const mask = new Uint8Array(count);
+    let any = false;
+    for (const name of hideKey === '' ? [] : hideKey.split('|')) {
+      const index = names.indexOf(name);
+      if (index >= 0) {
+        mask[index] = 1;
+        any = true;
+      }
+    }
+    return any ? mask : null;
+  }, [garage, hideKey]);
   useEffect(() => {
     control().dirty = true;
     invalidate();
-  }, [control, protect, invalidate]);
+  }, [control, protect, forced, invalidate]);
   // Changement de niveau de qualité, contexte WebGL rendu après une perte : état posé d'un coup.
   const epoch = useRenderStats((state) => state.gpuEpoch);
   useLayoutEffect(() => {
@@ -362,7 +381,7 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
     const { eye, last } = cut;
     state.camera.getWorldPosition(eye);
     if (cut.dirty || !eye.equals(last)) {
-      decideCut(garage.cut.structure, eye, protect, GARAGE.cut.wallBand, cut.state);
+      decideCut(garage.cut.structure, eye, protect, GARAGE.cut.wallBand, cut.state, forced);
       last.copy(eye);
       cut.dirty = false;
       const current = useRenderStats.getState().cut;

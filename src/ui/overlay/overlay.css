@@ -1,0 +1,63 @@
+/* Pastilles de la pièce cliquable : zone tactile de 48 px, dessin discret (petit rond, icône fine). */
+
+.piece-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.piece-pin {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--chrome);
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Le rond visible : 30 px, voile sombre, liseré fin. */
+.piece-pin::before {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: rgba(10, 9, 17, 0.62);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+.piece-pin .icon {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 2;
+}
+
+.piece-pin:active::before {
+  border-color: var(--ok);
+  background: rgba(10, 9, 17, 0.85);
+}
+
+.piece-pin:focus-visible {
+  outline: none;
+}
+
+.piece-pin:focus-visible::before {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 2px var(--ok);
+}
+
+@media (hover: hover) {
+  .piece-pin:hover::before {
+    border-color: rgba(233, 230, 242, 0.8);
+  }
+}

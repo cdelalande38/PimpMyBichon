@@ -1103,5 +1103,8 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
   }
 
   refreshDither();
-  return { root, floor, surfaces: surfaceUniforms, cut: { elements, structure, fades, dither }, update, setQuality, dispose };
+  const cut: GarageCut = { elements, structure, fades, dither };
+  // Pièce cliquable (src/scene/extras/) : boîtes des objets et fondus de la coupe, lus sans import.
+  root.userData.cut = cut;
+  return { root, floor, surfaces: surfaceUniforms, cut, update, setQuality, dispose };
 }

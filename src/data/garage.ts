@@ -149,6 +149,12 @@ export interface GarageLayout {
    */
   mirrorIbl: number;
   /**
+   * Mobilier qui s'efface quand le véhicule du moment est de ce genre (même mécanisme et même fondu
+   * que la coupe caméra, src/scene/garage/cut.ts ; le garage n'est pas reconstruit) : la sportive
+   * garée juste derrière le véhicule se confondrait avec une moto posée devant elle.
+   */
+  hideFor: Partial<Record<'car' | 'bike', readonly string[]>>;
+  /**
    * Sol et plafond prolongés hors de la pièce (côté du carré, en mètres) ; ils se perdent dans la
    * brume de l'ambiance : à `falloff` mètres des murs, il en reste 1/e. Coupé à aucun niveau.
    */
@@ -207,6 +213,7 @@ export const GARAGE: GarageLayout = {
   cut: { wallTolerance: 0.15, contactTolerance: 0.02, wallBand: 0.1, fadeMs: 180 },
   orbit: { target: [0, 0.12, 0], minPolar: 0.55, maxPolar: 1.52, frameMargin: 1.22 },
   mirrorIbl: 0.2,
+  hideFor: { bike: ['placeholder_moto_sportive'] },
   outside: { extent: 70, falloff: 4 },
   fog: { near: 12, far: 46 },
   // Les cônes s'éteignent à 1,5 m : au-dessus du plan de travail et de ce qu'il porte (moto en

@@ -4,10 +4,18 @@
 
 import type { ReactNode } from 'react';
 
-export type IconName = 'radio' | 'photo' | 'atelier' | 'moteur' | 'outils' | 'neon';
+export type IconName = 'radio' | 'photo' | 'atelier' | 'moteur' | 'outils' | 'neon' | 'volant';
 
 const SHAPES: Record<Exclude<IconName, 'radio'>, ReactNode> = {
-  // Appareil photo : boîtier, viseur, objectif.
+  // Volant : jante, moyeu, trois branches. La vue intérieure, à l'œil du conducteur.
+  volant: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="2.2" />
+      <path d="M3.8 10.6 9.9 11.4M20.2 10.6l-6.1.8M12 14.2v6.3" />
+    </>
+  ),
+    // Appareil photo : boîtier, viseur, objectif.
   photo: (
     <>
       <path d="M3 8.5a2 2 0 0 1 2-2h2.6l1.6-2.5h5.6l1.6 2.5H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />

@@ -736,7 +736,8 @@ export const PROPS_ENGINS: readonly Prop[] = [
   },
   {
     // Sportive carénée noire devant la colonne, parallèle au mur, nez à droite : la place
-    // accueille la moto du moment ; une noire laisse briller la voiture.
+    // accueille la moto du moment ; une noire laisse briller la voiture. Quand le véhicule du
+    // moment est une moto, elle s'efface (GARAGE.hideFor, src/data/garage.ts).
     name: 'placeholder_moto_sportive',
     at: [2.05, 0, -2.15],
     parts: SPORT,

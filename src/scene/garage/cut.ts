@@ -491,7 +491,15 @@ function anyPartHits(structure: CutStructure, element: number, eye: Point, prote
  * La décision ne dépend que de l'œil, de P et de l'état précédent : une projection décalée
  * (tuiles de l'export photo, sous-pixel) ne la change pas.
  */
-export function decideCut(structure: CutStructure, eye: Point, protect: ProtectBoxes, band: number, state: CutState): CutState {
+export function decideCut(
+  structure: CutStructure,
+  eye: Point,
+  protect: ProtectBoxes,
+  band: number,
+  state: CutState,
+  /** Éléments masqués d'office (1), quel que soit l'œil : le mobilier effacé pour un genre de véhicule. */
+  forced: Uint8Array | null = null,
+): CutState {
   const { count, room } = structure;
   const first = !state.ready;
   let behindMask = 0;
@@ -514,7 +522,7 @@ export function decideCut(structure: CutStructure, eye: Point, protect: ProtectB
     else if (anyPartHits(structure, i, eye, protect.small)) hit = true;
     else hit = first ? false : r2[i] === 1;
     r2[i] = hit ? 1 : 0;
-    const base = hit || ((structure.r1Planes[i] ?? 0) & behindMask) !== 0 ? 1 : 0;
+    const base = hit || forced?.[i] === 1 || ((structure.r1Planes[i] ?? 0) & behindMask) !== 0 ? 1 : 0;
     hidden[i] = base;
   }
   // R3 : un élément disparaît avec ce qui le porte (point fixe ; peu de niveaux en pratique).

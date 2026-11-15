@@ -42,9 +42,11 @@ test.describe('coque de l’app', () => {
       // Décision de l'utilisateur : le tiers bas ne vaut plus que pour la personnalisation (le dock).
       // Radio, photo et atelier vivent dans la colonne de boutons ronds du haut de l'écran.
       const inDock = await button.evaluate((element) => element.closest('footer.dock') !== null);
+      // Pastilles de la pièce cliquable (src/ui/overlay/) : posées sur leur objet dans la scène.
+      const onScene = await button.evaluate((element) => element.closest('.piece-overlay') !== null);
       if (inDock) {
         expect(box.y, `« ${label} » dans le tiers bas`).toBeGreaterThanOrEqual((VIEWPORT.height * 2) / 3);
-      } else {
+      } else if (!onScene) {
         expect(await button.evaluate((element) => element.closest('nav.quick') !== null), `« ${label} » hors du dock : bouton rond du haut`).toBe(true);
       }
     }

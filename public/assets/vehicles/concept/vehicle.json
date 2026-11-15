@@ -60,5 +60,6 @@
       { "material": "License", "maps": ["map"] },
       { "material": "Tireside", "maps": ["map", "normalMap"], "color": "#1a1a1c" }
     ]
-  }
+  },
+  "interiorView": { "eye": [0.2, 1.0, 0], "target": [1.3, 0.78, 0] }
 }

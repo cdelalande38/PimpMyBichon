@@ -115,6 +115,14 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
     checkZones(raw.zones, problems);
     checkEngine(raw.engine, problems);
     if (raw.adapt !== undefined && !isObject(raw.adapt)) problems.push('adapt doit être un objet');
+    if (raw.presentSide !== undefined && raw.presentSide !== 'gauche' && raw.presentSide !== 'droite') {
+      problems.push('presentSide doit valoir « gauche » ou « droite »');
+    }
+    if (raw.interiorView !== undefined) {
+      const view = raw.interiorView;
+      const point = (value: unknown) => Array.isArray(value) && value.length === 3 && value.every((n) => typeof n === 'number' && Number.isFinite(n));
+      if (!isObject(view) || !point(view.eye) || !point(view.target)) problems.push('interiorView doit porter eye et target, trois nombres chacun, en mètres');
+    }
   }
   if (problems.length > 0) {
     throw new Error(`Manifeste de véhicule invalide, ${manifestPath(folder)} : ${problems.join(' ; ')}.`);

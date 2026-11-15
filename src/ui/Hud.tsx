@@ -3,7 +3,10 @@
 // La personnalisation (onglets et options) reste dans le dock, au pouce (§ 2).
 
 import { openSheet } from '../app/useRoute.ts';
+import { resolveVehicle } from '../data/vehicles.ts';
 import { precachePercent, usePwa } from '../pwa/pwaStore.ts';
+import { useBuilds } from '../state/builds.ts';
+import { useView } from '../state/view.ts';
 import { openAtelier } from './AtelierSwitcher.tsx';
 import { Icon } from './icons.tsx';
 import { offlineLabel } from './labels.ts';
@@ -26,6 +29,30 @@ function OfflinePill() {
   );
 }
 
+/**
+ * Vue intérieure (§ 5.1) : seulement si le véhicule courant déclare un point de vue intérieur
+ * dans son manifeste. Un appui place l'œil au volant, un second rend la vue d'atelier.
+ */
+function InteriorButton() {
+  const vehicle = resolveVehicle(useBuilds((state) => state.current));
+  const inside = useView((state) => state.mode === 'interieur');
+  const toggle = useView((state) => state.toggle);
+  if (!vehicle.interiorView) return null;
+  const label = inside ? 'Sortir' : 'Intérieur';
+  return (
+    <button
+      type="button"
+      className="quick-btn"
+      aria-label={label}
+      title={inside ? 'Sortir : retour à l’atelier' : 'Intérieur : à la place du conducteur'}
+      data-on={inside || undefined}
+      onClick={toggle}
+    >
+      <Icon name="volant" />
+    </button>
+  );
+}
+
 interface HudProps {
   /** La scène 3D n'a pas démarré : pas de mode photo. */
   sceneFailed: boolean;
@@ -42,9 +69,10 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
       </h1>
       <div className="hud-side">
         <OfflinePill />
-        {/* De haut en bas : l'atelier (rare), la photo, la radio (la plus courue, au plus près du
-            pouce). La ligne du morceau en cours s'étend à gauche de la radio, sous la marque et
-            l'étiquette du véhicule, sans les recouvrir. */}
+        {/* De haut en bas : l'atelier (rare), la photo, la radio (la plus courue), puis la vue
+            intérieure (au plus près du pouce, quand le véhicule en a une). La ligne du morceau en
+            cours s'étend à gauche de la radio, sous la marque et l'étiquette du véhicule, sans
+            les recouvrir. */}
         <nav className="quick" aria-label="Raccourcis" inert={covered} aria-hidden={covered || undefined}>
           <button type="button" className="quick-btn" aria-label="Atelier" title="Atelier : réglages et état du socle" onClick={openAtelier}>
             <Icon name="atelier" />
@@ -55,6 +83,7 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
             </button>
           )}
           <RadioButton />
+          {!sceneFailed && <InteriorButton />}
         </nav>
       </div>
     </header>

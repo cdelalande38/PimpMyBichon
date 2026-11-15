@@ -46,9 +46,12 @@ describe('manifeste du van', () => {
     expect(manifest.engine).toEqual({ label: '4 cylindres turbo diesel', fuel: 'diesel', feed: 'injection', boost: 'turbo', power: 102 });
   });
 
-  it('déclare un point de vue intérieur à la place du conducteur, tourné vers la planche de bord', () => {
-    const view = manifest.interiorView!;
-    expect(view).toBeDefined();
+  // Vue intérieure retirée le 15 novembre 2026 : vu du siège, l'habitacle de substitut est presque
+  // noir (TODO_ASSETS.md). Elle revient avec un habitacle modelé et éclairé ; le jour où le manifeste
+  // la déclare de nouveau, le point de vue doit rester à la place du conducteur.
+  it('ne déclare pas de vue intérieure tant que l’habitacle n’est pas modelé ; sinon, à la place du conducteur', () => {
+    const view = manifest.interiorView;
+    if (view === undefined) return;
     const [ex, ey, ez] = view.eye;
     const [tx, ty] = view.target;
     expect(ez).toBeLessThan(-0.3); // place avant gauche
