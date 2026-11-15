@@ -13,9 +13,9 @@ import { matchesPath } from '../../../tools/lib/glob.mjs';
 import { creditsFile, located, useTempTrees } from './helpers.ts';
 
 describe('CREDITS.md — licences admises', () => {
-  it('reconnaît les quatre licences admises, quelle que soit leur écriture', () => {
-    expect(ALLOWED_LICENSES).toEqual(['CC0-1.0', 'CC-BY-4.0', 'OFL-1.1', 'création projet']);
-    const allowed = ['CC0-1.0', 'cc0 1.0', 'CC-BY-4.0', 'CC BY 4.0', 'OFL-1.1', 'création projet', 'Création projet', 'creation projet'];
+  it('reconnaît les six licences admises, quelle que soit leur écriture', () => {
+    expect(ALLOWED_LICENSES).toEqual(['CC0-1.0', 'CC-BY-4.0', 'OFL-1.1', 'création projet', 'Licence Ouverte 2.0', 'ODbL-1.0']);
+    const allowed = ['CC0-1.0', 'cc0 1.0', 'CC-BY-4.0', 'CC BY 4.0', 'OFL-1.1', 'création projet', 'Création projet', 'creation projet', 'Licence Ouverte 2.0', 'licence ouverte 2.0', 'ODbL-1.0', 'ODbL 1.0'];
     for (const license of allowed) expect(isAllowedLicense(license), license).toBe(true);
   });
 

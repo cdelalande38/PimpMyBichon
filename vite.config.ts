@@ -172,7 +172,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,woff2,svg,png,webp,ico,glb,wasm}'],
         // Copie hachée du transcodeur émise par KTX2Loader (son chemin par défaut, `new URL(…)`) :
         // jamais lue, l'app fixe transcoderPath sur libs/basis/. Inutile de la précacher (≈ 0,6 Mo).
-        globIgnores: ['assets/audio/**', 'assets/basis_transcoder-*'],
+        // Les cartes de sortie (assets/maps/<id>/ : tronçons GLB, relief lointain, route.json) se
+        // chargent à la demande, au fil de la route : jamais dans le précache (≈ 10 Mo par carte).
+        globIgnores: ['assets/audio/**', 'assets/basis_transcoder-*', 'assets/maps/**'],
         // Le concept pèse près de 10 Mo (budget d'un véhicule : 8 à 15 Mo, § 8).
         maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
       },

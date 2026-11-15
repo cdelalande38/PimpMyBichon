@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aperçu d’une carte</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0b0b0e;
+        color: #e9e7e2;
+        font: 13px/1.35 system-ui, sans-serif;
+      }
+      canvas {
+        display: block;
+      }
+      #info {
+        position: fixed;
+        left: 12px;
+        top: 10px;
+        padding: 6px 10px;
+        background: rgb(0 0 0 / 55%);
+        border-radius: 6px;
+        white-space: pre;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="info"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

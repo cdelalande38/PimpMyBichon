@@ -1,0 +1,12 @@
+{
+  "id": "plateau-matheysin",
+  "name": "Les lacs du plateau matheysin",
+  "hint": "De Laffrey à La Mure, le long des lacs",
+  "kind": "route",
+  "order": 1,
+  "route": "route.json",
+  "credits": [
+    { "source": "IGN, BD TOPO (routes, bâtiments, plans d’eau, végétation)", "licence": "Licence Ouverte 2.0", "date": "2026-11" },
+    { "source": "IGN, RGE ALTI (relief)", "licence": "Licence Ouverte 2.0", "date": "2026-11" }
+  ]
+}

@@ -36,3 +36,10 @@ coverage/
 # Le concept (modèle de banc d'essai sous licence) reste versionné.
 public/assets/vehicles/*/body.glb
 !public/assets/vehicles/concept/body.glb
+
+# Cartes de sortie : réponses brutes des fournisseurs (assets-src/maps/<id>/brut/) et fichiers produits
+# par npm run maps:build depuis assets-src/maps/<id>/donnees.json. Le manifeste map.json reste versionné.
+assets-src/maps/*/brut/
+public/assets/maps/*/route.json
+public/assets/maps/*/chunks/
+public/assets/maps/*/lointain.glb

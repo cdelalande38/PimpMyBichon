@@ -16,9 +16,10 @@ export const CREDITS_FILE = 'CREDITS.md';
 
 /**
  * Licences admises dans un dépôt public (§ 11 du cahier des charges) : domaine public,
- * attribution, police libre, ou fichier créé pour le projet.
+ * attribution, police libre, fichier créé pour le projet, ou données géographiques ouvertes des
+ * cartes de sortie (§ 17 : bases de l'IGN sous Licence Ouverte 2.0, OpenStreetMap sous ODbL 1.0).
  */
-export const ALLOWED_LICENSES = ['CC0-1.0', 'CC-BY-4.0', 'OFL-1.1', 'création projet'];
+export const ALLOWED_LICENSES = ['CC0-1.0', 'CC-BY-4.0', 'OFL-1.1', 'création projet', 'Licence Ouverte 2.0', 'ODbL-1.0'];
 
 /**
  * Forme de comparaison d'une cellule : sans accents, en minuscules, tout ce qui n'est ni

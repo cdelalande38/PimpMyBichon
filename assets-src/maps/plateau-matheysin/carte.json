@@ -1,0 +1,97 @@
+{
+  "id": "plateau-matheysin",
+  "nom": "Les lacs du plateau matheysin",
+  "fournisseur": "ign",
+  "note": "Route des lacs (D1085), de Laffrey au centre de La Mure, le long du Grand Lac de Laffrey, du lac de Pétichet et du lac de Pierre-Châtel.",
+  "emprise": {
+    "lonMin": 5.72,
+    "latMin": 44.88,
+    "lonMax": 5.84,
+    "latMax": 45.05
+  },
+  "route": "D1085",
+  "depart": {
+    "nom": "Laffrey",
+    "lon": 5.767149,
+    "lat": 45.03726
+  },
+  "arrivee": {
+    "nom": "La Mure",
+    "lon": 5.784115,
+    "lat": 44.907563
+  },
+  "couloir": {
+    "demiLargeur": 150,
+    "pasRelief": 10
+  },
+  "lointain": {
+    "proche": {
+      "pas": 200,
+      "marge": 4000
+    },
+    "loin": {
+      "pas": 600,
+      "marge": 16000
+    }
+  },
+  "fabrication": {
+    "pasRail": 2,
+    "lissagePlan": 6,
+    "lissageAltitude": 30,
+    "longueurTroncon": 400
+  },
+  "departs": [
+    {
+      "id": "laffrey",
+      "label": "Laffrey",
+      "debut": true
+    },
+    {
+      "id": "petichet",
+      "label": "Lac de Pétichet",
+      "pres": "Lac de Pétichet"
+    },
+    {
+      "id": "pierre-chatel",
+      "label": "Pierre-Châtel",
+      "pres": "Lac de Pierre-Châtel"
+    },
+    {
+      "id": "la-mure",
+      "label": "Entrée de La Mure",
+      "avantFin": 1500
+    }
+  ],
+  "captures": [
+    {
+      "nom": "grand-lac",
+      "vue": "conducteur",
+      "s": 3500,
+      "regard": 24
+    },
+    {
+      "nom": "petichet",
+      "vue": "conducteur",
+      "s": 5050,
+      "regard": 24
+    },
+    {
+      "nom": "pierre-chatel",
+      "vue": "conducteur",
+      "s": 7650,
+      "regard": 24
+    },
+    {
+      "nom": "la-mure",
+      "vue": "conducteur",
+      "s": 13500,
+      "regard": 0
+    },
+    {
+      "nom": "oiseau",
+      "vue": "oiseau",
+      "s": 3300,
+      "regard": -20
+    }
+  ]
+}

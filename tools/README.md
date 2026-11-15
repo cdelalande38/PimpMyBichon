@@ -340,3 +340,24 @@ Hors des trois contrôles ci-dessus.
 - **Générateur** : boîte à outils `tools/vehicles/kit.mjs` (loft, révolution, tube, symétrie, roues voiture et moto, optiques), écrivain GLB `tools/vehicles/glb-writer.mjs` ; elle refuse tout matériau hors des conventions du § 8. Mode d'emploi et exemple : `assets-src/vehicles/LISEZ-MOI.md`. Le build est déterministe (octets identiques d'un build à l'autre).
 - **Catalogue** : un dossier `public/assets/vehicles/<id>/` avec `vehicle.json` suffit ; `src/data/vehicles.ts` le découvre au build, le valide (une erreur cite le fichier) et le trie par `order`. La liste des modèles présents est relevée au démarrage de Vite : en développement, un GLB produit après le démarrage reste « modèle absent » jusqu'au redémarrage du serveur.
 - **Pack de musique** : chaque sous-dossier devient une station ; titre et artiste viennent des étiquettes ID3, sinon du nom de fichier (« 01 - Artiste - Titre.mp3 »). Le ZIP s'importe dans l'app par fichier, par adresse, ou par un lien `…/PimpMyBichon/?pack=<adresse du ZIP>` (recette dans `docs/DEPLOIEMENT.md`). L'hébergement doit servir le ZIP en https avec l'en-tête `Access-Control-Allow-Origin` ; pour la reprise après coupure, il doit aussi accepter les requêtes `Range` et exposer `Content-Length` et `Content-Range`.
+## Cartes de sortie (`tools/maps/`)
+
+Une carte = un dossier `assets-src/maps/<id>/` avec sa définition écrite à la main, `carte.json`
+(fournisseur de données, emprise, route numérotée, départ et arrivée, couloir, pas du relief,
+départs proposés, points de vue des captures). Aucun identifiant de carte dans le code.
+
+- `npm run maps:fetch -- <id>` (`tools/maps/fetch.mjs`) : interroge le fournisseur déclaré
+  (`tools/maps/fournisseurs/<nom>.mjs` ; aujourd'hui `ign` : WFS de la BD TOPO et calcul
+  altimétrique du RGE ALTI, Géoplateforme, sans clé, Licence Ouverte 2.0), une requête à la fois,
+  300 ms entre deux ; garde chaque réponse brute dans `assets-src/maps/<id>/brut/` (ignoré par git,
+  jamais redemandée ; altitudes aussi mémorisées point par point) et écrit `donnees.json`
+  (versionné, 3 Mo au plus) dans le repère de la carte.
+- `npm run maps:build` (`tools/maps/build.mjs`, branché sur predev, prebuild et check) : hors ligne
+  et déterministe, écrit `public/assets/maps/<id>/route.json`, `chunks/NNN.glb` et `lointain.glb`
+  (ignorés par git). Le manifeste `public/assets/maps/<id>/map.json` est écrit à la main.
+- `npm run maps:check` (`tools/maps/check.mjs`) : contrat (`src/data/mapTypes.ts`), maillages
+  `fusion_<rôle>`, budgets du § 8 (25 000 triangles par tronçon, 150 000 pour cinq tronçons
+  consécutifs, 12 Mo par carte, `donnees.json` de 3 Mo au plus) et crédits.
+- `node tools/maps/plan.mjs <id>` : plan vu de dessus et profil en long dans `captures/cartes/<id>/`.
+- `node tools/captures/carte.mjs <id>` : vues de la page `src/dev/carte/` (points de vue de
+  `carte.json`, ou `--vues nom=vue:s:regard,…`).
