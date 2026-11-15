@@ -56,6 +56,19 @@ describe('manifeste de la Cox', () => {
     expect(byId.sellerie!.paint.finish).toBe('satine');
   });
 
+  it('déclare la vue intérieure depuis la place du conducteur (à gauche), tournée vers l’avant', () => {
+    const view = manifest.interiorView!;
+    expect(view).toBeDefined();
+    const [ex, ey, ez] = view.eye;
+    const [tx, ty] = view.target;
+    expect(ez).toBeLessThan(-0.15); // conducteur à gauche
+    expect(Math.abs(ex)).toBeLessThan(0.6); // entre les deux portes
+    expect(ey).toBeGreaterThan(0.9); // assis, sous le pavillon (1,44)
+    expect(ey).toBeLessThan(1.3);
+    expect(tx).toBeGreaterThan(ex); // regarde vers l'avant
+    expect(ty).toBeLessThan(ey); // un peu vers le bas : volant, compteur, pommeau
+  });
+
   it('donne le moteur de la fiche', () => {
     expect(manifest.engine).toEqual({ label: '4 cylindres à plat refroidi par air', fuel: 'essence', feed: 'carburateur', boost: 'atmo', power: 50 });
   });
@@ -100,10 +113,30 @@ describe('modèle de la Cox', () => {
     for (const role of ['glass', 'lamp', 'tail', 'signal', 'chrome', 'rubber', 'black']) expect(summary.materials).toContain(role);
   });
 
-  it('tient les budgets : 40 000 à 120 000 triangles, moins de 60 appels de dessin', () => {
+  // Budget relevé pour la Cox (habitacle complet pour la vue intérieure) : 150 000 triangles.
+  it('tient les budgets : 40 000 à 150 000 triangles, moins de 60 appels de dessin', () => {
     expect(summary.triangles).toBeGreaterThanOrEqual(40_000);
-    expect(summary.triangles).toBeLessThanOrEqual(120_000);
+    expect(summary.triangles).toBeLessThanOrEqual(150_000);
     expect(summary.primitives).toBeLessThan(60);
+  });
+
+  it('garnit l’habitacle en noir : sellerie, ciel de toit, pommeau dans sa zone, dans la caisse', () => {
+    const node = json.nodes.find((n: { name: string }) => n.name === 'habitacle');
+    expect(node).toBeDefined();
+    const mats = json.meshes[node.mesh].primitives.map((p: { material: number }) => json.materials[p.material].name as string);
+    for (const m of ['paint_sellerie', 'paint_pommeau', 'leather', 'black', 'tail']) expect(mats).toContain(m);
+    const cabin = nodeBox('habitacle');
+    const body = nodeBox('carrosserie');
+    for (let i = 0; i < 3; i += 1) {
+      expect(cabin.min[i]!).toBeGreaterThan(body.min[i]!);
+      expect(cabin.max[i]!).toBeLessThan(body.max[i]!);
+    }
+    // L'œil du conducteur est dans l'habitacle garni.
+    const eye = manifest.interiorView!.eye;
+    for (let i = 0; i < 3; i += 1) {
+      expect(eye[i]!).toBeGreaterThan(cabin.min[i]!);
+      expect(eye[i]!).toBeLessThan(cabin.max[i]!);
+    }
   });
 
   it('pose ses roues au centre de l’empattement de 2,40 m, sur les voies de la fiche', () => {

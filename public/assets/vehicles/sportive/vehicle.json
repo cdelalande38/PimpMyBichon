@@ -1,0 +1,85 @@
+{
+  "id": "sportive",
+  "name": "La sportive",
+  "kind": "bike",
+  "wave": 1,
+  "order": 40,
+  "glb": "body.glb",
+  "hint": "Carénée de piste, coque relevée, jantes orange : ça sent la gomme chaude",
+  "placeholder": "placeholder_sportive",
+  "halfLengthHint": 1.1,
+  "zones": [
+    {
+      "id": "carenage",
+      "label": "Carénage",
+      "materials": ["paint_carenage"],
+      "group": "carrosserie",
+      "paint": { "color": "#ff6a00", "finish": "satine" }
+    },
+    {
+      "id": "reservoir",
+      "label": "Réservoir",
+      "materials": ["paint_reservoir"],
+      "group": "carrosserie",
+      "paint": { "color": "#ff6a00", "finish": "satine" }
+    },
+    {
+      "id": "garde_boue",
+      "label": "Garde-boue",
+      "materials": ["paint_garde_boue"],
+      "group": "carrosserie",
+      "paint": { "color": "#ff6a00", "finish": "satine" }
+    },
+    {
+      "id": "bas_carenage",
+      "label": "Bas de carénage et bande",
+      "materials": ["paint_bas_carenage"],
+      "group": "carrosserie",
+      "paint": { "color": "#f0efe9", "finish": "satine" },
+      "linked": false
+    },
+    {
+      "id": "coque_arriere",
+      "label": "Coque arrière et sabot",
+      "materials": ["paint_coque_arriere"],
+      "group": "carrosserie",
+      "paint": { "color": "#111114", "finish": "satine" },
+      "linked": false
+    },
+    {
+      "id": "jantes",
+      "label": "Jantes",
+      "materials": ["paint_jantes"],
+      "group": "accastillage",
+      "paint": { "color": "#ff6a00", "finish": "satine" }
+    },
+    {
+      "id": "cadre",
+      "label": "Cadre et bras",
+      "materials": ["paint_cadre"],
+      "group": "accastillage",
+      "paint": { "color": "#9aa0a8", "finish": "satine" }
+    },
+    {
+      "id": "fourche",
+      "label": "Fourche et couronne",
+      "materials": ["paint_fourche"],
+      "group": "accastillage",
+      "paint": { "color": "#c9a23a", "finish": "metallise" }
+    },
+    {
+      "id": "selle",
+      "label": "Selle",
+      "materials": ["paint_selle"],
+      "group": "accastillage",
+      "paint": { "color": "#111111", "finish": "mat" }
+    }
+  ],
+  "engine": {
+    "label": "4 cylindres en ligne",
+    "fuel": "essence",
+    "feed": "injection",
+    "boost": "atmo",
+    "power": 172
+  }
+}

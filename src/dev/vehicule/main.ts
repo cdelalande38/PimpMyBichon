@@ -9,6 +9,7 @@
 //   id=<véhicule>   dossier sous public/assets/vehicles/ (« van » par défaut)
 //   vue=<nom>       av34 (défaut), profil, ar34, face, arriere, dessus, roue
 //   orbite          caméra libre à la souris
+//   vue=interieur   point de vue intérieur du manifeste (interiorView) ; fov=<degrés> (60 par défaut)
 // Prête : attribut data-vehicule-pret sur body (et data-vehicule-info : triangles, appels…) ;
 // en cas d'erreur, data-vehicule-erreur. window.pmbVue(nom) change de vue et redessine.
 // Capture des six vues : node tools/captures/vehicule.mjs <id>.
@@ -128,10 +129,24 @@ const VIEWS: Record<string, { dir: [number, number, number]; fov: number; fit: n
 };
 
 let vehicleBox = new Box3();
+let interior: VehicleManifest['interiorView'];
 let wheelCenter = new Vector3();
 let wheelRadius = 0.35;
 
 function setView(name: string): void {
+  if (name === 'interieur' && interior) {
+    camera.fov = Number(params.get('fov') ?? 60);
+    camera.aspect = innerWidth / innerHeight;
+    camera.near = 0.02;
+    camera.up.set(0, 1, 0);
+    camera.position.set(...interior.eye);
+    camera.lookAt(new Vector3(...interior.target));
+    camera.updateProjectionMatrix();
+    controls?.target.set(...interior.target);
+    render();
+    return;
+  }
+  camera.near = 0.05;
   const view = VIEWS[name] ?? VIEWS.av34!;
   camera.fov = view.fov;
   camera.aspect = innerWidth / innerHeight;
@@ -166,6 +181,7 @@ function render(): void {
 
 async function main(): Promise<void> {
   const manifest = (await (await fetch(`${base}vehicle.json`)).json()) as VehicleManifest;
+  interior = manifest.interiorView;
   const gltf = await new GLTFLoader().loadAsync(`${base}${manifest.glb}`);
   const root = gltf.scene;
   const zoneOf = new Map<string, VehicleManifest['zones'][number]>();

@@ -109,11 +109,16 @@ test.describe('menu agrandi', () => {
       expect(await overflowingRows(page), `${tab} : aucune rangée ne déborde en largeur`).toEqual([]);
       await expectButtonsInside(page, width, tab);
       if (tab === 'Véhicule') {
-        // Toutes les puces du catalogue sont à l'écran, sans défiler.
+        // Toutes les puces du catalogue passent à la ligne, sans défiler en largeur. Au-delà de
+        // deux rangées (cinq véhicules et plus), le contenu de l'onglet défile en hauteur : chaque
+        // puce s'y montre alors en entier.
         const chips = dock(page).getByRole('group', { name: 'Véhicule' }).getByRole('button');
         const count = await chips.count();
         expect(count).toBeGreaterThan(1);
-        for (let i = 0; i < count; i += 1) await expect(chips.nth(i)).toBeInViewport({ ratio: 1 });
+        for (let i = 0; i < count; i += 1) {
+          await chips.nth(i).scrollIntoViewIfNeeded();
+          await expect(chips.nth(i)).toBeInViewport({ ratio: 1 });
+        }
       }
       if (tab === 'Peinture') {
         // Zones, couleurs et finitions ensemble : plus d'alternance Couleur / Finition.

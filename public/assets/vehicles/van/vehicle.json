@@ -45,5 +45,6 @@
     "feed": "injection",
     "boost": "turbo",
     "power": 102
-  }
+  },
+  "interiorView": { "eye": [0.68, 1.45, -0.47], "target": [1.5, 1.08, -0.3] }
 }

@@ -1,0 +1,69 @@
+{
+  "id": "bobber",
+  "name": "Le bobber",
+  "kind": "bike",
+  "wave": 1,
+  "order": 30,
+  "glb": "body.glb",
+  "hint": "Bicylindre en V, tout noir, selle solo et guidon haut : bas et long",
+  "placeholder": "placeholder_bobber",
+  "halfLengthHint": 1.2,
+  "zones": [
+    {
+      "id": "reservoir",
+      "label": "Réservoir",
+      "materials": ["paint_reservoir"],
+      "group": "carrosserie",
+      "paint": { "color": "#0b0b0e", "finish": "brillant" }
+    },
+    {
+      "id": "garde_boue",
+      "label": "Garde-boue",
+      "materials": ["paint_garde_boue"],
+      "group": "carrosserie",
+      "paint": { "color": "#0b0b0e", "finish": "brillant" }
+    },
+    {
+      "id": "cadre",
+      "label": "Cadre",
+      "materials": ["paint_cadre"],
+      "group": "accastillage",
+      "paint": { "color": "#0b0b0e", "finish": "satine" }
+    },
+    {
+      "id": "moteur",
+      "label": "Moteur",
+      "materials": ["paint_moteur"],
+      "group": "accastillage",
+      "paint": { "color": "#111113", "finish": "mat" }
+    },
+    {
+      "id": "jantes",
+      "label": "Jantes",
+      "materials": ["paint_jantes"],
+      "group": "accastillage",
+      "paint": { "color": "#0b0b0e", "finish": "satine" }
+    },
+    {
+      "id": "fourche",
+      "label": "Fourche",
+      "materials": ["paint_fourche"],
+      "group": "accastillage",
+      "paint": { "color": "#0b0b0e", "finish": "satine" }
+    },
+    {
+      "id": "selle",
+      "label": "Selle",
+      "materials": ["paint_selle"],
+      "group": "accastillage",
+      "paint": { "color": "#121214", "finish": "mat" }
+    }
+  ],
+  "engine": {
+    "label": "bicylindre en V refroidi par air",
+    "fuel": "essence",
+    "feed": "carburateur",
+    "boost": "atmo",
+    "power": 67
+  }
+}

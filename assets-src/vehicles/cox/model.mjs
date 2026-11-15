@@ -19,6 +19,8 @@
 // - Quatre ailes en pontons séparés, posées de chaque côté, qui sortent de la caisse jusqu'à
 //   z = ±0,775 ; marchepieds fins entre elles ; phares ronds dressés au bout des ailes avant.
 
+import interieur from './interieur.mjs';
+
 /** @typedef {typeof import('../../../tools/vehicles/kit.mjs')} Kit */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Parts} Parts */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Face} Face */
@@ -32,10 +34,12 @@ const WHEEL_R = 0.3;
 const ARCH_R = 0.36; // rayon des passages de roue dans les ailes
 const TRACK_Z = /** @type {const} */ ([0.655, 0.675]); // demi-voies avant, arrière
 const FENDER_OUT = 0.775; // face extérieure des ailes
+const HEAD_X = 1.858; // bout des ailes avant, sous le cerclage du phare
 
 // Repères le long de X.
 const X_WS = /** @type {const} */ ([0.2, 0.62]); // pare-brise : haut, bas (dans l'axe)
 const X_HOOD = 0.72; // joint arrière du capot avant
+const X_LIP = 1.912; // lèvre du capot avant, au-dessus du tablier
 const X_DOOR = /** @type {const} */ ([-0.38, 0.42]); // vitre de porte : arrière, avant (en bas)
 const X_QTR = /** @type {const} */ ([-1.0, -0.46]); // vitre de custode : arrière (en bas), avant
 const X_RW = /** @type {const} */ ([-1.47, -1.12]); // lunette ovale
@@ -90,8 +94,8 @@ export default function cox(k) {
     [1.6, 0.8],
     [1.8, 0.715],
     [1.9, 0.655],
-    [1.97, 0.58],
-    [X_FRONT, 0.52],
+    [1.95, 0.6],
+    [X_FRONT, 0.53],
   ]);
   const ybot = k.smoothCurve([
     [X_REAR, 0.3],
@@ -101,9 +105,10 @@ export default function cox(k) {
     [-1.3, 0.11],
     [1.3, 0.11],
     [1.62, 0.16],
-    [1.85, 0.28],
-    [1.95, 0.36],
-    [X_FRONT, 0.4],
+    [1.8, 0.24],
+    [1.9, 0.31],
+    [1.95, 0.35],
+    [X_FRONT, 0.38],
   ]);
   // Ceinture B : demi-largeur et hauteur.
   const wBelt = k.smoothCurve([
@@ -117,12 +122,12 @@ export default function cox(k) {
     [0.5, 0.67],
     [0.6, 0.655],
     [0.72, 0.59],
-    [0.85, 0.5],
-    [1.0, 0.45],
-    [1.25, 0.41],
-    [1.6, 0.37],
-    [1.85, 0.33],
-    [X_FRONT, 0.3],
+    [0.85, 0.48],
+    [1.0, 0.44],
+    [1.25, 0.405],
+    [1.6, 0.355],
+    [1.85, 0.35],
+    [X_FRONT, 0.34],
   ]);
   const yBelt = k.smoothCurve([
     [X_REAR, 0.36],
@@ -135,22 +140,24 @@ export default function cox(k) {
     [0.5, 0.95],
     [0.62, 0.935],
     [0.75, 0.87],
-    [0.9, 0.81],
-    [1.1, 0.78],
-    [1.4, 0.72],
-    [1.6, 0.67],
-    [1.8, 0.59],
-    [X_FRONT, 0.48],
+    [0.9, 0.8],
+    [1.1, 0.72],
+    [1.4, 0.66],
+    [1.6, 0.61],
+    [1.8, 0.54],
+    [X_FRONT, 0.46],
   ]);
   // Galbe du flanc sous la ceinture : renflement (au-delà de B) et rentrée du bas de caisse.
   const bulge = k.smoothCurve([[-1.0, 0], [-0.7, 0.01], [0.5, 0.01], [0.7, 0]]);
-  const tuck = k.smoothCurve([[X_REAR, 0.04], [-1.85, 0.08], [-1.6, 0.13], [-0.85, 0.13], [-0.65, 0.05], [0.5, 0.05], [0.75, 0.02]]);
+  // À l'avant, la rentrée devient négative : le tablier s'évase vers le bas entre les ailes.
+  const tuck = k.smoothCurve([[X_REAR, 0.04], [-1.85, 0.08], [-1.6, 0.13], [-0.85, 0.13], [-0.65, 0.05], [0.5, 0.05], [0.75, 0.02], [1.0, 0], [1.45, -0.03], [1.75, -0.06], [X_FRONT, -0.05]]);
   const yLow = k.smoothCurve([[X_REAR, 0.33], [-1.9, 0.3], [-0.7, 0.28], [0.6, 0.28], [1.6, 0.3], [X_FRONT, 0.44]]);
   const yMaxFrac = k.smoothCurve([[-0.9, 0.7], [-0.7, 0.615], [0.5, 0.615], [0.7, 0.7]]);
   // Dôme : inclinaison des vitres (rad), longueur de la tangente à la ceinture, rondeur du dessus.
-  const tilt = k.smoothCurve([[-1.4, 0], [-0.95, 0.24], [0.45, 0.26], [0.62, 0.12], [0.8, 0]]);
-  const lift = k.smoothCurve([[-1.5, 0.55], [-1.0, 0.7], [0.45, 0.7], [0.8, 0.55]]);
-  const crown = k.smoothCurve([[-1.6, 0.58], [-1.0, 0.72], [0.4, 0.72], [0.8, 0.55]]);
+  // Sur le capot avant (x > 0,85), la tangente à la ceinture penche vers l'intérieur : dôme rond.
+  const tilt = k.smoothCurve([[-1.4, 0], [-0.95, 0.24], [0.45, 0.26], [0.62, 0.12], [0.8, 0.14], [0.95, 0.34], [1.2, 0.55], [X_FRONT, 0.62]]);
+  const lift = k.smoothCurve([[-1.5, 0.55], [-1.0, 0.7], [0.45, 0.7], [0.8, 0.55], [1.1, 0.5]]);
+  const crown = k.smoothCurve([[-1.6, 0.58], [-1.0, 0.72], [0.4, 0.72], [0.8, 0.55], [1.1, 0.45]]);
   // Demi-largeur du point E : bord du capot moteur, haut des vitres, bord du pare-brise, capot avant.
   const zEdge = k.smoothCurve([
     [X_REAR, 0.32],
@@ -163,22 +170,24 @@ export default function cox(k) {
     [X_WS[1], 0.56],
     [0.68, 0.48],
     [0.76, 0.42],
-    [1.0, 0.4],
-    [1.2, 0.37],
-    [1.6, 0.33],
-    [1.85, 0.29],
-    [X_FRONT, 0.26],
+    [1.0, 0.41],
+    [1.2, 0.39],
+    [1.6, 0.345],
+    [1.85, 0.31],
+    [X_FRONT, 0.29],
   ]);
 
   /** Cotes de la section en x, bouts arrondis compris. @param {number} x */
   const dims = (x) => {
     const fI = (/** @type {number} */ r) => k.endInset(x, X_FRONT, r);
     const rI = (/** @type {number} */ r) => k.endInset(x, X_REAR, r);
-    const t = ytop(x) - fI(0.02) - rI(0.02);
-    const yb = ybot(x) + fI(0.03) + rI(0.03);
-    const wB = wBelt(x) - fI(0.12) - rI(0.14);
-    const yB = clamp(yBelt(x), yb + 0.1, t - 0.04);
-    const yL = clamp(yLow(x), yb + 0.03, yB - 0.06);
+    const t = ytop(x) - fI(0.03) - rI(0.02);
+    const yb = ybot(x) + fI(0.04) + rI(0.03);
+    const wB = wBelt(x) - fI(0.14) - rI(0.14);
+    // Au bout du nez, la section devient trop basse pour les marges : on garde un contour qui ne
+    // se replie pas (ceinture au-dessus du dessous, bas de caisse entre les deux).
+    const yB = Math.max(yb + 0.05, Math.min(t - 0.03, Math.max(yb + 0.1, yBelt(x))));
+    const yL = yB - 0.06 > yb + 0.03 ? clamp(yLow(x), yb + 0.03, yB - 0.06) : lerp(yb, yB, 0.4);
     const wb = wB - tuck(x);
     const wm = wB + bulge(x);
     const sm = yMaxFrac(x);
@@ -266,6 +275,7 @@ export default function cox(k) {
     }
     // Capot avant et ses joints.
     if (f.x > X_HOOD) {
+      if (p >= I_E && f.x > X_LIP) return f.x < X_LIP + SEAM ? 'black' : 'paint_carrosserie';
       if (p >= I_E) return f.x < X_HOOD + SEAM ? 'black' : 'paint_capot';
       if (p >= I_SEAM) return 'black';
       return 'paint_carrosserie';
@@ -300,7 +310,7 @@ export default function cox(k) {
   };
 
   const breaks = [
-    ...X_WS, X_HOOD, X_HOOD + SEAM, ...X_DOOR, ...X_QTR, ...X_RW, X_LID[0], X_LID[0] - SEAM, X_LID[1], X_LID[1] - SEAM,
+    ...X_WS, X_HOOD, X_HOOD + SEAM, X_LIP, X_LIP + SEAM, ...X_DOOR, ...X_QTR, ...X_RW, X_LID[0], X_LID[0] - SEAM, X_LID[1], X_LID[1] - SEAM,
     ...SEAMS_X.flatMap((s) => [s, s + SEAM]),
     ...VENTS.flatMap((v) => [v, v - 0.011]),
   ];
@@ -318,15 +328,18 @@ export default function cox(k) {
   /**
    * Une aile côté droit : loft dont la section (trapèze arrondi) est centrée sur zc(x), posée sur la
    * voûte du passage de roue au-dessus de l'essieu.
-   * @param {{ x0: number, x1: number, axle: number, crest: P2[], base: P2[], hw: P2[], zc: P2[] }} o
+   * r1 : arrondi du bout avant (x1) ; round : fraction (0 à 1) qui rend la section ronde (bout du
+   * ponton qui porte le phare).
+   * @param {{ x0: number, x1: number, axle: number, crest: P2[], base: P2[], hw: P2[], zc: P2[], r1?: number, round?: P2[] }} o
    */
   const fender = (o) => {
     const yt = k.smoothCurve(o.crest);
     const yb0 = k.smoothCurve(o.base);
     const hw = k.smoothCurve(o.hw);
     const zc = k.smoothCurve(o.zc);
+    const round = o.round ? k.smoothCurve(o.round) : () => 0;
     const dimsF = (/** @type {number} */ x) => {
-      const ends = (/** @type {number} */ r) => k.endInset(x, o.x1, r) + k.endInset(x, o.x0, r);
+      const ends = (/** @type {number} */ r) => k.endInset(x, o.x1, o.r1 ?? r) + k.endInset(x, o.x0, r);
       const t = yt(x) - ends(0.05);
       const dx = Math.abs(x - o.axle);
       let b = yb0(x) + ends(0.04);
@@ -339,15 +352,27 @@ export default function cox(k) {
       sectionAt: (x) => {
         const { t, b, w } = dimsF(x);
         const c = zc(x);
+        const q = clamp(round(x), 0, 1);
         const sec = k.mirrorSection(
-          k.roundedHalf({ bottom: b, top: t, halfWidthBottom: w, halfWidthTop: w * 0.9, rBottom: 0.02, rTop: Math.min(w * 0.8, 0.14), crown: 0.006, n: 6 }),
+          k.roundedHalf({
+            bottom: b,
+            top: t,
+            halfWidthBottom: w,
+            halfWidthTop: w * lerp(0.9, 1, q),
+            rBottom: lerp(0.02, w, q),
+            rTop: lerp(Math.min(w * 0.8, 0.14), w, q),
+            crown: 0.006 * (1 - q),
+            n: 6,
+          }),
         );
         return sec.map(([z, y]) => /** @type {P2} */ ([z + c, y]));
       },
       xs: k.sampleX(o.x0, o.x1, { step: 0.04, endZone: 0.1, endCount: 6, breaks: [o.axle - ARCH_R, o.axle + ARCH_R] }),
       around: 1,
       // Dessous noir : la voûte du passage de roue, et ce qui regarde franchement le sol.
-      material: (f) => ((f.ny < -0.35 && Math.abs(f.x - o.axle) < ARCH_R + 0.02) || f.ny < -0.8 ? 'black' : 'paint_ailes'),
+      // Le flanc intérieur qui dépasse dans l'habitacle (pieds avant et arrière) reste noir.
+      material: (f) =>
+        (f.ny < -0.35 && Math.abs(f.x - o.axle) < ARCH_R + 0.02) || f.ny < -0.8 || (Math.sign(f.z) * f.nz < -0.3 && f.x > -0.95 && f.x < 0.85) ? 'black' : 'paint_ailes',
       crease: 65,
       capRows: 4,
       capColumns: 6,
@@ -355,12 +380,16 @@ export default function cox(k) {
   };
   const frontFender = fender({
     x0: 0.6,
-    x1: 1.9,
+    x1: HEAD_X,
     axle: AXLES[0],
-    crest: [[0.6, 0.36], [0.65, 0.47], [0.72, 0.58], [0.84, 0.67], [1.0, 0.72], [1.2, 0.74], [1.45, 0.745], [1.65, 0.735], [1.8, 0.705], [1.86, 0.675], [1.9, 0.64]],
-    base: [[0.6, 0.27], [0.84, 0.28], [1.56, 0.3], [1.7, 0.33], [1.8, 0.39], [1.86, 0.47], [1.9, 0.53]],
-    hw: [[0.6, 0.05], [0.68, 0.12], [0.8, 0.18], [0.95, 0.205], [1.6, 0.205], [1.8, 0.19], [1.9, 0.165]],
-    zc: [[0.6, 0.71], [0.72, 0.63], [0.9, 0.57], [1.6, 0.57], [1.9, 0.57]],
+    // Ponton : la crête monte doucement vers l'avant et finit au ras du cerclage du phare ; la
+    // section devient ronde, centrée sur le phare (y 0,66 ; z 0,56).
+    crest: [[0.6, 0.36], [0.65, 0.47], [0.72, 0.58], [0.84, 0.67], [1.0, 0.72], [1.2, 0.742], [1.45, 0.752], [1.62, 0.76], [1.74, 0.766], [1.81, 0.768], [HEAD_X, 0.768]],
+    base: [[0.6, 0.27], [0.84, 0.28], [1.56, 0.3], [1.66, 0.34], [1.74, 0.41], [1.8, 0.49], [HEAD_X, 0.552]],
+    hw: [[0.6, 0.05], [0.68, 0.12], [0.8, 0.18], [0.95, 0.205], [1.55, 0.205], [1.68, 0.18], [1.78, 0.142], [HEAD_X, 0.114]],
+    zc: [[0.6, 0.71], [0.72, 0.63], [0.9, 0.57], [1.5, 0.57], [HEAD_X, 0.56]],
+    round: [[0.95, 0.3], [1.45, 0.42], [1.72, 0.75], [1.8, 1]],
+    r1: 0.012,
   });
   const rearFender = fender({
     x0: -2.02,
@@ -384,19 +413,19 @@ export default function cox(k) {
   // verre bombé.
   const headR = 0.095;
   const headN = /** @type {P3} */ ([Math.cos(0.14), Math.sin(0.14), 0]);
-  const headAt = /** @type {P3} */ ([1.885, 0.66, 0.56]);
+  const headAt = /** @type {P3} */ ([HEAD_X + 0.004, 0.66, 0.56]);
   const headPose = { position: headAt, normal: headN, up: /** @type {P3} */ ([0, 1, 0]) };
   /** @type {Parts} */
   const headlight = [
-    ...k.orient(k.lathe([[headR + 0.002, -0.16], [headR + 0.012, -0.07], [headR + 0.011, -0.004], [headR + 0.002, 0.004]], { material: 'paint_ailes', segments: 40, crease: 60 }), headPose),
-    ...k.orient(k.tube(k.circle(0, 0, headR + 0.004, 28).map(([a, b]) => /** @type {P3} */ ([a, b, 0.004])), { material: 'chrome', radius: 0.008, closed: true, segments: 40, radial: 8 }), headPose),
-    ...k.orient(k.lamp(k.circle(0, 0, headR - 0.004, 32), { material: 'lamp', bulge: 0.024, depth: 0.004 }), headPose),
+    ...k.orient(k.lathe([[headR + 0.004, -0.04], [headR + 0.011, -0.016], [headR + 0.011, -0.004], [headR + 0.002, 0.004]], { material: 'paint_ailes', segments: 40, crease: 60 }), headPose),
+    ...k.orient(k.tube(k.circle(0, 0, headR + 0.006, 28).map(([a, b]) => /** @type {P3} */ ([a, b, 0.004])), { material: 'chrome', radius: 0.008, closed: true, segments: 40, radial: 8 }), headPose),
+    ...k.orient(k.lamp(k.circle(0, 0, headR, 32), { material: 'lamp', bulge: 0.024, depth: 0.004 }), headPose),
   ];
   // Clignotant en obus chromé sur le dessus de l'aile avant.
   /** @type {Parts} */
   const blinker = [
-    ...k.ellipsoid([1.45, 0.758, 0.6], [0.062, 0.022, 0.024], { material: 'chrome', segments: 16 }),
-    ...k.ellipsoid([1.5, 0.76, 0.6], [0.018, 0.016, 0.018], { material: 'signal', segments: 14 }),
+    ...k.ellipsoid([1.45, 0.766, 0.6], [0.062, 0.022, 0.024], { material: 'chrome', segments: 16 }),
+    ...k.ellipsoid([1.5, 0.768, 0.6], [0.018, 0.016, 0.018], { material: 'signal', segments: 14 }),
   ];
   // Feu arrière ovale dressé sur la face arrière de l'aile arrière.
   const tailPose = { position: /** @type {P3} */ ([-1.99, 0.6, 0.6]), normal: /** @type {P3} */ ([-1, 0.12, 0]), up: /** @type {P3} */ ([0, 1, 0]) };
@@ -422,7 +451,7 @@ export default function cox(k) {
   // Poignées de porte chromées, sous la ceinture, à l'arrière de la porte.
   const handle = k.place(k.roundedExtrude(k.roundedRect(0.13, 0.026, 0.012), { material: 'chrome', depth: 0.03, bevel: 0.009 }), { position: [-0.3, 0.9, 0.672] });
   // Poignée du capot avant, sur le nez.
-  const hoodHandle = k.orient(k.roundedExtrude(k.roundedRect(0.12, 0.03, 0.014), { material: 'chrome', depth: 0.03, bevel: 0.01 }), { position: [1.955, 0.6, 0], normal: [0.8, 0.6, 0], up: [0, 1, 0] });
+  const hoodHandle = k.orient(k.roundedExtrude(k.roundedRect(0.12, 0.03, 0.014), { material: 'chrome', depth: 0.03, bevel: 0.01 }), { position: [1.895, 0.658, 0], normal: [0.62, 0.78, 0], up: [0, 1, 0] });
   // Deux sorties d'échappement fines sous le tablier arrière.
   /** @type {Parts} */
   const exhaust = [];
@@ -497,45 +526,20 @@ export default function cox(k) {
     ...k.orient(k.lathe([[0, -0.012], [0.047, -0.012], [0.052, -0.01]], { material: 'glass', segments: 32 }), { position: [0.37, 1.07, -0.76], normal: [1, 0, 0.1], up: [0, 1, 0] }),
   ];
 
-  // --- Habitacle (vu par les vitres) ---------------------------------------------------------
-  const lining = k.loft({
-    sectionAt: (x) => k.mirrorSection(half(x).map(([z, y]) => /** @type {P2} */ ([z * 0.93, 0.2 + (y - 0.2) * 0.95]))),
-    xs: k.sampleX(-1.2, 0.64, { step: 0.1, endZone: 0.06, endCount: 2 }),
-    material: 'black',
-    inward: true,
-    capRows: 1,
-    capColumns: 4,
+  // --- Habitacle (vue intérieure du conducteur, et vu par les vitres) : interieur.mjs ----------
+  const cabin = interieur(k, {
+    half,
+    band,
+    I: { belt: I_BELT, glass: I_GLASS, e: I_E },
+    xWs: X_WS,
+    xDoor: X_DOOR,
+    xQtr: X_QTR,
+    xRw: X_RW,
+    rwZ: RW_Z,
+    xDoorFront,
+    xQtrRear,
+    windows: [windowLoop(xDoorFrontAt, () => X_DOOR[0]), windowLoop(() => X_QTR[1], xQtrRearAt), wsLoop],
   });
-  /** @type {Parts} */
-  const cabin = [...lining];
-  for (const z of [-0.3, 0.3]) {
-    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.48, 0.12, 0.05), { material: 'paint_sellerie', depth: 0.44, bevel: 0.035 }), { position: [-0.02, 0.42, z] }));
-    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.13, 0.7, 0.06), { material: 'paint_sellerie', depth: 0.42, bevel: 0.035 }), { position: [-0.3, 0.8, z], rotation: [0, 0, 0.2] }));
-  }
-  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.45, 0.12, 0.05), { material: 'paint_sellerie', depth: 1.0, bevel: 0.035 }), { position: [-0.86, 0.4, 0] }));
-  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.12, 0.5, 0.05), { material: 'paint_sellerie', depth: 1.0, bevel: 0.035 }), { position: [-1.06, 0.68, 0] , rotation: [0, 0, 0.3] }));
-  // Planche de bord noire et sa rangée d'interrupteurs.
-  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.24, 0.14, 0.05), { material: 'black', depth: 0.98, bevel: 0.03 }), { position: [0.5, 0.86, 0] }));
-  for (let i = 0; i < 6; i += 1) cabin.push(...k.rod([0.39, 0.85, -0.1 + i * 0.05], [0.375, 0.85, -0.1 + i * 0.05], 0.009, { material: 'alu', radial: 8 }));
-  // Volant noir à trois branches ajourées (côté conducteur, -Z).
-  /** @type {Parts} */
-  const wheelParts = [];
-  wheelParts.push(...k.tube(k.circle(0, 0, 0.18, 14).map(([a, b]) => /** @type {P3} */ ([a, b, 0])), { material: 'black', radius: 0.014, closed: true, segments: 64, radial: 8 }));
-  wheelParts.push(...k.lathe([[0.045, -0.02], [0.045, 0.01], [0, 0.02]], { material: 'black', segments: 20 }));
-  for (const a of [Math.PI / 2 + Math.PI, Math.PI / 6, Math.PI - Math.PI / 6]) {
-    for (const off of [-0.018, 0.018]) {
-      const c = Math.cos(a);
-      const s = Math.sin(a);
-      wheelParts.push(...k.rod([0.04 * c - off * s, 0.04 * s + off * c, 0], [0.17 * c - off * 0.4 * s, 0.17 * s + off * 0.4 * c, 0], 0.0065, { material: 'black', radial: 6 }));
-    }
-  }
-  cabin.push(...k.orient(wheelParts, { position: [0.3, 0.98, -0.3], normal: [-1, 0.6, 0], up: [0, 1, 0] }));
-  // Levier de vitesses long à soufflet, pommeau en tête de mort ivoire.
-  cabin.push(...k.place(k.lathe([[0.06, 0], [0.045, 0.04], [0.02, 0.1], [0.008, 0.13], [0, 0.13]], { material: 'black', segments: 16, axis: 'y' }), { position: [0.18, 0.2, 0] }));
-  cabin.push(...k.rod([0.18, 0.3, 0], [0.1, 0.74, 0], 0.007, { material: 'alu', radial: 8 }));
-  cabin.push(...k.ellipsoid([0.095, 0.77, 0], [0.032, 0.028, 0.026], { material: 'paint_pommeau', segments: 16 }));
-  cabin.push(...k.ellipsoid([0.12, 0.746, 0], [0.016, 0.014, 0.019], { material: 'paint_pommeau', segments: 12 }));
-  for (const z of [-0.011, 0.011]) cabin.push(...k.ellipsoid([0.122, 0.77, z], [0.006, 0.007, 0.007], { material: 'black', segments: 10 }));
 
   // --- Modèle --------------------------------------------------------------------------------
   const m = new k.Model('cox');
