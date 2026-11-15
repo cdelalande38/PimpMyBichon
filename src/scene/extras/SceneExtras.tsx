@@ -127,6 +127,8 @@ export function SceneExtras({ photo }: SceneExtrasProps): null {
   }, [active]);
   useEffect(() => () => usePiece.getState().setPins([]), []);
 
+  const hadPins = useRef(false);
+
   // Position des pastilles : seulement quand une image est rendue (rendu à la demande).
   useFrame((state) => {
     if (!live.current.active) return;
@@ -163,16 +165,33 @@ export function SceneExtras({ photo }: SceneExtrasProps): null {
       pins.push({ id: target.point.id, x: px, y: py });
     }
     usePiece.getState().setPins(pins);
+    // Arrivée (ou retour) des pastilles à l'écran : repères allumés un instant.
+    if (pins.length > 0 && !hadPins.current) usePiece.getState().reveal();
+    hadPins.current = pins.length > 0;
   });
 
   // Appui court sur la scène : on écoute sans jamais retenir l'événement (l'orbite garde ses gestes).
   useEffect(() => {
     const element = gl.domElement;
     const tracker = createTapTracker();
-    const onDown = (event: PointerEvent) => tracker.down(event.pointerId, event.clientX, event.clientY, event.timeStamp);
+    // Repères : effacés tant qu'un doigt est sur la scène, rallumés quand le dernier la quitte.
+    const fingers = new Set<number>();
+    const lift = (pointerId: number) => {
+      fingers.delete(pointerId);
+      if (fingers.size === 0) usePiece.getState().reveal();
+    };
+    const onDown = (event: PointerEvent) => {
+      fingers.add(event.pointerId);
+      usePiece.getState().hide();
+      tracker.down(event.pointerId, event.clientX, event.clientY, event.timeStamp);
+    };
     const onMove = (event: PointerEvent) => tracker.move(event.pointerId, event.clientX, event.clientY);
-    const onCancel = (event: PointerEvent) => tracker.cancel(event.pointerId);
+    const onCancel = (event: PointerEvent) => {
+      lift(event.pointerId);
+      tracker.cancel(event.pointerId);
+    };
     const onUp = (event: PointerEvent) => {
+      lift(event.pointerId);
       if (!tracker.up(event.pointerId, event.clientX, event.clientY, event.timeStamp)) return;
       if (!live.current.active || usePiece.getState().covered) return;
       const work = getWork();

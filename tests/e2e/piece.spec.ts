@@ -46,6 +46,21 @@ async function orbitUntil(page: Page, name: string): Promise<void> {
   await expect(pin).toBeVisible();
 }
 
+/**
+ * Les pastilles sont des repères brefs (src/state/piece.ts) : effacées au repos, allumées quelques
+ * secondes à la fin d'un geste sur la scène. Un court glissé vertical (plus de 10 px : ce n'est pas
+ * un appui, et il ne fait presque pas tourner la vue) les rallume.
+ */
+async function reveal(page: Page): Promise<void> {
+  const top = (await dock(page).boundingBox())?.y ?? 600;
+  const y = Math.round(top * 0.5);
+  await page.mouse.move(180, y);
+  await page.mouse.down();
+  await page.mouse.move(180, y + 14, { steps: 3 });
+  await page.mouse.up();
+  await expect(page.locator('.piece-overlay')).toHaveAttribute('data-visible', 'oui');
+}
+
 async function ready(page: Page): Promise<void> {
   await openApp(page);
   await waitForScene(page);
@@ -58,6 +73,11 @@ test.describe('pièce cliquable', () => {
 
   test('pastilles : enceintes → radio, bloc moteur → Mécanique · Préparation ; rien sous un panneau', async ({ page }) => {
     await ready(page);
+    // Repères brefs : allumés à l'arrivée, ils s'effacent seuls et laissent voir le garage.
+    const overlay = page.locator('.piece-overlay');
+    await expect(overlay).toHaveAttribute('data-visible', 'non', { timeout: 20_000 });
+    await shot(page, 'pastilles-au-repos');
+    await reveal(page);
     await shot(page, 'pastilles');
 
     const radio = page.getByRole('button', { name: 'Ouvrir la radio', exact: true });
@@ -65,6 +85,7 @@ test.describe('pièce cliquable', () => {
     // Atteignable au clavier : c'est un vrai bouton.
     await radio.focus();
     await expect(radio).toBeFocused();
+    await reveal(page);
     await radio.click();
     await expect(page).toHaveURL(/#\/radio$/);
     await expect(page.getByRole('heading', { name: 'Radio', level: 2 })).toBeVisible();
@@ -78,6 +99,7 @@ test.describe('pièce cliquable', () => {
     await orbitUntil(page, 'Préparer le moteur');
     await shot(page, 'pastilles-autre-cote');
     const engine = page.getByRole('button', { name: 'Préparer le moteur', exact: true });
+    await reveal(page);
     await engine.click();
     // Un seul niveau du menu : la fiche de préparation, sections et entrées masquées.
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Mécanique', 'Préparation']);

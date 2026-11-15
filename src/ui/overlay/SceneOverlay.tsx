@@ -1,7 +1,8 @@
 // Point d'ancrage dans l'interface, au-dessus de la scène et sous les panneaux : les pastilles des
 // points d'intérêt de la pièce (src/data/pointsInteret.ts). Leur position vient de la scène
 // (src/scene/extras/SceneExtras.tsx, à chaque image rendue) ; ici, de vrais boutons nommés,
-// atteignables au clavier, qui ouvrent le même menu qu'un appui sur l'objet.
+// atteignables au clavier, qui ouvrent le même menu qu'un appui sur l'objet. Ce sont des repères
+// brefs (src/state/piece.ts) : effacés au repos, allumés un instant après un geste ou au clavier.
 
 import { useEffect } from 'react';
 import { POINTS_INTERET } from '../../data/pointsInteret.ts';
@@ -18,6 +19,7 @@ export interface SceneOverlayProps {
 
 export function SceneOverlay({ covered }: SceneOverlayProps) {
   const pins = usePiece((state) => state.pins);
+  const shown = usePiece((state) => state.shown);
   const mode = useView((state) => state.mode);
 
   // La scène lit cet état au moment d'un appui : panneau ouvert, elle ne répond plus.
@@ -28,7 +30,7 @@ export function SceneOverlay({ covered }: SceneOverlayProps) {
 
   if (covered || mode !== 'atelier' || pins.length === 0) return null;
   return (
-    <div className="piece-overlay">
+    <div className="piece-overlay" data-visible={shown ? 'oui' : 'non'}>
       {pins.map((pin) => {
         const point = POINTS_INTERET.find((item) => item.id === pin.id);
         if (!point) return null;

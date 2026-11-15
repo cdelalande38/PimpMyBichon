@@ -2,7 +2,7 @@
 // court, matériau du véhicule → zone du manifeste.
 
 import { Texture } from 'three';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DOCK_MENU } from '../../src/data/dockMenu.ts';
 import { GARAGE } from '../../src/data/garage.ts';
 import { POINTS_INTERET } from '../../src/data/pointsInteret.ts';
@@ -12,7 +12,7 @@ import type { GarageScene } from '../../src/scene/garage/build.ts';
 import type { Box } from '../../src/scene/garage/cut.ts';
 import { anchorOf, createTapTracker, materialOf, pickTarget, rayBox, targetsFromElements, zoneForMaterial, type PieceTarget } from '../../src/scene/extras/piece.ts';
 import { masterZone } from '../../src/state/builds.ts';
-import { samePins } from '../../src/state/piece.ts';
+import { PIN_HINT_MS, samePins, usePiece } from '../../src/state/piece.ts';
 
 /** Les textures du garage se dessinent au canvas : sans DOM, elles restent vides. */
 function stubDocument(): () => void {
@@ -163,5 +163,38 @@ describe('matériau du véhicule → zone', () => {
       const last = vehicle.zones.at(-1);
       if (last) expect(zoneForMaterial(vehicle, `paint_${last.id}.001`), `${vehicle.id} · paint_${last.id}`).toBe(last.id);
     }
+  });
+});
+
+describe('repères brefs de la pièce', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    usePiece.getState().hide();
+  });
+  afterEach(() => {
+    usePiece.getState().hide();
+    vi.useRealTimers();
+  });
+
+  it('effacés au repos, allumés par reveal, puis effacés seuls après le délai', () => {
+    expect(usePiece.getState().shown).toBe(false);
+    usePiece.getState().reveal();
+    expect(usePiece.getState().shown).toBe(true);
+    vi.advanceTimersByTime(PIN_HINT_MS - 1);
+    expect(usePiece.getState().shown).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(usePiece.getState().shown).toBe(false);
+  });
+
+  it('un nouveau geste relance le délai, et hide efface tout de suite sans rallumage tardif', () => {
+    usePiece.getState().reveal();
+    vi.advanceTimersByTime(PIN_HINT_MS - 100);
+    usePiece.getState().reveal();
+    vi.advanceTimersByTime(PIN_HINT_MS - 100);
+    expect(usePiece.getState().shown).toBe(true);
+    usePiece.getState().hide();
+    expect(usePiece.getState().shown).toBe(false);
+    vi.advanceTimersByTime(PIN_HINT_MS * 2);
+    expect(usePiece.getState().shown).toBe(false);
   });
 });
