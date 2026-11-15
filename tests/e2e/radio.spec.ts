@@ -6,7 +6,8 @@ import type { Server } from 'node:http';
 import { expect, test, type Page } from '@playwright/test';
 import { noiseWav, smallPack, startPackServer, type PackSource } from '../radio/server.ts';
 
-const PACK_PORT = 4521;
+// Port de l'hébergement d'essai, réglable quand plusieurs suites tournent en même temps sur la machine.
+const PACK_PORT = Number(process.env.PMB_RADIO_PORT ?? 4521);
 const HOST = `localhost:${PACK_PORT}`;
 const packs = new Map<string, PackSource>([
   ['pack.zip', { buffer: smallPack() }],
@@ -42,6 +43,8 @@ async function clockSeconds(page: Page): Promise<number> {
 }
 
 test('import par fichier, lecture, suivant, rechargement, suppression', async ({ page }) => {
+  // Parcours long (import, lecture, rechargement, deux suppressions) : plus de temps sur une machine chargée.
+  test.setTimeout(150_000);
   await openRadio(page);
   await expect(page.getByText('Ta radio est vide.')).toBeVisible();
   await page.getByTestId('radio-fichier-pack').setInputFiles({
@@ -252,11 +255,33 @@ async function installAudioProbe(page: Page): Promise<void> {
     w.__mode = 'normal';
     w.__hidden = false;
     w.__slow = false;
+    // Adresses d'objet vivantes des morceaux, et instants des « ended » et des play() (enchaînement sans délai).
+    const live = new Set<string>();
+    w.__liveUrls = live;
+    w.__endedAt = 0;
+    const playAt: number[] = [];
+    w.__playAt = playAt;
+    const create = URL.createObjectURL.bind(URL);
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.createObjectURL = (obj: Blob | MediaSource) => {
+      const url = create(obj);
+      // Seules les adresses des morceaux comptent (la scène 3D crée aussi les siennes pour ses textures).
+      if (obj instanceof Blob && obj.type.startsWith('audio/')) live.add(url);
+      return url;
+    };
+    URL.revokeObjectURL = (url: string) => {
+      live.delete(url);
+      revoke(url);
+    };
     const Native = window.Audio;
     window.Audio = class extends Native {
       constructor(src?: string) {
         super(src);
         w.__audios.push(this);
+        // Posé avant les écoutes de l'app : l'instant est noté avant son gestionnaire « ended ».
+        this.addEventListener('ended', () => {
+          w.__endedAt = performance.now();
+        });
       }
     } as typeof Audio;
     Object.defineProperty(Document.prototype, 'visibilityState', { configurable: true, get: () => (w.__hidden ? 'hidden' : 'visible') });
@@ -268,6 +293,7 @@ async function installAudioProbe(page: Page): Promise<void> {
     const played = new WeakSet<HTMLMediaElement>();
     const play = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+      playAt.push(performance.now());
       const mode = w.__mode;
       if (mode === 'refuse') return Promise.reject(new DOMException('geste requis', 'NotAllowedError'));
       if (mode === 'attente' || (mode === 'cache-strict' && w.__hidden && !played.has(this))) {
@@ -277,6 +303,22 @@ async function installAudioProbe(page: Page): Promise<void> {
       return play.call(this);
     };
     w.__release = () => w.__pending.splice(0).forEach((run) => run());
+    // Durée masquée à la demande (barre inactive), et dernière position confiée à l'écran verrouillé.
+    w.__noDuration = false;
+    const durationDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'duration')!;
+    Object.defineProperty(HTMLMediaElement.prototype, 'duration', {
+      configurable: true,
+      get(this: HTMLMediaElement) {
+        return w.__noDuration ? Number.NaN : (durationDesc.get!.call(this) as number);
+      },
+    });
+    w.__positionState = null;
+    const session = navigator.mediaSession;
+    const setPositionState = session.setPositionState?.bind(session);
+    session.setPositionState = (state?: MediaPositionState) => {
+      w.__positionState = state ?? null;
+      setPositionState?.(state);
+    };
     const getFile = FileSystemFileHandle.prototype.getFile;
     FileSystemFileHandle.prototype.getFile = async function (this: FileSystemFileHandle) {
       if (w.__slow) await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -356,6 +398,48 @@ test('page cachée : la fin du morceau enchaîne sur le même élément, avec du
   await expectAudible(page);
 });
 
+test('page cachée, lecture du fichier ralentie à la fin du morceau : enchaînement sans délai, avec du son', async ({ page }) => {
+  await startFourTracks(page);
+  const before = await expectAudible(page);
+  // L'adresse du morceau suivant est préparée dès le démarrage du morceau courant.
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __liveUrls: Set<string> }).__liveUrls.size)).toBe(2);
+  await setProbe(page, { __mode: 'cache-strict', __hidden: true, __slow: true });
+  await seekNearEnd(page, 1.2);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b', { timeout: 30_000 });
+  // play() du morceau suivant appelé dans le gestionnaire « ended », sans attendre la lecture du fichier (ralentie à 1,5 s).
+  const delay = await page.evaluate(() => {
+    const w = window as unknown as { __endedAt: number; __playAt: number[] };
+    const after = w.__playAt.filter((t) => t >= w.__endedAt);
+    return after.length > 0 ? after[0]! - w.__endedAt : -1;
+  });
+  expect(delay).toBeGreaterThanOrEqual(0);
+  expect(delay).toBeLessThan(100);
+  expect(await expectAudible(page)).toBe(before);
+});
+
+test('adresse préparée : une seule à la fois, refaite quand la file change, libérée à l’arrêt', async ({ page }) => {
+  await startFourTracks(page);
+  const live = () => page.evaluate(() => (window as unknown as { __liveUrls: Set<string> }).__liveUrls.size);
+  // Le morceau courant et le suivant préparé, pas plus.
+  await expect.poll(live).toBe(2);
+  const player = page.locator('.radio-player');
+  await player.getByRole('button', { name: 'Lecture aléatoire' }).click();
+  await expect(player.getByRole('button', { name: 'Lecture aléatoire' })).toHaveAttribute('aria-pressed', 'true');
+  await expect.poll(live).toBe(2);
+  for (let i = 0; i < 3; i += 1) {
+    await player.getByRole('button', { name: 'Morceau suivant' }).click();
+    await expect.poll(live).toBe(2);
+  }
+  await player.getByRole('button', { name: 'Lecture aléatoire' }).click();
+  await expect.poll(live).toBe(2);
+  // Arrêt (station supprimée) : plus aucune adresse vivante.
+  await station(page, 'Électro').getByRole('button', { name: /^Électro/ }).click();
+  await station(page, 'Électro').getByRole('button', { name: 'Supprimer la station' }).click();
+  await station(page, 'Électro').getByRole('button', { name: 'Supprimer', exact: true }).click();
+  await expect(station(page, 'Électro')).toHaveCount(0);
+  await expect.poll(live).toBe(0);
+});
+
 test('retour au premier plan : un morceau resté en attente repart avec du son, sans changer de morceau', async ({ page }) => {
   await startFourTracks(page);
   await setProbe(page, { __hidden: true, __mode: 'attente' });
@@ -405,6 +489,69 @@ test('garde de transition : une fin de morceau ne fait avancer la file que d’u
   await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b');
   await setProbe(page, { __slow: false });
   await expectAudible(page);
+});
+
+// ——— Barre de progression ———
+
+const seekBar = (page: Page) => page.getByRole('slider', { name: 'Position dans le morceau' });
+
+async function playingTime(page: Page): Promise<number> {
+  const deck = (await decks(page)).find((d) => !d.paused);
+  return deck ? deck.t : -1;
+}
+
+test('barre de progression : glisser au milieu, la position saute et la lecture continue', async ({ page }) => {
+  await startFourTracks(page);
+  const bar = seekBar(page);
+  await expect(bar).toBeEnabled();
+  await expect(bar).toHaveAttribute('aria-valuetext', /^\d+ s sur 12 s$/);
+  const box = (await bar.boundingBox())!;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(box.x + box.width * 0.05, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.5, y, { steps: 6 });
+  // Pendant le glissement, le temps affiché suit le doigt.
+  await expect(page.getByTestId('radio-temps')).toHaveText(/^0:0[5-7] \/ 0:12$/);
+  await page.mouse.up();
+  await expect.poll(() => playingTime(page)).toBeGreaterThanOrEqual(5);
+  expect(await playingTime(page)).toBeLessThan(9);
+  await expectAudible(page);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1a');
+  // L'écran verrouillé connaît la nouvelle position.
+  const state = await page.evaluate(() => (window as unknown as { __positionState: MediaPositionState | null }).__positionState);
+  expect(state?.duration).toBeCloseTo(12, 0);
+  expect(state?.position ?? 0).toBeGreaterThanOrEqual(4.5);
+});
+
+test('barre de progression : flèches du clavier par pas de 5 secondes', async ({ page }) => {
+  await startFourTracks(page);
+  const bar = seekBar(page);
+  await bar.focus();
+  const t0 = await playingTime(page);
+  await page.keyboard.press('ArrowRight');
+  const t1 = await playingTime(page);
+  expect(t1 - t0).toBeGreaterThan(4);
+  expect(t1 - t0).toBeLessThan(6.5);
+  await page.keyboard.press('ArrowLeft');
+  const t2 = await playingTime(page);
+  expect(t1 - t2).toBeGreaterThan(3.5);
+  expect(t1 - t2).toBeLessThan(5.5);
+  await expectAudible(page);
+});
+
+test('barre de progression inactive tant que la durée manque, sans erreur', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await installAudioProbe(page);
+  await openRadio(page);
+  await setProbe(page, { __noDuration: true });
+  await page.getByTestId('radio-fichier-pack').setInputFiles({ name: 'p.zip', mimeType: 'application/zip', buffer: Buffer.from(smallPack(['electro'], 2, 12)) });
+  await expect(page.getByText('Station ajoutée')).toBeVisible({ timeout: 45_000 });
+  await page.getByRole('button', { name: 'Écouter Électro' }).click();
+  await expectAudible(page);
+  await expect(seekBar(page)).toBeDisabled();
+  await expect(seekBar(page)).toHaveAttribute('aria-valuetext', 'Durée pas encore connue');
+  expect(errors).toEqual([]);
 });
 
 test('coupure pendant le téléchargement, puis reprise par une requête Range', async ({ page }) => {

@@ -7,6 +7,7 @@ import { id3Size, parseId3, tagsFromFilename } from '../../src/audio/radio/id3.t
 import { checkPackUrl, readPackLink, stripPackLink } from '../../src/audio/radio/link.ts';
 import { makeOrder, PlayQueue } from '../../src/audio/radio/order.ts';
 import { parseManifest, pickStart, planStations, prettyStationName } from '../../src/audio/radio/pack.ts';
+import { clampPosition, spokenTime } from '../../src/audio/radio/position.ts';
 import { entryBytes, entryRange, readZipEntries, ZipError, type ZipEntry } from '../../src/audio/radio/zip.ts';
 import { findPackByUrl, findSamePack } from '../../src/audio/radio/library.ts';
 import { sanitizePrefs, useRadio } from '../../src/state/radio.ts';
@@ -139,6 +140,18 @@ describe('étiquettes ID3', () => {
 });
 
 describe('ordre de lecture', () => {
+  it('peekNext annonce exactement le morceau que next() rendra, y compris d’un tour à l’autre', () => {
+    let seed = 3;
+    const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+    for (const shuffle of [false, true]) {
+      const queue = new PlayQueue(3, shuffle, 0, random);
+      for (let i = 0; i < 20; i += 1) {
+        const announced = queue.peekNext();
+        expect(queue.next()).toBe(announced);
+      }
+    }
+  });
+
   it('dans l’ordre, puis on boucle', () => {
     const queue = new PlayQueue(3, false, 1);
     expect([queue.current, queue.next(), queue.next(), queue.previous()]).toEqual([1, 2, 0, 2]);
@@ -156,6 +169,25 @@ describe('ordre de lecture', () => {
     }
     for (let i = 1; i < played.length; i += 1) expect(played[i]).not.toBe(played[i - 1]);
     expect(makeOrder(4, false)).toEqual([0, 1, 2, 3]);
+  });
+});
+
+describe('position dans le morceau', () => {
+  it('bornes : jamais négative, jamais au-delà de la fin, durée inconnue tolérée', () => {
+    expect(clampPosition(-3, 200)).toBe(0);
+    expect(clampPosition(72, 200)).toBe(72);
+    expect(clampPosition(500, 200)).toBe(199.75);
+    expect(clampPosition(Number.NaN, 200)).toBe(0);
+    expect(clampPosition(42, null)).toBe(42);
+    expect(clampPosition(-1, Number.NaN)).toBe(0);
+    expect(clampPosition(0.1, 0.2)).toBe(0);
+  });
+
+  it('valeur en clair pour les lecteurs d’écran', () => {
+    expect(`${spokenTime(72)} sur ${spokenTime(220)}`).toBe('1 min 12 sur 3 min 40');
+    expect(spokenTime(45.9)).toBe('45 s');
+    expect(spokenTime(180)).toBe('3 min');
+    expect(spokenTime(Number.NaN)).toBe('0 s');
   });
 });
 

@@ -1,10 +1,11 @@
 // Corps du panneau Radio : offre reçue par lien, import en cours, lecteur, stations et morceaux,
 // ajout d'un pack (fichier ou adresse) ou de morceaux, place occupée sur le téléphone.
 
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import type { Station } from '../../audio/radio/catalog.ts';
 import { cancelDownload, deletePack, deleteStation, dismissJob, downloadPack, importFiles } from '../../audio/radio/library.ts';
-import { next, playStation, previous, setShuffle, setVolume, togglePlay } from '../../audio/radio/player.ts';
+import { next, playStation, previous, seekTo, setShuffle, setVolume, togglePlay } from '../../audio/radio/player.ts';
+import { spokenTime } from '../../audio/radio/position.ts';
 import { useRadio, type Job } from '../../state/radio.ts';
 import {
   formatBytes,
@@ -18,6 +19,7 @@ import {
   plural,
 } from './bits.tsx';
 import './radio.css';
+import './seek.css';
 
 function OfferCard() {
   const offer = useRadio((state) => state.offer);
@@ -117,13 +119,61 @@ function JobCard() {
   );
 }
 
-function Clock() {
-  const clock = useRadio((state) => state.clock);
+/** Pas des flèches du clavier sur la barre de progression, en secondes. */
+const SEEK_KEY_STEP_S = 5;
+
+/**
+ * Barre de progression : elle suit le doigt pendant le glissement (le temps affiché aussi), le
+ * lecteur se place au relâchement. Flèches : ± 5 s. Inactive tant que la durée n'est pas connue.
+ */
+function SeekBar() {
+  const progress = useRadio((state) => state.progress);
+  const [drag, setDrag] = useState<number | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const duration = progress.duration && progress.duration > 0 ? progress.duration : null;
+  const value = Math.min(drag ?? progress.time, duration ?? 0);
+
+  // « change » natif : relâchement du doigt ou de la souris (React n'expose que « input »).
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    const commit = () => {
+      setDrag(null);
+      seekTo(Number(el.value));
+    };
+    el.addEventListener('change', commit);
+    return () => el.removeEventListener('change', commit);
+  }, []);
+
+  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    const step = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[event.key];
+    if (!step || !duration) return;
+    event.preventDefault();
+    setDrag(null);
+    seekTo(progress.time + step * SEEK_KEY_STEP_S);
+  };
+
   return (
-    <p className="radio-clock" data-testid="radio-temps">
-      {formatDuration(clock.position) || '0:00'}
-      {clock.duration ? ` / ${formatDuration(clock.duration)}` : ''}
-    </p>
+    <div className="radio-seek">
+      <input
+        ref={input}
+        type="range"
+        min={0}
+        max={duration ?? 1}
+        step={0.1}
+        value={value}
+        disabled={!duration}
+        aria-label="Position dans le morceau"
+        aria-valuetext={duration ? `${spokenTime(value)} sur ${spokenTime(duration)}` : 'Durée pas encore connue'}
+        onChange={(event) => setDrag(Number(event.currentTarget.value))}
+        onKeyDown={onKeyDown}
+        style={{ '--seek-fill': duration ? `${(value / duration) * 100}%` : '0%' } as CSSProperties}
+      />
+      <p className="radio-clock" data-testid="radio-temps">
+        {formatDuration(value) || '0:00'}
+        {duration ? ` / ${formatDuration(duration)}` : ''}
+      </p>
+    </div>
   );
 }
 
@@ -144,7 +194,7 @@ function Player() {
           {now ? now.title : station ? 'En pause. Appuie sur lecture pour reprendre.' : 'Choisis une station.'}
         </p>
         {now?.artist && <p className="radio-now-artist">{now.artist}</p>}
-        {now && <Clock />}
+        {now && <SeekBar />}
         {waitingTap && <p className="radio-tap">Touche pour lancer la musique</p>}
       </div>
       <div className="radio-controls">

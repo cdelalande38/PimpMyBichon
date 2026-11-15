@@ -24,6 +24,8 @@ export class PlayQueue {
   private readonly count: number;
   private shuffle: boolean;
   private readonly random: Random;
+  /** Tour suivant, tiré d'avance quand on regarde au-delà de la fin du tour (peekNext). */
+  private upcoming: number[] | null = null;
 
   constructor(count: number, shuffle: boolean, start = 0, random: Random = Math.random) {
     this.count = count;
@@ -44,17 +46,19 @@ export class PlayQueue {
     return this.order[this.pos] ?? 0;
   }
 
+  /** Morceau qui suivra : next() rendra exactement celui-là (le tour suivant est tiré d'avance). */
   peekNext(): number {
     if (this.pos + 1 < this.order.length) return this.order[this.pos + 1]!;
-    return this.shuffle ? -1 : 0;
+    this.upcoming ??= makeOrder(this.count, this.shuffle, this.random, this.current);
+    return this.upcoming[0] ?? 0;
   }
 
   next(): number {
     if (this.pos + 1 < this.order.length) {
       this.pos += 1;
     } else {
-      const last = this.current;
-      this.order = makeOrder(this.count, this.shuffle, this.random, last);
+      this.order = this.upcoming ?? makeOrder(this.count, this.shuffle, this.random, this.current);
+      this.upcoming = null;
       this.pos = 0;
     }
     return this.current;
@@ -71,6 +75,7 @@ export class PlayQueue {
     if (shuffle === this.shuffle) return;
     const current = this.current;
     this.shuffle = shuffle;
+    this.upcoming = null;
     if (shuffle) {
       this.order = makeOrder(this.count, true, this.random, current);
       const at = this.order.indexOf(current);

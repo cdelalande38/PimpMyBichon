@@ -82,6 +82,8 @@ export interface RadioState extends RadioPrefs {
   waitingTap: boolean;
   /** Position et durée du morceau en cours, en secondes entières. */
   clock: { position: number; duration: number | null };
+  /** Position fine (au dixième de seconde) et durée, pour la barre de progression. */
+  progress: { time: number; duration: number | null };
   /** Place occupée par l'app et quota du navigateur, en octets. */
   storage: { usage: number | null; quota: number | null };
 }
@@ -95,6 +97,7 @@ export const useRadio = create<RadioState>(() => ({
   now: null,
   waitingTap: false,
   clock: { position: 0, duration: null },
+  progress: { time: 0, duration: null },
   storage: { usage: null, quota: null },
 }));
 

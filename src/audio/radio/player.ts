@@ -11,15 +11,21 @@
 //   MÊME élément, dans « ended » : un navigateur mobile laisse continuer un élément qui jouait, mais
 //   peut refuser d'en démarrer un autre sans geste ;
 // - « en lecture » n'est publié que si le son sort vraiment (événement playing), et au retour au
-//   premier plan un morceau resté muet ou en attente se remet à jouer avec du son.
+//   premier plan un morceau resté muet ou en attente se remet à jouer avec du son ;
+// - l'adresse d'objet du morceau suivant est préparée dès que le morceau courant a démarré : page
+//   cachée, « ended » pose src et appelle play() tout de suite, sans rien attendre (une page sans son
+//   peut être ralentie ou gelée). Une seule adresse préparée à la fois, libérée si la file change.
 
 import { recordDuration, setPrefs, useRadio } from '../../state/radio.ts';
 import type { Station, Track } from './catalog.ts';
 import { trackBlob } from './opfs.ts';
 import { PlayQueue } from './order.ts';
+import { clampPosition } from './position.ts';
 
 /** Durée du fondu enchaîné, en secondes. */
 const FADE_S = 2;
+/** Pas des boutons « avance » et « recul » de l'écran verrouillé, en secondes. */
+const SEEK_STEP_S = 10;
 /** Marge du chien de garde au-delà du fondu, en millisecondes. */
 const WATCHDOG_MARGIN_MS = 1500;
 
@@ -48,6 +54,57 @@ let advancing = false;
 let wanted = false;
 /** Retire l'écoute « premier appui » (posée une seule fois). */
 let disarmTap: (() => void) | null = null;
+
+/** Adresse d'objet du morceau suivant de la file, prête à être posée sans attente. */
+interface Prepared {
+  stationId: string;
+  index: number;
+  trackId: string;
+  url: string;
+}
+let prepared: Prepared | null = null;
+/** Jeton des préparations : une lecture de fichier dépassée ne garde pas son adresse. */
+let prepareToken = 0;
+
+function releasePrepared(): void {
+  prepareToken += 1;
+  if (prepared) URL.revokeObjectURL(prepared.url);
+  prepared = null;
+}
+
+/** Prochain morceau de la file (station, position) : celui que next() rendra. */
+function upcoming(): { index: number; track: Track } | null {
+  if (!station || !queue || station.tracks.length === 0) return null;
+  const index = queue.peekNext();
+  const track = station.tracks[index];
+  return track ? { index, track } : null;
+}
+
+/** Prépare (ou garde) l'adresse du morceau suivant ; libère celle qui ne correspond plus à la file. */
+function prepareNext(): void {
+  const target = upcoming();
+  if (prepared && target && prepared.stationId === station?.id && prepared.index === target.index && prepared.trackId === target.track.id) return;
+  releasePrepared();
+  if (!target || !station) return;
+  const my = prepareToken;
+  const stationId = station.id;
+  void trackBlob(target.track).then(
+    (blob) => {
+      if (my !== prepareToken) return;
+      prepared = { stationId, index: target.index, trackId: target.track.id, url: URL.createObjectURL(blob) };
+    },
+    () => undefined,
+  );
+}
+
+/** Reprend l'adresse préparée si elle est celle du morceau demandé (elle passe à l'élément audio). */
+function takePrepared(index: number, track: Track): string | null {
+  if (!prepared || prepared.stationId !== station?.id || prepared.index !== index || prepared.trackId !== track.id) return null;
+  const { url } = prepared;
+  prepared = null;
+  prepareToken += 1;
+  return url;
+}
 
 /** Commandes de la radio : elles lancent la musique elles-mêmes, l'écoute globale les laisse faire. */
 const RADIO_CONTROLS = '.radio-mini button, .radio-player button, .radio-station-head button, .radio-tracks button';
@@ -101,6 +158,41 @@ function publish(): void {
   });
   if ('mediaSession' in navigator) {
     navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+  }
+}
+
+/** Durée du morceau actif : celle de l'élément, sinon celle retenue dans l'index ; null si inconnue. */
+function durationOf(deck: Deck): number | null {
+  const d = deck.el.duration;
+  if (Number.isFinite(d) && d > 0) return d;
+  return deck.track?.duration ?? null;
+}
+
+/** Position fine publiée pour la barre (au dixième de seconde, quatre fois par seconde au plus). */
+function publishProgress(deck: Deck): void {
+  const time = Math.round(deck.el.currentTime * 10) / 10;
+  const duration = durationOf(deck);
+  const progress = useRadio.getState().progress;
+  if (progress.time !== time || progress.duration !== duration) useRadio.setState({ progress: { time, duration } });
+}
+
+/** Position pour l'écran verrouillé : aux changements utiles (chargement, lecture, pause, placement). */
+function updatePositionState(): void {
+  const deck = activeDeck();
+  if (!('mediaSession' in navigator) || typeof navigator.mediaSession.setPositionState !== 'function') return;
+  try {
+    const duration = deck?.track ? durationOf(deck) : null;
+    if (!deck || !duration) {
+      navigator.mediaSession.setPositionState();
+      return;
+    }
+    navigator.mediaSession.setPositionState({
+      duration,
+      playbackRate: deck.el.playbackRate || 1,
+      position: Math.min(Math.max(0, deck.el.currentTime), duration),
+    });
+  } catch {
+    // Valeurs refusées par le navigateur (durée en cours de lecture) : on réessaiera au prochain changement.
   }
 }
 
@@ -183,9 +275,11 @@ async function startTrack(index: number, fade: boolean): Promise<void> {
   const incoming = reuse ? current : all[1 - active]!;
   const outgoing = incoming !== current ? current : null;
 
-  let url: string;
+  // Adresse préparée : aucune attente avant play() (dans « ended », tout reste synchrone).
+  let url: string | null = takePrepared(index, track);
+  if (!url) releasePrepared();
   try {
-    url = URL.createObjectURL(await trackBlob(track));
+    url ??= URL.createObjectURL(await trackBlob(track));
   } catch {
     // Fichier disparu du stockage privé : on passe au suivant, sans boucler.
     errors += 1;
@@ -205,7 +299,10 @@ async function startTrack(index: number, fade: boolean): Promise<void> {
   incoming.gain = crossfading ? 0 : 1;
   applyGain(incoming);
   active = all.indexOf(incoming);
-  useRadio.setState({ clock: { position: 0, duration: track.duration ? Math.round(track.duration) : null } });
+  useRadio.setState({
+    clock: { position: 0, duration: track.duration ? Math.round(track.duration) : null },
+    progress: { time: 0, duration: track.duration ?? null },
+  });
   setMetadata(track);
   setPrefs({ lastStationId: station.id, lastTrackId: track.id });
   if (outgoing && !crossfading) unload(outgoing);
@@ -215,8 +312,11 @@ async function startTrack(index: number, fade: boolean): Promise<void> {
     watchdog = setTimeout(finishFade, FADE_S * 1000 + WATCHDOG_MARGIN_MS);
   }
   publish();
+  const playing = incoming.el.play();
+  // Le morceau courant est lancé : on prépare tout de suite l'adresse du suivant.
+  prepareNext();
   try {
-    await incoming.el.play();
+    await playing;
   } catch (error) {
     if (my !== token) return;
     // Pas de son à attendre de l'élément sortant : on termine le fondu, l'entrant reste à plein gain.
@@ -255,6 +355,7 @@ function ensureDecks(): [Deck, Deck] {
       const duration = Number.isFinite(el.duration) ? Math.round(el.duration) : null;
       const clock = useRadio.getState().clock;
       if (clock.position !== position || clock.duration !== duration) useRadio.setState({ clock: { position, duration } });
+      publishProgress(deck);
       // Fondu seulement page visible ; page cachée, l'enchaînement attend « ended » sur le même élément.
       if (advancing || fadingOut || pageHidden() || !Number.isFinite(el.duration)) return;
       if (el.duration > FADE_S * 4 && el.duration - el.currentTime <= FADE_S) void autoAdvance(true);
@@ -264,6 +365,9 @@ function ensureDecks(): [Deck, Deck] {
     });
     el.addEventListener('loadedmetadata', () => {
       if (deck.track && deck.track.duration === undefined) recordDuration(deck.track.id, el.duration);
+      if (!isActive(deck)) return;
+      publishProgress(deck);
+      updatePositionState();
     });
     el.addEventListener('playing', () => {
       deck.audible = true;
@@ -273,6 +377,7 @@ function ensureDecks(): [Deck, Deck] {
       if (!fadingOut) fullGain(deck);
       clearTap();
       publish();
+      updatePositionState();
     });
     el.addEventListener('waiting', () => {
       deck.audible = false;
@@ -281,7 +386,9 @@ function ensureDecks(): [Deck, Deck] {
     el.addEventListener('play', () => isActive(deck) && publish());
     el.addEventListener('pause', () => {
       deck.audible = false;
-      if (isActive(deck)) publish();
+      if (!isActive(deck)) return;
+      publish();
+      updatePositionState();
     });
     el.addEventListener('error', () => {
       if (!isActive(deck) || !deck.track) return;
@@ -303,6 +410,19 @@ function ensureDecks(): [Deck, Deck] {
       ['nexttrack', () => void next()],
       ['previoustrack', () => void previous()],
     ];
+    // Curseur et boutons ± 10 s de l'écran verrouillé et de la notification.
+    const seekHandlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['seekto', (details) => details.seekTime !== undefined && seekTo(details.seekTime)],
+      ['seekforward', (details) => seekBy(details.seekOffset ?? SEEK_STEP_S)],
+      ['seekbackward', (details) => seekBy(-(details.seekOffset ?? SEEK_STEP_S))],
+    ];
+    for (const [action, handler] of seekHandlers) {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch {
+        // Action inconnue de ce navigateur.
+      }
+    }
     for (const [action, handler] of handlers) {
       try {
         navigator.mediaSession.setActionHandler(action, handler);
@@ -396,6 +516,29 @@ export async function previous(): Promise<void> {
   await advance(-1, false);
 }
 
+/**
+ * Se place dans le morceau en cours (secondes, bornées), en lecture comme en pause ; un fondu en
+ * cours est d'abord terminé. Sans morceau chargé ou durée inconnue, rien ne se passe.
+ */
+export function seekTo(seconds: number): void {
+  const deck = activeDeck();
+  if (!deck?.track) return;
+  const duration = durationOf(deck);
+  if (!duration) return;
+  finishFade();
+  deck.el.currentTime = clampPosition(seconds, duration);
+  publishProgress(deck);
+  const position = Math.floor(deck.el.currentTime);
+  useRadio.setState({ clock: { position, duration: Math.round(duration) } });
+  updatePositionState();
+}
+
+/** Avance (ou recule, pas négatif) dans le morceau en cours. */
+export function seekBy(step: number): void {
+  const deck = activeDeck();
+  if (deck?.track) seekTo(deck.el.currentTime + step);
+}
+
 export function setVolume(volume: number): void {
   setPrefs({ volume: Math.min(1, Math.max(0, volume)) });
   if (decks) for (const deck of decks) applyGain(deck);
@@ -404,6 +547,8 @@ export function setVolume(volume: number): void {
 export function setShuffle(shuffle: boolean): void {
   setPrefs({ shuffle });
   queue?.setShuffle(shuffle);
+  // La file a changé : l'adresse préparée est libérée et refaite pour le nouveau suivant.
+  if (queue) prepareNext();
 }
 
 /** Arrête tout (station supprimée ou remplacée). Sans argument : quelle que soit la station. */
@@ -413,10 +558,11 @@ export function stopPlayback(stationIds?: readonly string[]): void {
   wanted = false;
   clearTap();
   finishFade();
+  releasePrepared();
   if (decks) for (const deck of decks) unload(deck);
   station = null;
   queue = null;
-  useRadio.setState({ now: null });
+  useRadio.setState({ now: null, progress: { time: 0, duration: null } });
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = null;
     navigator.mediaSession.playbackState = 'none';
