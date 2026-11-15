@@ -235,6 +235,178 @@ for (const policy of ['geste exigé', 'lecture libre'] as const) {
   });
 }
 
+// ——— Enchaînement des morceaux : le bogue du silence (page cachée, play() refusé ou en attente) ———
+
+/**
+ * Sonde posée avant le chargement de l'app : liste des éléments audio créés, page cachée simulée
+ * (visibilityState), et play() pilotable : « refuse » (NotAllowedError), « attente » (la promesse ne
+ * se résout qu'à __release()), « cache-strict » (page cachée : un élément qui n'a jamais joué ne
+ * démarre pas, comme sur un téléphone ; celui qui jouait continue). __slow ralentit la lecture d'un
+ * fichier du stockage privé (pour éprouver la garde de transition).
+ */
+async function installAudioProbe(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const w = window as unknown as Record<string, unknown> & { __audios: HTMLAudioElement[]; __pending: (() => void)[] };
+    w.__audios = [];
+    w.__pending = [];
+    w.__mode = 'normal';
+    w.__hidden = false;
+    w.__slow = false;
+    const Native = window.Audio;
+    window.Audio = class extends Native {
+      constructor(src?: string) {
+        super(src);
+        w.__audios.push(this);
+      }
+    } as typeof Audio;
+    Object.defineProperty(Document.prototype, 'visibilityState', { configurable: true, get: () => (w.__hidden ? 'hidden' : 'visible') });
+    Object.defineProperty(Document.prototype, 'hidden', { configurable: true, get: () => w.__hidden });
+    w.__setHidden = (value: boolean) => {
+      w.__hidden = value;
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    const played = new WeakSet<HTMLMediaElement>();
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+      const mode = w.__mode;
+      if (mode === 'refuse') return Promise.reject(new DOMException('geste requis', 'NotAllowedError'));
+      if (mode === 'attente' || (mode === 'cache-strict' && w.__hidden && !played.has(this))) {
+        return new Promise<void>((resolve, reject) => w.__pending.push(() => void play.call(this).then(resolve, reject)));
+      }
+      played.add(this);
+      return play.call(this);
+    };
+    w.__release = () => w.__pending.splice(0).forEach((run) => run());
+    const getFile = FileSystemFileHandle.prototype.getFile;
+    FileSystemFileHandle.prototype.getFile = async function (this: FileSystemFileHandle) {
+      if (w.__slow) await new Promise((resolve) => setTimeout(resolve, 1500));
+      return getFile.call(this);
+    };
+  });
+}
+
+type ProbeWindow = Window & Record<string, unknown> & { __audios: HTMLAudioElement[]; __pending: unknown[] };
+
+/** Éléments audio chargés : index, en pause ou non, position, volume. */
+async function decks(page: Page) {
+  return page.evaluate(() =>
+    (window as unknown as ProbeWindow).__audios
+      .map((a, i) => ({ i, src: a.hasAttribute('src'), paused: a.paused, t: a.currentTime, volume: a.volume, ended: a.ended }))
+      .filter((a) => a.src),
+  );
+}
+
+/** Le son sort : un seul élément joue, à volume non nul, et sa position avance. */
+async function expectAudible(page: Page): Promise<number> {
+  let first: { i: number; t: number } | null = null;
+  await expect
+    .poll(async () => {
+      const playing = (await decks(page)).filter((d) => !d.paused && d.volume > 0);
+      if (playing.length !== 1) return 'pas un seul élément audible';
+      const [d] = playing;
+      if (!first || first.i !== d!.i) first = { i: d!.i, t: d!.t };
+      return d!.t > first.t + 0.5 ? 'ok' : 'la position n’avance pas encore';
+    }, { timeout: 45_000, intervals: [500] })
+    .toBe('ok');
+  return first!.i;
+}
+
+async function setProbe(page: Page, values: Record<string, unknown>): Promise<void> {
+  await page.evaluate((patch) => {
+    const w = window as unknown as ProbeWindow & { __setHidden(v: boolean): void };
+    for (const [key, value] of Object.entries(patch)) {
+      if (key === '__hidden') w.__setHidden(Boolean(value));
+      else w[key] = value;
+    }
+  }, values);
+}
+
+/** Saute près de la fin du morceau en cours (l'élément qui joue). */
+async function seekNearEnd(page: Page, remaining: number): Promise<void> {
+  await page.evaluate((left) => {
+    const a = (window as unknown as ProbeWindow).__audios.find((x) => x.hasAttribute('src') && !x.paused);
+    if (a) a.currentTime = Math.max(0, a.duration - left);
+  }, remaining);
+}
+
+async function startFourTracks(page: Page): Promise<void> {
+  await installAudioProbe(page);
+  await openRadio(page);
+  await page.getByTestId('radio-fichier-pack').setInputFiles({
+    name: 'quatre.zip',
+    mimeType: 'application/zip',
+    buffer: Buffer.from(smallPack(['electro'], 4, 12)),
+  });
+  await expect(page.getByText('Station ajoutée')).toBeVisible({ timeout: 45_000 });
+  await page.getByRole('button', { name: 'Écouter Électro' }).click();
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1a');
+  await expectAudible(page);
+}
+
+test('page cachée : la fin du morceau enchaîne sur le même élément, avec du son', async ({ page }) => {
+  await startFourTracks(page);
+  const before = await expectAudible(page);
+  // Comme sur un téléphone : page cachée, un élément qui n'a jamais joué ne démarre pas.
+  await setProbe(page, { __mode: 'cache-strict', __hidden: true });
+  await seekNearEnd(page, 1.2);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b', { timeout: 30_000 });
+  expect(await expectAudible(page)).toBe(before);
+  expect(await page.evaluate(() => (window as unknown as ProbeWindow).__pending.length)).toBe(0);
+  await setProbe(page, { __hidden: false });
+  await expectAudible(page);
+});
+
+test('retour au premier plan : un morceau resté en attente repart avec du son, sans changer de morceau', async ({ page }) => {
+  await startFourTracks(page);
+  await setProbe(page, { __hidden: true, __mode: 'attente' });
+  await seekNearEnd(page, 1.2);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b', { timeout: 30_000 });
+  // Rien ne sort : l'interface ne dit pas « en lecture ».
+  await expect(page.locator('.radio-player').getByRole('button', { name: 'Lecture', exact: true })).toBeVisible();
+  await setProbe(page, { __mode: 'normal', __hidden: false });
+  await expectAudible(page);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b');
+  await expect(page.locator('.radio-player').getByRole('button', { name: 'Pause' })).toBeVisible();
+});
+
+test('page visible : play() du morceau entrant refusé, le premier appui relance avec du son', async ({ page }) => {
+  await startFourTracks(page);
+  await setProbe(page, { __mode: 'refuse' });
+  await seekNearEnd(page, 3);
+  await expect(page.locator('.radio-player .radio-tap')).toHaveText('Touche pour lancer la musique', { timeout: 30_000 });
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b');
+  await setProbe(page, { __mode: 'normal' });
+  await page.getByRole('heading', { name: /radio/i, level: 2 }).click();
+  await expectAudible(page);
+  const [deck] = (await decks(page)).filter((d) => !d.paused);
+  expect(deck!.volume).toBeGreaterThan(0.5);
+});
+
+test('page visible : play() du morceau entrant en attente, le gain revient à plein (fondu ou chien de garde)', async ({ page }) => {
+  await startFourTracks(page);
+  await setProbe(page, { __mode: 'attente' });
+  await seekNearEnd(page, 3);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b', { timeout: 30_000 });
+  // Fondu (2 s) + marge (1,5 s) : l'élément sortant est déchargé, l'entrant est à plein gain.
+  await expect.poll(async () => (await decks(page)).map((d) => d.volume), { timeout: 15_000 }).toEqual([expect.any(Number)]);
+  expect((await decks(page))[0]!.volume).toBeGreaterThan(0.5);
+  await setProbe(page, { __mode: 'normal' });
+  await page.evaluate(() => (window as unknown as { __release(): void }).__release());
+  await expectAudible(page);
+});
+
+test('garde de transition : une fin de morceau ne fait avancer la file que d’un morceau', async ({ page }) => {
+  await startFourTracks(page);
+  // Lecture du fichier ralentie : plusieurs timeupdate arrivent pendant la transition.
+  await setProbe(page, { __slow: true });
+  await seekNearEnd(page, 3);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b', { timeout: 30_000 });
+  await page.waitForTimeout(3000);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1b');
+  await setProbe(page, { __slow: false });
+  await expectAudible(page);
+});
+
 test('coupure pendant le téléchargement, puis reprise par une requête Range', async ({ page }) => {
   await openRadio(page);
   await page.getByRole('button', { name: 'Depuis une adresse' }).click();

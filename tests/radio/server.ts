@@ -76,20 +76,22 @@ export function noiseWav(seconds: number, seed: number): Uint8Array {
   return new Uint8Array(out);
 }
 
-/** Petit pack version 2 : deux stations de deux morceaux WAV (20 s chacun). */
-export function smallPack(stations: string[] = ['electro', 'rock']): Uint8Array {
+/** Petit pack version 2 : par défaut deux stations de deux morceaux WAV (20 s chacun). */
+export function smallPack(stations: string[] = ['electro', 'rock'], count = 2, seconds = 20): Uint8Array {
   const entries: FixtureEntry[] = [
     {
       name: 'pack.json',
       data: new Uint8Array(
-        Buffer.from(JSON.stringify({ format: 'pmb-pack', version: 2, stations: stations.map((dossier) => ({ dossier, pistes: 2 })) })),
+        Buffer.from(JSON.stringify({ format: 'pmb-pack', version: 2, stations: stations.map((dossier) => ({ dossier, pistes: count })) })),
       ),
     },
   ];
   stations.forEach((folder, s) => {
-    entries.push({ name: `${folder}/01 - Bruit d’essai ${s + 1}a.wav`, data: noiseWav(20, 11 + s) });
-    // Le second morceau de la seconde station est compressé (deflate) : décompressé une fois à l'import.
-    entries.push({ name: `${folder}/02 - Bruit d’essai ${s + 1}b.wav`, data: noiseWav(20, 23 + s), deflate: s === 1 });
+    for (let i = 0; i < count; i += 1) {
+      const letter = 'abcdefgh'[i] ?? String(i);
+      // Le second morceau de la seconde station est compressé (deflate) : décompressé une fois à l'import.
+      entries.push({ name: `${folder}/0${i + 1} - Bruit d’essai ${s + 1}${letter}.wav`, data: noiseWav(seconds, 11 + 12 * i + s), deflate: s === 1 && i === 1 });
+    }
   });
   return buildZip(entries);
 }
