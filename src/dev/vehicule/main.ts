@@ -184,7 +184,10 @@ async function main(): Promise<void> {
       const zone = zoneOf.get(source.name);
       if (zone) {
         const paint = createPaintMaterial(source);
-        applyPaint(paint, zone.paint.color, finish(zone.paint.finish as FinishId));
+        applyPaint(paint, zone.paint.color, finish(zone.paint.finish as FinishId), {
+          flake: zone.paint.flake,
+          color2: zone.paint.color2,
+        });
         material = paint;
       } else {
         if (source.name.startsWith('paint_')) unknown.add(source.name);

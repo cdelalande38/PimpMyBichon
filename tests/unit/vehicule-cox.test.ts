@@ -27,7 +27,7 @@ describe('manifeste de la Cox', () => {
     near(manifest.halfLengthHint, 4.08 / 2);
   });
 
-  it('porte les zones de la fiche, peintes d’origine en sarcelle pailleté', () => {
+  it('porte les zones de la fiche, peintes d’origine en sarcelle pailleté fin', () => {
     const ids = manifest.zones.map((z) => z.id);
     expect(ids).toEqual(expect.arrayContaining(['carrosserie', 'toit', 'capot', 'capot_moteur', 'ailes', 'jantes', 'sellerie']));
     expect(new Set(ids).size).toBe(ids.length);
@@ -43,7 +43,11 @@ describe('manifeste de la Cox', () => {
     const byId = Object.fromEntries(manifest.zones.map((z) => [z.id, z]));
     for (const id of ['carrosserie', 'toit', 'capot', 'capot_moteur', 'ailes']) {
       expect(byId[id]!.group).toBe('carrosserie');
-      expect(byId[id]!.paint).toEqual({ color: '#0a3a46', finish: 'paillete' });
+      expect(byId[id]!.paint.color).toBe('#0a3a46');
+      expect(byId[id]!.paint.finish).toBe('paillete');
+      // Paillettes plus fines que celles de la finition, réglées dans le manifeste (en mm).
+      expect(byId[id]!.paint.flake).toBeGreaterThan(0);
+      expect(byId[id]!.paint.flake!).toBeLessThan(FINISHES.find((f) => f.id === 'paillete')!.flakeSize);
       expect(byId[id]!.linked).not.toBe(false); // ailes liées, comme le reste de la caisse
     }
     expect(byId.jantes!.group).toBe('accastillage');

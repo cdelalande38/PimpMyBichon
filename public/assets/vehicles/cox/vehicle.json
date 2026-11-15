@@ -14,35 +14,35 @@
       "label": "Carrosserie",
       "materials": ["paint_carrosserie"],
       "group": "carrosserie",
-      "paint": { "color": "#0a3a46", "finish": "paillete" }
+      "paint": { "color": "#0a3a46", "finish": "paillete", "flake": 0.4 }
     },
     {
       "id": "toit",
       "label": "Toit",
       "materials": ["paint_toit"],
       "group": "carrosserie",
-      "paint": { "color": "#0a3a46", "finish": "paillete" }
+      "paint": { "color": "#0a3a46", "finish": "paillete", "flake": 0.4 }
     },
     {
       "id": "capot",
       "label": "Capot avant",
       "materials": ["paint_capot"],
       "group": "carrosserie",
-      "paint": { "color": "#0a3a46", "finish": "paillete" }
+      "paint": { "color": "#0a3a46", "finish": "paillete", "flake": 0.4 }
     },
     {
       "id": "capot_moteur",
       "label": "Capot moteur",
       "materials": ["paint_capot_moteur"],
       "group": "carrosserie",
-      "paint": { "color": "#0a3a46", "finish": "paillete" }
+      "paint": { "color": "#0a3a46", "finish": "paillete", "flake": 0.4 }
     },
     {
       "id": "ailes",
       "label": "Ailes",
       "materials": ["paint_ailes"],
       "group": "carrosserie",
-      "paint": { "color": "#0a3a46", "finish": "paillete" }
+      "paint": { "color": "#0a3a46", "finish": "paillete", "flake": 0.4 }
     },
     {
       "id": "jantes",

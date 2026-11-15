@@ -1,16 +1,23 @@
 // @ts-check
 // La Cox (placeholder_cox) : berline ronde à deux portes des années 70, moteur arrière, rabaissée,
 // sans pare-chocs, jantes alliage à 8 branches. Substitut modelé par le code d'après la fiche
-// « La Cox » (captures/notes-agents/vague-g-fiches.md), à remplacer un jour par un vrai modèle aux
-// mêmes conventions, sans toucher au code.
-// Cotes : longueur 4,08 ; largeur 1,55 (ailes) ; hauteur 1,44 ; empattement 2,40 ; voies 1,31 avant
-// et 1,35 arrière ; roues de 0,60 (jantes de 15 pouces, pneus taille basse) ; garde au sol 0,11.
+// « La Cox » (captures/notes-agents/vague-g-fiches.md) et son gabarit chiffré, à remplacer un jour
+// par un vrai modèle aux mêmes conventions, sans toucher au code.
+// Cotes : longueur 4,08 (nez à x = +1,98, poupe à x = -2,10) ; largeur 1,55 aux ailes ; hauteur
+// 1,44 ; empattement 2,40 ; voies 1,31 avant et 1,35 arrière ; roues de 0,60 (jantes de 15 pouces) ;
+// garde au sol 0,11.
 //
-// Construction : une caisse en un seul loft (bas de caisse, puis dessus en courbe de Bézier de la
-// ceinture au milieu du pavillon) ; les vitres, les capots et le toit sont repérés par le paramètre
-// u de cette courbe, échantillonnée à des valeurs fixes : leurs bords tombent sur des lignes du
-// maillage et restent nets. Quatre ailes en lofts à part, posées de chaque côté, marchepieds entre
-// elles, phares ronds dressés au bout des ailes avant.
+// Construction
+// - La caisse est un seul loft. Chaque section (moitié droite) part du milieu du dessous : plancher,
+//   bas de caisse, flanc galbé jusqu'à la ceinture B, puis un dôme (courbe de Bézier) de la ceinture
+//   au milieu du dessus. Le dôme est coupé en deux par un point E posé à une demi-largeur donnée :
+//   bord du capot avant, bord du pare-brise, haut des vitres, bord du capot moteur. Comme chaque
+//   tronçon a un nombre de points fixe, ces bords tombent sur des lignes du maillage (repérées par
+//   l'indice de contour, voir `band`) et restent nets.
+// - Le profil dans l'axe suit la silhouette du gabarit : capot court et plongeant, arche du pavillon
+//   haute et continue, arrière en une seule courbe jusqu'en bas.
+// - Quatre ailes en pontons séparés, posées de chaque côté, qui sortent de la caisse jusqu'à
+//   z = ±0,775 ; marchepieds fins entre elles ; phares ronds dressés au bout des ailes avant.
 
 /** @typedef {typeof import('../../../tools/vehicles/kit.mjs')} Kit */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Parts} Parts */
@@ -18,34 +25,36 @@
 /** @typedef {[number, number]} P2 */
 /** @typedef {[number, number, number]} P3 */
 
-const X_FRONT = 1.97; // bout du tablier avant (les ailes avant vont jusqu'à 1,99)
-const X_REAR = -2.07; // bout du tablier arrière (les ailes arrière vont jusqu'à -2,09)
+const X_FRONT = 1.98; // bas du tablier avant
+const X_REAR = -2.1; // poupe
 const AXLES = /** @type {const} */ ([1.2, -1.2]);
 const WHEEL_R = 0.3;
-const ARCH_R = 0.34; // rayon des passages de roue dans les ailes
+const ARCH_R = 0.36; // rayon des passages de roue dans les ailes
 const TRACK_Z = /** @type {const} */ ([0.655, 0.675]); // demi-voies avant, arrière
-const FENDER_Z = /** @type {const} */ ([0.6, 0.61]); // axe des ailes avant, arrière
+const FENDER_OUT = 0.775; // face extérieure des ailes
 
-// Paramètres u de la courbe du dessus (0 : ceinture, 1 : milieu du pavillon). Les bords des régions
-// sont des valeurs de cette liste.
-const U_HOOD = 0.3; // bord des capots (avant)
-const U_LID = 0.42; // bord du capot moteur
-const U_WIN = 0.53; // haut des vitres latérales
-const U_WS = 0.6; // bas du pare-brise et de la lunette sur les côtés
-const U_ROOF = 0.66; // bord du toit
-const SEAM = 0.016;
-const U_SAMPLES = [0, 0.06, 0.12, 0.18, 0.24, U_HOOD - SEAM, U_HOOD, 0.35, U_LID - SEAM, U_LID, 0.475, U_WIN, 0.565, U_WS, U_ROOF, 0.72, 0.78, 0.83, 0.89, 0.94, 0.975, 1];
+// Repères le long de X.
+const X_WS = /** @type {const} */ ([0.2, 0.62]); // pare-brise : haut, bas (dans l'axe)
+const X_HOOD = 0.72; // joint arrière du capot avant
+const X_DOOR = /** @type {const} */ ([-0.38, 0.42]); // vitre de porte : arrière, avant (en bas)
+const X_QTR = /** @type {const} */ ([-1.0, -0.46]); // vitre de custode : arrière (en bas), avant
+const X_RW = /** @type {const} */ ([-1.47, -1.12]); // lunette ovale
+const RW_Z = 0.36; // demi-largeur de la lunette
+const X_LID = /** @type {const} */ ([-2.0, -1.53]); // capot moteur : bas, haut
+const SEAMS_X = [0.5, -0.426]; // joints de porte, sous la ceinture
+const VENTS = [-1.585, -1.61, -1.635, -1.66, -1.685];
+const SEAM = 0.006;
 
-const X_COWL = 0.72; // bas du pare-brise
-const X_WS_TOP = 0.44; // haut du pare-brise
-const X_HOOD = 0.79; // arrière du capot avant
-const X_LID = -1.29; // haut du capot moteur
-const X_RW = /** @type {const} */ ([-1.27, -0.95]); // lunette, de bas en haut
-const RW_Z = 0.3; // demi-largeur de la lunette
-const X_B = /** @type {const} */ ([-0.41, -0.37]); // montant milieu
-const X_Q = -1.0; // arrière de la vitre de custode
-const SEAMS_X = [0.52, -0.39];
-const VENTS = [-1.335, -1.365, -1.395, -1.425, -1.455];
+// Fractions fixes de chaque tronçon du dôme (même nombre de points dans toutes les sections).
+const FA = [0, 0.06, 0.15, 0.27, 0.4, 0.53, 0.66, 0.78, 0.89, 0.95]; // de la ceinture B vers E
+const FB = [0, 0.12, 0.25, 0.38, 0.5, 0.62, 0.74, 0.86, 1]; // de E vers le milieu du dessus
+// Indices de contour dans la moitié : 0-2 plancher, 3-5 coin, 6-8 bas de caisse, 9-16 flanc,
+// 17-26 dôme bas (17 = ceinture B, 18 = bas des vitres, 26 = joint), 27-35 dôme haut (27 = E).
+const I_BELT = 17;
+const I_GLASS = 18;
+const I_SEAM = 26;
+const I_E = 27;
+const HALF_POINTS = 36;
 
 /** @param {number} a @param {number} b @param {number} t */
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -55,127 +64,149 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 /** @param {Kit} k */
 export default function cox(k) {
   // --- Cotes de la caisse le long de X ----------------------------------------------------------
-  const top = k.smoothCurve([
-    [X_REAR, 0.5],
-    [-2.03, 0.6],
-    [-1.9, 0.72],
-    [-1.62, 0.86],
-    [-1.3, 1.03],
-    [-1.0, 1.24],
-    [-0.72, 1.355],
-    [-0.42, 1.418],
-    [-0.1, 1.44],
-    [0.18, 1.424],
-    [X_WS_TOP, 1.38],
-    [0.585, 1.18],
-    [X_COWL, 0.975],
-    [0.86, 0.935],
-    [1.2, 0.86],
-    [1.55, 0.765],
-    [1.78, 0.685],
-    [1.92, 0.605],
-    [X_FRONT, 0.54],
-  ]);
-  const shoulder = k.smoothCurve([
+  // Profil du dessus dans l'axe (gabarit), points intermédiaires pour bomber pare-brise et lunette.
+  const ytop = k.smoothCurve([
     [X_REAR, 0.4],
-    [-1.95, 0.5],
-    [-1.62, 0.66],
-    [-1.3, 0.81],
-    [-1.0, 0.93],
-    [-0.8, 0.965],
-    [0.5, 0.965],
-    [X_COWL, 0.84],
-    [1.2, 0.68],
-    [1.6, 0.6],
-    [X_FRONT, 0.42],
+    [-2.08, 0.45],
+    [-2.04, 0.52],
+    [-1.97, 0.605],
+    [-1.85, 0.72],
+    [-1.68, 0.875],
+    [-1.5, 1.02],
+    [-1.3, 1.162],
+    [-1.1, 1.28],
+    [-0.85, 1.38],
+    [-0.55, 1.428],
+    [-0.25, 1.44],
+    [0.02, 1.418],
+    [X_WS[0], 1.36],
+    [0.27, 1.315],
+    [0.41, 1.19],
+    [0.55, 1.06],
+    [X_WS[1], 0.99],
+    [0.75, 0.975],
+    [1.1, 0.93],
+    [1.4, 0.865],
+    [1.6, 0.8],
+    [1.8, 0.715],
+    [1.9, 0.655],
+    [1.97, 0.58],
+    [X_FRONT, 0.52],
   ]);
-  const halfWidth = k.smoothCurve([
-    [X_REAR, 0.5],
-    [-1.9, 0.54],
-    [-1.4, 0.58],
-    [-0.95, 0.645],
-    [-0.6, 0.665],
-    [0.3, 0.668],
-    [0.6, 0.64],
-    [0.9, 0.56],
-    [1.3, 0.48],
-    [1.7, 0.4],
-    [X_FRONT, 0.33],
-  ]);
-  const halfWidthBottom = k.smoothCurve([
-    [X_REAR, 0.42],
-    [-1.7, 0.47],
-    [-1.25, 0.49],
-    [-0.85, 0.58],
-    [-0.6, 0.62],
-    [0.5, 0.62],
-    [0.8, 0.52],
-    [1.25, 0.46],
-    [X_FRONT, 0.37],
-  ]);
-  const bottom = k.smoothCurve([
-    [X_REAR, 0.4],
-    [-1.95, 0.24],
-    [-1.6, 0.13],
-    [-1.2, 0.11],
+  const ybot = k.smoothCurve([
+    [X_REAR, 0.3],
+    [-2.06, 0.27],
+    [-1.95, 0.22],
+    [-1.65, 0.13],
+    [-1.3, 0.11],
     [1.3, 0.11],
-    [1.7, 0.17],
-    [1.88, 0.28],
-    [X_FRONT, 0.38],
+    [1.62, 0.16],
+    [1.85, 0.28],
+    [1.95, 0.36],
+    [X_FRONT, 0.4],
   ]);
-  const tumble = k.smoothCurve([
-    [X_REAR, 0.03],
-    [-1.3, 0.05],
-    [-0.9, 0.13],
-    [0.5, 0.13],
-    [0.82, 0.04],
-    [X_FRONT, 0.02],
+  // Ceinture B : demi-largeur et hauteur.
+  const wBelt = k.smoothCurve([
+    [X_REAR, 0.42],
+    [-1.95, 0.46],
+    [-1.75, 0.5],
+    [-1.5, 0.56],
+    [-1.25, 0.62],
+    [-1.0, 0.66],
+    [-0.75, 0.67],
+    [0.5, 0.67],
+    [0.6, 0.655],
+    [0.72, 0.59],
+    [0.85, 0.5],
+    [1.0, 0.45],
+    [1.25, 0.41],
+    [1.6, 0.37],
+    [1.85, 0.33],
+    [X_FRONT, 0.3],
+  ]);
+  const yBelt = k.smoothCurve([
+    [X_REAR, 0.36],
+    [-2.0, 0.48],
+    [-1.85, 0.6],
+    [-1.6, 0.76],
+    [-1.3, 0.88],
+    [-1.0, 0.94],
+    [-0.75, 0.95],
+    [0.5, 0.95],
+    [0.62, 0.935],
+    [0.75, 0.87],
+    [0.9, 0.81],
+    [1.1, 0.78],
+    [1.4, 0.72],
+    [1.6, 0.67],
+    [1.8, 0.59],
+    [X_FRONT, 0.48],
+  ]);
+  // Galbe du flanc sous la ceinture : renflement (au-delà de B) et rentrée du bas de caisse.
+  const bulge = k.smoothCurve([[-1.0, 0], [-0.7, 0.01], [0.5, 0.01], [0.7, 0]]);
+  const tuck = k.smoothCurve([[X_REAR, 0.04], [-1.85, 0.08], [-1.6, 0.13], [-0.85, 0.13], [-0.65, 0.05], [0.5, 0.05], [0.75, 0.02]]);
+  const yLow = k.smoothCurve([[X_REAR, 0.33], [-1.9, 0.3], [-0.7, 0.28], [0.6, 0.28], [1.6, 0.3], [X_FRONT, 0.44]]);
+  const yMaxFrac = k.smoothCurve([[-0.9, 0.7], [-0.7, 0.615], [0.5, 0.615], [0.7, 0.7]]);
+  // Dôme : inclinaison des vitres (rad), longueur de la tangente à la ceinture, rondeur du dessus.
+  const tilt = k.smoothCurve([[-1.4, 0], [-0.95, 0.24], [0.45, 0.26], [0.62, 0.12], [0.8, 0]]);
+  const lift = k.smoothCurve([[-1.5, 0.55], [-1.0, 0.7], [0.45, 0.7], [0.8, 0.55]]);
+  const crown = k.smoothCurve([[-1.6, 0.58], [-1.0, 0.72], [0.4, 0.72], [0.8, 0.55]]);
+  // Demi-largeur du point E : bord du capot moteur, haut des vitres, bord du pare-brise, capot avant.
+  const zEdge = k.smoothCurve([
+    [X_REAR, 0.32],
+    [-1.95, 0.35],
+    [-1.6, 0.39],
+    [-1.45, 0.42],
+    [-1.15, 0.47],
+    [-1.0, 0.49],
+    [X_WS[0], 0.49],
+    [X_WS[1], 0.56],
+    [0.68, 0.48],
+    [0.76, 0.42],
+    [1.0, 0.4],
+    [1.2, 0.37],
+    [1.6, 0.33],
+    [1.85, 0.29],
+    [X_FRONT, 0.26],
   ]);
 
   /** Cotes de la section en x, bouts arrondis compris. @param {number} x */
   const dims = (x) => {
-    const front = (/** @type {number} */ r) => k.endInset(x, X_FRONT, r);
-    const rear = (/** @type {number} */ r) => k.endInset(x, X_REAR, r);
-    const t = top(x) - front(0.07) - rear(0.06);
-    const yb = bottom(x) + front(0.05) + rear(0.05);
-    const w = halfWidth(x) - front(0.1) - rear(0.1);
-    const wb = Math.min(w - 0.02, halfWidthBottom(x) - front(0.08) - rear(0.08));
-    const s = clamp(shoulder(x), yb + 0.12, t - 0.05);
-    const tb = Math.min(tumble(x), w * 0.3);
-    return { t, yb, w, wb, s, tb };
+    const fI = (/** @type {number} */ r) => k.endInset(x, X_FRONT, r);
+    const rI = (/** @type {number} */ r) => k.endInset(x, X_REAR, r);
+    const t = ytop(x) - fI(0.02) - rI(0.02);
+    const yb = ybot(x) + fI(0.03) + rI(0.03);
+    const wB = wBelt(x) - fI(0.12) - rI(0.14);
+    const yB = clamp(yBelt(x), yb + 0.1, t - 0.04);
+    const yL = clamp(yLow(x), yb + 0.03, yB - 0.06);
+    const wb = wB - tuck(x);
+    const wm = wB + bulge(x);
+    const sm = yMaxFrac(x);
+    const zE = clamp(zEdge(x), 0.05, wB * 0.9);
+    return { t, yb, wB, yB, yL, wb, wm, sm, zE, tilt: tilt(x), lift: lift(x), crown: crown(x) };
   };
+  /** @typedef {ReturnType<typeof dims>} Dims */
 
-  /** Point [z, y] de la courbe du dessus en u. @param {ReturnType<typeof dims>} d @param {number} u @returns {P2} */
-  const upper = (d, u) => {
-    const h = d.t - d.s;
-    const p0 = [d.w, d.s];
-    const p1 = [d.w - d.tb, d.s + 0.62 * h];
-    const p2 = [0.6 * d.w, d.t];
-    const p3 = [0, d.t];
+  /** Point [z, y] du dôme en u (0 : ceinture B, 1 : milieu du dessus). @param {Dims} d @param {number} u @returns {P2} */
+  const dome = (d, u) => {
+    const h = d.t - d.yB;
+    const l = d.lift * h;
+    const p0 = [d.wB, d.yB];
+    const p1 = [d.wB - l * Math.sin(d.tilt), d.yB + l * Math.cos(d.tilt)];
+    const p2 = [d.crown * d.wB, d.t];
     const a = (1 - u) ** 3;
     const b = 3 * (1 - u) ** 2 * u;
     const c = 3 * (1 - u) * u * u;
     const e = u ** 3;
-    return [a * p0[0] + b * p1[0] + c * p2[0] + e * p3[0], a * p0[1] + b * p1[1] + c * p2[1] + e * p3[1]];
+    return [a * p0[0] + b * p1[0] + c * p2[0], a * p0[1] + b * p1[1] + c * p2[1] + e * d.t];
   };
-  /** Paramètre u d'une hauteur y sur la courbe du dessus (y croît avec u). @param {ReturnType<typeof dims>} d @param {number} y */
-  const uAtY = (d, y) => {
-    let lo = 0;
-    let hi = 1;
-    for (let i = 0; i < 24; i += 1) {
-      const mid = (lo + hi) / 2;
-      if (upper(d, mid)[1] < y) lo = mid;
-      else hi = mid;
-    }
-    return (lo + hi) / 2;
-  };
-  /** Paramètre u d'une demi-largeur z (z décroît avec u). @param {ReturnType<typeof dims>} d @param {number} z */
+  /** Paramètre u du dôme à la demi-largeur z (z décroît avec u). @param {Dims} d @param {number} z */
   const uAtZ = (d, z) => {
     let lo = 0;
     let hi = 1;
-    for (let i = 0; i < 24; i += 1) {
+    for (let i = 0; i < 30; i += 1) {
       const mid = (lo + hi) / 2;
-      if (upper(d, mid)[0] > z) lo = mid;
+      if (dome(d, mid)[0] > z) lo = mid;
       else hi = mid;
     }
     return (lo + hi) / 2;
@@ -184,260 +215,292 @@ export default function cox(k) {
   /** Moitié droite de la section en x. @param {number} x @returns {P2[]} */
   const half = (x) => {
     const d = dims(x);
-    const rb = Math.min(0.06, (d.s - d.yb) * 0.3);
     /** @type {P2[]} */
     const pts = [];
-    for (let i = 0; i < 3; i += 1) pts.push([((d.wb - rb) * i) / 3, d.yb]);
+    const rf = Math.min(0.03, (d.yL - d.yb) / 2);
+    const wf = clamp(d.wb - 0.08, 0.1, d.wb - 0.02);
+    for (let i = 0; i < 3; i += 1) pts.push([((wf - rf) * i) / 3, d.yb]);
     for (const deg of [-90, -60, -30]) {
       const a = (deg * Math.PI) / 180;
-      pts.push([d.wb - rb + rb * Math.cos(a), d.yb + rb + rb * Math.sin(a)]);
+      pts.push([wf - rf + rf * Math.cos(a), d.yb + rf + rf * Math.sin(a)]);
     }
-    for (let j = 0; j < 6; j += 1) {
-      const s = j / 6;
-      const y = lerp(d.yb + rb, d.s, s);
-      pts.push([d.wb + (d.w - d.wb) * (1 - (1 - s) ** 2), y]);
+    for (let i = 0; i < 3; i += 1) pts.push([lerp(wf, d.wb, i / 3), lerp(d.yb + rf, d.yL, i / 3)]);
+    for (let j = 0; j < 8; j += 1) {
+      const s = j / 8;
+      const y = lerp(d.yL, d.yB, s);
+      const z = s < d.sm ? d.wb + (d.wm - d.wb) * Math.sin(((Math.PI / 2) * s) / d.sm) : d.wm - (d.wm - d.wB) * ((s - d.sm) / (1 - d.sm)) ** 2;
+      pts.push([z, y]);
     }
-    for (const u of U_SAMPLES) pts.push(upper(d, u));
+    const uE = uAtZ(d, d.zE);
+    for (const f of FA) pts.push(dome(d, f * uE));
+    for (const g of FB) pts.push(dome(d, uE + g * (1 - uE)));
+    pts[pts.length - 1] = [0, d.t];
     return pts;
   };
 
-  // Bord avant des vitres de porte : suit le montant du pare-brise. @param {number} y
-  const xA = (/** @type {number} */ y) => X_COWL - 0.06 - 0.88 * (y - 0.965);
-  // Bord arrière de la vitre de custode, arrondi en haut. @param {number} y @param {number} yTop
-  const xQ = (/** @type {number} */ y, /** @type {number} */ yTop) => {
-    const s = clamp((y - 0.965) / Math.max(0.05, yTop - 0.965), 0, 1);
-    return X_Q + 0.2 * s ** 1.6;
+  /** Indice de contour (dans la moitié, en points d'origine) d'une face du loft de caisse. @param {Face} f */
+  const band = (f) => {
+    const n = 2 * HALF_POINTS - 2;
+    const pos = f.v * n;
+    return pos <= HALF_POINTS - 1 ? pos : n - pos;
   };
+
+  // Bord avant de la vitre de porte (suit le montant du pare-brise) et bord arrière de la custode.
+  const xDoorFront = (/** @type {number} */ y) => X_DOOR[1] - 0.27 * clamp((y - 0.97) / 0.33, 0, 1);
+  const xQtrRear = (/** @type {number} */ y) => X_QTR[0] + 0.24 * clamp((y - 0.97) / 0.3, 0, 1) ** 1.6;
+  const inVents = (/** @type {number} */ x) => VENTS.some((v) => x < v && x > v - 0.011);
 
   /** @param {Face} f */
   const bodyRegion = (f) => {
     const az = Math.abs(f.z);
     const side = Math.sign(f.z) * f.nz;
+    if (f.cap) return f.y < 0.27 ? 'black' : 'paint_carrosserie';
     if (f.ny < -0.5) return 'black';
-    if (f.y < 0.26 && f.x > X_REAR + 0.15 && f.x < X_FRONT - 0.15) return 'black';
-    for (const ax of AXLES) if (Math.abs(f.x - ax) < ARCH_R + 0.04 && f.y < 0.66 && side > 0.15 && az > 0.4) return 'black';
-    const d = dims(f.x);
-    if (f.y > d.s + 1e-4) {
-      const u = uAtY(d, f.y);
-      // Capot avant, et ses joints.
-      if (f.x > X_HOOD) {
-        if (f.x < X_HOOD + 0.007 && u > U_HOOD - SEAM) return 'black';
-        if (u > U_HOOD - SEAM && u < U_HOOD) return 'black';
-        if (u > U_HOOD) return 'paint_capot';
-        return 'paint_carrosserie';
-      }
-      // Capot moteur, ses joints et ses fentes d'aération.
-      if (f.x < X_LID) {
-        if (f.x > X_LID - 0.007 && u > U_LID - SEAM) return 'black';
-        if (u > U_LID - SEAM && u < U_LID && f.y > 0.5) return 'black';
-        if (u > U_LID && f.y > 0.5) {
-          if (az < 0.22) for (const v of VENTS) if (f.x < v && f.x > v - 0.012) return 'black';
-          return 'paint_capot_moteur';
-        }
-        return 'paint_carrosserie';
-      }
-      // Pare-brise.
-      if (f.x > X_WS_TOP && f.x < X_COWL && u > U_WS && f.nx > 0.2 && Math.abs(f.nz) < 0.45 && f.y > 0.985) return 'glass';
-      // Lunette ovale.
-      if (f.x > X_RW[0] && f.x < X_RW[1] && f.nx < -0.1 && u > U_WS) {
-        const ex = (f.x - (X_RW[0] + X_RW[1]) / 2) / ((X_RW[1] - X_RW[0]) / 2);
-        const ez = az / RW_Z;
-        if (ex * ex + ez * ez < 1) return 'glass';
-      }
-      // Vitres latérales : porte (bord avant incliné), custode (bord arrière arrondi).
-      if (u < U_WIN && side > 0.2) {
-        const yTop = upper(d, U_WIN)[1];
-        if (f.x > X_B[1] && f.x < xA(f.y)) return 'glass';
-        if (f.x < X_B[0] && f.x > xQ(f.y, yTop)) return 'glass';
-      }
-      if (u > U_ROOF && f.x > X_RW[1] && f.x < X_WS_TOP) return 'paint_toit';
+    const p = band(f);
+    if (p < I_BELT) {
+      if (p < 9 && f.y < 0.29) return 'black';
+      if (f.y < 0.27 && f.x > -1.9 && f.x < 1.8) return 'black';
+      for (const ax of AXLES) if (Math.abs(f.x - ax) < ARCH_R + 0.06 && f.y < 0.6 && az > 0.38) return 'black';
+      if (side > 0.4 && f.y > 0.3) for (const sx of SEAMS_X) if (f.x > sx && f.x < sx + SEAM) return 'black';
       return 'paint_carrosserie';
     }
-    // Joints de porte sous la ceinture.
-    if (side > 0.4 && f.y > 0.3) for (const sx of SEAMS_X) if (f.x > sx && f.x < sx + 0.006) return 'black';
+    // Capot avant et ses joints.
+    if (f.x > X_HOOD) {
+      if (p >= I_E) return f.x < X_HOOD + SEAM ? 'black' : 'paint_capot';
+      if (p >= I_SEAM) return 'black';
+      return 'paint_carrosserie';
+    }
+    // Capot moteur, ses joints et ses fentes d'aération.
+    if (f.x < X_LID[1] && f.x > X_LID[0] - SEAM) {
+      if (p >= I_E) {
+        if (f.x > X_LID[1] - SEAM || f.x < X_LID[0]) return 'black';
+        if (az < 0.24 && inVents(f.x)) return 'black';
+        return 'paint_capot_moteur';
+      }
+      if (p >= I_SEAM) return 'black';
+      return 'paint_carrosserie';
+    }
+    // Lunette ovale.
+    if (f.x > X_RW[0] && f.x < X_RW[1] && f.nx < 0) {
+      const ex = (f.x - (X_RW[0] + X_RW[1]) / 2) / ((X_RW[1] - X_RW[0]) / 2);
+      const ez = az / RW_Z;
+      if (ex * ex + ez * ez < 1) return 'glass';
+    }
+    if (p >= I_E) {
+      if (f.x > X_WS[0] && f.x < X_WS[1]) return 'glass';
+      if (f.x <= X_WS[0] && f.x > X_LID[1]) return 'paint_toit';
+      return 'paint_carrosserie';
+    }
+    // Vitres latérales : porte (bord avant incliné), custode (bord arrière arrondi).
+    if (p >= I_GLASS && side > 0.15) {
+      if (f.x > X_DOOR[0] && f.x < xDoorFront(f.y)) return 'glass';
+      if (f.x < X_QTR[1] && f.x > xQtrRear(f.y)) return 'glass';
+    }
     return 'paint_carrosserie';
   };
 
   const breaks = [
-    X_COWL, X_WS_TOP, X_HOOD, X_HOOD + 0.007, X_LID, X_LID - 0.007, ...X_RW, ...X_B, X_Q,
-    ...SEAMS_X.flatMap((s) => [s, s + 0.006]),
-    ...VENTS.flatMap((v) => [v, v - 0.012]),
-    ...AXLES.flatMap((a) => [a - ARCH_R - 0.04, a + ARCH_R + 0.04]),
+    ...X_WS, X_HOOD, X_HOOD + SEAM, ...X_DOOR, ...X_QTR, ...X_RW, X_LID[0], X_LID[0] - SEAM, X_LID[1], X_LID[1] - SEAM,
+    ...SEAMS_X.flatMap((s) => [s, s + SEAM]),
+    ...VENTS.flatMap((v) => [v, v - 0.011]),
   ];
   const body = k.loft({
     sectionAt: (x) => k.mirrorSection(half(x)),
-    xs: k.sampleX(X_REAR, X_FRONT, { step: 0.042, endZone: 0.12, endCount: 8, breaks }),
+    xs: k.sampleX(X_REAR, X_FRONT, { step: 0.04, endZone: 0.12, endCount: 8, breaks }),
     around: 2,
     material: bodyRegion,
     crease: 60,
-    capRows: 6,
+    capRows: 5,
     capColumns: 10,
   });
 
   // --- Ailes ---------------------------------------------------------------------------------
   /**
-   * Une aile : loft symétrique autour de son axe (z local = 0), posé ensuite à z = zc.
-   * @param {{ x0: number, x1: number, axle: number, top: P2[], base: P2[], hw: P2[] }} o
+   * Une aile côté droit : loft dont la section (trapèze arrondi) est centrée sur zc(x), posée sur la
+   * voûte du passage de roue au-dessus de l'essieu.
+   * @param {{ x0: number, x1: number, axle: number, crest: P2[], base: P2[], hw: P2[], zc: P2[] }} o
    */
   const fender = (o) => {
-    const yt = k.smoothCurve(o.top);
+    const yt = k.smoothCurve(o.crest);
     const yb0 = k.smoothCurve(o.base);
     const hw = k.smoothCurve(o.hw);
+    const zc = k.smoothCurve(o.zc);
     const dimsF = (/** @type {number} */ x) => {
       const ends = (/** @type {number} */ r) => k.endInset(x, o.x1, r) + k.endInset(x, o.x0, r);
-      const t = yt(x) - ends(0.04);
+      const t = yt(x) - ends(0.05);
       const dx = Math.abs(x - o.axle);
-      let b = yb0(x) + ends(0.03);
+      let b = yb0(x) + ends(0.04);
       if (dx < ARCH_R) b = Math.max(b, WHEEL_R + Math.sqrt(ARCH_R * ARCH_R - dx * dx));
-      b = Math.min(b, t - 0.03);
-      const w = Math.max(0.02, hw(x) - ends(0.05));
+      b = Math.min(b, t - 0.035);
+      const w = Math.max(0.02, hw(x) - ends(0.07));
       return { t, b, w };
     };
     return k.loft({
       sectionAt: (x) => {
         const { t, b, w } = dimsF(x);
-        return k.mirrorSection(
-          k.roundedHalf({ bottom: b, top: t, halfWidthBottom: w, halfWidthTop: w * 0.97, rBottom: 0.025, rTop: Math.min(w * 0.85, 0.15), crown: 0.004, n: 6 }),
+        const c = zc(x);
+        const sec = k.mirrorSection(
+          k.roundedHalf({ bottom: b, top: t, halfWidthBottom: w, halfWidthTop: w * 0.9, rBottom: 0.02, rTop: Math.min(w * 0.8, 0.14), crown: 0.006, n: 6 }),
         );
+        return sec.map(([z, y]) => /** @type {P2} */ ([z + c, y]));
       },
       xs: k.sampleX(o.x0, o.x1, { step: 0.04, endZone: 0.1, endCount: 6, breaks: [o.axle - ARCH_R, o.axle + ARCH_R] }),
       around: 1,
-      material: (f) => (f.ny < -0.35 ? 'black' : 'paint_ailes'),
+      // Dessous noir : la voûte du passage de roue, et ce qui regarde franchement le sol.
+      material: (f) => ((f.ny < -0.35 && Math.abs(f.x - o.axle) < ARCH_R + 0.02) || f.ny < -0.8 ? 'black' : 'paint_ailes'),
       crease: 65,
       capRows: 4,
       capColumns: 6,
     });
   };
   const frontFender = fender({
-    x0: 0.42,
-    x1: 1.99,
+    x0: 0.6,
+    x1: 1.9,
     axle: AXLES[0],
-    top: [[0.42, 0.29], [0.58, 0.4], [0.8, 0.62], [1.02, 0.745], [1.3, 0.795], [1.6, 0.81], [1.8, 0.825], [1.92, 0.815], [1.99, 0.78]],
-    base: [[0.42, 0.27], [0.8, 0.27], [1.6, 0.29], [1.85, 0.36], [1.99, 0.46]],
-    hw: [[0.42, 0.075], [0.6, 0.12], [0.9, 0.158], [1.2, 0.168], [1.6, 0.165], [1.85, 0.15], [1.99, 0.125]],
+    crest: [[0.6, 0.36], [0.65, 0.47], [0.72, 0.58], [0.84, 0.67], [1.0, 0.72], [1.2, 0.74], [1.45, 0.745], [1.65, 0.735], [1.8, 0.705], [1.86, 0.675], [1.9, 0.64]],
+    base: [[0.6, 0.27], [0.84, 0.28], [1.56, 0.3], [1.7, 0.33], [1.8, 0.39], [1.86, 0.47], [1.9, 0.53]],
+    hw: [[0.6, 0.05], [0.68, 0.12], [0.8, 0.18], [0.95, 0.205], [1.6, 0.205], [1.8, 0.19], [1.9, 0.165]],
+    zc: [[0.6, 0.71], [0.72, 0.63], [0.9, 0.57], [1.6, 0.57], [1.9, 0.57]],
   });
   const rearFender = fender({
-    x0: -2.09,
-    x1: -0.45,
+    x0: -2.02,
+    x1: -0.62,
     axle: AXLES[1],
-    top: [[-2.09, 0.56], [-2.02, 0.68], [-1.85, 0.79], [-1.55, 0.85], [-1.25, 0.845], [-1.0, 0.77], [-0.8, 0.61], [-0.62, 0.42], [-0.45, 0.29]],
-    base: [[-2.09, 0.44], [-1.9, 0.32], [-1.6, 0.29], [-0.45, 0.27]],
-    hw: [[-2.09, 0.12], [-1.9, 0.155], [-1.5, 0.168], [-1.2, 0.168], [-0.9, 0.15], [-0.65, 0.11], [-0.45, 0.075]],
+    crest: [[-2.02, 0.6], [-1.96, 0.67], [-1.8, 0.715], [-1.5, 0.73], [-1.2, 0.725], [-1.0, 0.7], [-0.86, 0.65], [-0.75, 0.57], [-0.67, 0.47], [-0.62, 0.36]],
+    base: [[-2.02, 0.5], [-1.96, 0.42], [-1.86, 0.35], [-1.7, 0.31], [-1.56, 0.3], [-0.84, 0.28], [-0.62, 0.27]],
+    hw: [[-2.02, 0.15], [-1.9, 0.175], [-0.95, 0.175], [-0.8, 0.16], [-0.7, 0.12], [-0.62, 0.05]],
+    zc: [[-2.02, 0.6], [-0.95, 0.6], [-0.75, 0.63], [-0.62, 0.71]],
   });
-  const fenders = k.symmetric([...k.place(frontFender, { position: [0, 0, FENDER_Z[0]] }), ...k.place(rearFender, { position: [0, 0, FENDER_Z[1]] })]);
+  const fenders = k.symmetric([...frontFender, ...rearFender]);
 
-  // Marchepieds : bande noire entre les ailes, jonc chromé au bord.
+  // Marchepieds : bande noire fine entre les ailes, jonc chromé au bord.
   const step = [
-    ...k.place(k.roundedExtrude(k.roundedRect(1.5, 0.15, 0.03), { material: 'black', depth: 0.035, bevel: 0.012, axis: 'y' }), { position: [0, 0.285, 0.675] }),
-    ...k.rod([-0.74, 0.3, 0.752], [0.74, 0.3, 0.752], 0.006, { material: 'chrome', radial: 8 }),
+    ...k.place(k.roundedExtrude(k.roundedRect(1.26, 0.17, 0.02), { material: 'black', depth: 0.024, bevel: 0.008, axis: 'y' }), { position: [0, 0.27, 0.68] }),
+    ...k.rod([-0.62, 0.278, 0.762], [0.62, 0.278, 0.762], 0.005, { material: 'chrome', radial: 8 }),
   ];
 
   // --- Optiques et chromes -------------------------------------------------------------------
-  /** Phare rond dressé au bout de l'aile avant : cuvelage peint, cerclage chromé, verre bombé. */
-  const headX = 1.995;
-  const headY = 0.675;
-  const headZ = FENDER_Z[0];
-  const headR = 0.09;
+  // Phare rond dressé au bout de l'aile avant, légèrement couché : cuvelage peint, cerclage chromé,
+  // verre bombé.
+  const headR = 0.095;
+  const headN = /** @type {P3} */ ([Math.cos(0.14), Math.sin(0.14), 0]);
+  const headAt = /** @type {P3} */ ([1.885, 0.66, 0.56]);
+  const headPose = { position: headAt, normal: headN, up: /** @type {P3} */ ([0, 1, 0]) };
   /** @type {Parts} */
   const headlight = [
-    ...k.place(k.lathe([[headR + 0.008, -0.11], [headR + 0.014, -0.04], [headR + 0.013, 0], [headR - 0.004, 0.004]], { material: 'paint_ailes', segments: 40, crease: 60 }), { position: [headX, headY, headZ], rotation: [0, Math.PI / 2, 0] }),
-    ...k.orient(k.tube(k.circle(0, 0, headR + 0.002, 28).map(([a, b]) => /** @type {P3} */ ([a, b, 0])), { material: 'chrome', radius: 0.009, closed: true, segments: 40, radial: 8 }), { position: [headX + 0.006, headY, headZ], normal: [1, 0, 0], up: [0, 1, 0] }),
-    ...k.orient(k.lamp(k.circle(0, 0, headR - 0.004, 32), { material: 'lamp', bulge: 0.022, depth: 0.004 }), { position: [headX + 0.004, headY, headZ], normal: [1, 0, 0], up: [0, 1, 0] }),
+    ...k.orient(k.lathe([[headR + 0.002, -0.16], [headR + 0.012, -0.07], [headR + 0.011, -0.004], [headR + 0.002, 0.004]], { material: 'paint_ailes', segments: 40, crease: 60 }), headPose),
+    ...k.orient(k.tube(k.circle(0, 0, headR + 0.004, 28).map(([a, b]) => /** @type {P3} */ ([a, b, 0.004])), { material: 'chrome', radius: 0.008, closed: true, segments: 40, radial: 8 }), headPose),
+    ...k.orient(k.lamp(k.circle(0, 0, headR - 0.004, 32), { material: 'lamp', bulge: 0.024, depth: 0.004 }), headPose),
   ];
   // Clignotant en obus chromé sur le dessus de l'aile avant.
-  const signalX = 1.5;
-  const signalY = 0.815;
   /** @type {Parts} */
   const blinker = [
-    ...k.ellipsoid([signalX, signalY, headZ + 0.02], [0.065, 0.024, 0.026], { material: 'chrome', segments: 16 }),
-    ...k.ellipsoid([signalX + 0.055, signalY + 0.002, headZ + 0.02], [0.018, 0.017, 0.019], { material: 'signal', segments: 14 }),
+    ...k.ellipsoid([1.45, 0.758, 0.6], [0.062, 0.022, 0.024], { material: 'chrome', segments: 16 }),
+    ...k.ellipsoid([1.5, 0.76, 0.6], [0.018, 0.016, 0.018], { material: 'signal', segments: 14 }),
   ];
-  // Feu arrière ovale dressé sur l'aile arrière.
-  const tailX = -2.0;
-  const tailY = 0.69;
+  // Feu arrière ovale dressé sur la face arrière de l'aile arrière.
+  const tailPose = { position: /** @type {P3} */ ([-1.99, 0.6, 0.6]), normal: /** @type {P3} */ ([-1, 0.12, 0]), up: /** @type {P3} */ ([0, 1, 0]) };
   /** @type {Parts} */
   const taillight = [
-    ...k.orient(k.roundedExtrude(k.roundedRect(0.1, 0.17, 0.05, 8), { material: 'chrome', depth: 0.02, bevel: 0.006 }), { position: [tailX, tailY, FENDER_Z[1]], normal: [-1, 0.25, 0], up: [0, 1, 0] }),
-    ...k.orient(k.lamp(k.roundedRect(0.085, 0.155, 0.042, 8), { material: 'tail', bulge: 0.012, depth: 0.004 }), { position: [tailX - 0.011, tailY + 0.003, FENDER_Z[1]], normal: [-1, 0.25, 0], up: [0, 1, 0] }),
+    ...k.orient(k.roundedExtrude(k.roundedRect(0.1, 0.2, 0.05, 8), { material: 'chrome', depth: 0.03, bevel: 0.008 }), tailPose),
+    ...k.orient(k.lamp(k.roundedRect(0.084, 0.184, 0.042, 8), { material: 'tail', bulge: 0.012, depth: 0.004 }), { ...tailPose, position: /** @type {P3} */ ([-2.006, 0.6, 0.6]) }),
   ];
-  // Poignées de porte chromées, sous la ceinture, à l'arrière de la porte.
-  const handle = k.place(k.roundedExtrude(k.roundedRect(0.13, 0.026, 0.012), { material: 'chrome', depth: 0.03, bevel: 0.009 }), { position: [-0.27, 0.9, 0.668] });
-  // Poignée du capot avant, sur le nez.
-  const hoodHandle = k.orient(k.roundedExtrude(k.roundedRect(0.12, 0.03, 0.014), { material: 'chrome', depth: 0.03, bevel: 0.01 }), { position: [1.92, 0.61, 0], normal: [0.85, 0.5, 0], up: [0, 1, 0] });
-  // Sorties d'échappement fines sous le tablier arrière.
-  /** @type {Parts} */
-  const exhaust = [];
-  for (const z of [-0.3, 0.3]) {
-    const pipe = k.lathe([[0.016, 0.1], [0.016, -0.03], [0.022, -0.03], [0.022, 0.08], [0.02, 0.1]], { material: 'chrome', segments: 20, axis: 'x', crease: 60 });
-    exhaust.push(...k.place(pipe, { position: [X_REAR + 0.005, 0.27, z] }));
-  }
 
-  // Joncs chromés des vitres latérales : posés sur la caisse, le long des bords des régions.
-  /** Point 3D de la surface (côté droit) en x et u, un peu en dehors. @param {number} x @param {number} u @returns {P3} */
-  const onUpper = (x, u) => {
-    const [z, y] = upper(dims(x), u);
+  /** Point 3D du dôme (côté droit) en x, sur la fraction f du tronçon bas (0 : ceinture, 1 : E), un peu en dehors. @param {number} x @param {number} f @returns {P3} */
+  const onLower = (x, f) => {
+    const d = dims(x);
+    const [z, y] = dome(d, f * uAtZ(d, d.zE));
     return [x, y + 0.002, z + 0.006];
   };
-  /** Abscisse du bord avant de la vitre de porte à la hauteur u (point fixe). @param {number} u */
-  const xAt = (u) => {
-    let x = X_COWL;
-    for (let i = 0; i < 12; i += 1) x = xA(upper(dims(x), u)[1]);
+  /** Point 3D du dôme à la demi-largeur z (côté du signe de z). @param {number} x @param {number} z @param {number} [out] @returns {P3} */
+  const onDome = (x, z, out = 0.006) => {
+    const d = dims(x);
+    const [zz, y] = dome(d, uAtZ(d, Math.abs(z)));
+    return [x, y + out, Math.sign(z || 1) * zz];
+  };
+
+  // Poignées de porte chromées, sous la ceinture, à l'arrière de la porte.
+  const handle = k.place(k.roundedExtrude(k.roundedRect(0.13, 0.026, 0.012), { material: 'chrome', depth: 0.03, bevel: 0.009 }), { position: [-0.3, 0.9, 0.672] });
+  // Poignée du capot avant, sur le nez.
+  const hoodHandle = k.orient(k.roundedExtrude(k.roundedRect(0.12, 0.03, 0.014), { material: 'chrome', depth: 0.03, bevel: 0.01 }), { position: [1.955, 0.6, 0], normal: [0.8, 0.6, 0], up: [0, 1, 0] });
+  // Deux sorties d'échappement fines sous le tablier arrière.
+  /** @type {Parts} */
+  const exhaust = [];
+  for (const z of [-0.26, 0.26]) {
+    const pipe = k.lathe([[0.015, 0.14], [0.015, 0.0], [0.019, 0.0], [0.019, 0.12], [0.017, 0.14]], { material: 'chrome', segments: 20, axis: 'x', crease: 60 });
+    exhaust.push(...k.place(pipe, { position: [X_REAR + 0.01, 0.245, z] }));
+  }
+
+  // Joncs chromés des vitres latérales, posés le long des bords des régions.
+  /** Abscisse du bord avant de la vitre de porte à la fraction f (point fixe). @param {number} f */
+  const xDoorFrontAt = (f) => {
+    let x = X_DOOR[1];
+    for (let i = 0; i < 12; i += 1) x = xDoorFront(onLower(x, f)[1]);
     return x;
   };
-  /** Contour d'une vitre (bas, avant, haut, arrière), en points posés sur la surface. @param {(u: number) => number} xF @param {(u: number) => number} xR @returns {P3[]} */
+  const xQtrRearAt = (/** @type {number} */ f) => {
+    let x = X_QTR[0];
+    for (let i = 0; i < 12; i += 1) x = xQtrRear(onLower(x, f)[1]);
+    return x;
+  };
+  const F0 = FA[1];
+  /** Contour d'une vitre (bas, avant, haut, arrière). @param {(f: number) => number} xF @param {(f: number) => number} xR @returns {P3[]} */
   const windowLoop = (xF, xR) => {
     /** @type {P3[]} */
     const pts = [];
     const n = 8;
-    for (let i = 0; i < n; i += 1) pts.push(onUpper(lerp(xR(0.01), xF(0.01), i / n), 0.01));
-    for (let i = 0; i < 4; i += 1) pts.push(onUpper(xF(lerp(0.01, U_WIN, i / 4)), lerp(0.01, U_WIN, i / 4)));
-    for (let i = 0; i < n; i += 1) pts.push(onUpper(lerp(xF(U_WIN), xR(U_WIN), i / n), U_WIN));
-    for (let i = 0; i < 4; i += 1) pts.push(onUpper(xR(lerp(U_WIN, 0.01, i / 4)), lerp(U_WIN, 0.01, i / 4)));
+    for (let i = 0; i < n; i += 1) pts.push(onLower(lerp(xR(F0), xF(F0), i / n), F0));
+    for (let i = 0; i < 5; i += 1) pts.push(onLower(xF(lerp(F0, 1, i / 5)), lerp(F0, 1, i / 5)));
+    for (let i = 0; i < n; i += 1) pts.push(onLower(lerp(xF(1), xR(1), i / n), 1));
+    for (let i = 0; i < 5; i += 1) pts.push(onLower(xR(lerp(1, F0, i / 5)), lerp(1, F0, i / 5)));
     return pts;
-  };
-  const quarterRear = (/** @type {number} */ u) => {
-    let x = X_Q;
-    for (let i = 0; i < 8; i += 1) {
-      const d = dims(x);
-      x = xQ(upper(d, u)[1], upper(d, U_WIN)[1]);
-    }
-    return x;
   };
   /** @type {Parts} */
   const trims = [
-    ...k.tube(windowLoop(xAt, () => X_B[1]), { material: 'chrome', radius: 0.0055, closed: true, segments: 80, radial: 6 }),
-    ...k.tube(windowLoop(() => X_B[0], quarterRear), { material: 'chrome', radius: 0.0055, closed: true, segments: 80, radial: 6 }),
+    ...k.tube(windowLoop(xDoorFrontAt, () => X_DOOR[0]), { material: 'chrome', radius: 0.005, closed: true, segments: 90, radial: 6 }),
+    ...k.tube(windowLoop(() => X_QTR[1], xQtrRearAt), { material: 'chrome', radius: 0.005, closed: true, segments: 90, radial: 6 }),
     // Montant du déflecteur, dans la vitre de porte.
-    ...k.tube([onUpper(0.36, 0.005), onUpper(0.355, U_WIN * 0.5), onUpper(0.35, U_WIN - 0.005)], { material: 'chrome', radius: 0.005, segments: 12, radial: 8 }),
+    ...k.tube([onLower(0.3, F0), onLower(0.27, 0.5), onLower(0.24, 0.99)], { material: 'chrome', radius: 0.0045, segments: 12, radial: 6 }),
   ];
-  // Jonc de la lunette ovale (les deux moitiés y sont : pas de symétrie à ajouter).
+  // Jonc du pare-brise : bas, côtés le long de E, haut.
+  /** @type {P3[]} */
+  const wsLoop = [];
+  const zWsAt = (/** @type {number} */ x) => dims(x).zE;
+  for (let i = 0; i <= 12; i += 1) wsLoop.push(onDome(X_WS[1] - 0.004, lerp(-zWsAt(X_WS[1]), zWsAt(X_WS[1]), i / 12)));
+  for (let i = 1; i < 10; i += 1) {
+    const x = lerp(X_WS[1], X_WS[0], i / 10);
+    wsLoop.push(onDome(x, zWsAt(x) - 0.003));
+  }
+  for (let i = 0; i <= 12; i += 1) wsLoop.push(onDome(X_WS[0] + 0.004, lerp(zWsAt(X_WS[0]), -zWsAt(X_WS[0]), i / 12)));
+  for (let i = 1; i < 10; i += 1) {
+    const x = lerp(X_WS[0], X_WS[1], i / 10);
+    wsLoop.push(onDome(x, -zWsAt(x) + 0.003));
+  }
+  const wsTrim = k.tube(wsLoop, { material: 'chrome', radius: 0.0055, closed: true, segments: 120, radial: 6 });
+  // Jonc de la lunette ovale.
   /** @type {P3[]} */
   const rwLoop = [];
   for (let i = 0; i < 40; i += 1) {
     const a = (2 * Math.PI * i) / 40;
     const x = (X_RW[0] + X_RW[1]) / 2 + ((X_RW[1] - X_RW[0]) / 2) * Math.cos(a);
     const z = RW_Z * Math.sin(a);
-    const d = dims(x);
-    const [, y] = upper(d, uAtZ(d, Math.abs(z)));
-    rwLoop.push([x - 0.004, y + 0.005, z]);
+    const p = onDome(x, z, 0.005);
+    rwLoop.push([x - 0.003, p[1], p[2]]);
   }
   const rwTrim = k.tube(rwLoop, { material: 'chrome', radius: 0.0055, closed: true, segments: 80, radial: 6 });
 
   // Rétroviseur rond sur la porte conducteur (côté gauche, -Z).
   /** @type {Parts} */
   const mirror = [
-    ...k.rod([0.44, 0.985, -0.655], [0.42, 1.08, -0.74], 0.008, { material: 'chrome', radial: 8 }),
-    ...k.orient(k.lathe([[0.055, -0.012], [0.058, 0.0], [0.05, 0.012], [0, 0.014]], { material: 'chrome', segments: 32, crease: 60 }), { position: [0.42, 1.1, -0.75], normal: [1, 0, 0.1], up: [0, 1, 0] }),
-    ...k.orient(k.lathe([[0, -0.012], [0.05, -0.012], [0.055, -0.01]], { material: 'glass', segments: 32 }), { position: [0.42, 1.1, -0.75], normal: [1, 0, 0.1], up: [0, 1, 0] }),
+    ...k.rod([0.4, 0.96, -0.665], [0.37, 1.05, -0.75], 0.008, { material: 'chrome', radial: 8 }),
+    ...k.orient(k.lathe([[0.052, -0.012], [0.055, 0.0], [0.047, 0.012], [0, 0.014]], { material: 'chrome', segments: 32, crease: 60 }), { position: [0.37, 1.07, -0.76], normal: [1, 0, 0.1], up: [0, 1, 0] }),
+    ...k.orient(k.lathe([[0, -0.012], [0.047, -0.012], [0.052, -0.01]], { material: 'glass', segments: 32 }), { position: [0.37, 1.07, -0.76], normal: [1, 0, 0.1], up: [0, 1, 0] }),
   ];
 
   // --- Habitacle (vu par les vitres) ---------------------------------------------------------
   const lining = k.loft({
-    sectionAt: (x) => {
-      const d = dims(x);
-      return k.mirrorSection(k.roundedHalf({ bottom: 0.2, top: d.t - 0.04, halfWidthBottom: d.wb - 0.04, halfWidthTop: d.w - d.tb - 0.06, rTop: 0.18, rBottom: 0.04 }));
-    },
-    xs: k.sampleX(-1.22, 0.74, { step: 0.12, endZone: 0.06, endCount: 2 }),
+    sectionAt: (x) => k.mirrorSection(half(x).map(([z, y]) => /** @type {P2} */ ([z * 0.93, 0.2 + (y - 0.2) * 0.95]))),
+    xs: k.sampleX(-1.2, 0.64, { step: 0.1, endZone: 0.06, endCount: 2 }),
     material: 'black',
     inward: true,
     capRows: 1,
@@ -446,14 +509,14 @@ export default function cox(k) {
   /** @type {Parts} */
   const cabin = [...lining];
   for (const z of [-0.3, 0.3]) {
-    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.48, 0.12, 0.05), { material: 'paint_sellerie', depth: 0.46, bevel: 0.035 }), { position: [-0.02, 0.44, z] }));
-    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.13, 0.74, 0.06), { material: 'paint_sellerie', depth: 0.44, bevel: 0.035 }), { position: [-0.3, 0.84, z], rotation: [0, 0, 0.2] }));
+    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.48, 0.12, 0.05), { material: 'paint_sellerie', depth: 0.44, bevel: 0.035 }), { position: [-0.02, 0.42, z] }));
+    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.13, 0.7, 0.06), { material: 'paint_sellerie', depth: 0.42, bevel: 0.035 }), { position: [-0.3, 0.8, z], rotation: [0, 0, 0.2] }));
   }
-  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.45, 0.12, 0.05), { material: 'paint_sellerie', depth: 1.05, bevel: 0.035 }), { position: [-0.86, 0.42, 0] }));
-  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.12, 0.5, 0.05), { material: 'paint_sellerie', depth: 1.05, bevel: 0.035 }), { position: [-1.08, 0.7, 0], rotation: [0, 0, 0.3] }));
+  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.45, 0.12, 0.05), { material: 'paint_sellerie', depth: 1.0, bevel: 0.035 }), { position: [-0.86, 0.4, 0] }));
+  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.12, 0.5, 0.05), { material: 'paint_sellerie', depth: 1.0, bevel: 0.035 }), { position: [-1.06, 0.68, 0] , rotation: [0, 0, 0.3] }));
   // Planche de bord noire et sa rangée d'interrupteurs.
-  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.26, 0.16, 0.06), { material: 'black', depth: 0.98, bevel: 0.03 }), { position: [0.6, 0.88, 0] }));
-  for (let i = 0; i < 6; i += 1) cabin.push(...k.rod([0.51, 0.87, -0.1 + i * 0.05], [0.495, 0.87, -0.1 + i * 0.05], 0.009, { material: 'alu', radial: 8 }));
+  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.24, 0.14, 0.05), { material: 'black', depth: 0.98, bevel: 0.03 }), { position: [0.5, 0.86, 0] }));
+  for (let i = 0; i < 6; i += 1) cabin.push(...k.rod([0.39, 0.85, -0.1 + i * 0.05], [0.375, 0.85, -0.1 + i * 0.05], 0.009, { material: 'alu', radial: 8 }));
   // Volant noir à trois branches ajourées (côté conducteur, -Z).
   /** @type {Parts} */
   const wheelParts = [];
@@ -466,13 +529,13 @@ export default function cox(k) {
       wheelParts.push(...k.rod([0.04 * c - off * s, 0.04 * s + off * c, 0], [0.17 * c - off * 0.4 * s, 0.17 * s + off * 0.4 * c, 0], 0.0065, { material: 'black', radial: 6 }));
     }
   }
-  cabin.push(...k.orient(wheelParts, { position: [0.4, 1.0, -0.3], normal: [-1, 0.6, 0], up: [0, 1, 0] }));
+  cabin.push(...k.orient(wheelParts, { position: [0.3, 0.98, -0.3], normal: [-1, 0.6, 0], up: [0, 1, 0] }));
   // Levier de vitesses long à soufflet, pommeau en tête de mort ivoire.
-  cabin.push(...k.place(k.lathe([[0.06, 0], [0.045, 0.04], [0.02, 0.1], [0.008, 0.13], [0, 0.13]], { material: 'black', segments: 16, axis: 'y' }), { position: [0.22, 0.2, 0] }));
-  cabin.push(...k.rod([0.22, 0.3, 0], [0.13, 0.78, 0], 0.007, { material: 'alu', radial: 8 }));
-  cabin.push(...k.ellipsoid([0.125, 0.81, 0], [0.032, 0.028, 0.026], { material: 'paint_pommeau', segments: 16 }));
-  cabin.push(...k.ellipsoid([0.15, 0.786, 0], [0.016, 0.014, 0.019], { material: 'paint_pommeau', segments: 12 }));
-  for (const z of [-0.011, 0.011]) cabin.push(...k.ellipsoid([0.152, 0.81, z], [0.006, 0.007, 0.007], { material: 'black', segments: 10 }));
+  cabin.push(...k.place(k.lathe([[0.06, 0], [0.045, 0.04], [0.02, 0.1], [0.008, 0.13], [0, 0.13]], { material: 'black', segments: 16, axis: 'y' }), { position: [0.18, 0.2, 0] }));
+  cabin.push(...k.rod([0.18, 0.3, 0], [0.1, 0.74, 0], 0.007, { material: 'alu', radial: 8 }));
+  cabin.push(...k.ellipsoid([0.095, 0.77, 0], [0.032, 0.028, 0.026], { material: 'paint_pommeau', segments: 16 }));
+  cabin.push(...k.ellipsoid([0.12, 0.746, 0], [0.016, 0.014, 0.019], { material: 'paint_pommeau', segments: 12 }));
+  for (const z of [-0.011, 0.011]) cabin.push(...k.ellipsoid([0.122, 0.77, z], [0.006, 0.007, 0.007], { material: 'black', segments: 10 }));
 
   // --- Modèle --------------------------------------------------------------------------------
   const m = new k.Model('cox');
@@ -489,32 +552,35 @@ export default function cox(k) {
   m.add('habitacle', cabin);
   m.add('accessoires', [
     ...k.symmetric([...headlight, ...blinker, ...taillight, ...handle, ...trims]),
+    ...wsTrim,
     ...rwTrim,
     ...hoodHandle,
     ...exhaust,
     ...mirror,
   ]);
 
-  // Roues : jante à 8 branches larges et bombées, déport creux, écrous apparents. Un maillage partagé.
-  m.shared('roue', coxWheel(k));
-  m.instance('roue_avant_droite', 'roue', { position: [AXLES[0], WHEEL_R, TRACK_Z[0]] });
-  m.instance('roue_avant_gauche', 'roue', { position: [AXLES[0], WHEEL_R, -TRACK_Z[0]], rotation: [0, Math.PI, 0] });
-  m.instance('roue_arriere_droite', 'roue', { position: [AXLES[1], WHEEL_R, TRACK_Z[1]] });
-  m.instance('roue_arriere_gauche', 'roue', { position: [AXLES[1], WHEEL_R, -TRACK_Z[1]], rotation: [0, Math.PI, 0] });
+  // Roues : jante alliage à 8 branches droites, pneus plus larges à l'arrière. Deux maillages partagés.
+  m.shared('roue_av', coxWheel(k, 0.165));
+  m.shared('roue_ar', coxWheel(k, 0.185));
+  m.instance('roue_avant_droite', 'roue_av', { position: [AXLES[0], WHEEL_R, TRACK_Z[0]] });
+  m.instance('roue_avant_gauche', 'roue_av', { position: [AXLES[0], WHEEL_R, -TRACK_Z[0]], rotation: [0, Math.PI, 0] });
+  m.instance('roue_arriere_droite', 'roue_ar', { position: [AXLES[1], WHEEL_R, TRACK_Z[1]] });
+  m.instance('roue_arriere_gauche', 'roue_ar', { position: [AXLES[1], WHEEL_R, -TRACK_Z[1]], rotation: [0, Math.PI, 0] });
   return m;
 }
 
 /**
- * Roue de la Cox : pneu taille basse du kit, jante alliage polie à 8 branches larges et bombées,
- * déport creux (le moyeu est en retrait, les branches remontent vers le rebord), écrous apparents.
+ * Roue de la Cox : pneu taille basse du kit, jante alliage polie de 15 pouces à huit branches
+ * DROITES, larges et bombées (environ 22° chacune au rebord, plus étroites vers le moyeu), posées à
+ * plat en retrait de 4 cm derrière le rebord extérieur ; moyeu de 0,12 à quatre écrous apparents.
  * Axe Z, face extérieure vers +Z, centre à l'origine.
  * @param {Kit} k
+ * @param {number} width  largeur du pneu
  * @returns {Parts}
  */
-function coxWheel(k) {
+function coxWheel(k, width) {
   const outer = WHEEL_R;
   const r = 0.1905; // jante de 15 pouces
-  const width = 0.19;
   const w = width / 2;
   const mat = 'paint_jantes';
   /** @type {Parts} */
@@ -536,37 +602,38 @@ function coxWheel(k) {
     { material: mat, segments: 56, crease: 55 },
   );
   for (const p of barrel) parts.push({ material: p.material, geometry: k.doubleSided(p.geometry) });
-  // Cuvette : cône creux du rebord vers le moyeu en retrait.
-  const zLip = w - 0.012;
-  const zHub = 0.0;
-  const hubR = 0.058;
-  parts.push(...k.lathe([[r - 0.012, zLip - 0.004], [r - 0.03, zLip - 0.018], [hubR + 0.02, zHub - 0.012], [hubR, zHub - 0.015]], { material: 'black', segments: 48, crease: 70 }));
-  // Huit branches larges, inclinées du moyeu (en retrait) au rebord.
-  const n = 8;
-  const len = r - 0.016 - hubR * 0.8;
-  const tilt = Math.atan2(zLip - 0.01 - zHub, len);
-  const spoke = k.roundedExtrude(
-    [
-      [0, -0.028],
-      [len, -0.046],
-      [len, 0.046],
-      [0, 0.028],
-    ],
-    { material: mat, depth: 0.026, bevel: 0.012, bevelSegments: 3 },
-  );
-  for (let i = 0; i < n; i += 1) {
-    const a = (2 * Math.PI * i) / n;
-    const tilted = k.place(spoke, { position: [hubR * 0.8, 0, zHub + 0.004], rotation: [0, -tilt, 0] });
-    parts.push(...k.place(tilted, { rotation: [0, 0, a] }));
+  // Rebord extérieur creux : paroi polie du rebord jusqu'au plan des branches, 4 cm plus bas.
+  const zLip = w - 0.008;
+  const zS = zLip - 0.04; // plan des branches
+  parts.push(...k.lathe([[r - 0.014, zLip - 0.002], [r - 0.02, zLip - 0.012], [r - 0.026, zS + 0.004], [r - 0.034, zS - 0.004]], { material: mat, segments: 56, crease: 55 }));
+  // Fond sombre derrière les branches (on voit le tambour entre elles).
+  parts.push(...k.lathe([[r - 0.03, zS - 0.016], [0.07, zS - 0.024], [0.05, zS - 0.03]], { material: 'black', segments: 48, crease: 70 }));
+  // Huit branches droites, radiales, bombées (bord arrondi), à plat dans le plan zS.
+  const rIn = 0.05;
+  const rOut = r - 0.026;
+  const halfIn = 0.02;
+  const halfOut = rOut * Math.tan((12.5 * Math.PI) / 180);
+  /** @type {P2[]} */
+  const outline = [];
+  for (let i = 0; i <= 4; i += 1) {
+    const t = i / 4;
+    outline.push([lerp(rIn, rOut, t), -lerp(halfIn, halfOut, t ** 0.85)]);
   }
-  // Moyeu poli bombé et écrous apparents (quatre).
-  parts.push(...k.lathe([[hubR + 0.004, zHub - 0.01], [hubR + 0.004, zHub + 0.012], [hubR * 0.75, zHub + 0.024], [0, zHub + 0.03]], { material: mat, segments: 40, crease: 50 }));
+  for (let i = 4; i >= 0; i -= 1) {
+    const t = i / 4;
+    outline.push([lerp(rIn, rOut, t), lerp(halfIn, halfOut, t ** 0.85)]);
+  }
+  const spoke = k.roundedExtrude(outline, { material: mat, depth: 0.024, bevel: 0.011, bevelSegments: 3 });
+  for (let i = 0; i < 8; i += 1) parts.push(...k.place(spoke, { position: [0, 0, zS], rotation: [0, 0, (2 * Math.PI * i) / 8 + Math.PI / 8] }));
+  // Moyeu poli bombé (diamètre 0,12) et quatre écrous apparents.
+  const hubR = 0.06;
+  parts.push(...k.lathe([[hubR, zS - 0.01], [hubR, zS + 0.014], [hubR * 0.78, zS + 0.026], [0, zS + 0.032]], { material: mat, segments: 40, crease: 50 }));
   for (let i = 0; i < 4; i += 1) {
     const a = (2 * Math.PI * i) / 4 + Math.PI / 4;
-    const rr = hubR * 0.62;
-    parts.push(...k.rod([rr * Math.cos(a), rr * Math.sin(a), zHub + 0.015], [rr * Math.cos(a), rr * Math.sin(a), zHub + 0.036], 0.009, { material: 'chrome', radial: 6 }));
+    const rr = hubR * 0.6;
+    parts.push(...k.rod([rr * Math.cos(a), rr * Math.sin(a), zS + 0.016], [rr * Math.cos(a), rr * Math.sin(a), zS + 0.038], 0.0085, { material: 'chrome', radial: 6 }));
   }
-  parts.push(...k.lathe([[0.012, zHub + 0.028], [0.012, zHub + 0.04], [0, zHub + 0.042]], { material: 'black', segments: 16 }));
+  parts.push(...k.lathe([[0.012, zS + 0.03], [0.012, zS + 0.04], [0, zS + 0.042]], { material: 'black', segments: 16 }));
   // Disque de frein dans l'ombre, derrière la jante.
   parts.push(...k.lathe([[r * 0.35, -w + 0.03], [r * 0.85, -w + 0.03], [r * 0.85, -w + 0.045], [r * 0.35, -w + 0.045]], { material: 'black', segments: 40, crease: 50 }));
   return parts;
