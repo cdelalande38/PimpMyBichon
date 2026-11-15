@@ -1,6 +1,6 @@
 # PimpMyBichon — cahier des charges pour Claude Code
 
-Version 0.3 du 13 novembre 2026. Remplace les v0.1 et v0.2. Complétée le 14 novembre 2026 : télé du garage et option YouTube (§ 5.12).
+Version 0.3 du 13 novembre 2026. Remplace les v0.1 et v0.2. Complétée le 14 novembre 2026 : télé du garage et option YouTube (§ 5.12). Complétée le 15 novembre 2026 : le van remplace le combi (§ 3, § 4), fiche de préparation du moteur (§ 5.4), pack de musique à plusieurs stations chargé par son adresse (§ 9), modèle de banc d'essai gardé au catalogue de la première version livrée (§ 10.1).
 
 > Ce fichier est écrit pour vivre dans un dépôt public. Il ne contient volontairement aucune information personnelle sur l'utilisateur final au-delà de son surnom. Garder cette règle dans tout le dépôt (code, commits, issues, assets).
 
@@ -71,7 +71,7 @@ Noms de travail génériques. Aucun n'est la copie d'un modèle de série : silh
 | Vague | Véhicule | Type | D'où il vient |
 |---|---|---|---|
 | 1 | **La Cox** | berline ronde des années 70, moteur arrière | sa Cox verte |
-| 1 | **Le combi** | fourgon à moteur arrière des années 60-70, aménageable | son van |
+| 1 | **Le van** | fourgon moderne à moteur avant, tôlé, blanc et rabaissé, aménageable | son van |
 | 1 | **Le bobber** | bicylindre en V à cadre rigide | son bobber noir à flammes |
 | 1 | **Le fastback** | muscle car américain de la fin des années 60 | références de rendu |
 | 1 | **La sportive** | moto carénée de piste | sa sportive orange |
@@ -81,11 +81,13 @@ Noms de travail génériques. Aucun n'est la copie d'un modèle de série : silh
 | 2 | **Le coupé** | coupé moderne à quatre portes | références de covering |
 | 3 | au fil de l'eau | lowrider, hot rod, café racer, supermotard, fourgon aménagé | — |
 
-La **V1 est livrable avec la vague 1** (cinq véhicules). La Cox et le combi partagent le même moteur à plat : un seul modèle de moteur et un seul jeu de sons pour les deux. L'architecture doit rendre l'ajout d'un véhicule possible **sans toucher au code** : déposer un dossier `public/assets/vehicles/<id>/` (modèle, manifeste, vignette, jeu de sons moteur) suffit. Chaque véhicule a au moins 12 postes et 60 options en P1.
+La **V1 est livrable avec la vague 1** (cinq véhicules). Depuis le 15 novembre 2026, le « combi » de ce cahier est **le van** (identifiant `van`) : les photos reçues ce jour-là montrent un fourgon moderne à moteur avant, et non le fourgon à moteur arrière supposé jusque-là ; partout où ce cahier écrit « combi », lire « van ». La Cox garde son moteur à plat ; le van a le sien, un quatre cylindres turbo diesel. L'architecture doit rendre l'ajout d'un véhicule possible **sans toucher au code** : déposer un dossier `public/assets/vehicles/<id>/` (modèle, manifeste, vignette, jeu de sons moteur) suffit. Chaque véhicule a au moins 12 postes et 60 options en P1.
 
 ### Hors périmètre V1
 
 Courses, adversaires, chrono, classement, dégâts, collisions, police, monde ouvert, circulation dense, multijoueur, physique de conduite réaliste, comptes utilisateurs, serveur, galerie commune, notifications push, simulation mécanique (pannes, réglages, puissance), iOS optimisé.
+
+Exception décidée le 15 novembre 2026 : la **fiche de préparation du moteur** (§ 5.4) affiche des chiffres de puissance d'atelier, sans rien simuler de la mécanique.
 
 ### V2 envisagée (ne pas implémenter, ne pas fermer la porte)
 
@@ -131,7 +133,7 @@ Disposition, vue depuis le canapé en balayant de gauche à droite :
 - Bobber noir à **flammes sur le réservoir**, guidon haut, selle solo, phare rond.
 - Berline des années 90 **crème mat**, phares à anneaux lumineux, toit noir, **portes en élytre** (projet 2006).
 - Pick-up américain **gris** rabaissé, jantes tôle blanches, feux de gabarit orange sur le toit.
-- Un **fourgon à moteur arrière** (pas de photo disponible : silhouette générique des années 60-70, bi-ton, à affiner quand une photo arrive).
+- Un **fourgon moderne blanc, rabaissé**, tôlé, à vitres teintées, bouclier avant gris non peint, jantes tôle percées peintes en blanc, moteur turbo diesel reprogrammé (photos reçues le 15 novembre 2026 ; son intérieur a un plafond à LED, photo attendue).
 - 4x4 gris à **rampes LED** (toit et pare-chocs) et pneus tout-terrain à lettrage blanc.
 - Pick-up noir et gris rehaussé, arceau de benne chromé.
 
@@ -246,6 +248,8 @@ Les pièces partagées (jantes, pneus, sièges, volants, sono) sont modélisées
 Chaque changement joue un bruitage d'atelier réel et une micro-animation de la pièce. Un bouton **« Surprends-moi »** tire une configuration au hasard. Un bouton « d'origine » par poste.
 
 Préréglages de départ : « La vraie de Bichon » et « Sortie de grange » (Cox) ; « Le bobber de Bichon » et « Sortie d'usine » (bobber).
+
+**Préparation du moteur** (demandée le 15 novembre 2026). Une fiche par véhicule part du moteur d'origine déclaré dans son manifeste et propose, selon ce moteur : la **reprogrammation** par paliers pour les moteurs à injection, la **carburation** pour les moteurs à carburateur (motos, Cox), le **nitro** pour tous. Elle affiche la puissance d'origine, le gain et la puissance préparée, comme une feuille de préparateur (« Origine 102 ch, gain + 73 ch, reprogrammé 175 ch »). Ce sont des chiffres d'atelier : aucune simulation mécanique. Les pièces visibles (carburateurs, bouteille), les sons et l'effet sur la sortie de nuit viendront avec les pièces P1 et le son.
 
 ### 5.5 Sortie de nuit
 
@@ -479,7 +483,7 @@ Trois niveaux de qualité (économie, standard, max) choisis automatiquement d'a
 
 ### Moteurs
 
-Un jeu de sons par véhicule, rangé dans son dossier. Signatures de la vague 1, à rendre reconnaissables : **4 cylindres à plat refroidi par air** (Cox et combi, jeu partagé), **bicylindre en V à calage irrégulier** (bobber), **gros V8 américain** (fastback), **4 cylindres en ligne de moto à haut régime** (sportive). Vague 2 : 6 cylindres en ligne (berline 90), V8 (pick-up), V6 ou diesel (4x4), 4 cylindres turbo (coupé).
+Un jeu de sons par véhicule, rangé dans son dossier. Signatures de la vague 1, à rendre reconnaissables : **4 cylindres à plat refroidi par air** (Cox), **4 cylindres turbo diesel** (van), **bicylindre en V à calage irrégulier** (bobber), **gros V8 américain** (fastback), **4 cylindres en ligne de moto à haut régime** (sportive). Vague 2 : 6 cylindres en ligne (berline 90), V8 (pick-up), V6 ou diesel (4x4), 4 cylindres turbo (coupé).
 
 - Si l'on ne dispose que de prises continues (démarrage, ralenti, montée en régime, passage), le pipeline `tools/` y découpe des tranches stables, les boucle, et déduit leur régime ; à défaut, lecture granulaire le long d'une montée en régime. C'est le cas le plus courant avec les banques de sons.
 - Méthode : **échantillons réels en boucle**, plusieurs par régime, fondus entre voisins et accordés par `playbackRate` (écart maximal ± 25 % autour du régime enregistré). Deux couches par régime si disponibles : en charge et en décélération, mélangées selon l'accélérateur.
@@ -496,7 +500,7 @@ Un jeu de sons par véhicule, rangé dans son dossier. Signatures de la vague 1,
 
 1. **Dossier de lecture** (au build) : un dossier par station, `radio/<station>/`. On y dépose des fichiers audio ; le build les indexe, les normalise et les encode. Trois stations prévues par défaut (hip-hop et R&B, rock, électro), mais le nombre de stations suit le nombre de dossiers. Une station vide n'apparaît pas.
 2. **Import depuis le téléphone** (dans l'app) : « Ajouter mes morceaux » ouvre le sélecteur de fichiers ; les morceaux choisis sont copiés dans le stockage privé de l'app (OPFS), restent sur l'appareil, fonctionnent hors ligne et forment la station **« Ma playlist »**. Rien n'est envoyé ni partagé.
-3. **Pack de musique** (décidé le 14 novembre 2026) : un fichier ZIP par style, non chiffré, que l'on remet à l'utilisateur en privé, par messagerie. L'app l'importe en un geste, depuis son sélecteur de fichiers ou comme cible de partage du téléphone, copie les morceaux dans le stockage privé de l'appareil et en fait une **station personnelle par pack** (le dossier du ZIP donne son nom à la station). Les packs ne passent jamais par le dépôt ni par le site ; `npm run radio:pack` les fabrique sur le poste à partir du dossier privé `ma-playlist/`.
+3. **Pack de musique** (décidé le 14 novembre 2026) : un fichier ZIP par style, non chiffré, que l'on remet à l'utilisateur en privé, par messagerie. L'app l'importe en un geste, depuis son sélecteur de fichiers ou comme cible de partage du téléphone, copie les morceaux dans le stockage privé de l'appareil et en fait une **station personnelle par pack** (le dossier du ZIP donne son nom à la station). Les packs ne passent jamais par le dépôt ni par le site ; `npm run radio:pack` les fabrique sur le poste à partir du dossier privé `ma-playlist/`. Complément du 15 novembre 2026 : un pack peut réunir plusieurs stations (un dossier par station), et entrer aussi par son **adresse**, saisie dans l'app ou portée par un lien vers l'app (`?pack=<adresse du pack>`) qui ouvre la radio et télécharge le pack après un appui. L'adresse vient toujours de l'utilisateur et n'est jamais écrite dans le dépôt ; c'est la seconde exception à la règle « aucune requête vers un tiers à l'exécution ».
 
 - Niveau : normalisation automatique vers −14 LUFS environ, crête vraie ≤ −1 dBTP.
 - Dossier de lecture : encodage **Opus** à 128–160 kbit/s, mise en cache station par station à la première écoute.
@@ -535,7 +539,7 @@ Un `Makefile` ou des scripts `npm run assets:*` enchaînent les étapes 2 à 4.
 4. Blender + Blender MCP pour les **pièces mécaniques et les accessoires** (jantes, échappements, guidons, galeries, sono, décor), pas pour les carrosseries.
 5. Génération par IA pour les accessoires de décor uniquement.
 
-**Banc d'essai du rendu (jalon 1)** : pour régler peinture, reflets et éclairage avant d'avoir les modèles définitifs, utiliser le modèle `CarConcept` des glTF Sample Assets de Khronos (voiture-concept sans marque automobile, licence CC-BY 4.0, porte des logos Khronos). Usage interne au réglage ; ne pas le livrer comme véhicule du catalogue.
+**Banc d'essai du rendu (jalon 1)** : pour régler peinture, reflets et éclairage avant d'avoir les modèles définitifs, utiliser le modèle `CarConcept` des glTF Sample Assets de Khronos (voiture-concept sans marque automobile, licence CC-BY 4.0, porte des logos Khronos). Usage interne au réglage ; ne pas le livrer comme véhicule du catalogue définitif. À la demande du commanditaire (15 novembre 2026), il figure dans la première version livrée sous le nom « Le concept », comme substitut déclaré.
 
 ### 10.2 Audio
 
@@ -702,7 +706,7 @@ Le jalon 1 passe avant tout le reste : si le rendu n'atteint pas le niveau atten
 
 - `npm run build` sans avertissement ; tests Vitest et Playwright verts.
 - Fonctionne en mode avion après une première visite.
-- Aucune requête réseau vers un tiers à l'exécution, hors télé du § 5.12 ouverte par l'utilisateur.
+- Aucune requête réseau vers un tiers à l'exécution, hors télé du § 5.12 ouverte par l'utilisateur et pack de musique téléchargé à l'adresse qu'il a donnée (§ 9).
 - Budgets du § 8 vérifiés par `npm run assets:check` ; audio vérifié par `npm run audio:check`.
 - Aucun son de moteur ni de musique synthétisé dans le build livré.
 - Parcours complet réalisable d'une seule main, pouce droit ou gauche, y compris la pose d'un sticker.
@@ -762,7 +766,7 @@ Encore ouvertes, et **bloquantes pour les jalons 5, 6, 7 et 9** :
 1. D'où viennent les modèles 3D : freelance (budget ?), modèles libres retravaillés, ou les deux ?
 2. Abonnement à une banque de sons : lequel, et qui télécharge et valide à l'écoute les prises de `docs/SOURCING_AUDIO.md` ?
 3. Musique du dossier de lecture : quelle source, avec quelle licence ?
-4. Une photo du combi, pour caler la silhouette et le bi-ton.
+4. Une photo de l'intérieur du van, à plafond LED (les photos de l'extérieur sont arrivées le 15 novembre 2026).
 5. Quels amis écrivent les premiers briefs ?
 
 ## 19. Consignes pour Claude Code (reprises dans `CLAUDE.md`)
