@@ -1,6 +1,6 @@
 # PimpMyBichon — cahier des charges pour Claude Code
 
-Version 0.3 du 13 novembre 2026. Remplace les v0.1 et v0.2. Complétée le 14 novembre 2026 : télé du garage et option YouTube (§ 5.12). Complétée le 15 novembre 2026 : le van remplace le combi (§ 3, § 4), fiche de préparation du moteur (§ 5.4), pack de musique à plusieurs stations chargé par son adresse (§ 9), modèle de banc d'essai gardé au catalogue de la première version livrée (§ 10.1).
+Version 0.3 du 13 novembre 2026. Remplace les v0.1 et v0.2. Complétée le 14 novembre 2026 : télé du garage et option YouTube (§ 5.12). Complétée le 15 novembre 2026 : le van remplace le combi (§ 3, § 4), fiche de préparation du moteur (§ 5.4), pack de musique à plusieurs stations chargé par son adresse (§ 9), modèle de banc d'essai gardé au catalogue de la première version livrée (§ 10.1), sortie de nuit sur des cartes tirées de lieux réels, sur rail puis en conduite libre (§ 3, § 5.5, § 8, § 14, § 17, § 18).
 
 > Ce fichier est écrit pour vivre dans un dépôt public. Il ne contient volontairement aucune information personnelle sur l'utilisateur final au-delà de son surnom. Garder cette règle dans tout le dépôt (code, commits, issues, assets).
 
@@ -58,7 +58,7 @@ Ce n'est pas un jeu de course : pas d'adversaire, pas de chrono, rien à gagner.
 5. Catalogue de pièces et de réglages large, y compris les excès (kits larges, sono, hydraulique, portes en élytre).
 6. **Aménagement intérieur** : le combi se transforme en camping-car (mobilier, habillages, LED au plafond).
 7. **Établi moteur** : dépose du moteur, vue éclatée, personnalisation pièce par pièce.
-8. **Sortie de nuit** : le véhicule roule dans une ville néon sous la pluie, en pilote automatique ou à la main.
+8. **Sortie de nuit** : le véhicule roule de nuit, sous la pluie si on veut, sur une **carte tirée d'un lieu réel** (route de lacs, ville, circuit urbain), en pilote automatique ou à la main.
 9. Projets à brief et garage libre.
 10. Partage sans serveur : photo, lien de build, lien de défi.
 11. Son réaliste : moteurs enregistrés, bruitages d'atelier, radio alimentée par un dossier de lecture.
@@ -89,9 +89,11 @@ Courses, adversaires, chrono, classement, dégâts, collisions, police, monde ou
 
 Exception décidée le 15 novembre 2026 : la **fiche de préparation du moteur** (§ 5.4) affiche des chiffres de puissance d'atelier, sans rien simuler de la mécanique.
 
+Seconde exception décidée le 15 novembre 2026 : la **conduite libre** (direction au pouce sur route fermée, bords de route qui retiennent le véhicule) fait l'objet d'un second lot de la sortie de nuit (§ 5.5). Monde ouvert, collisions avec dégâts, police et circulation dense restent hors périmètre.
+
 ### V2 envisagée (ne pas implémenter, ne pas fermer la porte)
 
-Vague 3 de véhicules, deuxième décor de sortie (route de montagne), deuxième garage (atelier souterrain à graffitis), circulation légère, galerie privée et réactions via une petite API (Symfony + API Platform, hébergée hors GitHub Pages), mémo vocal de l'ami joint au défi.
+Vague 3 de véhicules, d'autres cartes de sortie au fil de l'eau (Grenoble, Paris, Nice, Marseille, capitales et villes de bord de mer : § 5.5), deuxième garage (atelier souterrain à graffitis), circulation légère, galerie privée et réactions via une petite API (Symfony + API Platform, hébergée hors GitHub Pages), mémo vocal de l'ami joint au défi.
 
 ## 4. Univers et direction artistique
 
@@ -256,15 +258,24 @@ Préréglages de départ : « La vraie de Bichon » et « Sortie de grange » (C
 Le moment de récompense : on sort le véhicule et on le regarde rouler.
 
 - **Entrée** : bouton « Sortir ». La porte du garage se lève, le moteur démarre, le véhicule sort (plan de 3 secondes, passable).
-- **Décor** : ville néon de nuit en boucle d'environ 2 km (référence n°2 du § 4), chaussée détrempée qui fait miroir, enseignes néon **fictives**, brume au ras du sol, lampadaires, un tunnel, un pont, quelques véhicules garés. Pas de piéton.
+- **Décor** : une **carte** tirée d'un lieu réel (voir « Cartes » plus bas), de nuit, dans l'esprit de la référence n°2 du § 4 : chaussée détrempée qui fait miroir, enseignes néon **fictives** en ville, brume au ras du sol, lampadaires, quelques véhicules garés ; tunnels, ponts et plans d'eau là où le lieu en a. Pas de piéton.
 - **Météo** : sec ou pluie (gouttes, éclaboussures, flaques), au choix.
-- **Conduite sur rail** : le véhicule suit la route tout seul. **Pilote automatique par défaut** (croisière entre 60 et 90 km/h). À la main : appui maintenu en bas à droite pour accélérer, en bas à gauche pour freiner, balayage latéral pour changer de file. Aucune collision, aucune sortie de route possible.
+- **Conduite sur rail** (lot 1) : le véhicule suit la route tout seul. **Pilote automatique par défaut** (croisière entre 60 et 90 km/h). À la main : appui maintenu en bas à droite pour accélérer, en bas à gauche pour freiner, balayage latéral pour changer de file. Aucune collision, aucune sortie de route possible.
 - **Caméras** : poursuite, rasante côté roue, avant, embarquée, travelling de bord de route (le véhicule passe devant la caméra), orbite libre. Mode **réalisateur** qui enchaîne les plans tout seul. Ralenti sur appui long.
 - **Le véhicule vit** : roues qui tournent, suspension qui travaille, roulis et plongée, feux stop, faisceaux des phares, néons qui se reflètent sur la chaussée, sono qui bat, flammes à l'échappement et purge de nitro si montées, hydraulique utilisable en roulant. Le bobber **penche** en courbe avec son pilote.
 - **Sensation de vitesse** : traînées lumineuses, léger élargissement du champ, flou radial discret. Désactivés si mouvement réduit.
 - **Son** : moteur qui suit le régime avec passages de rapports, roulement, vent, réverbération dans le tunnel, effet Doppler sur le travelling (§ 9).
 - **Photo** à tout moment ; **clip** de 6 à 8 secondes partageable (P2, Android).
 - Retour au garage en un geste, à l'endroit où l'on s'était arrêté.
+
+**Cartes (décision du 15 novembre 2026).** Le décor n'est plus une boucle fictive unique : chaque carte est un **parcours de quelques kilomètres tiré d'une vraie route**.
+
+- **Ce qui vient du lieu** : le tracé de la route, le relief, les plans d'eau, l'emprise et la hauteur des bâtiments, les tunnels et les ponts. **Ce qui reste à nous** : l'habillage (matières, néons, enseignes fictives, mobilier, végétation). Une carte est une évocation fidèle au tracé, pas une copie du lieu : aucune façade, aucun monument, aucune enseigne reproduits à l'identique.
+- **Une carte = un dossier** `public/assets/maps/<id>/` et un manifeste, chargée à la demande, comme un véhicule. Elle est fabriquée sur le poste par un outil (`tools/maps/`) à partir d'un tracé donné ; **aucune donnée n'est téléchargée à l'exécution**.
+- **Sources** : uniquement des données géographiques ouvertes, dont la source et la licence sont notées dans `CREDITS.md` et rappelées dans l'app : les bases de l'IGN (routes, bâtiments, hydrographie, relief) pour la France, OpenStreetMap ailleurs. Ni fond de carte dessiné, ni donnée d'un service de cartographie commercial.
+- **Ordre** : 1. les lacs du plateau matheysin et La Mure ; 2. Monaco, en ville et sur le tour du circuit urbain. Ensuite, au fil de l'eau : Grenoble, Paris, Nice, Marseille, des capitales et des villes de bord de mer. Les cartes sont publiques, dans ce dépôt.
+- **Deux lots** : le lot 1 livre la sortie **sur rail** décrite ci-dessus, sur la première carte ; le lot 2 ajoute la **conduite libre** : direction au pouce sur route fermée, bords de route qui retiennent le véhicule, sans dégâts ni circulation.
+- Aucun film, aucune émission, aucune compétition n'est cité ni reproduit (§ 17) : les lieux réels, oui.
 
 ### 5.6 Projets à brief et garage libre
 
@@ -446,7 +457,7 @@ Construit d'après le § 4, textures créées (OSB, carrelage, lambris, béton),
 
 ### Sortie de nuit
 
-- Boucle fermée modulaire : 10 à 14 tronçons réutilisés, façades et mobilier urbain **instanciés**, un atlas de textures, éclairage précalculé + émissifs.
+- Une carte par dossier (§ 5.5) : ruban de route et relief produits par l'outil à partir du tracé réel, découpés en tronçons chargés puis libérés au fil de la route ; volumes des bâtiments, mobilier et végétation **instanciés**, un atlas de textures, éclairage précalculé + émissifs. Le budget « décor de route » ci-dessous vaut par carte.
 - Chaussée détrempée : réflexion planaire allégée + carte de flaques ; sonde de réflexion mobile pour la caisse.
 - Brouillard pour fermer l'horizon et masquer le chargement.
 - Pilote des motos : silhouette générique articulée (épaules, bras, tête), casque et blouson colorables.
@@ -671,13 +682,14 @@ Précautions Blender MCP : l'outil exécute du Python arbitraire dans Blender, d
 ├─ public/assets/
 │  ├─ vehicles/<id>/          body.glb, body_lod1.glb, vehicle.json, thumb.webp, engine/
 │  ├─ shared/                 jantes, pneus, sièges, volants, sono, engines/<famille>/
-│  ├─ garage/  city/          décors
+│  ├─ garage/                 décor du garage
+│  ├─ maps/<id>/              cartes de sortie : manifeste, tronçons, crédits des données (§ 5.5)
 │  ├─ stickers/  patterns/    SVG et motifs
 │  └─ audio/                  paquets générés au build (rien de versionné sous licence)
 ├─ docs/SOURCING_AUDIO.md     présélection de sons moteur et règles de licence
 ├─ assets-src/                .blend (hors Pages, LFS ou dépôt privé)
 ├─ (dépôt privé PimpMyBichon-assets : engines/, sfx/, radio/<station>/, modèles sous licence)
-├─ tools/                     export.py, scripts gltf-transform et ffmpeg, contrôles
+├─ tools/                     export.py, scripts gltf-transform et ffmpeg, contrôles, maps/ (fabrication des cartes)
 ├─ tests/                     vitest + playwright
 └─ .github/workflows/pages.yml
 ```
@@ -694,13 +706,13 @@ Précautions Blender MCP : l'outil exécute du Python arbitraire dans Blender, d
 | 5 | Établi moteur | dépose, vue éclatée, traitements par pièce, échanges de pièces, remontage ; sur un moteur substitut puis sur le 4 à plat définitif |
 | 6 | Vague 1 définitive | Cox, combi, bobber, fastback, sportive : modèles aux conventions, pièces P1, animations (portes, capots, hydraulique, sono), pilote des motos |
 | 7 | Aménagement du combi | tous les emplacements P1, vue en coupe, LED de plafond (ciel étoilé, rubans, spots), matières et couleurs libres, extérieur camping |
-| 8 | Sortie de nuit | ville néon complète, pluie, pilote automatique, 6 caméras, mode réalisateur, 30 i/s plancher |
+| 8 | Sortie de nuit | lot 1 : la première carte (lacs du plateau matheysin et La Mure) roulée sur rail, pluie, pilote automatique, 6 caméras, mode réalisateur, 30 i/s plancher ; lot 2 : conduite libre ; puis Monaco, en ville et sur le circuit urbain |
 | 9 | Son | un moteur accepté à l'aveugle par famille, bruitages, dossier de lecture et import « Ma playlist », mixage tenu au casque et au haut-parleur |
 | 10 | Projets et partage | 20 briefs, carnet, livraison, liens de build et de défi, photo haute qualité partagée depuis Android |
 | 11 | Finition | pièces P2, bivouac, télé du garage (§ 5.12), accessibilité, tests sur appareil, clip vidéo, APK si demandé |
 | 12 | Vague 2 | berline 90, pick-up, 4x4, coupé, déposés sans modification du code |
 
-Le jalon 1 passe avant tout le reste : si le rendu n'atteint pas le niveau attendu sur un seul véhicule, ajouter des véhicules et des options n'y changera rien. Les jalons 2, 3, 4 et 8 ne dépendent d'aucun asset externe. Les jalons 5, 6, 7, 9 et 12 attendent les fournitures du § 10.3 ; leur code se développe avant, contre des substituts déclarés.
+Le jalon 1 passe avant tout le reste : si le rendu n'atteint pas le niveau attendu sur un seul véhicule, ajouter des véhicules et des options n'y changera rien. Les jalons 2, 3 et 4 ne dépendent d'aucun asset externe ; le jalon 8 ne dépend que de données géographiques ouvertes, téléchargées sur le poste (§ 5.5). Les jalons 5, 6, 7, 9 et 12 attendent les fournitures du § 10.3 ; leur code se développe avant, contre des substituts déclarés.
 
 ## 15. Définition de fini
 
@@ -745,6 +757,7 @@ Le jalon 1 passe avant tout le reste : si le rendu n'atteint pas le niveau atten
 - **Stickers** : uniquement des créations originales ; les faux sponsors ne doivent ressembler à aucune marque réelle. Les images importées par l'utilisateur restent sur son appareil.
 - **Sons** : uniquement des enregistrements dont la licence autorise l'intégration dans une app, tracés dans `CREDITS.md`. Les banques par abonnement interdisent en général de redistribuer les fichiers et d'en permettre l'extraction : voir § 11.
 - **Musique du dossier de lecture** : « libre de droits » ne veut pas dire « utilisable partout ». Les formules standard des banques de musique pour créateurs couvrent des vidéos et des podcasts publiés en ligne ; l'usage dans un jeu ou une application relève d'une formule dédiée ou d'un accord écrit. Les morceaux importés par l'utilisateur sur son téléphone restent sur son appareil.
+- **Cartes** : uniquement des données géographiques ouvertes (bases de l'IGN sous Licence Ouverte 2.0, OpenStreetMap sous ODbL), avec la mention de la source dans l'app et dans `CREDITS.md` ; les données dérivées d'OpenStreetMap publiées dans ce dépôt le sont sous la même licence. Aucun fond de carte dessiné, aucune donnée d'un service de cartographie commercial. Les lieux sont évoqués (tracé, relief, gabarit des rues), sans reproduire d'enseigne, de marque ni d'œuvre architecturale à l'identique ; aucun film, aucune émission, aucune compétition citée.
 
 Ce paragraphe n'est pas un avis juridique.
 
@@ -757,7 +770,7 @@ Prises par défaut, à corriger si besoin :
 3. Vague 1 : Cox, combi, bobber, fastback, sportive. Vague 2 : berline 90, pick-up, 4x4, coupé.
 4. Enseigne du garage : le nom de l'app en néon.
 5. Aucune prise de son de ses véhicules (la vidéo du garage est muette) : moteurs issus de banques de sons.
-6. Décor de sortie : ville néon ; la route de montagne attend la V2.
+6. Décor de sortie (décidé le 15 novembre 2026) : des cartes tirées de lieux réels, publiques dans ce dépôt (§ 5.5) ; la première : les lacs du plateau matheysin et La Mure ; la deuxième : Monaco, en ville et sur le circuit urbain. Sur rail d'abord (lot 1), conduite libre ensuite (lot 2).
 7. Musique : aucune par défaut dans le dépôt ; dossier de lecture rempli à la main, import « Ma playlist » sur le téléphone.
 8. Assets sous licence dans un dépôt privé `PimpMyBichon-assets`.
 
@@ -775,6 +788,7 @@ Encore ouvertes, et **bloquantes pour les jalons 5, 6, 7 et 9** :
 - **Le rendu est l'exigence n°1.** Commencer par le jalon 1 et ne pas le déclarer atteint sans captures d'écran comparées aux descriptions du § 4.
 - Travailler jalon par jalon (§ 14). Ne pas commencer un jalon avant que le précédent soit accepté. Ne jamais réduire le périmètre en silence : ce qui n'est pas fait est écrit.
 - Un véhicule = un dossier et un manifeste. Aucun identifiant de véhicule codé en dur. Catalogue, zones, curseurs, stickers, motifs et briefs sont pilotés par les données.
+- Une carte de sortie = un dossier et un manifeste, fabriquée sur le poste à partir de données géographiques ouvertes dont la source et la licence sont notées dans `CREDITS.md`. Aucun identifiant de carte codé en dur, aucune donnée téléchargée à l'exécution.
 - La profondeur passe d'abord par le paramétrique (couleurs, finitions, livrées, curseurs).
 - **Modèles** : ne pas prétendre atteindre la cible de rendu avec de la géométrie générée par code. Les véhicules procéduraux sont des substituts déclarés, en attendant les modèles du § 10.3.
 - **Assets sous licence** : aucun fichier de banque payante, aucun morceau, aucun modèle acheté dans ce dépôt. Ils vivent dans le dépôt privé d'assets ; le build doit passer sans lui.
