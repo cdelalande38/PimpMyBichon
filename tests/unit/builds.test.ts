@@ -89,6 +89,23 @@ describe('peinture effective d’une zone', () => {
   it('une zone inconnue du manifeste n’a pas de peinture', () => {
     expect(resolvePaint(MANIFEST, undefined, 'spoiler')).toBeUndefined();
   });
+
+  it('la paillette du manifeste va avec sa finition : une autre finition garde la sienne (INT-5)', () => {
+    const tuned: VehicleManifest = {
+      ...MANIFEST,
+      zones: MANIFEST.zones.map((zone) => (zone.id === 'caisse' ? { ...zone, paint: { ...zone.paint, flake: 0.4 } } : zone)),
+    };
+    // Valeur de départ : la paillette réglée par le manifeste.
+    expect(resolvePaint(tuned, undefined, 'caisse')?.flake).toBe(0.4);
+    // Une autre finition choisie (le dock efface la paillette au changement) : celle de la finition.
+    const candy: Build = { paints: { caisse: { finish: 'candy' } } };
+    expect(resolvePaint(tuned, candy, 'caisse')).toEqual({ color: '#0a3a46', finish: 'candy' });
+    expect(resolvePaint(tuned, candy, 'capot')?.flake, 'zone liée').toBeUndefined();
+    // Retour à la finition du manifeste : sa paillette réglée revient.
+    expect(resolvePaint(tuned, { paints: { caisse: { finish: 'paillete' } } }, 'caisse')?.flake).toBe(0.4);
+    // Une paillette choisie au curseur l'emporte toujours.
+    expect(resolvePaint(tuned, { paints: { caisse: { finish: 'candy', flake: 1.2 } } }, 'caisse')?.flake).toBe(1.2);
+  });
 });
 
 describe('lecture tolérante des builds', () => {

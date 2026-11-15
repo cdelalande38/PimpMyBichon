@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { idbStorage } from './persistence.ts';
+import { idbStorage, shareAcrossTabs } from './persistence.ts';
 import { DEFAULT_SETTINGS, sanitizeSettings, type Settings } from './settings.ts';
 
 export const SETTINGS_KEY = 'pmb-reglages';
@@ -38,3 +38,6 @@ export const useSettings = create<SettingsState>()(
     },
   ),
 );
+
+// Une autre page de l'app enregistre aussi : le store relit la sauvegarde (src/state/persistence.ts).
+shareAcrossTabs(useSettings);

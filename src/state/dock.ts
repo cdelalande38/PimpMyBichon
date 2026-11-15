@@ -14,7 +14,7 @@
 import { create } from 'zustand';
 import { DOCK_MENU, type EntryId, type SectionId } from '../data/dockMenu.ts';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { idbStorage } from './persistence.ts';
+import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
 export const DOCK_KEY = 'pmb-dock';
 export const DOCK_VERSION = 2;
@@ -181,3 +181,6 @@ export const useDock = create<DockState>()(
     },
   ),
 );
+
+// Une autre page de l'app enregistre aussi : le store relit la sauvegarde (src/state/persistence.ts).
+shareAcrossTabs(useDock);

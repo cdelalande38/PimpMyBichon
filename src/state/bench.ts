@@ -10,7 +10,7 @@ import { PAINT_COLORS } from '../data/paintColors.ts';
 import { VEHICLES } from '../data/vehicles.ts';
 import type { Hex } from '../data/vehicleTypes.ts';
 import { masterZone, useBuilds } from './builds.ts';
-import { idbStorage } from './persistence.ts';
+import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
 export const BENCH_KEY = 'pmb-banc';
 /** 2 : la teinte et la finition du banc d'essai sont passées dans les builds. */
@@ -113,3 +113,6 @@ export const useBench = create<BenchState>()(
     },
   ),
 );
+
+// Une autre page de l'app enregistre aussi : le store relit la sauvegarde (src/state/persistence.ts).
+shareAcrossTabs(useBench);

@@ -15,7 +15,7 @@ import type {
   VehicleManifest,
   Zone,
 } from '../data/vehicleTypes.ts';
-import { idbStorage } from './persistence.ts';
+import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
 export const BUILDS_KEY = 'pmb-builds';
 export const BUILDS_VERSION = 1;
@@ -59,7 +59,11 @@ export function isLinked(manifest: Zoned, build: Build | undefined, zoneId: stri
 function ownPaint(zone: Zone, choice: PaintChoice | undefined): Paint {
   const paint: Paint = { ...zone.paint };
   if (choice?.color !== undefined) paint.color = choice.color;
-  if (choice?.finish !== undefined) paint.finish = choice.finish;
+  if (choice?.finish !== undefined && choice.finish !== zone.paint.finish) {
+    // La paillette du manifeste va avec sa finition : une autre finition garde la sienne.
+    paint.finish = choice.finish;
+    delete paint.flake;
+  }
   if (choice?.flake !== undefined) paint.flake = choice.flake;
   if (choice?.color2 !== undefined) paint.color2 = choice.color2;
   return paint;
@@ -247,3 +251,6 @@ export const useBuilds = create<BuildsState>()(
     },
   ),
 );
+
+// Une autre page de l'app enregistre aussi : le store relit la sauvegarde (src/state/persistence.ts).
+shareAcrossTabs(useBuilds);

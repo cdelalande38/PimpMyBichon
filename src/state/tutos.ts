@@ -5,7 +5,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { TUTOS } from '../data/tutos.ts';
-import { idbStorage } from './persistence.ts';
+import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
 export const TUTOS_KEY = 'pmb-tutos';
 export const TUTOS_VERSION = 1;
@@ -87,3 +87,5 @@ export const useTutos = create<TutoState>()(
     },
   ),
 );
+
+shareAcrossTabs(useTutos);
