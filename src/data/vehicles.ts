@@ -5,7 +5,7 @@
 // le premier est le véhicule de départ. Aucun identifiant de véhicule n'est écrit dans le code.
 
 import { FINISHES } from './finishes.ts';
-import type { EngineSpec, Paint, VehicleId, VehicleManifest, Zone, ZoneGroup } from './vehicleTypes.ts';
+import type { EngineSpec, InteriorView, Paint, SkyMotif, VehicleId, VehicleManifest, Zone, ZoneGroup } from './vehicleTypes.ts';
 
 /** Dossier des véhicules, sous le socle de l'app. */
 export const VEHICLES_DIR = 'assets/vehicles/';
@@ -18,6 +18,7 @@ const GROUPS: readonly ZoneGroup[] = ['carrosserie', 'accastillage'];
 const FUELS: ReadonlyArray<EngineSpec['fuel']> = ['essence', 'diesel'];
 const FEEDS: ReadonlyArray<EngineSpec['feed']> = ['carburateur', 'injection'];
 const BOOSTS: ReadonlyArray<EngineSpec['boost']> = ['atmo', 'turbo', 'compresseur'];
+const MOTIFS: readonly SkyMotif[] = ['eclair', 'flamme'];
 
 type Raw = Record<string, unknown>;
 
@@ -84,6 +85,95 @@ function checkEngine(raw: unknown, problems: string[]): void {
   if (!positive(raw.power)) problems.push('engine.power doit être un nombre de chevaux positif');
 }
 
+function point(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 3 && value.every((n) => typeof n === 'number' && Number.isFinite(n));
+}
+
+function checkView(view: unknown, where: string, problems: string[]): void {
+  if (!isObject(view) || !point(view.eye) || !point(view.target)) {
+    problems.push(`${where} doit porter eye et target, trois nombres chacun, en mètres`);
+    return;
+  }
+  if (view.label !== undefined && !text(view.label)) problems.push(`${where}.label doit être un texte`);
+  if (view.fov !== undefined && !(typeof view.fov === 'number' && view.fov >= 60 && view.fov <= 110)) problems.push(`${where}.fov doit être un angle de 60 à 110 degrés`);
+}
+
+/** Points de vue intérieurs, ciel étoilé et lumière d'habitacle. */
+function checkInterior(raw: Raw, problems: string[]): void {
+  if (raw.interiorView !== undefined) checkView(raw.interiorView, 'interiorView', problems);
+  if (raw.interiorViews !== undefined) {
+    if (!Array.isArray(raw.interiorViews)) problems.push('interiorViews doit être une liste de points de vue');
+    else if (raw.interiorView === undefined) problems.push('interiorViews demande un premier point de vue, interiorView');
+    else raw.interiorViews.forEach((view: unknown, i) => checkView(view, `interiorViews[${i}]`, problems));
+  }
+  if (raw.cabin === undefined) return;
+  const cabin = raw.cabin;
+  if (!isObject(cabin)) {
+    problems.push('cabin doit être un objet');
+    return;
+  }
+  const { sky, light, panels } = cabin;
+  if (panels !== undefined) {
+    if (!Array.isArray(panels)) problems.push('cabin.panels doit être une liste');
+    else
+      panels.forEach((panel: unknown, i) => {
+        const size = isObject(panel) ? panel.size : undefined;
+        const ok =
+          isObject(panel) &&
+          (panel.shape === 'disque' || panel.shape === 'rectangle') &&
+          point(panel.center) &&
+          point(panel.normal) &&
+          Array.isArray(size) &&
+          size.length === 2 &&
+          size.every(positive) &&
+          typeof panel.color === 'string' &&
+          HEX.test(panel.color) &&
+          (panel.intensity === undefined || (typeof panel.intensity === 'number' && panel.intensity >= 0 && panel.intensity <= 1));
+        if (!ok) problems.push(`cabin.panels[${i}] doit porter shape (disque ou rectangle), center et normal (trois nombres), size (deux longueurs), color (#rrggbb), intensity de 0 à 1`);
+      });
+  }
+  if (sky !== undefined) {
+    const size = isObject(sky) ? sky.size : undefined;
+    if (
+      !isObject(sky) ||
+      !point(sky.center) ||
+      !Array.isArray(size) ||
+      size.length !== 2 ||
+      !size.every(positive) ||
+      !(typeof sky.count === 'number' && Number.isInteger(sky.count) && sky.count > 0 && sky.count <= 2000) ||
+      typeof sky.color !== 'string' ||
+      !HEX.test(sky.color)
+    ) {
+      problems.push('cabin.sky doit porter center (trois nombres), size (deux longueurs), count (1 à 2 000 points) et color (#rrggbb)');
+    } else if (sky.medallion !== undefined) {
+      const medallion = sky.medallion;
+      if (!isObject(medallion) || !positive(medallion.radius) || !MOTIFS.includes(medallion.motif as SkyMotif)) {
+        problems.push(`cabin.sky.medallion doit porter radius (en mètres) et motif (${MOTIFS.join(' ou ')})`);
+      }
+    }
+  }
+  if (light !== undefined) {
+    if (
+      !isObject(light) ||
+      !point(light.position) ||
+      !positive(light.intensity) ||
+      !positive(light.distance) ||
+      (light.color !== undefined && (typeof light.color !== 'string' || !HEX.test(light.color)))
+    ) {
+      problems.push('cabin.light doit porter position (trois nombres), intensity et distance positives, color facultative (#rrggbb)');
+    }
+  }
+}
+
+/**
+ * Points de vue intérieurs d'un véhicule, dans l'ordre des appuis sur le bouton rond : le premier
+ * s'ouvre en entrant. Vide : pas de vue intérieure.
+ */
+export function interiorViewsOf(vehicle: Pick<VehicleManifest, 'interiorView' | 'interiorViews'>): readonly InteriorView[] {
+  if (!vehicle.interiorView) return [];
+  return [vehicle.interiorView, ...(vehicle.interiorViews ?? [])];
+}
+
 /** Chemin du manifeste d'un dossier, tel qu'on le cite dans une erreur. */
 export function manifestPath(folder: string): string {
   return `public/${VEHICLES_DIR}${folder}/vehicle.json`;
@@ -118,11 +208,7 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
     if (raw.presentSide !== undefined && raw.presentSide !== 'gauche' && raw.presentSide !== 'droite') {
       problems.push('presentSide doit valoir « gauche » ou « droite »');
     }
-    if (raw.interiorView !== undefined) {
-      const view = raw.interiorView;
-      const point = (value: unknown) => Array.isArray(value) && value.length === 3 && value.every((n) => typeof n === 'number' && Number.isFinite(n));
-      if (!isObject(view) || !point(view.eye) || !point(view.target)) problems.push('interiorView doit porter eye et target, trois nombres chacun, en mètres');
-    }
+    checkInterior(raw, problems);
   }
   if (problems.length > 0) {
     throw new Error(`Manifeste de véhicule invalide, ${manifestPath(folder)} : ${problems.join(' ; ')}.`);

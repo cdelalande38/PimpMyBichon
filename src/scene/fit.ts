@@ -296,9 +296,13 @@ export interface Look {
   pitch: number;
 }
 
-/** Champ vertical de la vue intérieure, en degrés. */
-export function interiorFov(width: number, height: number): number {
-  return height > Math.max(1, width) * 1.15 ? INTERIOR.fovPortrait : INTERIOR.fovLandscape;
+/**
+ * Champ vertical de la vue intérieure, en degrés. `portrait` : celui que le point de vue déclare
+ * (manifeste, interiorView.fov) pour un écran en hauteur ; en largeur, le champ garde la même
+ * proportion à celui de l'app.
+ */
+export function interiorFov(width: number, height: number, portrait: number = INTERIOR.fovPortrait): number {
+  return height > Math.max(1, width) * 1.15 ? portrait : (INTERIOR.fovLandscape * portrait) / INTERIOR.fovPortrait;
 }
 
 /** Œil et point regardé dans la pièce. */

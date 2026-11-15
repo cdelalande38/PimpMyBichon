@@ -56,17 +56,29 @@ describe('manifeste de la Cox', () => {
     expect(byId.sellerie!.paint.finish).toBe('satine');
   });
 
-  it('déclare la vue intérieure depuis la place du conducteur (à gauche), tournée vers l’avant', () => {
-    const view = manifest.interiorView!;
-    expect(view).toBeDefined();
-    const [ex, ey, ez] = view.eye;
-    const [tx, ty] = view.target;
-    expect(ez).toBeLessThan(-0.15); // conducteur à gauche
-    expect(Math.abs(ex)).toBeLessThan(0.6); // entre les deux portes
-    expect(ey).toBeGreaterThan(0.9); // assis, sous le pavillon (1,44)
-    expect(ey).toBeLessThan(1.3);
-    expect(tx).toBeGreaterThan(ex); // regarde vers l'avant
-    expect(ty).toBeLessThan(ey); // un peu vers le bas : volant, compteur, pommeau
+  it('déclare deux points de vue : entre les sièges, reculé, puis à la place du conducteur, tournés vers l’avant', () => {
+    const first = manifest.interiorView!;
+    expect(first).toBeDefined();
+    expect(first.label).toBe('Entre les sièges');
+    const [ex, ey, ez] = first.eye;
+    expect(Math.abs(ez)).toBeLessThan(0.05); // au centre de l'habitacle
+    expect(ex).toBeLessThan(-0.4); // reculé, derrière le haut des dossiers avant
+    expect(ex).toBeGreaterThan(-1.0); // devant la banquette
+    expect(ey).toBeGreaterThan(1.0); // à hauteur du haut des dossiers
+    expect(ey).toBeLessThan(1.3); // sous le pavillon (1,44)
+    expect(first.target[0]).toBeGreaterThan(ex); // droit devant
+    expect(first.target[1]).toBeLessThan(ey); // très légèrement vers le bas
+    expect(Math.abs(first.target[2])).toBeLessThan(0.05);
+    expect(manifest.interiorViews).toHaveLength(1);
+    const driver = manifest.interiorViews![0]!;
+    expect(driver.label).toBe('Au volant');
+    const [dx, dy, dz] = driver.eye;
+    expect(dz).toBeLessThan(-0.15); // conducteur à gauche
+    expect(Math.abs(dx)).toBeLessThan(0.6); // entre les deux portes
+    expect(dy).toBeGreaterThan(0.9);
+    expect(dy).toBeLessThan(1.3);
+    expect(driver.target[0]).toBeGreaterThan(dx);
+    expect(driver.target[1]).toBeLessThan(dy); // volant, compteur, pommeau
   });
 
   it('donne le moteur de la fiche', () => {
@@ -124,18 +136,21 @@ describe('modèle de la Cox', () => {
     const node = json.nodes.find((n: { name: string }) => n.name === 'habitacle');
     expect(node).toBeDefined();
     const mats = json.meshes[node.mesh].primitives.map((p: { material: number }) => json.materials[p.material].name as string);
-    for (const m of ['paint_sellerie', 'paint_pommeau', 'leather', 'black', 'tail']) expect(mats).toContain(m);
+    for (const m of ['paint_sellerie', 'paint_pommeau', 'black', 'tail', 'chrome']) expect(mats).toContain(m);
+    // Tout noir mat d'après la fiche : plus de ciel de toit en cuir.
+    expect(mats).not.toContain('leather');
     const cabin = nodeBox('habitacle');
     const body = nodeBox('carrosserie');
     for (let i = 0; i < 3; i += 1) {
       expect(cabin.min[i]!).toBeGreaterThan(body.min[i]!);
       expect(cabin.max[i]!).toBeLessThan(body.max[i]!);
     }
-    // L'œil du conducteur est dans l'habitacle garni.
-    const eye = manifest.interiorView!.eye;
-    for (let i = 0; i < 3; i += 1) {
-      expect(eye[i]!).toBeGreaterThan(cabin.min[i]!);
-      expect(eye[i]!).toBeLessThan(cabin.max[i]!);
+    // Chaque œil est dans l'habitacle garni.
+    for (const { eye } of [manifest.interiorView!, ...(manifest.interiorViews ?? [])]) {
+      for (let i = 0; i < 3; i += 1) {
+        expect(eye[i]!).toBeGreaterThan(cabin.min[i]!);
+        expect(eye[i]!).toBeLessThan(cabin.max[i]!);
+      }
     }
   });
 

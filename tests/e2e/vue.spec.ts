@@ -3,7 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { capture, openApp, openEntry, quick, waitForBench, waitForScene } from './helpers.ts';
 
 // Vue intérieure (§ 5.1) et cadrage de départ par véhicule : le bouton « Intérieur » n'existe que
-// pour un véhicule qui déclare interiorView ; entrer, regarder autour, sortir rend la vue d'atelier ;
+// pour un véhicule qui déclare interiorView ; entrer, passer d'un point de vue au suivant
+// (interiorViews : le bouton dit lequel), regarder autour, sortir rend la vue d'atelier ;
 // chaque véhicule occupe environ 80 % de la largeur, centré dans la partie libre au-dessus du dock.
 
 interface Entry {
@@ -12,6 +13,7 @@ interface Entry {
   glb: string;
   kind: 'car' | 'bike';
   interiorView?: unknown;
+  interiorViews?: ReadonlyArray<{ label?: string }>;
 }
 
 const DIR = new URL('../../public/assets/vehicles/', import.meta.url);
@@ -113,7 +115,7 @@ for (const screen of [
 }
 
 test.describe('vue intérieure', () => {
-  test('entrer, regarder autour, sortir : la vue d’atelier est retrouvée', async ({ page }) => {
+  test('entrer, passer d’un point de vue à l’autre, regarder autour, sortir : la vue d’atelier est retrouvée', async ({ page }) => {
     test.setTimeout(420_000);
     const { width, height } = page.viewportSize() ?? { width: 390, height: 844 };
     await openApp(page);
@@ -128,7 +130,8 @@ test.describe('vue intérieure', () => {
 
       await interiorButton(page).tap();
       await expect(stage(page)).toHaveAttribute('data-vue', 'interieur');
-      await expect(leaveButton(page)).toBeVisible();
+      // Le bouton dit ce que fera l'appui : passer au point de vue suivant, ou sortir.
+      if (!entry.interiorViews?.length) await expect(leaveButton(page)).toBeVisible();
       await expect(stage(page)).toHaveAttribute('data-regard', '0,0');
       // Rien du décor n'est retiré à tort : l'œil est dans le volume protégé du véhicule, la coupe
       // n'ajoute rien à ce qu'elle retirait déjà depuis la vue d'atelier.
@@ -136,6 +139,19 @@ test.describe('vue intérieure', () => {
       console.log(`coupe ${entry.id} : atelier ${cutBefore}, intérieur ${cutInside}`);
       expect(cutInside, 'coupe caméra dans l’habitacle').toBeLessThanOrEqual(cutBefore);
       await capture(page, `vue-interieure-${entry.id}`);
+
+      // Points de vue suivants : le bouton dit où mène l'appui ; chacun repart regard droit devant.
+      for (const [i, next] of (entry.interiorViews ?? []).entries()) {
+        const nextButton = quick(page).getByRole('button', { name: `Vue suivante : ${next.label ?? 'autre place'}`, exact: true });
+        await expect(nextButton).toBeVisible();
+        await expect(leaveButton(page)).toHaveCount(0);
+        const cameraBefore = await stage(page).getAttribute('data-regard');
+        await nextButton.tap();
+        await expect(stage(page)).toHaveAttribute('data-vue', 'interieur');
+        await expect(stage(page)).toHaveAttribute('data-regard', '0,0');
+        expect(cameraBefore).toBe('0,0');
+        await capture(page, `vue-interieure-${entry.id}-${i + 2}`);
+      }
 
       // Glisser vers la droite : on regarde à gauche, sans dépasser les bornes du regard.
       const y = Math.round(height * 0.4);
@@ -151,6 +167,7 @@ test.describe('vue intérieure', () => {
         .toBe(true);
       // Le dock reste utilisable dedans.
       await expect(dock(page)).toBeVisible();
+      await expect(leaveButton(page)).toBeVisible();
 
       await leaveButton(page).tap();
       await expect(stage(page)).toHaveAttribute('data-vue', 'atelier');

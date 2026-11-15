@@ -18,6 +18,8 @@
 // - Bourrelet des passages de roue : le flanc est repoussé de 3 cm le long du cercle de chaque
 //   passage (fonction de la distance au cercle), dans le même loft : pas de couture.
 
+import interieur from './interieur.mjs';
+
 /** @typedef {typeof import('../../../tools/vehicles/kit.mjs')} Kit */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Parts} Parts */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Face} Face */
@@ -315,32 +317,8 @@ export default function van(k) {
     ...k.orient(k.lamp(k.circle(0, 0, 0.026, 20), { material: 'lamp', bulge: 0.008, depth: 0.004 }), { ...fogPose, position: /** @type {P3} */ ([fogPose.position[0] + nFog[0] * 0.005, 0.56, fogPose.position[2] + nFog[2] * 0.005]) }),
   ];
 
-  // --- Habitacle : doublure sombre, planche de bord, volant, deux sièges, cloison ---------------
-  const lining = k.loft({
-    sectionAt: (x) => {
-      const d = dims(x);
-      return k.mirrorSection(k.roundedHalf({ bottom: 0.42, top: d.t - 0.05, halfWidthBottom: d.w - 0.05, halfWidthTop: d.w - 0.12, rTop: 0.1, rBottom: 0.03 }));
-    },
-    xs: k.sampleX(X_REAR + 0.08, 1.62, { step: 0.12, endZone: 0.05, endCount: 2 }),
-    material: 'black',
-    inward: true,
-    capRows: 1,
-    capColumns: 4,
-  });
-  /** @type {Parts} */
-  const cabin = [...lining];
-  for (const z of [-0.47, 0.47]) {
-    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.5, 0.12, 0.05), { material: 'leather', depth: 0.5, bevel: 0.03 }), { position: [0.72, 0.68, z] }));
-    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.12, 0.7, 0.05), { material: 'leather', depth: 0.5, bevel: 0.03 }), { position: [0.44, 1.05, z], rotation: [0, 0, 0.16] }));
-    cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.1, 0.18, 0.04), { material: 'leather', depth: 0.28, bevel: 0.03 }), { position: [0.38, 1.5, z], rotation: [0, 0, 0.16] }));
-  }
-  // Cloison derrière les sièges.
-  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(1.76, 1.3, 0.1), { material: 'black', depth: 0.03, bevel: 0.01, axis: 'x' }), { position: [0.27, 1.07, 0] }));
-  // Planche de bord et volant.
-  cabin.push(...k.place(k.roundedExtrude(k.roundedRect(0.45, 0.24, 0.08), { material: 'black', depth: 1.74, bevel: 0.04 }), { position: [1.45, 1.0, 0] }));
-  const ring = Array.from({ length: 12 }, (_, i) => /** @type {P3} */ ([0, 0.19 * Math.sin((2 * Math.PI * i) / 12), 0.19 * Math.cos((2 * Math.PI * i) / 12)]));
-  cabin.push(...k.place(k.tube(ring, { material: 'black', radius: 0.017, closed: true, segments: 60, radial: 8 }), { position: [1.18, 1.2, -0.47], rotation: [0, 0, 0.6] }));
-  cabin.push(...k.rod([1.18, 1.2, -0.47], [1.36, 1.08, -0.47], 0.03, { material: 'black' }));
+  // --- Habitacle : doublure percée aux vitres, planche, combiné, volant, sièges (interieur.mjs) --
+  const cabin = interieur(k, { dims, flankZ, gy, xRear: X_REAR, xWs: X_WS, xFwin: X_FWIN, xSwin: X_SWIN });
 
   // --- Accessoires : rétroviseurs, poignées, répétiteurs, trappe à carburant -------------------
   /** @type {Parts} */

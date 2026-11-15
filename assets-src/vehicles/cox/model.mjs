@@ -539,6 +539,7 @@ export default function cox(k) {
     xDoorFront,
     xQtrRear,
     windows: [windowLoop(xDoorFrontAt, () => X_DOOR[0]), windowLoop(() => X_QTR[1], xQtrRearAt), wsLoop],
+    onDome,
   });
 
   // --- Modèle --------------------------------------------------------------------------------

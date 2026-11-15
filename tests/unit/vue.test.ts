@@ -1,7 +1,9 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { GARAGE } from '../../src/data/garage.ts';
-import { validateManifest } from '../../src/data/vehicles.ts';
+import { interiorViewsOf, validateManifest } from '../../src/data/vehicles.ts';
+import { starLayout } from '../../src/scene/cabin.ts';
+import { useView } from '../../src/state/view.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
 import {
   clampLook,
@@ -111,29 +113,123 @@ describe('bornes du regard', () => {
     expect(interiorFov(390, 844)).toBeGreaterThan(46);
     expect(interiorFov(844, 390)).toBeGreaterThan(34);
   });
+
+  it('un point de vue peut élargir son champ ; en paysage, il garde la même proportion', () => {
+    expect(interiorFov(390, 844, 100)).toBe(100);
+    expect(interiorFov(844, 390, 100)).toBeCloseTo((INTERIOR.fovLandscape * 100) / INTERIOR.fovPortrait, 9);
+    expect(interiorFov(390, 844, undefined)).toBe(INTERIOR.fovPortrait);
+  });
+});
+
+describe('bouton rond de la vue intérieure', () => {
+  it('un point de vue : un appui pour entrer, un pour sortir (comportement d’avant)', () => {
+    useView.getState().setMode('atelier');
+    useView.getState().next(1);
+    expect(useView.getState()).toMatchObject({ mode: 'interieur', seat: 0 });
+    useView.getState().next(1);
+    expect(useView.getState()).toMatchObject({ mode: 'atelier', seat: 0 });
+  });
+
+  it('deux points de vue : entrer, passer au second, ressortir', () => {
+    useView.getState().setMode('atelier');
+    const seen: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      useView.getState().next(2);
+      const { mode, seat } = useView.getState();
+      seen.push(`${mode}:${seat}`);
+    }
+    expect(seen).toEqual(['interieur:0', 'interieur:1', 'atelier:0']);
+  });
+
+  it('sortir par un autre chemin (photo, autre véhicule) remet au premier point de vue', () => {
+    useView.getState().setMode('atelier');
+    useView.getState().next(2);
+    useView.getState().next(2);
+    useView.getState().setMode('atelier');
+    expect(useView.getState().seat).toBe(0);
+    useView.getState().next(0);
+    expect(useView.getState().mode).toBe('atelier');
+  });
 });
 
 describe('vue intérieure dans les manifestes', () => {
-  // Le van l'attend : son habitacle de substitut est trop sombre pour être montré (TODO_ASSETS.md).
   // On ne juge que les véhicules nommés ici et les motos : un autre fichier de tests dépose un
   // véhicule d'essai dans le même dossier pendant qu'il tourne (tests/unit/vehicules.test.ts).
-  it('la Cox et le concept la déclarent ; pas les motos, ni le van tant que son habitacle n’est pas modelé', () => {
-    for (const id of ['cox', 'concept']) expect(byId(id)?.interiorView, id).toBeDefined();
-    expect(byId('van'), 'le van est au catalogue').toBeDefined();
-    expect(byId('van')?.interiorView, 'van').toBeUndefined();
+  it('la Cox, le concept et le van la déclarent (la vue intérieure du van est revenue) ; pas les motos', () => {
+    for (const id of ['cox', 'concept', 'van']) expect(byId(id)?.interiorView, id).toBeDefined();
+    expect(interiorViewsOf(byId('cox')!).map((view) => view.label)).toEqual(['Entre les sièges', 'Au volant']);
+    expect(interiorViewsOf(byId('van')!)).toHaveLength(1);
     for (const manifest of MANIFESTS) {
-      if (manifest.kind === 'bike') expect(manifest.interiorView, manifest.id).toBeUndefined();
+      if (manifest.kind === 'bike') expect(interiorViewsOf(manifest), manifest.id).toHaveLength(0);
     }
   });
 
-  it('l’œil est dans la boîte du véhicule et regarde vers l’avant', () => {
+  it('chaque point de vue a l’œil dans la boîte du véhicule et regarde vers l’avant', () => {
     for (const manifest of MANIFESTS) {
-      const view = manifest.interiorView;
-      if (!view) continue;
-      expect(Math.abs(view.eye[0]), manifest.id).toBeLessThan(manifest.halfLengthHint);
-      expect(view.eye[1], manifest.id).toBeGreaterThan(0.6);
-      expect(view.target[0], manifest.id).toBeGreaterThan(view.eye[0]);
+      for (const view of interiorViewsOf(manifest)) {
+        expect(Math.abs(view.eye[0]), manifest.id).toBeLessThan(manifest.halfLengthHint);
+        expect(view.eye[1], manifest.id).toBeGreaterThan(0.6);
+        expect(view.target[0], manifest.id).toBeGreaterThan(view.eye[0]);
+      }
     }
+  });
+
+  it('des points de vue suivants sans premier point de vue, ou un champ hors bornes, sont refusés', () => {
+    const base = JSON.parse(readFileSync(new URL('cox/vehicle.json', DIR), 'utf8')) as Record<string, unknown>;
+    const { interiorView, ...rest } = base;
+    expect(interiorView).toBeDefined();
+    expect(() => validateManifest(rest, 'cox')).toThrow(/interiorViews demande/);
+    expect(() => validateManifest({ ...base, interiorView: { eye: [0, 1, 0], target: [1, 1, 0], fov: 150 } }, 'cox')).toThrow(/fov/);
+    expect(() => validateManifest({ ...base, cabin: { sky: { center: [0, 1, 0], size: [1, 1], count: 10, color: 'rouge' } } }, 'cox')).toThrow(/cabin.sky/);
+  });
+});
+
+describe('ciel étoilé', () => {
+  const sky = byId('van')?.cabin?.sky;
+
+  it('le van déclare un ciel rouge par défaut, un médaillon à motif à nous, une lumière et ses cadrans', () => {
+    expect(sky).toBeDefined();
+    expect(sky!.color).toMatch(/^#[0-9a-f]{6}$/);
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(sky!.color.slice(i, i + 2), 16));
+    expect(r!).toBeGreaterThan(200);
+    expect(g! + b!).toBeLessThan(120);
+    expect(['eclair', 'flamme']).toContain(sky!.medallion?.motif);
+    const cabin = byId('van')!.cabin!;
+    expect(cabin.light?.intensity).toBeGreaterThan(0);
+    expect(cabin.light?.color).toBeUndefined(); // de la couleur du plafond
+    expect(cabin.panels?.filter((panel) => panel.shape === 'disque')).toHaveLength(2);
+    expect(cabin.panels?.filter((panel) => panel.shape === 'rectangle')).toHaveLength(1);
+  });
+
+  it('même manifeste, même ciel ; les points restent sur le plafond, plus serrés au centre', () => {
+    const stars = starLayout(sky!);
+    expect(starLayout(sky!)).toEqual(stars);
+    expect(stars.length).toBeGreaterThan(sky!.count);
+    const [cx, , cz] = sky!.center;
+    const [length, width] = sky!.size;
+    for (const star of stars.slice(0, sky!.count)) {
+      expect(Math.abs(star.x - cx)).toBeLessThanOrEqual(length / 2);
+      expect(Math.abs(star.z - cz)).toBeLessThanOrEqual(width / 2);
+    }
+    // Densité, mesurée sans médaillon (il vide le milieu) : le carré du milieu couvre un quart du
+    // plafond, il reçoit plus d'un quart des points.
+    let inner = 0;
+    let outer = 0;
+    for (const star of starLayout({ ...sky!, medallion: undefined, count: 2000 })) {
+      const u = Math.abs(star.x - cx) / (length / 2);
+      const v = Math.abs(star.z - cz) / (width / 2);
+      expect(u).toBeLessThanOrEqual(1);
+      expect(v).toBeLessThanOrEqual(1);
+      expect(star.radius).toBeGreaterThan(0.001);
+      expect(star.radius).toBeLessThan(0.01);
+      if (Math.max(u, v) < 0.5) inner += 1;
+      else outer += 1;
+    }
+    expect(inner / (inner + outer)).toBeGreaterThan(0.28);
+    // Le médaillon : des points sur son cercle, aucun point du semis dedans.
+    const r = sky!.medallion!.radius;
+    for (const star of stars.slice(0, sky!.count)) expect(Math.hypot(star.x - cx, star.z - cz)).toBeGreaterThan(r);
+    expect(stars.slice(sky!.count).some((star) => Math.abs(Math.hypot(star.x - cx, star.z - cz) - r) < 1e-9)).toBe(true);
   });
 });
 

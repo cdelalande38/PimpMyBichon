@@ -45,5 +45,22 @@
     "feed": "injection",
     "boost": "turbo",
     "power": 102
+  },
+  "interiorView": { "label": "Sous le ciel étoilé", "eye": [-0.75, 1.44, 0.3], "target": [1.4, 1.46, -0.42], "fov": 100 },
+  "cabin": {
+    "sky": {
+      "center": [-0.05, 1.835, 0],
+      "size": [1.4, 1.3],
+      "count": 420,
+      "color": "#ff2a1f",
+      "seed": 7,
+      "medallion": { "radius": 0.25, "motif": "eclair" }
+    },
+    "light": { "position": [0, 1.3, 0], "intensity": 2, "distance": 3 },
+    "panels": [
+      { "shape": "disque", "center": [1.317, 1.1904, -0.538], "normal": [-0.94, 0.34, 0], "size": [0.1, 0.1], "color": "#f4f1ea", "intensity": 0.9 },
+      { "shape": "disque", "center": [1.317, 1.1904, -0.402], "normal": [-0.94, 0.34, 0], "size": [0.1, 0.1], "color": "#f4f1ea", "intensity": 0.9 },
+      { "shape": "rectangle", "center": [1.253, 1.2107, 0], "normal": [-0.94, 0.34, 0], "size": [0.22, 0.13], "color": "#2f7bff", "intensity": 0.85 }
+    ]
   }
 }

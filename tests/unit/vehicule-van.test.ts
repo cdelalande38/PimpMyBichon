@@ -46,21 +46,28 @@ describe('manifeste du van', () => {
     expect(manifest.engine).toEqual({ label: '4 cylindres turbo diesel', fuel: 'diesel', feed: 'injection', boost: 'turbo', power: 102 });
   });
 
-  // Vue intérieure retirée le 15 novembre 2026 : vu du siège, l'habitacle de substitut est presque
-  // noir (TODO_ASSETS.md). Elle revient avec un habitacle modelé et éclairé ; le jour où le manifeste
-  // la déclare de nouveau, le point de vue doit rester à la place du conducteur.
-  it('ne déclare pas de vue intérieure tant que l’habitacle n’est pas modelé ; sinon, à la place du conducteur', () => {
+  // Vue intérieure retirée le 15 novembre 2026 (habitacle presque noir), revenue avec un habitacle
+  // percé aux vitres, un ciel étoilé, des cadrans clairs et une lumière d'habitacle (cabin).
+  it('la vue intérieure du van est revenue : derrière les sièges avant, sous le plafond, vers l’avant', () => {
     const view = manifest.interiorView;
-    if (view === undefined) return;
-    const [ex, ey, ez] = view.eye;
-    const [tx, ty] = view.target;
-    expect(ez).toBeLessThan(-0.3); // place avant gauche
-    expect(ex).toBeGreaterThan(0.3); // devant la cloison
-    expect(ex).toBeLessThan(1.05); // derrière le pare-brise
+    expect(view).toBeDefined();
+    const [ex, ey, ez] = view!.eye;
+    const [tx] = view!.target;
+    expect(Math.abs(ex)).toBeLessThan(2.3); // dans la caisse
+    expect(Math.abs(ez)).toBeLessThan(0.6);
     expect(ey).toBeGreaterThan(1.2);
     expect(ey).toBeLessThan(1.8); // sous le pavillon
-    expect(tx).toBeGreaterThan(ex); // regarde vers l'avant
-    expect(ty).toBeLessThan(ey); // et vers le bas, la planche de bord
+    expect(tx).toBeGreaterThan(ex); // regarde vers l'avant, le poste de conduite
+  });
+
+  it('allume en vue intérieure un ciel étoilé sous le pavillon, sa lumière et ses cadrans', () => {
+    const cabin = manifest.cabin!;
+    expect(cabin.sky).toBeDefined();
+    expect(cabin.sky!.center[1]).toBeGreaterThan(1.8);
+    expect(cabin.sky!.center[1]).toBeLessThan(1.86); // sous la doublure du pavillon (1,90 − 4,5 cm)
+    expect(cabin.light!.position[1]).toBeLessThan(cabin.sky!.center[1]);
+    expect(cabin.light!.distance).toBeLessThan(4); // n'éclaire pas le garage
+    for (const panel of cabin.panels ?? []) expect(panel.center[0]).toBeGreaterThan(manifest.interiorView!.eye[0]);
   });
 });
 

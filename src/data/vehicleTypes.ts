@@ -89,6 +89,74 @@ export interface EngineSpec {
   power: number;
 }
 
+/** Point en mètres, dans le repère du véhicule (avant vers +X, haut vers +Y, droite vers +Z). */
+export type VehiclePoint = readonly [number, number, number];
+
+/** Un point de vue de la vue intérieure. */
+export interface InteriorView {
+  eye: VehiclePoint;
+  target: VehiclePoint;
+  /** Nom court, dit par le bouton rond qui y mène : « Entre les sièges », « Au volant ». */
+  label?: string;
+  /** Champ vertical en portrait, en degrés (60 à 110) ; absent : celui de l'app (90). */
+  fov?: number;
+}
+
+/** Motifs du médaillon du ciel étoilé : des dessins à nous, jamais un emblème de constructeur. */
+export type SkyMotif = 'eclair' | 'flamme';
+
+/**
+ * Ciel de toit étoilé : un semis de points lumineux sous le plafond, plus serrés vers le centre,
+ * avec un médaillon rond facultatif au milieu. Dessiné par l'app (src/scene/cabin.ts), pas par le
+ * modèle : couleur, densité et motif changent sans refaire le GLB.
+ */
+export interface StarrySky {
+  /** Centre du semis, juste sous le plafond. */
+  center: VehiclePoint;
+  /** Longueur (le long de X) et largeur (le long de Z) du semis, en mètres. */
+  size: readonly [number, number];
+  /** Nombre de points du semis, médaillon non compris. */
+  count: number;
+  color: Hex;
+  /** Graine du tirage : un même manifeste donne toujours le même ciel. */
+  seed?: number;
+  /** Médaillon central : rayon en mètres, motif dessiné en points de la couleur des étoiles. */
+  medallion?: { radius: number; motif: SkyMotif };
+}
+
+/** Lumière d'habitacle, allumée en vue intérieure seulement. */
+export interface CabinLight {
+  position: VehiclePoint;
+  /** Absente : la couleur du ciel étoilé (ou blanc chaud sans ciel). */
+  color?: Hex;
+  /** Intensité, en candelas. */
+  intensity: number;
+  /** Portée, en mètres : au-delà, elle n'éclaire plus rien (le garage reste tel quel). */
+  distance: number;
+}
+
+/**
+ * Surface rétroéclairée de la planche (cadran, écran) : dessinée par l'app devant son support noir
+ * du modèle, allumée en vue intérieure seulement.
+ */
+export interface CabinPanel {
+  shape: 'disque' | 'rectangle';
+  center: VehiclePoint;
+  /** Normale, tournée vers l'habitacle. */
+  normal: VehiclePoint;
+  /** Diamètre (deux fois le même), ou largeur et hauteur, en mètres. */
+  size: readonly [number, number];
+  color: Hex;
+  /** Force, de 0 à 1 (absente : 1) : lisible de nuit, sans halo. */
+  intensity?: number;
+}
+
+export interface CabinLighting {
+  sky?: StarrySky;
+  light?: CabinLight;
+  panels?: readonly CabinPanel[];
+}
+
 export interface VehicleManifest {
   /** Égal au nom du dossier. */
   id: VehicleId;
@@ -112,10 +180,19 @@ export interface VehicleManifest {
   /** Moteur d'origine ; absent : pas de fiche de préparation pour ce véhicule. */
   engine?: EngineSpec;
   /**
-   * Point de vue intérieur (§ 5.1) : position de l'œil et point regardé, en mètres, dans le repère
-   * du véhicule (avant vers +X, haut vers +Y, droite vers +Z). Absent : pas de vue intérieure.
+   * Point de vue intérieur (§ 5.1), celui qui s'ouvre quand on entre : position de l'œil et point
+   * regardé, en mètres, dans le repère du véhicule (avant vers +X, haut vers +Y, droite vers +Z).
+   * Absent : pas de vue intérieure.
    */
-  interiorView?: { eye: readonly [number, number, number]; target: readonly [number, number, number] };
+  interiorView?: InteriorView;
+  /**
+   * Points de vue suivants, dans l'ordre des appuis sur le bouton rond : chaque appui passe au
+   * suivant, l'appui sur le dernier rend l'atelier. Absent : un seul point de vue, un appui pour
+   * entrer, un pour sortir.
+   */
+  interiorViews?: readonly InteriorView[];
+  /** Ce que l'habitacle allume en vue intérieure (§ 5.10) : ciel étoilé, lumière d'habitacle. */
+  cabin?: CabinLighting;
   /**
    * Côté montré dans la vue de départ de l'atelier : 'droite' pose le véhicule nez à droite, la
    * caméra en miroir (le bobber montre ses échappements). Absent : 'gauche', nez à gauche.

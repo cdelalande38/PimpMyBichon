@@ -3,7 +3,7 @@
 // La personnalisation (onglets et options) reste dans le dock, au pouce (§ 2).
 
 import { openSheet } from '../app/useRoute.ts';
-import { resolveVehicle } from '../data/vehicles.ts';
+import { interiorViewsOf, resolveVehicle } from '../data/vehicles.ts';
 import { precachePercent, usePwa } from '../pwa/pwaStore.ts';
 import { useBuilds } from '../state/builds.ts';
 import { useView } from '../state/view.ts';
@@ -31,22 +31,33 @@ function OfflinePill() {
 
 /**
  * Vue intérieure (§ 5.1) : seulement si le véhicule courant déclare un point de vue intérieur
- * dans son manifeste. Un appui place l'œil au volant, un second rend la vue d'atelier.
+ * dans son manifeste. Un appui ouvre le premier point de vue, chaque appui suivant passe au point
+ * de vue suivant (interiorViews), l'appui sur le dernier rend la vue d'atelier. Le nom du bouton
+ * dit ce que fera l'appui.
  */
 function InteriorButton() {
   const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const inside = useView((state) => state.mode === 'interieur');
-  const toggle = useView((state) => state.toggle);
-  if (!vehicle.interiorView) return null;
-  const label = inside ? 'Sortir' : 'Intérieur';
+  const seat = useView((state) => state.seat);
+  const next = useView((state) => state.next);
+  const views = interiorViewsOf(vehicle);
+  if (views.length === 0) return null;
+  const following = inside ? views[seat + 1] : undefined;
+  const label = !inside ? 'Intérieur' : following ? `Vue suivante : ${following.label ?? 'autre place'}` : 'Sortir';
+  const title = !inside
+    ? `Intérieur : ${(views[0]?.label ?? 'à la place du conducteur').toLowerCase()}`
+    : following
+      ? label
+      : 'Sortir : retour à l’atelier';
   return (
     <button
       type="button"
       className="quick-btn"
       aria-label={label}
-      title={inside ? 'Sortir : retour à l’atelier' : 'Intérieur : à la place du conducteur'}
+      title={title}
       data-on={inside || undefined}
-      onClick={toggle}
+      data-place={inside ? seat : undefined}
+      onClick={() => next(views.length)}
     >
       <Icon name="volant" />
     </button>

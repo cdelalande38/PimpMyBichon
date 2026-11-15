@@ -8,18 +8,20 @@
 // décor qui passerait devant le véhicule quitte l'image (coupe caméra, src/scene/garage/cut.ts).
 // Chaque véhicule a son cadrage de départ (src/scene/fit.ts, fitVehicle : 80 % de la largeur,
 // centré dans la partie libre au-dessus du dock compact) et son côté de présentation (manifeste,
-// presentSide). Vue intérieure (useView, mode 'interieur') : l'œil du conducteur du manifeste
-// (interiorView), le regard qui tourne au doigt, sans se déplacer ni zoomer.
+// presentSide). Vue intérieure (useView, mode 'interieur') : l'un des points de vue du manifeste
+// (interiorView, puis interiorViews, un appui du bouton rond chacun), le regard qui tourne au
+// doigt, sans se déplacer ni zoomer ; l'habitacle y allume son ciel étoilé et sa lumière (cabin).
 
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { VignetteEffect } from 'postprocessing';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
-import { PerspectiveCamera as Camera, Quaternion, Vector3 } from 'three';
+import { CircleGeometry, Color, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera as Camera, PlaneGeometry, Quaternion, Vector3 } from 'three';
 import { SceneBoundary } from '../app/SceneBoundary.tsx';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
-import { modelPresent, resolveVehicle } from '../data/vehicles.ts';
+import { interiorViewsOf, modelPresent, resolveVehicle } from '../data/vehicles.ts';
+import type { CabinLighting, InteriorView } from '../data/vehicleTypes.ts';
 import { GARAGE } from '../data/garage.ts';
 import { CAMERA_LAYERS } from '../render/layers.ts';
 import { AccumulatePass } from '../render/photo/AccumulatePass.ts';
@@ -38,6 +40,7 @@ import { usePhoto } from '../state/photo.ts';
 import { useSettings } from '../state/store.ts';
 import { useView } from '../state/view.ts';
 import { AutoQuality } from './AutoQuality.tsx';
+import { starLayout } from './cabin.ts';
 import { SceneExtras } from './extras/SceneExtras.tsx';
 import {
   clampLook,
@@ -113,6 +116,8 @@ interface InteriorRig {
   savedTarget: Vector3;
   /** Véhicule à l'entrée : s'il a changé entre-temps, on sort sur la vue de départ du nouveau. */
   vehicle: string;
+  /** Point de vue visé (un appui du bouton rond passe au suivant, depuis la pose du moment). */
+  view: InteriorView | null;
   eye: Vector3;
   base: Look;
   look: Look;
@@ -215,7 +220,9 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // en cours ou un véhicule sans point de vue intérieur. `outside` : la caméra est revenue en orbite.
   const viewMode = useView((state) => state.mode);
   const setViewMode = useView((state) => state.setMode);
-  const interiorView = vehicle.interiorView;
+  const views = interiorViewsOf(vehicle);
+  const seat = useView((state) => state.seat);
+  const interiorView = views[Math.min(seat, views.length - 1)];
   const wantInside = viewMode === 'interieur' && interiorView !== undefined && !photo && !measuring;
   useEffect(() => {
     if (viewMode === 'interieur' && !wantInside) setViewMode('atelier');
@@ -238,6 +245,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     savedPosition: new Vector3(),
     savedTarget: new Vector3(),
     vehicle: '',
+    view: null,
     eye: new Vector3(),
     base: { yaw: 0, pitch: 0 },
     look: { yaw: 0, pitch: 0 },
@@ -360,7 +368,8 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     const rig = interior.current;
     const view = getThree().camera as Camera;
     const now = performance.now();
-    if (wantInside && interiorView && (rig.phase === 'out' || rig.phase === 'leaving')) {
+    const moving = rig.phase === 'out' || rig.phase === 'leaving' || rig.view !== interiorView;
+    if (wantInside && interiorView && moving) {
       if (rig.phase === 'out') {
         rig.savedPosition.copy(view.position);
         if (controls.current) rig.savedTarget.copy(controls.current.target);
@@ -371,7 +380,8 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       rig.eye.set(...pose.eye);
       rig.base = lookFrom(pose.eye, pose.target);
       rig.look = { ...rig.base };
-      rig.fov = interiorFov(width, height);
+      rig.view = interiorView;
+      rig.fov = interiorFov(width, height, interiorView.fov);
       rig.fromPosition.copy(view.position);
       rig.fromQuaternion.copy(view.quaternion);
       rig.fromFov = view.fov;
@@ -389,14 +399,16 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       rig.start = now;
       rig.duration = instant ? 0 : INTERIOR.transitionMs;
       rig.phase = 'leaving';
+      rig.view = null;
       invalidate();
     }
   }, [wantInside, interiorView, turn, width, height, instant, getThree, target, invalidate, vehicle.id]);
   // Le champ de la vue intérieure suit la forme de l'écran.
+  const viewFov = interiorView?.fov;
   useEffect(() => {
-    interior.current.fov = interiorFov(width, height);
+    interior.current.fov = interiorFov(width, height, viewFov);
     invalidate();
-  }, [width, height, invalidate]);
+  }, [width, height, viewFov, invalidate]);
   // Dedans : regarder autour en faisant glisser le doigt, borné autour de l'axe du manifeste.
   const gl = useThree((state) => state.gl);
   useEffect(() => {
@@ -478,8 +490,12 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       invalidate();
       return;
     }
-    if (rig.phase === 'entering') rig.phase = 'in';
-    else if (rig.phase === 'leaving') {
+    if (rig.phase === 'entering') {
+      rig.phase = 'in';
+      // Une image de plus : la scène publie la vue posée (data-vue) même quand rien d'autre ne
+      // redemande d'image (passage d'un point de vue à l'autre, sans changement d'état React).
+      invalidate();
+    } else if (rig.phase === 'leaving') {
       rig.phase = 'out';
       view.near = NEAR;
       view.updateProjectionMatrix();
@@ -545,6 +561,8 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
             </Suspense>
           </SceneBoundary>
         )}
+        {/* Ciel étoilé et lumière d'habitacle : montés avec le véhicule qui les déclare, allumés en vue intérieure seulement. */}
+        {vehicle.cabin && <CabinLights key={vehicle.id} cabin={vehicle.cabin} on={!outside} />}
       </group>
 
       <PostChain ambiance={ambiance} profile={profile} accumulate={accumulate} vignette={vignette} floatTargets={floatTargets} />
@@ -567,6 +585,77 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       <AutoQuality enabled={autoLevel && !measuring && !exporting} />
       <FrameMeter level={level} instantCut={reducedMotion || photo} photo={photo} />
     </>
+  );
+}
+
+/** Force des points du ciel étoilé : au-delà de 1, ils passent le seuil du halo (bloom). */
+const STAR_GLOW = 1.15;
+/** Disque d'un point du ciel, tourné vers le bas (on le voit depuis les sièges). */
+const STAR_DISC = new CircleGeometry(1, 8).rotateX(Math.PI / 2);
+
+/**
+ * Ciel étoilé (src/scene/cabin.ts : un seul maillage instancié, un appel de dessin), cadrans et
+ * écran rétroéclairés, et lumière d'habitacle du manifeste (cabin), dans le repère du véhicule. La lumière reste montée, éteinte
+ * hors de la vue intérieure : l'allumer ne recompile aucun programme. Rien ne bouge : au repos,
+ * rien n'est redessiné.
+ */
+function CabinLights({ cabin, on }: { cabin: CabinLighting; on: boolean }) {
+  const { sky, light } = cabin;
+  const stars = useMemo(() => {
+    if (!sky) return null;
+    const layout = starLayout(sky);
+    const material = new MeshBasicMaterial({ color: new Color(sky.color).multiplyScalar(STAR_GLOW), toneMapped: false, fog: false });
+    const mesh = new InstancedMesh(STAR_DISC, material, layout.length);
+    const matrix = new Matrix4();
+    layout.forEach((star, i) => {
+      matrix.makeScale(star.radius, star.radius, star.radius).setPosition(star.x, sky.center[1], star.z);
+      mesh.setMatrixAt(i, matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+    return mesh;
+  }, [sky]);
+  useEffect(
+    () => () => {
+      if (!stars) return;
+      stars.dispose();
+      (stars.material as MeshBasicMaterial).dispose();
+    },
+    [stars],
+  );
+  // Cadrans et écran : un disque ou un rectangle par surface, face à sa normale.
+  const panels = useMemo(
+    () =>
+      (cabin.panels ?? []).map((panel) => {
+        const [w, h] = panel.size;
+        const geometry = panel.shape === 'disque' ? new CircleGeometry(w / 2, 32) : new PlaneGeometry(w, h);
+        const material = new MeshBasicMaterial({ color: new Color(panel.color).multiplyScalar(panel.intensity ?? 1), toneMapped: false, fog: false });
+        const mesh = new Mesh(geometry, material);
+        mesh.position.set(...panel.center);
+        mesh.lookAt(new Vector3(...panel.center).add(new Vector3(...panel.normal)));
+        return mesh;
+      }),
+    [cabin.panels],
+  );
+  useEffect(
+    () => () => {
+      for (const mesh of panels) {
+        mesh.geometry.dispose();
+        (mesh.material as MeshBasicMaterial).dispose();
+      }
+    },
+    [panels],
+  );
+  const lightColor = light?.color ?? sky?.color ?? '#ffe2c0';
+  return (
+    // Hors de la sonde de réflexion, comme le véhicule.
+    <group userData={{ hideInProbe: true }}>
+      {stars && <primitive object={stars} visible={on} />}
+      {panels.map((mesh) => (
+        <primitive key={mesh.uuid} object={mesh} visible={on} />
+      ))}
+      {light && <pointLight position={light.position as [number, number, number]} color={lightColor} intensity={on ? light.intensity : 0} distance={light.distance} decay={2} />}
+    </group>
   );
 }
 

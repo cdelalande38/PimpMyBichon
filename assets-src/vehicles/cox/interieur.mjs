@@ -1,13 +1,19 @@
 // @ts-check
-// Habitacle de la Cox (placeholder_cox), pour la vue intérieure du manifeste (interiorView : place
-// du conducteur, à gauche) et pour ce qu'on voit par les vitres. Tout est noir, d'après la fiche :
+// Habitacle de la Cox (placeholder_cox), pour la vue intérieure du manifeste (deux points de vue :
+// entre les sièges, reculé, puis à la place du conducteur, à gauche) et pour ce qu'on voit par les
+// vitres. D'après la fiche captures/notes-agents/reference-interieur-cox.md : tout noir mat, trois
+// accents seulement, le rouge (tail), le métal poli (chrome) et l'os du pommeau (zone `pommeau`).
 // - garnissage fermé : doublure tendue sous toute la caisse de l'habitacle (ciel de toit, montants,
 //   flancs, plancher), percée aux vitres seulement, pour qu'on ne voie jamais à travers la caisse ;
-// - planche de bord plate, gros compteur rond derrière le volant, rangée d'interrupteurs avec un
-//   bouton rouge ;
-// - volant noir à trois branches ajourées ;
-// - levier de vitesses long à soufflet, pommeau en tête de mort ivoire (zone `pommeau`) ;
-// - deux sièges avant à dossier haut, banquette arrière, garnitures de portes.
+// - planche de bord plate : grille striée et gros compteur derrière le volant, panneau central
+//   (interrupteur sous capot rouge, gros bouton rouge, trois bascules polies sous leurs voyants),
+//   petit cadran poli dessous, grande boîte à gants à serrure ronde à droite ;
+// - volant à trois branches plates percées de fentes oblongues, jante épaisse, moyeu à six vis,
+//   sans aucun marquage ;
+// - levier long et fin sur un ressort à spires apparentes, pommeau tête de mort couleur os, langue
+//   rouge ;
+// - deux baquets bas sans appui-tête (zone `sellerie`), banquette arrière, garnitures de portes ;
+// - deux balais d'essuie-glace au repos au bas du pare-brise, couchés vers la droite.
 
 /** @typedef {typeof import('../../../tools/vehicles/kit.mjs')} Kit */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Parts} Parts */
@@ -32,6 +38,7 @@ const HOLE = 'paint_vide';
  *   xDoorFront: (y: number) => number,
  *   xQtrRear: (y: number) => number,
  *   windows: P3[][],
+ *   onDome: (x: number, z: number, out?: number) => P3,
  * }} c
  * @returns {Parts}
  */
@@ -57,7 +64,7 @@ export default function interieur(k, c) {
     }
     if (p >= c.I.e) {
       if (f.x > c.xWs[0] + 0.01 && f.x < c.xWs[1] - 0.005) return HOLE; // pare-brise
-      return 'leather'; // ciel de toit
+      return 'black'; // ciel de toit
     }
     if (p >= c.I.glass) {
       if (f.x > c.xDoor[0] + 0.01 && f.x < c.xDoorFront(y) - 0.01) return HOLE;
@@ -65,8 +72,7 @@ export default function interieur(k, c) {
       return 'black'; // montants et pourtour des vitres
     }
     if (p >= c.I.belt) return 'black';
-    if (p >= 9) return 'paint_sellerie'; // flancs et garnitures de portes
-    return 'black'; // plancher
+    return 'black'; // flancs, garnitures de portes et plancher
   };
   const breaks = [...c.xWs, ...c.xDoor, ...c.xQtr, ...c.xRw].filter((x) => x > X0 && x < X1);
   const lining = k
@@ -103,13 +109,15 @@ export default function interieur(k, c) {
   // --- Planche de bord -----------------------------------------------------------------------
   // Panneau plat, face vers le conducteur (−X), sur toute la largeur, et son bourrelet.
   const DASH_X = 0.575;
+  const FACE = DASH_X - 0.002;
   parts.push(...k.place(box(0.1, 0.25, 0.03, 1.2, 'black', 0.02), { position: [DASH_X + 0.05, 0.835, 0] }));
   parts.push(...k.place(box(0.17, 0.05, 0.024, 1.18, 'black', 0.02), { position: [DASH_X + 0.02, 0.965, 0] }));
-  // Vide-poche côté passager.
-  parts.push(...k.place(box(0.02, 0.09, 0.012, 0.3, 'black', 0.006), { position: [DASH_X - 0.002, 0.86, 0.34] }));
+  /** Pose sur la face de la planche : (u, v) = (z, y), normale vers le conducteur. @param {Parts} p @param {number} z @param {number} y @param {number} [dx] */
+  const onDash = (p, z, y, dx = 0) => k.orient(p, { position: [FACE - dx, y, z], normal: [-1, 0, 0], up: [0, 1, 0] });
+  /** Plaque à coins arrondis posée à plat sur la planche (épaisseur vers le conducteur). @param {number} w @param {number} h @param {number} r @param {number} t @param {string} material */
+  const plate = (w, h, r, t, material) => k.roundedExtrude(k.roundedRect(w, h, r, 3), { material, depth: t, bevel: Math.min(0.003, t / 2 - 1e-4), bevelSegments: 1 });
 
-  // Gros compteur rond derrière le volant : boîtier, cerclage chromé, cadran noir, graduations,
-  // aiguille orange.
+  // Gros compteur rond derrière le volant : boîtier, cerclage, cadran noir, graduations, aiguille.
   const GAUGE = /** @type {P3} */ ([DASH_X - 0.005, 0.862, -0.32]);
   const gaugeR = 0.075;
   const gPose = { position: GAUGE, normal: /** @type {P3} */ ([-1, 0.12, 0]), up: /** @type {P3} */ ([0, 1, 0]) };
@@ -126,87 +134,206 @@ export default function interieur(k, c) {
   }
   const na = (150 * Math.PI) / 180;
   gauge.push(...k.rod([0, 0, 0.012], [gaugeR * 0.8 * Math.cos(na), gaugeR * 0.8 * Math.sin(na), 0.012], 0.0026, { material: 'signal', radial: 4 }));
-  gauge.push(...k.lathe([[0.008, 0.012], [0.008, 0.016], [0, 0.018]], { material: 'chrome', segments: 12 }));
+  gauge.push(...k.lathe([[0.008, 0.012], [0.008, 0.016], [0, 0.018]], { material: 'black', segments: 12 }));
   parts.push(...k.orient(gauge, gPose));
 
-  // Rangée d'interrupteurs au milieu de la planche, dont un gros bouton rouge.
-  for (let i = 0; i < 6; i += 1) {
-    const z = -0.17 + i * 0.055;
-    if (i === 2) {
-      parts.push(...k.orient(k.lathe([[0.016, -0.01], [0.016, 0.008], [0.012, 0.014], [0, 0.016]], { material: 'tail', segments: 20, crease: 50 }), { position: [DASH_X - 0.003, 0.79, z], normal: [-1, 0, 0], up: [0, 1, 0] }));
-      parts.push(...k.orient(k.tube(k.circle(0, 0, 0.019, 16).map(([a, b]) => /** @type {P3} */ ([a, b, 0])), { material: 'chrome', radius: 0.003, closed: true, segments: 20, radial: 6 }), { position: [DASH_X - 0.002, 0.79, z], normal: [-1, 0, 0], up: [0, 1, 0] }));
-    } else {
-      parts.push(...k.orient(k.lathe([[0.011, -0.004], [0.011, 0.004], [0, 0.006]], { material: 'chrome', segments: 14 }), { position: [DASH_X - 0.002, 0.79, z], normal: [-1, 0, 0], up: [0, 1, 0] }));
-      parts.push(...k.rod([DASH_X - 0.004, 0.79, z], [DASH_X - 0.03, 0.802, z], 0.0035, { material: 'alu', radial: 6 }));
-    }
+  // Grille à fines stries verticales, à gauche du compteur : cadre, fond creux, quinze lames.
+  const GRILLE_Z = -0.485;
+  const GRILLE_Y = 0.85;
+  parts.push(...onDash(k.roundedExtrude(k.roundedRect(0.11, 0.13, 0.012, 3), { material: 'black', depth: 0.008, bevel: 0.003, bevelSegments: 1, holes: [k.roundedRect(0.094, 0.114, 0.006, 2)] }), GRILLE_Z, GRILLE_Y, 0.004));
+  for (let i = 0; i < 15; i += 1) {
+    const z = GRILLE_Z - 0.042 + i * 0.006;
+    parts.push(...k.rod([FACE - 0.002, GRILLE_Y - 0.054, z], [FACE - 0.002, GRILLE_Y + 0.054, z], 0.0016, { material: 'black', radial: 4 }));
   }
 
-  // --- Volant noir à trois branches ajourées -------------------------------------------------
+  // Panneau d'interrupteurs rapporté, au centre (de gauche à droite : capot rouge, gros bouton
+  // rouge, trois bascules polies sous leurs voyants), une rangée de trois voyants au-dessus.
+  const PANEL_Z = -0.085;
+  const PANEL_Y = 0.835;
+  parts.push(...onDash(plate(0.27, 0.15, 0.014, 0.01, 'black'), PANEL_Z, PANEL_Y, 0.005));
+  const PF = FACE - 0.01; // face du panneau
+  const ROW = PANEL_Y - 0.02;
+  /** Voyant rond : petite lentille bombée. @param {number} z @param {number} y @param {string} material */
+  const pilot = (z, y, material) => k.orient(k.lathe([[0.0055, -0.002], [0.0055, 0.002], [0.003, 0.0045], [0, 0.005]], { material, segments: 10 }), { position: [PF, y, z], normal: [-1, 0, 0], up: [0, 1, 0] });
+  // Interrupteur sous capot rouge basculant, relevé : socle, levier poli, capot incliné.
+  const COVER_Z = PANEL_Z - 0.1;
+  parts.push(...k.orient(plate(0.03, 0.044, 0.004, 0.006, 'black'), { position: [PF - 0.003, ROW, COVER_Z], normal: [-1, 0, 0], up: [0, 1, 0] }));
+  parts.push(...k.rod([PF - 0.006, ROW, COVER_Z], [PF - 0.026, ROW - 0.006, COVER_Z], 0.0026, { material: 'chrome', radial: 6 }));
+  parts.push(...k.orient(k.roundedExtrude(k.roundedRect(0.028, 0.046, 0.006, 2), { material: 'tail', depth: 0.008, bevel: 0.0025, bevelSegments: 1 }), { position: [PF - 0.022, ROW + 0.032, COVER_Z], normal: [-0.55, -0.83, 0], up: [-0.83, 0.55, 0] }));
+  // Gros bouton rond rouge (démarrage) dans sa bague noire.
+  const START_Z = PANEL_Z - 0.048;
+  parts.push(...k.orient(k.lathe([[0.022, -0.004], [0.022, 0.004], [0.018, 0.007], [0, 0.007]], { material: 'black', segments: 20 }), { position: [PF, ROW, START_Z], normal: [-1, 0, 0], up: [0, 1, 0] }));
+  parts.push(...k.orient(k.lathe([[0.016, 0.004], [0.016, 0.014], [0.012, 0.019], [0, 0.021]], { material: 'tail', segments: 20, crease: 50 }), { position: [PF, ROW, START_Z], normal: [-1, 0, 0], up: [0, 1, 0] }));
+  // Trois bascules en métal poli, chacune sous un petit voyant.
+  for (let i = 0; i < 3; i += 1) {
+    const z = PANEL_Z + 0.004 + i * 0.04;
+    parts.push(...k.orient(k.lathe([[0.0085, -0.003], [0.0085, 0.004], [0.006, 0.007], [0, 0.007]], { material: 'chrome', segments: 12 }), { position: [PF, ROW, z], normal: [-1, 0, 0], up: [0, 1, 0] }));
+    parts.push(...k.rod([PF - 0.006, ROW, z], [PF - 0.03, ROW - 0.012, z], 0.003, { material: 'chrome', radial: 6, top: 0.0022 }));
+    parts.push(...pilot(z, ROW + 0.035, 'signal'));
+  }
+  // Rangée de trois petits voyants ronds au-dessus du panneau.
+  for (let i = 0; i < 3; i += 1) parts.push(...pilot(PANEL_Z - 0.09 + i * 0.03, PANEL_Y + 0.058, i === 1 ? 'tail' : 'signal'));
+
+  // Petit cadran rond à cerclage poli sous le panneau, entre deux petits boutons ; un voyant
+  // rouge triangulaire à droite.
+  const MINI = /** @type {P3} */ ([FACE, 0.738, PANEL_Z]);
+  const miniR = 0.024;
+  /** @type {Parts} */
+  const mini = [
+    ...k.lathe([[miniR + 0.004, -0.004], [miniR + 0.004, 0.006], [miniR, 0.007], [0, 0.004]], { material: 'black', segments: 24 }),
+    ...k.tube(k.circle(0, 0, miniR + 0.002, 20).map(([a, b]) => /** @type {P3} */ ([a, b, 0.007])), { material: 'chrome', radius: 0.0032, closed: true, segments: 32, radial: 6 }),
+    ...k.rod([0, 0, 0.0075], [miniR * 0.75 * Math.cos(2.2), miniR * 0.75 * Math.sin(2.2), 0.0075], 0.0016, { material: 'alu', radial: 4 }),
+  ];
+  for (let i = 0; i <= 4; i += 1) {
+    const a = ((210 - 60 * i) * Math.PI) / 180;
+    mini.push(...k.rod([miniR * 0.7 * Math.cos(a), miniR * 0.7 * Math.sin(a), 0.006], [miniR * 0.9 * Math.cos(a), miniR * 0.9 * Math.sin(a), 0.006], 0.0014, { material: 'alu', radial: 4 }));
+  }
+  parts.push(...k.orient(mini, { position: MINI, normal: [-1, 0, 0], up: [0, 1, 0] }));
+  for (const dz of [-0.052, 0.052]) parts.push(...k.orient(k.lathe([[0.007, -0.003], [0.007, 0.006], [0, 0.007]], { material: 'black', segments: 12 }), { position: [FACE, MINI[1], PANEL_Z + dz], normal: [-1, 0, 0], up: [0, 1, 0] }));
+  parts.push(...onDash(k.roundedExtrude([[-0.008, -0.006], [0.008, -0.006], [0, 0.008]], { material: 'tail', depth: 0.004, bevel: 0.001, bevelSegments: 1 }), PANEL_Z + 0.08, MINI[1], 0.002));
+
+  // Grande boîte à gants à coins arrondis sur presque toute la moitié droite, serrure ronde en haut.
+  const BOX_Z = 0.3;
+  const BOX_Y = 0.832;
+  parts.push(...onDash(plate(0.45, 0.19, 0.03, 0.012, 'black'), BOX_Z, BOX_Y, 0.004));
+  parts.push(...onDash(k.lathe([[0.011, -0.003], [0.011, 0.005], [0.008, 0.008], [0, 0.008]], { material: 'alu', segments: 14 }), BOX_Z, BOX_Y + 0.07, 0.012));
+  parts.push(...k.rod([FACE - 0.02, BOX_Y + 0.07 - 0.005, BOX_Z], [FACE - 0.02, BOX_Y + 0.07 + 0.005, BOX_Z], 0.0015, { material: 'black', radial: 4 }));
+
+  // --- Volant : trois branches plates percées de fentes oblongues, jante épaisse, six vis ----
   const WHEEL = /** @type {P3} */ ([0.29, 0.9, -0.32]);
   const wheelN = /** @type {P3} */ ([-0.85, 0.53, 0]);
   const ringR = 0.19;
   /** @type {Parts} */
   const sw = [];
-  sw.push(...k.tube(k.circle(0, 0, ringR, 24).map(([a, b]) => /** @type {P3} */ ([a, b, 0])), { material: 'black', radius: 0.0145, closed: true, segments: 72, radial: 10 }));
-  sw.push(...k.lathe([[0.04, -0.03], [0.04, 0.004], [0.03, 0.016], [0, 0.02]], { material: 'black', segments: 24, crease: 50 }));
-  sw.push(...k.lathe([[0.014, 0.019], [0.014, 0.024], [0, 0.026]], { material: 'chrome', segments: 14 }));
-  // Branches à 3 h, 9 h et 6 h : deux lames qui s'écartent, ajourées au milieu.
-  for (const a of [0, Math.PI, -Math.PI / 2]) {
-    const ca = Math.cos(a);
-    const sa = Math.sin(a);
-    const at = (/** @type {number} */ r, /** @type {number} */ off) => /** @type {P3} */ ([r * ca - off * sa, r * sa + off * ca, -0.004 + 0.02 * (1 - r / ringR)]);
-    for (const s of [-1, 1]) {
-      sw.push(...k.tube([at(0.045, s * 0.014), at(0.1, s * 0.024), at(ringR - 0.006, s * 0.022)], { material: 'black', radius: 0.0065, segments: 10, radial: 6 }));
+  sw.push(...k.tube(k.circle(0, 0, ringR, 24).map(([a, b]) => /** @type {P3} */ ([a, b, 0])), { material: 'black', radius: 0.02, closed: true, segments: 64, radial: 10 }));
+  // Moyeu rond, uni (aucun marquage), et ses six vis en cercle.
+  sw.push(...k.lathe([[0.05, -0.026], [0.05, 0.006], [0.044, 0.016], [0, 0.018]], { material: 'black', segments: 28, crease: 50 }));
+  for (let i = 0; i < 6; i += 1) {
+    const a = (2 * Math.PI * i) / 6 + Math.PI / 6;
+    sw.push(...k.place(k.lathe([[0.0042, 0], [0.0042, 0.002], [0.0028, 0.0035], [0, 0.004]], { material: 'alu', segments: 8 }), { position: [0.033 * Math.cos(a), 0.033 * Math.sin(a), 0.0125] }));
+  }
+  // Branches à 3 h, 9 h et 6 h : lame plate, deux fentes oblongues chacune.
+  const SPOKE_IN = 0.042;
+  const SPOKE_OUT = ringR - 0.008;
+  const spokeLen = SPOKE_OUT - SPOKE_IN;
+  /** @type {P2[]} */
+  const spokeOutline = [
+    [0, -0.022],
+    [spokeLen * 0.55, -0.02],
+    [spokeLen, -0.028],
+    [spokeLen, 0.028],
+    [spokeLen * 0.55, 0.02],
+    [0, 0.022],
+  ];
+  /** Fente oblongue de u0 à u1, demi-largeur w. @param {number} u0 @param {number} u1 @param {number} w @returns {P2[]} */
+  const slot = (u0, u1, w) => {
+    /** @type {P2[]} */
+    const pts = [];
+    for (let i = 0; i <= 5; i += 1) {
+      const a = -Math.PI / 2 + (Math.PI * i) / 5;
+      pts.push([u1 - w + w * Math.cos(a), w * Math.sin(a)]);
     }
-    sw.push(...k.rod(at(ringR - 0.012, -0.024), at(ringR - 0.012, 0.024), 0.0065, { material: 'black', radial: 6 }));
+    for (let i = 0; i <= 5; i += 1) {
+      const a = Math.PI / 2 + (Math.PI * i) / 5;
+      pts.push([u0 + w + w * Math.cos(a), w * Math.sin(a)]);
+    }
+    return pts;
+  };
+  const spoke = k.roundedExtrude(spokeOutline, { material: 'black', depth: 0.007, bevel: 0.0025, bevelSegments: 1, holes: [slot(0.018, 0.064, 0.0085), slot(0.076, 0.122, 0.0085)] });
+  for (const a of [0, Math.PI, -Math.PI / 2]) {
+    // Légère cuvette : la branche recule vers le moyeu.
+    sw.push(...k.place(spoke, { position: [SPOKE_IN * Math.cos(a), SPOKE_IN * Math.sin(a), 0.004], rotation: [0, 0, a] }));
   }
   parts.push(...k.orient(sw, { position: WHEEL, normal: wheelN, up: [0, 1, 0] }));
   // Colonne de direction jusqu'à la planche.
   parts.push(...k.rod([WHEEL[0] + 0.02, WHEEL[1] - 0.012, WHEEL[2]], [DASH_X + 0.02, WHEEL[1] - 0.17, WHEEL[2]], 0.022, { material: 'black', radial: 12 }));
 
-  // --- Levier de vitesses long à soufflet, pommeau en tête de mort ---------------------------
+  // --- Levier : tige longue et fine sur un ressort à spires apparentes, pommeau tête de mort ---
   const BASE = /** @type {P3} */ ([0.34, 0.3, 0]);
   const KNOB = /** @type {P3} */ ([0.25, 0.74, 0]);
-  /** @type {P2[]} */
-  const boot = [];
-  for (let i = 0; i <= 10; i += 1) boot.push([lerpN(0.06, 0.014, i / 10) + (i % 2 ? 0.006 : 0), (0.13 * i) / 10]);
-  boot.push([0, 0.13]);
-  parts.push(...k.place(k.lathe(boot, { material: 'black', axis: 'y', segments: 18, crease: 80 }), { position: BASE }));
-  parts.push(...k.place(box(0.2, 0.03, 0.012, 0.16, 'black', 0.01), { position: [BASE[0], BASE[1] - 0.01, 0] }));
-  parts.push(...k.rod([BASE[0], BASE[1] + 0.12, 0], [KNOB[0] + 0.004, KNOB[1] - 0.03, 0], 0.0075, { material: 'chrome', radial: 8 }));
-  // Crâne tourné vers le conducteur : boîte crânienne, mâchoire, orbites et nez sombres.
+  const SPRING_H = 0.2;
+  // Embase au plancher, ressort de neuf spires autour du pied de la tige.
+  parts.push(...k.place(box(0.16, 0.025, 0.012, 0.13, 'black', 0.008), { position: [BASE[0], BASE[1] - 0.005, 0] }));
+  parts.push(...k.place(k.lathe([[0.034, 0], [0.034, 0.012], [0.026, 0.016], [0.012, 0.018]], { material: 'black', axis: 'y', segments: 18 }), { position: BASE }));
+  /** @type {P3[]} */
+  const coil = [];
+  const turns = 9;
+  for (let i = 0; i <= turns * 10; i += 1) {
+    const t = i / (turns * 10);
+    const a = 2 * Math.PI * turns * t;
+    coil.push([BASE[0] + 0.024 * Math.cos(a) - 0.09 * t * SPRING_H, BASE[1] + 0.016 + t * SPRING_H, 0.024 * Math.sin(a)]);
+  }
+  parts.push(...k.tube(coil, { material: 'black', radius: 0.0034, segments: turns * 12, radial: 5, caps: false }));
+  parts.push(...k.rod([BASE[0], BASE[1] + 0.01, 0], [KNOB[0] + 0.004, KNOB[1] - 0.03, 0], 0.0055, { material: 'black', radial: 8 }));
+  // Crâne tourné vers l'arrière de l'habitacle (les deux points de vue) : boîte crânienne,
+  // orbites creuses, nez, mâchoire ouverte et dents, langue rouge tirée.
   /** @type {Parts} */
   const skull = [
-    ...k.ellipsoid([0.004, 0.006, 0], [0.034, 0.031, 0.029], { material: 'paint_pommeau', segments: 18 }),
-    ...k.ellipsoid([-0.012, -0.02, 0], [0.022, 0.016, 0.02], { material: 'paint_pommeau', segments: 14 }),
-    ...k.ellipsoid([-0.029, 0.002, -0.012], [0.007, 0.009, 0.0085], { material: 'black', segments: 10 }),
-    ...k.ellipsoid([-0.029, 0.002, 0.012], [0.007, 0.009, 0.0085], { material: 'black', segments: 10 }),
-    ...k.ellipsoid([-0.032, -0.012, 0], [0.004, 0.005, 0.0035], { material: 'black', segments: 8 }),
+    ...k.ellipsoid([0.004, 0.008, 0], [0.034, 0.031, 0.029], { material: 'paint_pommeau', segments: 18 }),
+    ...k.ellipsoid([-0.01, -0.026, 0], [0.02, 0.012, 0.019], { material: 'paint_pommeau', segments: 14 }),
+    ...k.ellipsoid([-0.03, 0.004, -0.012], [0.0075, 0.0095, 0.009], { material: 'black', segments: 10 }),
+    ...k.ellipsoid([-0.03, 0.004, 0.012], [0.0075, 0.0095, 0.009], { material: 'black', segments: 10 }),
+    ...k.ellipsoid([-0.033, -0.01, 0], [0.004, 0.005, 0.0035], { material: 'black', segments: 8 }),
+    // Bouche ouverte : creux sombre entre les deux rangées de dents.
+    ...k.ellipsoid([-0.026, -0.021, 0], [0.008, 0.005, 0.013], { material: 'black', segments: 10 }),
+    // Langue rouge tirée, qui pend sur la mâchoire.
+    ...k.ellipsoid([-0.036, -0.03, 0], [0.008, 0.012, 0.0085], { material: 'tail', segments: 10 }),
   ];
-  for (const z of [-0.012, -0.004, 0.004, 0.012]) skull.push(...k.ellipsoid([-0.03, -0.027, z], [0.0035, 0.004, 0.003], { material: 'paint_pommeau', segments: 6 }));
-  parts.push(...k.place(skull, { position: KNOB, rotation: [0, -0.6, 0.15] }));
+  for (const z of [-0.012, -0.004, 0.004, 0.012]) {
+    skull.push(...k.ellipsoid([-0.03, -0.016, z], [0.0035, 0.004, 0.003], { material: 'paint_pommeau', segments: 6 }));
+    skull.push(...k.ellipsoid([-0.026, -0.03, z], [0.003, 0.0035, 0.003], { material: 'paint_pommeau', segments: 6 }));
+  }
+  parts.push(...k.place(skull, { position: KNOB, rotation: [0, -0.3, 0.12] }));
 
-  // --- Sièges --------------------------------------------------------------------------------
+  // --- Sièges : deux baquets bas, sans appui-tête, dossiers arrondis en haut --------------------
+  // Dossier : contour (z, y) à haut en demi-cercle, extrudé dans son épaisseur (X).
+  /** @param {number} w @param {number} h @returns {P2[]} */
+  const archOutline = (w, h) => {
+    /** @type {P2[]} */
+    const pts = [[-w / 2, 0], [w / 2, 0]];
+    const r = w / 2;
+    for (let i = 0; i <= 10; i += 1) {
+      const a = (Math.PI * i) / 10;
+      pts.push([r * Math.cos(a), h - r + r * Math.sin(a) * 0.55]);
+    }
+    return pts;
+  };
   for (const z of [-0.31, 0.31]) {
-    // Assise, dossier haut (appui-tête intégré), un peu creusé par deux bourrelets latéraux.
-    parts.push(...k.place(box(0.5, 0.12, 0.05, 0.46, 'paint_sellerie', 0.035), { position: [-0.03, 0.43, z], rotation: [0, 0, 0.06] }));
-    parts.push(...k.place(box(0.12, 0.8, 0.055, 0.46, 'paint_sellerie', 0.035), { position: [-0.36, 0.86, z], rotation: [0, 0, 0.17] }));
-    for (const s of [-1, 1]) parts.push(...k.place(box(0.1, 0.5, 0.04, 0.05, 'paint_sellerie', 0.02), { position: [-0.33, 0.8, z + s * 0.21], rotation: [0, 0, 0.17] }));
-    parts.push(...k.place(box(0.06, 0.12, 0.02, 0.36, 'black', 0.015), { position: [-0.06, 0.33, z] }));
+    // Assise creusée par deux bourrelets.
+    parts.push(...k.place(box(0.5, 0.11, 0.05, 0.44, 'paint_sellerie', 0.035), { position: [-0.03, 0.42, z], rotation: [0, 0, 0.06] }));
+    for (const s of [-1, 1]) parts.push(...k.place(box(0.46, 0.06, 0.03, 0.07, 'paint_sellerie', 0.025), { position: [-0.03, 0.49, z + s * 0.19], rotation: [0, 0, 0.06] }));
+    // Dossier bas (haut vers 1,0 m), légèrement incliné, et ses bourrelets latéraux.
+    const back = k.roundedExtrude(archOutline(0.44, 0.56), { material: 'paint_sellerie', depth: 0.11, bevel: 0.03, bevelSegments: 2, axis: 'x' });
+    parts.push(...k.place(back, { position: [-0.33, 0.46, z], rotation: [0, 0, 0.17] }));
+    for (const s of [-1, 1]) parts.push(...k.place(box(0.09, 0.4, 0.035, 0.06, 'paint_sellerie', 0.022), { position: [-0.3, 0.7, z + s * 0.2], rotation: [0, 0, 0.17] }));
+    parts.push(...k.place(box(0.06, 0.12, 0.02, 0.36, 'black', 0.015), { position: [-0.06, 0.32, z] }));
   }
   // Banquette arrière.
   parts.push(...k.place(box(0.46, 0.13, 0.05, 1.08, 'paint_sellerie', 0.035), { position: [-0.88, 0.4, 0] }));
   parts.push(...k.place(box(0.12, 0.55, 0.05, 1.04, 'paint_sellerie', 0.035), { position: [-1.1, 0.72, 0], rotation: [0, 0, 0.32] }));
 
-  // --- Garnitures de portes : accoudoir, tirette chromée, manivelle -------------------------
+  // --- Garnitures de portes : accoudoir, tirette, manivelle (noires, aucun chrome décoratif) ---
   for (const s of [-1, 1]) {
     parts.push(...k.place(box(0.42, 0.045, 0.02, 0.05, 'black', 0.015), { position: [0.05, 0.69, s * 0.6] }));
-    parts.push(...k.rod([0.3, 0.84, s * 0.605], [0.38, 0.84, s * 0.6], 0.006, { material: 'chrome', radial: 8 }));
-    parts.push(...k.rod([-0.12, 0.6, s * 0.61], [-0.12, 0.6, s * 0.585], 0.012, { material: 'chrome', radial: 8 }));
-    parts.push(...k.rod([-0.12, 0.6, s * 0.585], [-0.07, 0.56, s * 0.585], 0.006, { material: 'chrome', radial: 6 }));
+    parts.push(...k.rod([0.3, 0.84, s * 0.605], [0.38, 0.84, s * 0.6], 0.006, { material: 'black', radial: 8 }));
+    parts.push(...k.rod([-0.12, 0.6, s * 0.61], [-0.12, 0.6, s * 0.585], 0.012, { material: 'black', radial: 8 }));
+    parts.push(...k.rod([-0.12, 0.6, s * 0.585], [-0.07, 0.56, s * 0.585], 0.006, { material: 'black', radial: 6 }));
   }
   // Rétroviseur intérieur au haut du pare-brise.
   parts.push(...k.place(box(0.04, 0.06, 0.02, 0.2, 'black', 0.012), { position: [0.2, 1.27, 0] }));
+
+  // --- Essuie-glaces : deux balais au repos au bas du pare-brise, couchés vers la droite -------
+  const xWiper = c.xWs[1] - 0.03;
+  for (const z0 of [-0.4, 0.02]) {
+    const pivot = c.onDome(c.xWs[1] - 0.012, z0, 0.004);
+    parts.push(...k.rod(pivot, [pivot[0], pivot[1] + 0.014, pivot[2]], 0.008, { material: 'black', radial: 8 }));
+    /** @type {P3[]} */
+    const arm = [0, 0.5, 1].map((t) => c.onDome(lerpN(c.xWs[1] - 0.014, xWiper, t), z0 + 0.03 + t * 0.3, 0.016));
+    parts.push(...k.tube(arm, { material: 'black', radius: 0.0035, segments: 8, radial: 5 }));
+    /** @type {P3[]} */
+    const blade = [0, 0.5, 1].map((t) => c.onDome(xWiper - 0.004, z0 + 0.05 + t * 0.34, 0.008));
+    parts.push(...k.tube(blade, { material: 'black', radius: 0.006, segments: 8, radial: 5 }));
+  }
   return parts;
 }
 

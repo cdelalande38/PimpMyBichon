@@ -73,5 +73,6 @@
     "boost": "atmo",
     "power": 50
   },
-  "interiorView": { "eye": [-0.15, 1.08, -0.32], "target": [0.6, 0.84, -0.14] }
+  "interiorView": { "label": "Entre les sièges", "eye": [-0.64, 1.13, 0], "target": [0.6, 0.8, 0], "fov": 94 },
+  "interiorViews": [{ "label": "Au volant", "eye": [-0.15, 1.08, -0.32], "target": [0.6, 0.84, -0.14] }]
 }
