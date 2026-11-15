@@ -96,7 +96,7 @@ test.describe('mesure comparée', () => {
       expect(text, id).toContain(`${NBSP}ms`);
     }
     // Écart au réglage en cours sur chaque variante (sauf au plafond de l'écran), avec son verdict.
-    await expect(dialog.locator('[data-fact="comparer-courant"]')).not.toHaveText(/\([+−±][\d,]+\sms/);
+    await expect(dialog.locator('[data-fact="comparer-courant"]')).not.toHaveText(/\([+−±][\d\s,]+\sms/);
     // Sans reflet du sol : la passe de réflexion (une scène et quatre passes de flou) n'est plus dessinée ;
     // sans mobilier : objets, œuvres et ombres de contact non plus.
     const current = await callsOf(dialog.locator('[data-fact="comparer-courant"]'));
@@ -105,7 +105,9 @@ test.describe('mesure comparée', () => {
     expect(plain, 'moins d’appels sans le reflet du sol').toBeLessThan(current);
     expect(bare, 'moins d’appels sans le mobilier').toBeLessThan(current);
     // L'état dit le niveau, le bruit de l'essai, le rythme de l'écran, et s'il faut recommencer.
-    await expect(fact).toHaveText(/Standard, pixel ratio 1,5, deux passages par variante\. Bruit\s: [\d,]+\sms par image/);
+    // Le bruit dépasse la seconde sur une machine très lente (rendu logiciel de la CI) : il s'écrit
+    // alors avec une espace de milliers.
+    await expect(fact).toHaveText(/Standard, pixel ratio 1,5, deux passages par variante\. Bruit\s: [\d\s,]+\sms par image/);
     await expect(fact).toHaveText(/Écran\s: \d+\si\/s\.|Rythme de l’écran pas reconnu\./);
     await expect(fact).toHaveAttribute('data-recommencer', /^(oui|non)$/);
     if ((await fact.getAttribute('data-recommencer')) === 'oui') await expect(fact).toHaveText(/Trop de bruit pour conclure\s: relance «\sComparer\s»/);
