@@ -332,9 +332,10 @@ test.describe('navigation du dock', () => {
     // Agrandi : couleurs et finitions d'une zone ; on descend jusqu'aux finitions, on en choisit une.
     // Seul sous la ligne de repère, le contenu tient en 390 × 844 : un écran plus bas le fait défiler.
     await page.setViewportSize({ width: 390, height: 640 });
+    // La poignée ne paraît que là où agrandir montre plus : on l'attrape dans la peinture.
+    await openEntry(page, 'Peinture');
     await dock(page).getByRole('button', { name: 'Agrandir le menu' }).tap();
     await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
-    await openEntry(page, 'Peinture');
     await zones(page).first().tap();
     await expect(back(page)).toBeVisible();
     const candy = dock(page).getByRole('group', { name: 'Finitions' }).getByRole('button', { name: /^Candy/ });
@@ -415,6 +416,54 @@ test.describe('navigation du dock', () => {
       const under = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label'), { x, y });
       expect(under, 'la couleur touchée reste sous le doigt').toBe(name);
       expect(await order(), 'l’ordre des dernières couleurs ne change pas').toEqual(before);
+    }
+  });
+});
+
+test.describe('étiquette du véhicule', () => {
+  // Sans service worker, le modèle passe par la page : on peut le couper.
+  test.use({ serviceWorkers: 'block' });
+
+  test('modèle introuvable : l’étiquette ne recouvre aucun bouton, deux tailles d’écran, trois tailles de texte', async ({ page }) => {
+    test.setTimeout(180_000);
+    await page.route('**/assets/vehicles/van/body.glb', (route) => route.abort('internetdisconnected'));
+    await openApp(page);
+    await openEntry(page, 'Véhicule');
+    await dock(page).getByRole('group', { name: 'Véhicule' }).locator('[data-vehicle="van"]').tap();
+    await expect(page.locator('.stage')).toHaveAttribute('data-bench', 'erreur', { timeout: 30_000 });
+    await expect(page.locator('.tag')).toContainText('introuvable, relance avec du réseau');
+    for (const [width, height] of [
+      [390, 844],
+      [360, 780],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      for (const size of ['normal', 'grand', 'tres-grand']) {
+        await page.evaluate((value) => {
+          document.documentElement.dataset.text = value;
+        }, size);
+        // L'étiquette et le « ? » se recalent (mesure au changement de taille) : on les attend.
+        await expect
+          .poll(
+            async () =>
+              page.evaluate(() => {
+                const tag = document.querySelector('.mid > .tag')?.getBoundingClientRect();
+                if (!tag) return ['pas d’étiquette'];
+                return [...document.querySelectorAll<HTMLElement>('button')]
+                  .filter((button) => button.getClientRects().length > 0)
+                  .filter((button) => {
+                    const box = button.getBoundingClientRect();
+                    return box.left < tag.right && box.right > tag.left && box.top < tag.bottom && box.bottom > tag.top;
+                  })
+                  .map((button) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '?');
+              }),
+            { message: `${width} × ${height}, texte ${size} : boutons sous l’étiquette` },
+          )
+          .toEqual([]);
+        // Le « ? » reste dans l'écran, au-dessus de « Réessayer ».
+        const aide = await page.getByRole('button', { name: 'Aide', exact: true }).boundingBox();
+        const retry = await page.getByRole('button', { name: 'Réessayer', exact: true }).boundingBox();
+        expect((aide?.y ?? 0) + (aide?.height ?? 0)).toBeLessThan(retry?.y ?? 0);
+      }
     }
   });
 });

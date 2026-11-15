@@ -55,12 +55,19 @@ export function Chargement({ sceneFailed }: { sceneFailed: boolean }) {
   }, [garage]);
 
   const faites = !atelier ? 0 : !garage ? 1 : bench === 'chargement' ? 2 : 3;
-  const fini = sceneFailed || lasse || bench === 'absent' || bench === 'erreur' || faites === 3;
+  // Une fois fini, il le reste : « Réessayer » ou un autre véhicule remettent le banc en chargement,
+  // l'écran de chargement ne revient pas pour autant.
+  const [dejaFini, setDejaFini] = useState(false);
+  const fini = dejaFini || sceneFailed || lasse || bench === 'absent' || bench === 'erreur' || faites === 3;
+  if (fini && !dejaFini) setDejaFini(true);
 
   // Fondu quand tout est prêt, sauf en mouvement réduit. S'il cède la place (échec, attente trop
   // longue), il part d'un coup : ce qu'il couvrait doit se voir tout de suite.
   const fondu = faites === 3 && !reduced;
-  const parti = fini && (!fondu || fonduFini);
+  // Parti, il ne revient plus (même si le fondu en cours perd sa raison d'être).
+  const [dejaParti, setDejaParti] = useState(false);
+  const parti = dejaParti || (fini && (!fondu || fonduFini));
+  if (parti && !dejaParti) setDejaParti(true);
   useEffect(() => {
     if (!fini || !fondu) return;
     const timer = window.setTimeout(() => setFonduFini(true), FONDU_MS);

@@ -323,6 +323,20 @@ button {
   text-transform: uppercase;
 }
 
+/* Étiquette du véhicule (substitut, « en route… », échec) : elle passe à la ligne avant la colonne
+   des boutons ronds, jamais dessous ; le bouton « ? » se pose sous elle (src/ui/tuto/Tutos.tsx). */
+.mid > .tag {
+  max-width: calc(100% - var(--tap) - 0.5rem);
+}
+
+/* « Réessayer » (modèle introuvable) : en bas de la zone centrale, comme l'alerte, sous le pouce. La
+   zone laisse passer les gestes vers la scène ; le bouton, lui, se touche. */
+.mid > .btn.mid-retry {
+  flex: none;
+  margin-top: auto;
+  pointer-events: auto;
+}
+
 .alert {
   align-self: stretch;
   margin: auto 0 0;

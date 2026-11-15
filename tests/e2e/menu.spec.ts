@@ -4,13 +4,15 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { backToSections, openApp, openEntry, quick, waitForBench, waitForScene } from './helpers.ts';
 
 // Menu agrandi : la poignée du dock fait monter le menu (60 % de l'écran au plus) et passe les
-// options de l'onglet sur plusieurs lignes, sans défilement en largeur. Le véhicule reste au-dessus
+// options de l'onglet sur plusieurs lignes, sans défilement en largeur. Elle ne paraît que là où
+// agrandir montre plus (jamais aux sections) ; la croix ne bouge pas d'un niveau à l'autre. Le véhicule reste au-dessus
 // du dock (cadre posé par la scène), la préférence survit au rechargement, et le dock réduit
 // retrouve sa géométrie d'origine. Dans la fiche moteur, les options passent à la ligne aussi.
 
 const dock = (page: Page) => page.locator('footer.dock');
 const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
 const handle = (page: Page) => dock(page).getByRole('button', { name: /^(Agrandir|Réduire) le menu$/ });
+const close = (page: Page) => dock(page).getByRole('button', { name: 'Fermer le menu', exact: true });
 const TABS = ['Véhicule', 'Custom', 'Mécanique', 'Garage'] as const;
 /** Nom de fichier d'une section : sans accent ni majuscule. */
 const slug = (label: string) => label.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -90,14 +92,21 @@ test.describe('menu agrandi', () => {
     await waitForScene(page);
     await waitForBench(page);
 
-    // Compact d'abord : la géométrie d'origine, et le cadrage d'origine (aucun décalage).
+    // Compact d'abord : la géométrie d'origine, et le cadrage d'origine (aucun décalage). Aux
+    // sections, agrandir ne montrerait rien de plus : pas de poignée.
     await expect(dock(page)).toHaveAttribute('data-taille', 'compact');
-    await expect(handle(page)).toHaveAccessibleName('Agrandir le menu');
+    await expect(handle(page)).toHaveCount(0);
     const compact = await dockGeometry(page);
-    const handleBox = await handle(page).boundingBox();
-    expect(handleBox?.y ?? 0, 'poignée dans le tiers bas').toBeGreaterThanOrEqual((height * 2) / 3);
+    const closeBox = await close(page).boundingBox();
     await expect(page.locator('.stage')).toHaveAttribute('data-decalage', '0');
     await shot(page, '00-compact-vehicule');
+
+    // La peinture gagne à être agrandie : la poignée y paraît, la croix reste à la même place.
+    await openEntry(page, 'Peinture');
+    await expect(handle(page)).toHaveAccessibleName('Agrandir le menu');
+    const handleBox = await handle(page).boundingBox();
+    expect(handleBox?.y ?? 0, 'poignée dans le tiers bas').toBeGreaterThanOrEqual((height * 2) / 3);
+    expect(await close(page).boundingBox(), 'croix immobile, des sections à la peinture').toEqual(closeBox);
 
     // Au pouce : le menu monte, sans dépasser 60 % de l'écran.
     await handle(page).tap();
@@ -116,6 +125,9 @@ test.describe('menu agrandi', () => {
         await entries.getByRole('button', { disabled: false }).first().tap();
       }
       await expect(dock(page).locator('.dock-tab')).toBeVisible();
+      // Contenu qui tient déjà en entier : ni poignée ni grand vide, le dock reprend sa taille compacte.
+      const grows = (await dock(page).getAttribute('data-taille')) === 'agrandi';
+      if (!grows) await expect(handle(page)).toHaveCount(0);
       const box = await dock(page).boundingBox();
       expect(box?.height ?? 0, `${tab} : 60 % de l'écran au plus`).toBeLessThanOrEqual(height * 0.6 + 1);
       expect(await overflowingRows(page), `${tab} : aucune rangée ne déborde en largeur`).toEqual([]);
@@ -146,13 +158,15 @@ test.describe('menu agrandi', () => {
         await candy.tap();
         await expect(candy).toHaveAttribute('aria-pressed', 'true');
       }
-      await expectVehicleAboveDock(page);
+      if (grows) await expectVehicleAboveDock(page);
       // Capture : l'onglet vu depuis le haut de sa liste.
       await dock(page).locator('.dock-tab').evaluate((element) => element.scrollTo({ top: 0 }));
       await shot(page, `0${TABS.indexOf(tab) + 1}-agrandi-${slug(tab)}`);
     }
 
-    // La radio (bouton rond du haut de l'écran) reste à l'écran, menu agrandi.
+    // La radio (bouton rond du haut de l'écran) reste à l'écran, menu agrandi (sur la peinture).
+    await openEntry(page, 'Peinture');
+    await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
     await expect(quick(page).getByRole('button', { name: /^Radio/ })).toBeInViewport({ ratio: 1 });
     await shot(page, '06-agrandi-radio');
 
@@ -169,19 +183,22 @@ test.describe('menu agrandi', () => {
     await page.waitForTimeout(400);
     await page.reload();
     await waitForBench(page);
+    // Au lancement, le menu montre les sections : resté « agrandi », il s'y affiche compact, sans
+    // poignée ni grand vide. Dans la peinture, le dock agrandi remonte, la vue se décale.
+    await expect(dock(page)).toHaveAttribute('data-taille', 'compact');
+    await expect(handle(page)).toHaveCount(0);
+    await expect.poll(() => dockGeometry(page)).toEqual(compact);
+    await openEntry(page, 'Peinture');
     await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
     await expect(handle(page)).toHaveAccessibleName('Réduire le menu');
-    // Au lancement, le menu montre les sections (une ligne) : le véhicule reste au-dessus du dock.
-    // Dans une entrée, le dock agrandi monte, et la vue se décale pour garder le véhicule en vue.
-    await openEntry(page, 'Véhicule');
     await expectVehicleAboveDock(page);
-    await backToSections(page);
 
     // Au clavier : la poignée réduit le menu ; la géométrie et le cadrage d'origine reviennent.
     await handle(page).focus();
     await page.keyboard.press('Enter');
     await expect(dock(page)).toHaveAttribute('data-taille', 'compact');
     await expect(handle(page)).toHaveAccessibleName('Agrandir le menu');
+    await backToSections(page);
     await expect.poll(() => dockGeometry(page)).toEqual(compact);
     await expect(page.locator('.stage')).toHaveAttribute('data-decalage', '0');
   });
@@ -190,6 +207,7 @@ test.describe('menu agrandi', () => {
     test.setTimeout(150_000);
     await page.setViewportSize({ width: 360, height: 780 });
     await openApp(page);
+    await openEntry(page, 'Peinture');
     await handle(page).tap();
     await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
     await page.waitForTimeout(400);
@@ -200,6 +218,7 @@ test.describe('menu agrandi', () => {
       await dialog.getByRole('button', { name: new RegExp(`^${size}`) }).click();
       await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
       await expect(dialog).toBeHidden();
+      await openEntry(page, 'Peinture');
       await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
       for (const tab of TABS) {
         await backToSections(page);
@@ -223,6 +242,7 @@ test.describe('menu agrandi', () => {
       await dialog.getByRole('button', { name: new RegExp(`^${size}`) }).click();
       await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
       await expect(dialog).toBeHidden();
+      await openEntry(page, 'Peinture');
       if ((await dock(page).getAttribute('data-taille')) === 'agrandi') await handle(page).click();
       await expect(dock(page)).toHaveAttribute('data-taille', 'compact');
       // Sections : aucun libellé plus large que son bouton.

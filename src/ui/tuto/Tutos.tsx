@@ -208,16 +208,77 @@ function TutoDialog() {
   );
 }
 
+/**
+ * Bas de l'étiquette du véhicule (« Substitut · Le van · introuvable… », src/app/App.tsx), en pixels ;
+ * `null` sans étiquette. Suivi quand elle paraît, change de texte ou de taille (taille du texte, écran).
+ */
+function useBasEtiquette(): number | null {
+  const [bas, setBas] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const mid = document.querySelector<HTMLElement>('.app > .mid');
+    if (!mid) return;
+    let suivie: Element | null = null;
+    const tailles = new ResizeObserver(() => mesurer());
+    function mesurer() {
+      const tag = mid?.querySelector(':scope > .tag') ?? null;
+      if (tag !== suivie) {
+        if (suivie) tailles.unobserve(suivie);
+        if (tag) tailles.observe(tag);
+        suivie = tag;
+      }
+      setBas(tag ? Math.ceil(tag.getBoundingClientRect().bottom) : null);
+    }
+    mesurer();
+    const mutations = new MutationObserver(mesurer);
+    mutations.observe(mid, { childList: true, subtree: true, characterData: true });
+    window.addEventListener('resize', mesurer);
+    return () => {
+      tailles.disconnect();
+      mutations.disconnect();
+      window.removeEventListener('resize', mesurer);
+    };
+  }, []);
+  return bas;
+}
+
 /** Bouton « ? », en haut à gauche sous l'étiquette du véhicule ; caché en mode photo. */
 function BoutonAide({ ecran }: { ecran: EcranKey | null }) {
   const ouvrir = useTutos((state) => state.ouvrir);
+  // Étiquette sur plusieurs lignes : le « ? » descend sous elle au lieu de passer dessous.
+  const bas = useBasEtiquette();
   return (
     <button
       type="button"
       className="tuto-aide"
+      style={bas === null ? undefined : ({ '--aide-sous': `${bas + 8}px` } as CSSProperties)}
       aria-label="Aide"
       title="Aide : ce qu’on fait sur cet écran, et tous les tutos"
-      onClick={() => ouvrir((tutoForEcran(ecran) ?? tutoById(TUTO_ACCUEIL) ?? TUTOS[0])?.id ?? TUTO_ACCUEIL)}
+      onClick={() => ouvrir(tutoDuBouton(ecran))}
+    >
+      <span aria-hidden="true">?</span>
+    </button>
+  );
+}
+
+/** Tutoriel que « ? » rouvre sur cet écran : le sien, sinon celui de l'accueil. */
+function tutoDuBouton(ecran: EcranKey | null): string {
+  return (tutoForEcran(ecran) ?? tutoById(TUTO_ACCUEIL) ?? TUTOS[0])?.id ?? TUTO_ACCUEIL;
+}
+
+/**
+ * « ? » dans l'en-tête d'un panneau ouvert (src/ui/Sheet.tsx) : le panneau, modal, met le bouton du
+ * garage hors d'atteinte. Il rouvre le tuto du panneau ; le dialogue des tutos s'ouvre par-dessus.
+ */
+export function AidePanneau() {
+  const ecran = useEcran();
+  const ouvrir = useTutos((state) => state.ouvrir);
+  return (
+    <button
+      type="button"
+      className="tuto-aide-panneau"
+      aria-label="Aide"
+      title="Aide : ce qu’on fait dans ce panneau, et tous les tutos"
+      onClick={() => ouvrir(tutoDuBouton(ecran))}
     >
       <span aria-hidden="true">?</span>
     </button>

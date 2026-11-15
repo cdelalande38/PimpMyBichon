@@ -50,6 +50,36 @@ test.describe('écran de chargement', () => {
     await expect(chargement).toHaveCount(0, { timeout: 30_000 });
     await expect(page.locator('.tag')).toContainText('en route');
   });
+
+  test('une fois parti, il ne revient pas : « Réessayer » tout de suite après un modèle introuvable', async ({ page }) => {
+    test.setTimeout(120_000);
+    // « Dans les premières secondes » : en rendu logiciel, l'échec arrive après les délais de l'écran
+    // (3 s après la première image, 10 s en tout), qui le font partir de toute façon. On les allonge
+    // ici, pour que seul l'échec le fasse partir, comme sur un téléphone rapide.
+    await page.addInitScript(() => {
+      const original = window.setTimeout.bind(window);
+      window.setTimeout = ((handler: TimerHandler, delay?: number, ...rest: unknown[]) =>
+        original(handler, delay === 3_000 || delay === 10_000 ? 120_000 : delay, ...rest)) as typeof window.setTimeout;
+    });
+    // Le premier modèle tombe : le banc passe en erreur, l'écran part aussitôt. Les essais suivants
+    // restent en route : le banc reste « en chargement ».
+    let essais = 0;
+    await page.route('**/*.glb', (route) => {
+      essais += 1;
+      return essais === 1 ? route.abort('internetdisconnected') : undefined;
+    });
+    await page.goto('./');
+    await expect(page.locator('.stage')).toHaveAttribute('data-bench', 'erreur', { timeout: 30_000 });
+    await chargementParti(page);
+    // « Réessayer » tout de suite (dans les premières secondes) : l'écran de chargement reste parti.
+    await page.getByRole('button', { name: 'Réessayer', exact: true }).click();
+    await expect(page.locator('.stage')).toHaveAttribute('data-bench', 'chargement');
+    for (let i = 0; i < 20; i += 1) {
+      await expect(page.locator('.tuto-chargement')).toHaveCount(0);
+      await page.waitForTimeout(100);
+    }
+    await expect(page.locator('.tag')).toContainText('en route');
+  });
 });
 
 test.describe('tutoriels', () => {
@@ -135,6 +165,34 @@ test.describe('tutoriels', () => {
     await expect(peinture).toBeVisible();
     await peinture.getByRole('button', { name: 'Passer' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+
+  test('panneau ouvert : son en-tête offre « ? », qui rouvre le tuto du panneau par-dessus', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto('./');
+    await chargementParti(page);
+    await quick(page).getByRole('button', { name: 'Atelier', exact: true }).click();
+    const panneau = page.getByRole('dialog', { name: 'Réglages' });
+    await expect(panneau).toBeVisible();
+    const aide = panneau.getByRole('button', { name: 'Aide', exact: true });
+    const box = await aide.boundingBox();
+    expect(box?.width ?? 0, '« ? » du panneau : 48 px').toBeGreaterThanOrEqual(48);
+    expect(box?.height ?? 0, '« ? » du panneau : 48 px').toBeGreaterThanOrEqual(48);
+    // Le titre du panneau ne passe pas sous le bouton.
+    const titre = await panneau.getByRole('heading', { level: 2 }).evaluate((h) => {
+      const range = document.createRange();
+      range.selectNodeContents(h);
+      return range.getBoundingClientRect().right;
+    });
+    expect(titre, 'titre avant le « ? »').toBeLessThanOrEqual(box?.x ?? 0);
+    await capture(page, '05-panneau-aide');
+    await aide.click();
+    const tuto = page.getByRole('dialog', { name: 'L’atelier' });
+    await expect(tuto).toBeVisible();
+    await tuto.getByRole('button', { name: 'Passer' }).click();
+    await expect(tuto).toHaveCount(0);
+    await expect(panneau).toBeVisible();
+    await expect(aide).toBeFocused();
   });
 
   test('lisible aux trois tailles de texte, en 360 × 780 : la carte et ses boutons tiennent dans l’écran', async ({ page }) => {

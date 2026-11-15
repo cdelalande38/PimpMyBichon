@@ -143,7 +143,8 @@
 /* En haut à gauche, sous la marque et l'étiquette du véhicule : hors de la colonne de droite. */
 .tuto-aide {
   position: fixed;
-  top: calc(5rem + var(--safe-t));
+  /* Sous l'étiquette du véhicule quand elle passe sur plusieurs lignes (--aide-sous, mesuré). */
+  top: max(calc(5rem + var(--safe-t)), var(--aide-sous, 0px));
   left: calc(max(0px, (100vw - 56.25rem) / 2) + var(--gutter) + var(--safe-l));
   z-index: 2;
   display: inline-grid;
@@ -168,6 +169,46 @@
 }
 
 .tuto-aide:focus-visible {
+  outline: 2px solid var(--ambre);
+  outline-offset: 3px;
+}
+
+/* « ? » dans l'en-tête d'un panneau ouvert (Radio, Atelier) : en haut à droite de la carte, le titre
+   s'arrête avant lui. */
+.card:has(> .tuto-aide-panneau) {
+  position: relative;
+}
+
+.card:has(> .tuto-aide-panneau) .card-scroll > :is(.eyebrow, h2):first-of-type {
+  padding-right: calc(max(48px, 3rem) + 0.5rem);
+}
+
+.tuto-aide-panneau {
+  position: absolute;
+  top: 0.5rem;
+  right: calc(0.75rem + var(--safe-r));
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  width: max(48px, 3rem);
+  height: max(48px, 3rem);
+  padding: 0;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ambre);
+  font-family: var(--display);
+  font-size: 1.375rem;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tuto-aide-panneau:active {
+  filter: brightness(1.25);
+}
+
+.tuto-aide-panneau:focus-visible {
   outline: 2px solid var(--ambre);
   outline-offset: 3px;
 }

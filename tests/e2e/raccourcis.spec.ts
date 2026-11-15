@@ -36,9 +36,10 @@ test.describe('raccourcis et dock de personnalisation', () => {
       expect(box.y, `${name} dans le haut de l’écran`).toBeLessThan(VIEWPORT.height / 3);
     }
 
-    // Le dock : quatre sections (le véhicule de départ déclare un moteur), la poignée, plus d'actions.
+    // Le dock : quatre sections (le véhicule de départ déclare un moteur), plus d'actions ; pas de
+    // poignée aux sections, où agrandir ne montrerait rien de plus (src/ui/Dock.tsx).
     await expect(tabs(page).getByRole('button')).toHaveText(['Véhicule', 'Custom', 'Mécanique', 'Garage']);
-    await expect(dock(page).getByRole('button', { name: 'Agrandir le menu' })).toBeVisible();
+    await expect(dock(page).getByRole('button', { name: /^(Agrandir|Réduire) le menu$/ })).toHaveCount(0);
     for (const name of ['Radio', 'Photo', 'Sous le capot', 'Réglages']) {
       await expect(dock(page).getByRole('button', { name, exact: true })).toHaveCount(0);
     }

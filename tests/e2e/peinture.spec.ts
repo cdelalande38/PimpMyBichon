@@ -237,8 +237,11 @@ test.describe('peinture', () => {
       expect(box?.height ?? 0, 'boutons de la question : 48 px').toBeGreaterThanOrEqual(48);
     }
     await shot(page, '10-cadenas-question');
-    await keep.tap();
+    // Au clavier : « Garder sa peinture » (le choix par défaut, déjà sous le focus), puis le focus
+    // revient sur le cadenas, pas sur la page.
+    await page.keyboard.press('Enter');
     await expect(confirm).toHaveCount(0);
+    await expect(lock(page)).toBeFocused();
     await expect(lock(page)).toHaveAttribute('data-cadenas', 'ouvert');
     await expect(navy).toHaveAttribute('aria-pressed', 'true');
     // Échap vaut « garder », et ne fait pas remonter le menu.
@@ -246,12 +249,15 @@ test.describe('peinture', () => {
     await expect(keep).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(confirm).toHaveCount(0);
+    await expect(lock(page)).toBeFocused();
     await expect(lock(page)).toHaveAttribute('data-cadenas', 'ouvert');
     await expect(navy).toHaveAttribute('aria-pressed', 'true');
     // Confirmer : la zone revient à la carrosserie, ses choix se verrouillent de nouveau.
     await lock(page).tap();
-    await confirm.getByRole('button', { name: 'Refermer le cadenas' }).tap();
+    await confirm.getByRole('button', { name: 'Refermer le cadenas' }).focus();
+    await page.keyboard.press('Enter');
     await expect(confirm).toHaveCount(0);
+    await expect(lock(page)).toBeFocused();
     await expect(lock(page)).toHaveAttribute('data-cadenas', 'ferme');
     await expect(color(page, wornName ?? '')).toHaveAttribute('aria-pressed', 'true');
     await expect(navy).toHaveAttribute('aria-disabled', 'true');

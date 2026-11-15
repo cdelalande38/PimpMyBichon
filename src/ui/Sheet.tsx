@@ -2,6 +2,7 @@
 // sont gérés par le navigateur. Le bouton de fermeture reste en bas, sous le pouce.
 
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { AidePanneau } from './tuto/Tutos.tsx';
 
 interface SheetProps {
   open: boolean;
@@ -54,6 +55,8 @@ export function Sheet({ open, eyebrow, title, onClose, children, actions, switch
     >
       {open && (
         <div className="card">
+          {/* Le « ? » du garage passe derrière le panneau (modal) : le panneau a le sien, en tête. */}
+          <AidePanneau />
           <div className="card-scroll">
             <p className="eyebrow">{eyebrow}</p>
             <h2 id={titleId}>{title}</h2>

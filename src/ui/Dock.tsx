@@ -5,16 +5,19 @@
 // à une pastille « Personnaliser » qui le rouvre là où on l'avait laissé. La radio, la photo et
 // l'atelier vivent dans la colonne de boutons ronds du haut de l'écran (src/ui/Hud.tsx).
 // Trois tailles (src/state/dock.ts) : fermé, compact (les rangées défilent), agrandi (le dock monte
-// et les options passent à la ligne). Échap remonte d'un niveau, puis ferme le menu.
+// et les options passent à la ligne). La poignée ne paraît que là où agrandir montre quelque chose
+// de plus (mesuré, voir moreWhenExpanded) ; ailleurs, un menu resté « agrandi » s'affiche compact,
+// à sa hauteur utile, et le redevient en revenant là où il gagne. Échap remonte d'un niveau, puis
+// ferme le menu.
 
-import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useSettling } from '../app/useRoute.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
 import type { VehicleManifest } from '../data/vehicleTypes.ts';
 import { usePwa } from '../pwa/pwaStore.ts';
 import { applyUpdate, promptInstall } from '../pwa/register.ts';
 import { useBuilds } from '../state/builds.ts';
-import { dockSize, useDock, type DockLevel } from '../state/dock.ts';
+import { dockSize, useDock, type DockLevel, type MenuLevel } from '../state/dock.ts';
 import { activeEntry, visibleSections } from '../data/dockMenu.ts';
 import { BenchControls } from './BenchControls.tsx';
 
@@ -48,8 +51,41 @@ function levelCrumbs(level: DockLevel, vehicle: VehicleManifest): string[] {
   return [level.target === 'color2' ? 'Seconde teinte' : 'Nuancier'];
 }
 
-/** Ligne de repère : Retour, le fil (section · entrée · niveaux), la poignée, Fermer le menu. */
-function DockHeader({ vehicle }: { vehicle: VehicleManifest }) {
+/** Largeur d'une rangée posée sur une seule ligne (ses éléments, leurs marges, les écarts) : plus
+ *  large que la place, elle défile en compact et passe à la ligne agrandie. Mesure indépendante de
+ *  la taille du dock : la décision ne bascule pas d'une taille à l'autre. */
+function rowOverflows(row: HTMLElement): boolean {
+  const style = getComputedStyle(row);
+  const items = [...row.children].filter((item): item is HTMLElement => item instanceof HTMLElement && item.getClientRects().length > 0);
+  if (items.length === 0) return false;
+  let width = (Number.parseFloat(style.columnGap) || 0) * (items.length - 1);
+  for (const item of items) {
+    const box = getComputedStyle(item);
+    width += item.getBoundingClientRect().width + (Number.parseFloat(box.marginLeft) || 0) + (Number.parseFloat(box.marginRight) || 0);
+  }
+  const room = row.clientWidth - (Number.parseFloat(style.paddingLeft) || 0) - (Number.parseFloat(style.paddingRight) || 0);
+  return width > room + 1;
+}
+
+/**
+ * Vrai si agrandir le menu montre quelque chose de plus au niveau à l'écran : jamais aux sections ;
+ * aux entrées d'une section, si leur rangée ne tient pas dans la largeur ; dans le contenu d'une
+ * entrée, s'il se déclare plus riche agrandi (`data-agrandir="toujours"` : la peinture, couleurs et
+ * finitions ensemble), s'il défile en hauteur, ou si l'une de ses rangées ne tient pas sur une ligne.
+ */
+function moreWhenExpanded(footer: HTMLElement, level: MenuLevel): boolean {
+  if (level === 'sections') return false;
+  const entries = footer.querySelector<HTMLElement>('.dock-entries');
+  if (level === 'entrees') return entries !== null && rowOverflows(entries);
+  const tab = footer.querySelector<HTMLElement>('.dock-tab');
+  if (!tab) return false;
+  if (tab.querySelector('[data-agrandir="toujours"]')) return true;
+  if (tab.scrollHeight > tab.clientHeight + 1) return true;
+  return [...tab.querySelectorAll<HTMLElement>('.chips, .tabs')].some(rowOverflows);
+}
+
+/** Ligne de repère : Retour, le fil (section · entrée · niveaux), la poignée (si utile), Fermer le menu. */
+function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boolean }) {
   const chosen = useDock((state) => state.section);
   const menu = useDock((state) => state.menu);
   const remembered = useDock((state) => state.entries);
@@ -107,7 +143,7 @@ function DockHeader({ vehicle }: { vehicle: VehicleManifest }) {
           </>
         )}
       </p>
-      <DockHandle />
+      {handle && <DockHandle />}
       <button type="button" className="dock-close" aria-label="Fermer le menu" title="Fermer le menu" onClick={() => setClosed(true)}>
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
           <path d="M6 6l12 12M18 6L6 18" />
@@ -168,18 +204,43 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
   const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const expanded = useDock((state) => state.expanded);
   const closed = useDock((state) => state.closed);
-  const size = dockSize({ expanded, closed });
   const setTop = useDock((state) => state.setTop);
   const setClosed = useDock((state) => state.setClosed);
   const menu = useDock((state) => state.menu);
   const section = useDock((state) => state.section);
+  const remembered = useDock((state) => state.entries);
   const depth = useDock((state) => state.levels.length);
+  // Comme le dock et le fil : une section absente pour ce véhicule retombe sur les sections.
+  const shown = visibleSections(vehicle.engine !== undefined).find((item) => item.id === section);
+  const level: MenuLevel = shown ? menu : 'sections';
+  const entryId = shown ? activeEntry(shown, remembered[shown.id])?.id : undefined;
+  // Agrandir montre-t-il quelque chose de plus ici ? Mesuré après chaque rendu du niveau (avant
+  // l'affichage), et quand la taille de l'écran, du texte ou du contenu change.
+  const [more, setMore] = useState(false);
+  // Resté « agrandi » là où la poignée n'a rien à montrer : affiché compact, à sa hauteur utile.
+  const size = dockSize({ expanded: expanded && more, closed });
 
   // Dock agrandi : son bord haut, mesuré à l'écran, sert à la scène pour recadrer le véhicule
   // au-dessus. Il bouge avec le contenu de l'onglet, la taille du texte et celle de l'écran.
   // Fermé ou compact : le cadrage d'origine.
   const footer = useRef<HTMLElement>(null);
   useKeepFocus(footer, `${size}/${menu}/${section}/${depth}`);
+  useLayoutEffect(() => {
+    const element = footer.current;
+    if (!element || closed || sceneFailed) return;
+    const measure = () => setMore(moreWhenExpanded(element, level));
+    measure();
+    const resize = new ResizeObserver(measure);
+    resize.observe(element);
+    for (const row of element.querySelectorAll('.dock-entries, .dock-tab, .dock-tab .chips')) resize.observe(row);
+    // Un contenu qui change sans changer de niveau (question du cadenas, nuancier) : on remesure.
+    const mutations = new MutationObserver(measure);
+    mutations.observe(element, { childList: true, subtree: true });
+    return () => {
+      resize.disconnect();
+      mutations.disconnect();
+    };
+  }, [closed, sceneFailed, level, section, entryId, depth, vehicle.id, size]);
   useLayoutEffect(() => {
     const element = footer.current;
     if (size !== 'agrandi' || !element) {
@@ -268,7 +329,7 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
 
   return (
     <footer ref={footer} className="dock" data-taille={size} inert={settling || covered} aria-hidden={covered || undefined}>
-      <DockHeader vehicle={vehicle} />
+      <DockHeader vehicle={vehicle} handle={more} />
       {banners}
       <BenchControls />
     </footer>

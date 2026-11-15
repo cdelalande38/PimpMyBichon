@@ -52,8 +52,10 @@ export const TUTOS: readonly Tuto[] = [
         cible: 'footer.dock nav[aria-label="Onglets de l’atelier"]',
       },
       {
-        texte: 'La flèche agrandit le menu, la croix le range. Il revient d’une touche sur « Personnaliser ».',
-        cible: 'footer.dock .dock-handle, footer.dock .dock-close',
+        // La poignée n'est pas aux sections (elle ne paraît que là où agrandir montre plus) : la
+        // croix seule est visée ici.
+        texte: 'La croix range le menu ; il revient d’une touche sur « Personnaliser ». Dans une entrée, la flèche l’agrandit s’il a plus à montrer.',
+        cible: 'footer.dock .dock-close',
       },
       { texte: 'En haut à droite, les boutons ronds : atelier, photo, radio, parfois l’intérieur. Touche aussi les objets du garage : ils ouvrent des menus.', cible: 'nav.quick' },
       { texte: 'Perdu ? Le bouton « ? » réexplique l’écran où tu es, et garde tous les tutos.', cible: '.tuto-aide' },
@@ -80,7 +82,9 @@ export const TUTOS: readonly Tuto[] = [
       { texte: 'Choisis d’abord une zone : la carrosserie, le toit, les jantes…', cible: 'footer.dock [aria-label="Zones"]' },
       { texte: 'Touche une couleur pour l’appliquer, puis passe à la finition : brillant, mat, métallisé, nacré…' },
       { texte: 'Le nuancier ouvre toutes les teintes. La pipette reprend la couleur d’une autre zone.' },
-      { texte: 'Le cadenas fermé, la partie suit la carrosserie. Ouvre-le pour lui donner sa propre peinture.', cible: 'footer.dock [data-cadenas]' },
+      // La zone maîtresse change d'un véhicule à l'autre (carrosserie, réservoir… : champ « phrase »
+      // du manifeste) ; elle ouvre toujours la liste des zones (src/ui/paint/paintLogic.ts).
+      { texte: 'Le cadenas fermé, la partie suit la première zone de la liste. Ouvre-le pour lui donner sa propre peinture.', cible: 'footer.dock [data-cadenas]' },
     ],
   },
   {

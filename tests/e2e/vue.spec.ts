@@ -76,6 +76,8 @@ async function expectFramed(page: Page, id: string): Promise<void> {
 /** Dock agrandi : le véhicule glisse dans la partie libre au-dessus de lui ; fermé : il ne sort pas de l'écran. */
 async function expectFramedWithDock(page: Page, id: string): Promise<void> {
   const { height } = page.viewportSize() ?? { width: 390, height: 844 };
+  // La poignée ne paraît que là où agrandir montre plus (jamais aux sections) : la peinture en a.
+  await openEntry(page, 'Peinture');
   await handle(page).tap();
   await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
   const dockTop = (await dock(page).boundingBox())?.y ?? height;

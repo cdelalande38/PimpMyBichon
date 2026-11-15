@@ -94,7 +94,7 @@ export function EnginePanel() {
   const touched = slots.some((slot) => chosenOption(engine, build, slot.id) !== undefined);
 
   return (
-    <div className="engine">
+    <div className="engine" data-agrandir="toujours">
       <p className="engine-spec">
         <strong>{engine.label}</strong>
         <span>

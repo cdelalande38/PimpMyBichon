@@ -5,7 +5,7 @@
 // dit pourquoi et propose de l'ouvrir. Tout part des données : zones du manifeste,
 // src/data/paintColors.ts, src/data/finishes.ts. Dock agrandi : couleurs et finitions ensemble.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { finish as findFinish, FINISHES } from '../../data/finishes.ts';
 import { PAINT_COLORS } from '../../data/paintColors.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
@@ -176,7 +176,15 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
 
   // Refermer un cadenas qui ferait perdre une peinture à part : une question d'abord (zone en attente).
   const [relock, setRelock] = useState<string | null>(null);
+  // La question partie, le focus revient sur le cadenas qui l'a posée (sinon il retombe sur la page).
+  const relockFrom = useRef<string | null>(null);
   const keepPaint = useCallback(() => setRelock(null), []);
+  useEffect(() => {
+    if (relock !== null || relockFrom.current === null) return;
+    const selector = relockFrom.current;
+    relockFrom.current = null;
+    document.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+  }, [relock]);
 
   if (!zone || !paint || !finish) {
     return <p className="paint-note">Ce véhicule n’a pas de zone à peindre.</p>;
@@ -199,8 +207,9 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
     });
   // Ouvrir garde l'image telle quelle : la peinture du moment (celle de la carrosserie) devient
   // celle de la zone. Refermer rend la zone à la carrosserie.
-  const toggleZoneLock = (id: string, seed: Paint | undefined) => {
+  const toggleZoneLock = (id: string, seed: Paint | undefined, from: string) => {
     if (!isLinked(manifest, build, id) && relockLoses(manifest, build, id)) {
+      relockFrom.current = from;
       setRelock(id);
       return;
     }
@@ -208,7 +217,7 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   };
   const toggleLock = () => {
     setNotice(0);
-    toggleZoneLock(zoneId, paint);
+    toggleZoneLock(zoneId, paint, 'footer.dock .paint-lockbtn, footer.dock .paint-lockline-btn');
   };
   const disabled = locked ? { 'aria-disabled': true as const } : {};
 
@@ -217,7 +226,7 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
 
   if (picker) {
     return (
-      <div className="paint">
+      <div className="paint" data-agrandir="toujours">
         <ColorPicker
           value={pickerValue}
           title={pickerTitle}
@@ -261,9 +270,10 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
                 type="button"
                 className="paint-lock"
                 data-cadenas={state}
+                data-zone={item.id}
                 aria-label={lockLabel(item.label, state, phrase)}
                 title={lockReminder(state, phrase)}
-                onClick={() => toggleZoneLock(item.id, itemPaint)}
+                onClick={() => toggleZoneLock(item.id, itemPaint, `footer.dock .paint-lock[data-zone="${item.id}"]`)}
               >
                 <Padlock open={state === 'ouvert'} />
               </button>
@@ -396,12 +406,14 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   );
 
   const noticeEl = <LockNotice token={locked ? notice : 0} message={lockMessage(phrase)} onOpen={toggleLock} onDone={hideNotice} />;
+  // data-agrandir : la peinture gagne toujours au dock agrandi (couleurs et finitions ensemble) ; la
+  // poignée du menu reste (src/ui/Dock.tsx).
   const rootClass = ['paint', wide && 'paint-wide', locked && 'paint-locked'].filter(Boolean).join(' ');
 
   const relockZone = relock !== null && lockState(manifest, build, relock) === 'ouvert' ? manifest.zones.find((item) => item.id === relock) : undefined;
   if (relockZone) {
     return (
-      <div className={wide ? 'paint paint-wide' : 'paint'}>
+      <div className={wide ? 'paint paint-wide' : 'paint'} data-agrandir="toujours">
         <RelockConfirm
           question={relockQuestion(relockZone.label, phrase)}
           onKeep={keepPaint}
@@ -415,12 +427,12 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   }
 
   if (!zoneLevel) {
-    return <div className={wide ? 'paint paint-wide' : 'paint'}>{zonesBar}</div>;
+    return <div className={wide ? 'paint paint-wide' : 'paint'} data-agrandir="toujours">{zonesBar}</div>;
   }
   if (wide) {
     // Dock agrandi : le cadenas (collé en haut), les couleurs, puis les finitions de la zone.
     return (
-      <div className={rootClass}>
+      <div className={rootClass} data-agrandir="toujours">
         {lockLine}
         <section className="paint-section" aria-labelledby={`${vehicle}-couleur`}>
           <h3 id={`${vehicle}-couleur`} className="paint-head">
@@ -455,7 +467,7 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
       </p>
     );
   return (
-    <div className={rootClass}>
+    <div className={rootClass} data-agrandir="toujours">
       <div className="paint-frame">
         <div className="paint-bar paint-bar-steps">
           <nav className="tabs paint-steps" aria-label="Peinture">

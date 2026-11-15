@@ -5,7 +5,11 @@ import { IDBFactory } from 'fake-indexeddb';
 import { createStore, get, set } from 'idb-keyval';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Route } from '../../src/app/router.ts';
+import { readdirSync, readFileSync } from 'node:fs';
 import { DOCK_MENU } from '../../src/data/dockMenu.ts';
+import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
+import { masterZone } from '../../src/state/builds.ts';
+import { orderedZones } from '../../src/ui/paint/paintLogic.ts';
 import { TUTO_ACCUEIL, TUTOS, tutoForEcran, type EcranKey } from '../../src/data/tutos.ts';
 import { sanitizeTutos, TUTOS_KEY } from '../../src/state/tutos.ts';
 import { ecranCourant, ecranDuGarage, premierPassageActif, type EcranFaits } from '../../src/ui/tuto/ecran.ts';
@@ -172,5 +176,36 @@ describe('souvenir des tutos', () => {
     expect((await launch()).getState().vus).toEqual({ radio: true });
     await set(TUTOS_KEY, '{pas du json', db());
     expect((await launch()).getState().vus).toEqual({});
+  });
+});
+
+describe('textes qui dépendent du véhicule ou du menu', () => {
+  const DIR = new URL('../../public/assets/vehicles/', import.meta.url);
+  const manifests = readdirSync(DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      try {
+        return [JSON.parse(readFileSync(new URL(`${entry.name}/vehicle.json`, DIR), 'utf8')) as VehicleManifest];
+      } catch {
+        return [];
+      }
+    });
+
+  it('le cadenas « suit la première zone de la liste » : vrai pour chaque véhicule, moto comprise', () => {
+    const etape = TUTOS.find((tuto) => tuto.id === 'peinture')?.etapes.find((item) => item.cible?.includes('data-cadenas'));
+    expect(etape?.texte).toMatch(/première zone de la liste/);
+    expect(etape?.texte).not.toMatch(/carrosserie/);
+    expect(manifests.length).toBeGreaterThan(0);
+    for (const manifest of manifests) {
+      const master = masterZone(manifest);
+      expect(master, manifest.id).toBeDefined();
+      expect(orderedZones(manifest)[0], manifest.id).toBe(master);
+    }
+  });
+
+  it('l’accueil vise la croix seule : la poignée n’est pas aux sections', () => {
+    const cibles = TUTOS.find((tuto) => tuto.id === TUTO_ACCUEIL)?.etapes.map((etape) => etape.cible ?? '') ?? [];
+    expect(cibles.some((cible) => cible.includes('.dock-close'))).toBe(true);
+    expect(cibles.some((cible) => cible.includes('.dock-handle'))).toBe(false);
   });
 });
