@@ -33,6 +33,7 @@ import { useDock } from '../state/dock.ts';
 import { usePhoto } from '../state/photo.ts';
 import { useSettings } from '../state/store.ts';
 import { AutoQuality } from './AutoQuality.tsx';
+import { SceneExtras } from './extras/SceneExtras.tsx';
 import { DOCK_SHIFT_MS, dockShift, easeOutCubic, fitCamera, orbitPosition } from './fit.ts';
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
@@ -245,6 +246,8 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       />
 
       <Garage ambiance={ambiance} profile={profile} vehicle={measure} instantCut={reducedMotion || photo} />
+      {/* Ce que la pièce ajoute à la scène sans toucher à ce fichier (points d'intérêt, appui sur le véhicule). */}
+      <SceneExtras photo={photo} />
       {/* En photo, la sonde passe en haute résolution (src/render/photo/plan.ts). */}
       <ReflectionProbe size={photo ? plan.probeSize : profile.probeSize} position={GARAGE.probe} version={ambiance.id} epoch={epoch} />
       {/* Le modèle arrive après le décor ; s'il manque (absent du build, ou première visite sans

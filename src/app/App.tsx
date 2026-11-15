@@ -8,6 +8,7 @@ import { useBuilds } from '../state/builds.ts';
 import { useSettings } from '../state/store.ts';
 import { Dock } from '../ui/Dock.tsx';
 import { Hud } from '../ui/Hud.tsx';
+import { SceneOverlay } from '../ui/overlay/SceneOverlay.tsx';
 import { PhotoBar } from '../ui/PhotoBar.tsx';
 import { Sheets } from '../ui/Sheets.tsx';
 import { isSheetRoute } from './router.ts';
@@ -57,6 +58,8 @@ export function App() {
         <>
           {/* Panneau ouvert : le haut de l'écran et le dock passent derrière, hors d'atteinte. */}
           <Hud sceneFailed={sceneFailed} covered={isSheetRoute(route)} />
+          {/* Ce qui se pose sur l'image sans toucher à ce fichier (pastilles de la pièce). */}
+          {!sceneFailed && <SceneOverlay covered={isSheetRoute(route)} />}
 
           <div className="mid">
             {/* Jamais de substitut en silence : il est annoncé à l'écran, comme le chargement. */}
