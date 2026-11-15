@@ -106,6 +106,11 @@ export interface VehicleManifest {
   zones: readonly Zone[];
   /** Moteur d'origine ; absent : pas de fiche de préparation pour ce véhicule. */
   engine?: EngineSpec;
+  /**
+   * Point de vue intérieur (§ 5.1) : position de l'œil et point regardé, en mètres, dans le repère
+   * du véhicule (avant vers +X, haut vers +Y, droite vers +Z). Absent : pas de vue intérieure.
+   */
+  interiorView?: { eye: readonly [number, number, number]; target: readonly [number, number, number] };
   adapt?: VehicleAdapt;
 }
 
