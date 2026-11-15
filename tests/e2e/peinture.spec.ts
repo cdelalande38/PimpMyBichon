@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { changedRatio, openApp, sceneBand, waitForScene, waitForStill } from './helpers.ts';
+import { changedRatio, openApp, openEntry, sceneBand, waitForScene, waitForStill } from './helpers.ts';
 
 // Jalon 3 (§ 5.2) : l'onglet « Peinture » du dock. Zone, couleur saisie en hexadécimal,
 // finition, zone détachée de la carrosserie : tout est retrouvé après rechargement.
@@ -30,19 +30,26 @@ function finishChip(page: Page, label: string): Locator {
     .filter({ has: page.locator('b', { hasText: new RegExp(`^${label}$`) }) });
 }
 
-/** L'onglet « Peinture » du dock (l'atelier s'ouvre sur un autre onglet). */
+/** L'entrée « Peinture » de la section « Custom » du dock (l'atelier s'ouvre sur « Véhicule »). */
 async function openPaintTab(page: Page): Promise<void> {
-  const tab = page.locator('footer.dock').getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: 'Peinture' });
-  await tab.tap();
-  await expect(tab).toHaveAttribute('aria-current', 'true');
+  await openEntry(page, 'Peinture');
+}
+
+/** Remonte à la liste des zones (« Retour » de la ligne de repère du dock), si on n'y est pas. */
+async function backToZones(page: Page): Promise<void> {
+  const back = page.locator('footer.dock').getByRole('button', { name: 'Retour', exact: true });
+  if (await back.isVisible()) await back.tap();
+  await expect(zones(page).first()).toBeVisible();
 }
 
 /** Première zone qui porte un cadenas (zone de carrosserie autre que la maîtresse). */
 async function linkableZone(page: Page): Promise<number> {
+  await backToZones(page);
   const count = await zones(page).count();
   for (let index = 1; index < count; index += 1) {
     await zones(page).nth(index).tap();
     if (await lock(page).isVisible()) return index;
+    await backToZones(page);
   }
   throw new Error('aucune zone à cadenas sur ce véhicule');
 }
@@ -65,6 +72,8 @@ test.describe('peinture', () => {
     // Zone maîtresse en tête, choisie d'office.
     await expect(zones(page).first()).toHaveAttribute('aria-pressed', 'true');
     await shot(page, '01-zones');
+    // La zone maîtresse : on descend dans ses couleurs.
+    await zones(page).first().tap();
 
     // Couleur saisie au nuancier, en hexadécimal.
     const before = await sceneBand(page);
@@ -125,11 +134,13 @@ test.describe('peinture', () => {
     await waitForScene(page);
     await openPaintTab(page);
     await expect(zones(page).first()).toBeVisible({ timeout: 120_000 });
+    await zones(page).first().tap();
     await expect(paint(page).getByRole('button', { name: 'Récente #ff3fa4' })).toHaveAttribute('aria-pressed', 'true');
     await step(page, 'Finition');
     await expect(finishChip(page, 'Pailleté')).toHaveAttribute('aria-pressed', 'true');
     await expect(paint(page).locator('.paint-flake output')).toHaveText('1,5 mm');
     await step(page, 'Couleur');
+    await backToZones(page);
     await zones(page).nth(detached).tap();
     await expect(lock(page)).toHaveAttribute('aria-pressed', 'false');
     await expect(paint(page).getByRole('button', { name: 'Bleu nuit', exact: true })).toHaveAttribute('aria-pressed', 'true');

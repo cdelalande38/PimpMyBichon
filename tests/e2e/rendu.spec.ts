@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import { capture, changedRatio, openApp, paintAndReload, sceneBand, VIEWPORT, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { capture, changedRatio, openApp, openAtelier, openEntry, paintAndReload, sceneBand, VIEWPORT, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 // Jalon 1, rendu cible : une capture par ambiance, la planche de revue (3 ambiances × 4
 // peintures, captures/jalon-1/planche-c.jpg) et les relevés de « Sous le capot » (coût d'une
@@ -11,7 +11,7 @@ import { capture, changedRatio, openApp, paintAndReload, sceneBand, VIEWPORT, wa
 const dock = (page: Page) => page.locator('footer.dock');
 
 async function pick(page: Page, tab: string, choice: string): Promise<void> {
-  await dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: tab }).tap();
+  await openEntry(page, tab);
   // Le nom exact (« Chrome » n'est pas « Chrome coloré ») est dans le <b> du bouton.
   const button = dock(page)
     .getByRole('group', { name: tab })
@@ -36,7 +36,7 @@ async function facts(page: Page): Promise<Facts> {
 }
 
 async function setQuality(page: Page, label: string): Promise<void> {
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  await openAtelier(page, 'Réglages');
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await expect(dialog).toBeVisible();
   const button = dialog.getByRole('group', { name: 'Qualité' }).getByRole('button', { name: new RegExp(`^${label}`) });

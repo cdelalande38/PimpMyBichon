@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { openApp, waitForBench, waitForScene } from './helpers.ts';
+import { openApp, quick, waitForBench, waitForScene } from './helpers.ts';
 
 // Menu agrandi : la poignée du dock fait monter le menu (60 % de l'écran au plus) et passe les
 // options de l'onglet sur plusieurs lignes, sans défilement en largeur. Le véhicule reste au-dessus
@@ -11,7 +11,9 @@ import { openApp, waitForBench, waitForScene } from './helpers.ts';
 const dock = (page: Page) => page.locator('footer.dock');
 const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
 const handle = (page: Page) => dock(page).getByRole('button', { name: /^(Agrandir|Réduire) le menu$/ });
-const TABS = ['Véhicule', 'Peinture', 'Ambiance'] as const;
+const TABS = ['Véhicule', 'Custom', 'Mécanique', 'Garage'] as const;
+/** Nom de fichier d'une section : sans accent ni majuscule. */
+const slug = (label: string) => label.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
 async function shot(page: Page, name: string): Promise<void> {
   const path = resolve('captures', 'menu', `${name}.png`);
@@ -19,18 +21,18 @@ async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path });
 }
 
-/** Géométrie du dock : son haut, la rangée d'onglets, la rangée d'actions. */
+/** Géométrie du dock : son haut, la rangée d'onglets. */
 async function dockGeometry(page: Page) {
   return dock(page).evaluate((footer) => {
     const top = (selector: string) => Math.round(footer.querySelector(selector)?.getBoundingClientRect().top ?? -1);
-    return { dock: Math.round(footer.getBoundingClientRect().top), tabs: top('.dock-tabs-row'), acts: top('nav.acts') };
+    return { dock: Math.round(footer.getBoundingClientRect().top), tabs: top('.dock-tabs-row') };
   });
 }
 
-/** Rangées de l'onglet courant (et onglets, actions) qui débordent en largeur : aucune attendue. */
+/** Rangées de l'onglet courant (et onglets) qui débordent en largeur : aucune attendue. */
 async function overflowingRows(page: Page): Promise<string[]> {
   return dock(page).evaluate((footer) => {
-    const rows = [...footer.querySelectorAll<HTMLElement>('.tabs, .chips, .acts, .dock-tab, .paint-bar, .paint-extra')];
+    const rows = [...footer.querySelectorAll<HTMLElement>('.tabs, .chips, .dock-tab, .paint-bar, .paint-extra')];
     return rows
       .filter((row) => row.getClientRects().length > 0 && row.scrollWidth > row.clientWidth + 1)
       .map((row) => `${row.className} (${row.scrollWidth} > ${row.clientWidth})`);
@@ -103,7 +105,7 @@ test.describe('menu agrandi', () => {
     await expect(handle(page)).toHaveAccessibleName('Réduire le menu');
 
     for (const tab of TABS) {
-      await tabs(page).getByRole('button', { name: tab }).tap();
+      await tabs(page).getByRole('button', { name: tab, exact: true }).tap();
       const box = await dock(page).boundingBox();
       expect(box?.height ?? 0, `${tab} : 60 % de l'écran au plus`).toBeLessThanOrEqual(height * 0.6 + 1);
       expect(await overflowingRows(page), `${tab} : aucune rangée ne déborde en largeur`).toEqual([]);
@@ -120,9 +122,11 @@ test.describe('menu agrandi', () => {
           await expect(chips.nth(i)).toBeInViewport({ ratio: 1 });
         }
       }
-      if (tab === 'Peinture') {
-        // Zones, couleurs et finitions ensemble : plus d'alternance Couleur / Finition.
+      if (tab === 'Custom') {
+        // La liste des zones, puis une zone : ses couleurs et finitions ensemble, plus d'alternance
+        // Couleur / Finition (la pile des niveaux : src/state/dock.ts).
         await expect(dock(page).getByRole('group', { name: 'Zones' })).toBeVisible();
+        await dock(page).getByRole('group', { name: 'Zones' }).getByRole('button').first().tap();
         await expect(dock(page).getByRole('group', { name: 'Couleurs' })).toBeVisible();
         await expect(dock(page).getByRole('group', { name: 'Finitions' })).toBeAttached();
         await expect(dock(page).getByRole('navigation', { name: 'Peinture' })).toHaveCount(0);
@@ -135,13 +139,12 @@ test.describe('menu agrandi', () => {
       await expectVehicleAboveDock(page);
       // Capture : l'onglet vu depuis le haut de sa liste.
       await dock(page).locator('.dock-tab').evaluate((element) => element.scrollTo({ top: 0 }));
-      await shot(page, `0${TABS.indexOf(tab) + 1}-agrandi-${tab === 'Véhicule' ? 'vehicule' : tab.toLowerCase()}`);
+      await shot(page, `0${TABS.indexOf(tab) + 1}-agrandi-${slug(tab)}`);
     }
 
-    // La radio reste dans la rangée d'actions, à l'écran.
-    await expect(dock(page).getByRole('navigation', { name: 'Atelier', exact: true }).getByRole('button', { name: /^Radio/ })).toBeInViewport({
-      ratio: 1,
-    });
+    // La radio (bouton rond du haut de l'écran) reste à l'écran, menu agrandi.
+    await expect(quick(page).getByRole('button', { name: /^Radio/ })).toBeInViewport({ ratio: 1 });
+    await shot(page, '06-agrandi-radio');
 
     // Mode photo : le dock s'efface, la vue n'est plus décalée ; au retour, le recadrage revient.
     await page.getByRole('button', { name: 'Photo', exact: true }).tap();
@@ -185,7 +188,7 @@ test.describe('menu agrandi', () => {
       await expect(dialog).toBeHidden();
       await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
       for (const tab of TABS) {
-        await tabs(page).getByRole('button', { name: tab }).click();
+        await tabs(page).getByRole('button', { name: tab, exact: true }).click();
         const box = await dock(page).boundingBox();
         expect(box?.height ?? 0, `${tab} (${size}) : 60 % de l'écran au plus`).toBeLessThanOrEqual(780 * 0.6 + 1);
         expect(await overflowingRows(page), `${tab} (${size}) : aucune rangée ne déborde en largeur`).toEqual([]);
@@ -198,10 +201,12 @@ test.describe('menu agrandi', () => {
   test('fiche moteur : les options passent à la ligne, « Origine » reste à l’écran au stage 3', async ({ page }) => {
     test.setTimeout(150_000);
     await openApp(page);
-    await tabs(page).getByRole('button', { name: 'Véhicule' }).tap();
+    await tabs(page).getByRole('button', { name: 'Véhicule', exact: true }).tap();
     await dock(page).getByRole('group', { name: 'Véhicule' }).locator('[data-vehicle="van"]').tap();
-    await dock(page).getByRole('button', { name: 'Moteur', exact: true }).tap();
-    const sheet = page.locator('dialog[open]');
+    // La fiche vit dans « Mécanique · Préparation », dock agrandi pour la voir en entier.
+    await tabs(page).getByRole('button', { name: 'Mécanique', exact: true }).tap();
+    await dock(page).getByRole('button', { name: 'Agrandir le menu' }).tap();
+    const sheet = dock(page).locator('.dock-tab');
     await expect(sheet).toBeVisible();
     const stage3 = sheet.getByRole('button', { name: /^Stage 3/ });
     await stage3.tap();

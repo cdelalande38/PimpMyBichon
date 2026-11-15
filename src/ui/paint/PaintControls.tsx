@@ -4,13 +4,14 @@
 // Tout part des données : zones du manifeste, src/data/paintColors.ts, src/data/finishes.ts. Dock
 // agrandi : les trois ensemble, sur plusieurs lignes, sans l'alternance Couleur / Finition.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { finish as findFinish, FINISHES } from '../../data/finishes.ts';
 import { PAINT_COLORS } from '../../data/paintColors.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import type { Hex, Paint, VehicleManifest } from '../../data/vehicleTypes.ts';
 import { FLAKE_RANGE, isLinked, masterZone, resolvePaints, useBuilds } from '../../state/builds.ts';
-import { useDock } from '../../state/dock.ts';
+import { useDock, type PaintStep, type PickerTarget } from '../../state/dock.ts';
+import { useRevealPressed } from '../scroll.ts';
 import { ColorPicker } from './ColorPicker.tsx';
 import {
   canLink,
@@ -25,8 +26,7 @@ import {
 } from './paintLogic.ts';
 import './paint.css';
 
-type Step = 'couleur' | 'finition';
-type PickerTarget = 'color' | 'color2';
+type Step = PaintStep;
 
 const STEPS: ReadonlyArray<{ id: Step; label: string }> = [
   { id: 'couleur', label: 'Couleur' },
@@ -42,18 +42,6 @@ function Lock({ open }: { open: boolean }) {
   );
 }
 
-/** Amène le choix pressé dans le champ de sa rangée défilante. */
-function useKeepPressedInView(key: unknown) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      ref.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [key]);
-  return ref;
-}
-
 function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   const vehicle = manifest.id;
   const build = useBuilds((state) => state.builds[vehicle]);
@@ -66,11 +54,25 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
 
   const zones = useMemo(() => orderedZones(manifest), [manifest]);
   const master = masterZone(manifest);
-  const [chosenZone, setZone] = useState<string>(() => zones[0]?.id ?? '');
-  // Changement de véhicule : la zone choisie peut ne plus exister.
-  const zoneId = zones.some((zone) => zone.id === chosenZone) ? chosenZone : (zones[0]?.id ?? '');
-  const [step, setStep] = useState<Step>('couleur');
-  const [picker, setPicker] = useState<PickerTarget | null>(null);
+  // Niveaux dans la pile du dock (src/state/dock.ts) : liste des zones, puis une zone (couleur ou
+  // finition), puis le nuancier. « Retour » (fil du dock, ou Échap) remonte d'un niveau.
+  const levels = useDock((state) => state.levels);
+  const lastZone = useDock((state) => state.zone);
+  const push = useDock((state) => state.push);
+  const replace = useDock((state) => state.replace);
+  const back = useDock((state) => state.back);
+  const first = levels[0];
+  // Changement de véhicule : la zone de la pile peut ne plus exister, on retombe sur la liste.
+  const zoneLevel = first?.kind === 'zone' && zones.some((zone) => zone.id === first.zone) ? first : null;
+  const second = levels[1];
+  const picker: PickerTarget | null = zoneLevel && second?.kind === 'nuancier' ? second.target : null;
+  const zoneId = zoneLevel?.zone ?? (zones.some((zone) => zone.id === lastZone) ? lastZone : null) ?? zones[0]?.id ?? '';
+  const step: Step = zoneLevel?.step ?? 'couleur';
+  const setStep = (next: Step) => replace({ kind: 'zone', zone: zoneId, step: next });
+  const setPicker = (target: PickerTarget | null) => {
+    if (target) push({ kind: 'nuancier', target });
+    else if (picker) back();
+  };
 
   const paints = useMemo(() => resolvePaints(manifest, build), [manifest, build]);
   const paint: Paint | undefined = paints[zoneId];
@@ -80,8 +82,8 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   const target = paintTarget(manifest, build, zoneId);
   const finish = paint ? findFinish(paint.finish) : undefined;
 
-  const zoneRow = useKeepPressedInView(`${vehicle}-${zoneId}`);
-  const choiceRow = useKeepPressedInView(`${wide}-${step}-${paint?.color}-${paint?.finish}`);
+  const zoneRow = useRevealPressed<HTMLDivElement>(`${vehicle}-${zoneId}`);
+  const choiceRow = useRevealPressed<HTMLDivElement>(`${wide}-${step}-${paint?.color}-${paint?.finish}`);
 
   if (!zone || !paint || !finish) {
     return <p className="paint-note">Ce véhicule n’a pas de zone à peindre.</p>;
@@ -119,6 +121,7 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
     );
   }
 
+  // Liste des zones (haut de l'onglet) : une zone choisie fait descendre d'un niveau.
   const zonesBar = (
     <div className="paint-bar">
       <div ref={zoneRow} className="chips paint-zones" role="group" aria-label="Zones">
@@ -131,7 +134,7 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
               type="button"
               className="chip chip-swatch paint-zone"
               aria-pressed={item.id === zoneId}
-              onClick={() => setZone(item.id)}
+              onClick={() => push({ kind: 'zone', zone: item.id, step: 'couleur' })}
             >
               {itemPaint && <span className="swatch" aria-hidden="true" style={{ background: itemPaint.color }} />}
               <b>{item.label}</b>
@@ -140,21 +143,22 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
           );
         })}
       </div>
-      {linkable && master && (
-        <button
-          type="button"
-          className="btn paint-lock"
-          aria-pressed={linked}
-          aria-label={linked ? `Liée à ${master.label} : détacher` : `Détachée : lier à ${master.label}`}
-          onClick={toggleLink}
-        >
-          <Lock open={!linked} />
-          <span aria-hidden="true">{linked ? 'Liée' : 'Détachée'}</span>
-        </button>
-      )}
     </div>
   );
 
+  // Cadenas d'une zone de carrosserie : liée à la zone maîtresse, ou détachée.
+  const lockButton = linkable && master && (
+    <button
+      type="button"
+      className="btn paint-lock"
+      aria-pressed={linked}
+      aria-label={linked ? `Liée à ${master.label} : détacher` : `Détachée : lier à ${master.label}`}
+      onClick={toggleLink}
+    >
+      <Lock open={!linked} />
+      <span aria-hidden="true">{linked ? 'Liée' : 'Détachée'}</span>
+    </button>
+  );
   const colorRow = (
     <div ref={wide || step === 'couleur' ? choiceRow : undefined} className="chips paint-colors" role="group" aria-label="Couleurs">
       <button type="button" className="paint-dot paint-other" onClick={() => setPicker('color')}>
@@ -245,11 +249,14 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
     </p>
   );
 
+  if (!zoneLevel) {
+    return <div className={wide ? 'paint paint-wide' : 'paint'}>{zonesBar}</div>;
+  }
   if (wide) {
-    // Dock agrandi : les zones, puis les couleurs, puis les finitions, visibles ensemble.
+    // Dock agrandi : les couleurs, puis les finitions de la zone, visibles ensemble.
     return (
       <div className="paint paint-wide">
-        {zonesBar}
+        {lockButton && <div className="paint-bar paint-bar-lock">{lockButton}</div>}
         <section className="paint-section" aria-labelledby={`${vehicle}-couleur`}>
           <h3 id={`${vehicle}-couleur`} className="paint-head">
             Couleur
@@ -270,9 +277,7 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
 
   return (
     <div className="paint">
-      {/* Deux rangées au plus sous les onglets (tiers bas, § 2) : zones et cadenas, puis
-          étapes et choix. */}
-      {zonesBar}
+      {/* Une rangée sous les onglets (tiers bas, § 2) : étapes, choix et cadenas. */}
       <div className="paint-bar paint-bar-steps">
         <nav className="tabs paint-steps" aria-label="Peinture">
           {STEPS.map((item) => (
@@ -287,6 +292,7 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
           ))}
         </nav>
         {step === 'couleur' ? colorRow : finishRow}
+        {lockButton}
       </div>
       {step !== 'couleur' && extraRow}
       {step === 'couleur' && linkedNote}

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { capture, openApp, VIEWPORT, waitForScene } from './helpers.ts';
+import { capture, openApp, openAtelier, quick, VIEWPORT, waitForScene } from './helpers.ts';
 
 async function expectControlsInThumbZone(page: Page, height: number = VIEWPORT.height): Promise<void> {
   const buttons = page.locator('dialog[open] button:visible');
@@ -13,7 +13,11 @@ async function expectControlsInThumbZone(page: Page, height: number = VIEWPORT.h
     if (!box) continue;
     expect(box.height, `hauteur de « ${label} »`).toBeGreaterThanOrEqual(48);
     expect(box.width, `largeur de « ${label} »`).toBeGreaterThanOrEqual(48);
-    expect(box.y, `« ${label} » dans le tiers bas`).toBeGreaterThanOrEqual((height * 2) / 3);
+    // Décision de l'utilisateur : le tiers bas ne vaut plus que pour la personnalisation (le dock).
+    // Dans un panneau, il tient pour ses commandes du bas : « Retour à l'atelier », les actions et
+    // les rubriques du panneau Atelier ; le contenu, au-dessus, garde ses 48 px.
+    const bottom = await button.evaluate((element) => element.closest('.sheet-acts, .atelier-tabs') !== null);
+    if (bottom) expect(box.y, `« ${label} » dans le tiers bas`).toBeGreaterThanOrEqual((height * 2) / 3);
   }
 }
 
@@ -21,7 +25,7 @@ test.describe('panneaux', () => {
   test('« Sous le capot » dit quelle version tourne et où en est le socle', async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
-    await page.getByRole('button', { name: 'Sous le capot' }).click();
+    await openAtelier(page, 'Sous le capot');
 
     const dialog = page.getByRole('dialog', { name: 'Sous le capot' });
     await expect(dialog).toBeVisible();
@@ -36,7 +40,7 @@ test.describe('panneaux', () => {
 
   test('les réglages se changent au pouce et survivent à un rechargement', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: 'Réglages' }).click();
+    await openAtelier(page, 'Réglages');
 
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
     await expect(dialog).toBeVisible();
@@ -65,7 +69,7 @@ test.describe('panneaux', () => {
     // Reprise : la sauvegarde IndexedDB est relue au lancement suivant.
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-text', 'tres-grand');
-    await page.getByRole('button', { name: 'Réglages' }).click();
+    await openAtelier(page, 'Réglages');
     await expect(
       page.getByRole('dialog').getByRole('button', { name: /Économie/ }),
     ).toHaveAttribute('aria-pressed', 'true');
@@ -89,13 +93,13 @@ test.describe('panneaux', () => {
 
   test('le retour du navigateur et la touche Échap ferment le panneau', async ({ page }) => {
     await openApp(page);
-    await page.getByRole('button', { name: 'Réglages' }).click();
+    await openAtelier(page, 'Réglages');
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.goBack();
     await expect(page.getByRole('dialog')).toBeHidden();
     await expect(page).not.toHaveURL(/#\/reglages/);
 
-    await page.getByRole('button', { name: 'Sous le capot' }).click();
+    await openAtelier(page, 'Sous le capot');
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog')).toBeHidden();
@@ -121,7 +125,7 @@ test.describe('panneaux', () => {
     // Fermer un panneau ouvert par un lien direct ramène au garage sans quitter l'app.
     await page.getByRole('button', { name: 'Retour à l’atelier' }).click();
     await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Réglages' })).toBeVisible();
+    await expect(quick(page).getByRole('button', { name: 'Atelier', exact: true })).toBeVisible();
   });
 
   test('un code reçu n’est jamais interprété comme du HTML', async ({ page }) => {

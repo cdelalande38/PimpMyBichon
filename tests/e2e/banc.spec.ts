@@ -1,15 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import {
-  capture,
-  changedRatio,
-  openApp,
-  paintAndReload,
-  readBuilds,
-  sceneBand,
-  waitForBench,
-  waitForScene,
-  waitForStill,
-} from './helpers.ts';
+import { capture, changedRatio, openApp, openEntry, paintAndReload, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 // L'atelier dans le dock : onglets Véhicule, Peinture, Ambiance. L'ambiance se change au pouce ;
 // la peinture est posée par la sauvegarde des builds (l'interface de peinture a ses propres parcours).
@@ -19,7 +9,7 @@ const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets
 
 /** Touche un onglet du dock, puis un choix de sa rangée, au pouce. */
 async function pick(page: Page, tab: string, choice: string): Promise<void> {
-  await tabs(page).getByRole('button', { name: tab }).tap();
+  await openEntry(page, tab);
   // Le nom exact est dans le <b> du bouton.
   const button = dock(page)
     .getByRole('group', { name: tab })
@@ -30,7 +20,7 @@ async function pick(page: Page, tab: string, choice: string): Promise<void> {
 }
 
 async function pressed(page: Page, tab: string): Promise<string> {
-  await tabs(page).getByRole('button', { name: tab }).tap();
+  await openEntry(page, tab);
   const button = dock(page).getByRole('group', { name: tab }).locator('[aria-pressed="true"]');
   return (await button.locator('b').innerText()).trim();
 }
@@ -79,8 +69,8 @@ test.describe('atelier', () => {
       await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
       await expect(dialog).toBeHidden();
 
-      for (const tab of ['Véhicule', 'Peinture', 'Ambiance']) {
-        await tabs(page).getByRole('button', { name: tab }).click();
+      for (const tab of ['Véhicule', 'Custom', 'Mécanique', 'Garage']) {
+        await tabs(page).getByRole('button', { name: tab, exact: true }).click();
         const buttons = dock(page).locator('button:visible');
         const count = await buttons.count();
         expect(count).toBeGreaterThan(4);

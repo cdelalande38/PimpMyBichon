@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, type Page } from '@playwright/test';
 import sharp from 'sharp';
+import { DOCK_MENU } from '../../src/data/dockMenu.ts';
 
 /** Gabarit de référence (§ 19) : toute capture se fait dans ce format. */
 export const VIEWPORT = { width: 390, height: 844 } as const;
@@ -18,6 +19,41 @@ const SCENE_BAND = {
 export async function openApp(page: Page, hash = ''): Promise<void> {
   await page.goto(`./${hash}`);
   await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
+}
+
+/** Colonne de boutons ronds du haut de l'écran : Radio, Photo, Atelier. */
+export function quick(page: Page) {
+  return page.getByRole('navigation', { name: 'Raccourcis' });
+}
+
+/**
+ * Ouvre le panneau « Atelier » (roue dentée) sur une rubrique : « Réglages » ou « Sous le capot ».
+ * Le panneau porte alors le nom de la rubrique.
+ */
+export async function openAtelier(page: Page, rubrique: 'Réglages' | 'Sous le capot'): Promise<void> {
+  await quick(page).getByRole('button', { name: 'Atelier', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Rubriques de l’atelier' }).getByRole('button', { name: rubrique, exact: true }).click();
+  await expect(page.getByRole('dialog', { name: rubrique })).toBeVisible();
+}
+
+/**
+ * Ouvre une entrée du dock par son libellé (« Peinture », « Préparation », « Ambiance »,
+ * « Véhicule ») : la section qui la porte (src/data/dockMenu.ts), puis l'entrée si la section en a
+ * plusieurs. On arrive en haut de l'entrée.
+ */
+export async function openEntry(page: Page, label: string): Promise<void> {
+  const section = DOCK_MENU.find((item) => item.entries.some((entry) => entry.label === label));
+  if (!section) throw new Error(`entrée inconnue : ${label}`);
+  const dock = page.locator('footer.dock');
+  const sectionButton = dock.getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: section.label, exact: true });
+  await sectionButton.tap();
+  await expect(sectionButton).toHaveAttribute('aria-current', 'true');
+  const entries = dock.getByRole('navigation', { name: `Entrées · ${section.label}` });
+  if (await entries.count()) {
+    const entryButton = entries.getByRole('button', { name: label, exact: true });
+    await entryButton.tap();
+    await expect(entryButton).toHaveAttribute('aria-current', 'true');
+  }
 }
 
 export async function sceneBand(page: Page): Promise<Buffer> {

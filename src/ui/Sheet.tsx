@@ -11,9 +11,11 @@ interface SheetProps {
   children: ReactNode;
   /** Commandes propres au panneau, posées à côté du bouton de fermeture, sous le pouce. */
   actions?: ReactNode;
+  /** Rubriques d'un panneau qui en a plusieurs (« Atelier ») : juste au-dessus des commandes. */
+  switcher?: ReactNode;
 }
 
-export function Sheet({ open, eyebrow, title, onClose, children, actions }: SheetProps) {
+export function Sheet({ open, eyebrow, title, onClose, children, actions, switcher }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const pressedOnBackdrop = useRef(false);
@@ -57,6 +59,7 @@ export function Sheet({ open, eyebrow, title, onClose, children, actions }: Shee
             <h2 id={titleId}>{title}</h2>
             {children}
           </div>
+          {switcher}
           <div className="sheet-acts">
             {actions}
             <button ref={closeRef} type="button" className="btn cta" onClick={onClose}>

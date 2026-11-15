@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { isSheetRoute, type Route, type SheetRouteName } from '../app/router.ts';
 import { closeSheet } from '../app/useRoute.ts';
+import { AtelierSwitcher, isAtelierRoute } from './AtelierSwitcher.tsx';
 import { EnginePanel } from './engine/EnginePanel.tsx';
 import { RadioPanel } from './radio/RadioPanel.tsx';
 import { SettingsPanel } from './SettingsPanel.tsx';
@@ -19,12 +20,12 @@ interface SheetContent {
 
 const CONTENT: Record<SheetRouteName, SheetContent> = {
   reglages: {
-    eyebrow: 'Atelier',
+    eyebrow: 'Atelier · configuration',
     title: 'Réglages',
     body: <SettingsPanel />,
   },
   capot: {
-    eyebrow: 'État du socle',
+    eyebrow: 'Atelier · état du socle',
     title: 'Sous le capot',
     body: <UnderHoodPanel />,
     actions: <MeterButton />,
@@ -87,6 +88,7 @@ export function Sheets({ route }: { route: Route }) {
       title={content?.title ?? ''}
       onClose={closeSheet}
       actions={content?.actions}
+      switcher={isSheetRoute(route) && isAtelierRoute(route.name) ? <AtelierSwitcher current={route.name} /> : undefined}
     >
       {content?.body}
     </Sheet>

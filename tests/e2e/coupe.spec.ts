@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { capture, openApp, VIEWPORT, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { capture, openApp, openAtelier, VIEWPORT, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 // Coupe caméra (src/scene/garage/cut.ts) : en tournant autour du véhicule, le décor qui
 // passerait devant lui quitte l'image. Le nombre d'éléments retirés est lu sur la scène
@@ -129,7 +129,7 @@ test.describe('coupe caméra', () => {
     await waitForScene(page);
     await waitForBench(page);
     // Rotation lente coupée : sinon la scène tournerait sans fin une fois le mouvement permis.
-    await page.getByRole('button', { name: 'Réglages' }).click();
+    await openAtelier(page, 'Réglages');
     const dialog = page.getByRole('dialog', { name: 'Réglages' });
     await dialog.getByRole('navigation', { name: 'Réglages' }).getByRole('button', { name: 'Rotation' }).click();
     const off = dialog.getByRole('button', { name: /^Coupée/ });

@@ -1,13 +1,5 @@
 import { expect, test } from '@playwright/test';
-import {
-  capture,
-  changedRatio,
-  openApp,
-  sceneBand,
-  VIEWPORT,
-  waitForBench,
-  waitForScene,
-} from './helpers.ts';
+import { capture, changedRatio, openApp, openAtelier, quick, sceneBand, VIEWPORT, waitForBench, waitForScene } from './helpers.ts';
 
 test.describe('coque de l’app', () => {
   test('l’écran principal s’affiche en 390 × 844, véhicule de départ compris', async ({ page }) => {
@@ -25,30 +17,36 @@ test.describe('coque de l’app', () => {
     // Le véhicule de départ est un substitut déclaré : il est annoncé à l'écran et nommé dans le dock.
     await expect(page.locator('.tag')).toHaveText(/^Substitut · /);
     await expect(page.locator('footer.dock .dock-vehicle')).not.toBeEmpty();
-    await expect(page.getByRole('button', { name: 'Sous le capot' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Réglages' })).toBeVisible();
+    // Radio, photo et atelier : les boutons ronds du haut de l'écran.
+    for (const name of [/^Radio/, /^Photo$/, /^Atelier$/]) await expect(quick(page).getByRole('button', { name })).toBeVisible();
     await capture(page, '01-garage');
 
     expect(errors).toEqual([]);
   });
 
-  test('les commandes sont dans le tiers bas et font au moins 48 px', async ({ page }) => {
+  test('la personnalisation est dans le tiers bas ; toute commande fait au moins 48 px', async ({ page }) => {
     await openApp(page);
+    // Toute commande visible, dock comme boutons ronds du haut : 48 px au moins.
     const buttons = page.locator('.app button:visible');
     const count = await buttons.count();
     expect(count).toBeGreaterThanOrEqual(2);
 
     for (let i = 0; i < count; i += 1) {
       const button = buttons.nth(i);
-      const label = (await button.innerText()).trim();
+      const label = ((await button.getAttribute('aria-label')) ?? (await button.innerText())).trim();
       const box = await button.boundingBox();
       expect(box, `bouton « ${label} » mesurable`).not.toBeNull();
       if (!box) continue;
       expect(box.height, `hauteur de « ${label} »`).toBeGreaterThanOrEqual(48);
       expect(box.width, `largeur de « ${label} »`).toBeGreaterThanOrEqual(48);
-      expect(box.y, `« ${label} » dans le tiers bas`).toBeGreaterThanOrEqual(
-        (VIEWPORT.height * 2) / 3,
-      );
+      // Décision de l'utilisateur : le tiers bas ne vaut plus que pour la personnalisation (le dock).
+      // Radio, photo et atelier vivent dans la colonne de boutons ronds du haut de l'écran.
+      const inDock = await button.evaluate((element) => element.closest('footer.dock') !== null);
+      if (inDock) {
+        expect(box.y, `« ${label} » dans le tiers bas`).toBeGreaterThanOrEqual((VIEWPORT.height * 2) / 3);
+      } else {
+        expect(await button.evaluate((element) => element.closest('nav.quick') !== null), `« ${label} » hors du dock : bouton rond du haut`).toBe(true);
+      }
     }
   });
 
@@ -58,10 +56,10 @@ test.describe('coque de l’app', () => {
 
     await openApp(page);
     await waitForScene(page);
-    await page.getByRole('button', { name: 'Sous le capot' }).click();
+    await openAtelier(page, 'Sous le capot');
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('button', { name: 'Retour à l’atelier' }).click();
-    await page.getByRole('button', { name: 'Réglages' }).click();
+    await openAtelier(page, 'Réglages');
     await expect(page.getByRole('dialog')).toBeVisible();
 
     expect(requested.length).toBeGreaterThan(5);
@@ -150,7 +148,7 @@ test.describe('coque de l’app', () => {
       (VIEWPORT.height * 2) / 3,
     );
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(48);
-    await expect(page.getByRole('button', { name: 'Réglages' })).toBeVisible();
+    await expect(quick(page).getByRole('button', { name: 'Atelier', exact: true })).toBeVisible();
     await capture(page, '10-scene-en-panne');
 
     // Le réseau revient : un appui relance le garage.
@@ -165,12 +163,12 @@ test.describe('coque de l’app', () => {
     await page.setViewportSize({ width: 844, height: 390 });
     await openApp(page);
     await waitForScene(page);
-    await expect(page.getByRole('button', { name: 'Réglages' })).toBeVisible();
+    await expect(quick(page).getByRole('button', { name: 'Atelier', exact: true })).toBeVisible();
     await capture(page, '11-paysage');
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await waitForScene(page);
-    await page.getByRole('button', { name: 'Réglages' }).click();
+    await openAtelier(page, 'Réglages');
     await expect(page.getByRole('dialog', { name: 'Réglages' })).toBeVisible();
     await capture(page, '12-ordinateur');
   });
@@ -178,6 +176,6 @@ test.describe('coque de l’app', () => {
   test('un hash inconnu retombe sur le garage, sans panneau', async ({ page }) => {
     await openApp(page, '#/nimporte-quoi');
     await expect(page.getByRole('dialog')).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Réglages' })).toBeVisible();
+    await expect(quick(page).getByRole('button', { name: 'Atelier', exact: true })).toBeVisible();
   });
 });

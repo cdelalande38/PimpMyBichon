@@ -4,6 +4,7 @@
 
 import type { Server } from 'node:http';
 import { expect, test, type Page } from '@playwright/test';
+import { openAtelier } from './helpers.ts';
 import { noiseWav, smallPack, startPackServer, type PackSource } from '../radio/server.ts';
 
 // Port de l'hébergement d'essai, réglable quand plusieurs suites tournent en même temps sur la machine.
@@ -157,7 +158,7 @@ test('économie de données : le pack reçu par lien attend un appui', async ({ 
 
 test('réglage « Lecture automatique » coupé : rien ne démarre après un import ni à l’ouverture', async ({ page }) => {
   await page.goto('./');
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  await openAtelier(page, 'Réglages');
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: 'Lecture automatique' }).click();
   await dialog.getByRole('button', { name: /^Coupée/ }).click();

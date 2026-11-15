@@ -222,6 +222,81 @@ button {
   background: var(--rouge);
 }
 
+/* Colonne de droite : la pastille d'état, puis les boutons ronds (radio, photo, atelier). Elle sort
+   du flux : la hauteur du bandeau reste celle de la marque, la scène et le dock n'en bougent pas. */
+.hud-side {
+  position: absolute;
+  top: calc(0.625rem + var(--safe-t));
+  right: calc(var(--gutter) + var(--safe-r));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  max-width: calc(100% - 2 * var(--gutter) - 6rem);
+}
+
+.quick {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.quick-btn {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--chrome);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.quick-btn[data-on] {
+  border-color: var(--ok);
+  color: var(--ok);
+  box-shadow: 0 0 12px rgba(34, 211, 182, 0.35);
+}
+
+.quick-btn:active {
+  filter: brightness(1.2);
+}
+
+@media (hover: hover) {
+  .quick-btn:hover {
+    border-color: rgba(233, 230, 242, 0.8);
+  }
+}
+
+.icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Pastille de progression (import de musique) sur un bouton rond. */
+.quick-badge {
+  position: absolute;
+  right: -0.375rem;
+  bottom: -0.25rem;
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  background: var(--night);
+  color: var(--ambre);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 /* ───────────── Zone centrale : la scène reste libre sous le pouce ───────────── */
 
 .mid {
@@ -258,20 +333,22 @@ button {
   font-size: 0.9375rem;
 }
 
-/* ───────────── Dock : toutes les commandes, dans le tiers bas ───────────── */
+/* ───────────── Dock : la personnalisation, dans le tiers bas ───────────── */
 
 .dock {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 1.75rem calc(var(--gutter) + var(--safe-r)) calc(var(--gutter) + var(--safe-b))
+  /* Rangées serrées, en pixels : ligne de repère, sections, entrées et contenu tiennent dans le
+     tiers bas jusqu'au texte « très grand » sur 360 × 780. */
+  gap: 6px;
+  padding: 0.75rem calc(var(--gutter) + var(--safe-r)) calc(var(--gutter) + var(--safe-b))
     calc(var(--gutter) + var(--safe-l));
   background: linear-gradient(
     180deg,
     rgba(10, 9, 17, 0),
-    rgba(10, 9, 17, 0.9) 1.75rem,
+    rgba(10, 9, 17, 0.9) 0.75rem,
     rgba(10, 9, 17, 0.97)
   );
   /* Le dégradé ne bloque pas l'orbite : seuls les boutons prennent le toucher. */
@@ -447,6 +524,13 @@ button {
   padding: 0 var(--pad-r) 0 var(--pad-l);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Rubriques du panneau « Atelier » (Réglages, Sous le capot), juste au-dessus des commandes. */
+.card > .atelier-tabs {
+  margin: 0;
+  padding: 0 var(--pad-r) 0 var(--pad-l);
+  border-top: 1px solid var(--line);
 }
 
 /* Commandes du panneau, sous le pouce : la fermeture, et parfois une commande propre au panneau. */
@@ -704,7 +788,7 @@ button {
   visibility: hidden;
 }
 
-/* ───────────── Dock de l'atelier : véhicule, onglets, actions ───────────── */
+/* ───────────── Dock de l'atelier : véhicule, onglets ───────────── */
 
 /* Nom du véhicule à l'écran, dans la ligne de tête du dock. */
 .dock-vehicle {
@@ -718,34 +802,42 @@ button {
   flex-direction: column;
   gap: 0.5rem;
 }
-.dock-tab > *,
-.dock .acts {
+.dock-tab > * {
   pointer-events: auto;
 }
 
-/* Rangée d'actions : jusqu'à cinq boutons (radio, moteur, capot, réglages, photo). Elle défile
-   au pouce, jusqu'aux bords de l'écran, comme les onglets ; chaque bouton garde 48 px de haut. */
-.dock .acts {
+/* Onglet « Moteur » en dock compact : la fiche tient dans une zone bornée qui défile en hauteur ;
+   les trois chiffres restent en tête, les options passent dessous. */
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] {
+  /* Ce qui reste du tiers bas une fois la ligne de repère, les sections et les entrées posées. */
+  max-height: max(60px, calc(100dvh / 3 - 200px));
   margin: 0 calc(-1 * var(--pad-r)) 0 calc(-1 * var(--pad-l));
-  padding: 0 var(--pad-r) 0 var(--pad-l);
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  padding: 0 var(--pad-r) 0.25rem var(--pad-l);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
 }
-.dock .acts::-webkit-scrollbar {
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-figures {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 0.25rem;
+  background: rgba(10, 9, 17, 0.97);
+}
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-figures > div {
+  gap: 0;
+  padding: 0.25rem 0.375rem;
+}
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-figures dt {
+  font-size: 0.6875rem;
+}
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-figures dd {
+  font-size: 1.125rem;
+}
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-spec,
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-hint,
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-note {
   display: none;
-}
-.dock .acts > * {
-  flex: none;
-}
-/* Radio en cours dans la rangée : le titre du morceau se coupe au lieu de pousser les autres
-   boutons hors de l'écran. */
-.dock .acts > .radio-dock {
-  max-width: min(22rem, 78vw);
-}
-.dock .acts > .btn {
-  padding: 0 1rem;
-  white-space: nowrap;
 }
 
 /* Catalogue : la ligne d'atelier d'un véhicule peut être longue ; la puce reste à taille de pouce. */
@@ -851,8 +943,7 @@ button {
 
 /* Plus de défilement en largeur : chaque rangée passe à la ligne. */
 .dock[data-taille='agrandi'] .tabs,
-.dock[data-taille='agrandi'] .dock-tab .chips,
-.dock[data-taille='agrandi'] .acts {
+.dock[data-taille='agrandi'] .dock-tab .chips {
   flex-wrap: wrap;
   overflow-x: visible;
 }
@@ -862,21 +953,204 @@ button {
   padding: 0.125rem 0;
 }
 
-.dock[data-taille='agrandi'] .acts {
-  margin: 0;
-  padding: 0;
-}
-
-/* Actions sur deux rangées si besoin : chaque bouton s'étire pour remplir sa ligne. */
-.dock[data-taille='agrandi'] .acts > * {
-  flex: 1 0 auto;
-}
-
-.dock[data-taille='agrandi'] .acts > .radio-dock {
-  max-width: 100%;
-}
-
 /* Une puce plus longue que la ligne se coupe au lieu d'élargir le dock. */
 .dock[data-taille='agrandi'] .dock-tab .chip {
   max-width: 100%;
+}
+
+/* Quatre onglets de personnalisation : ils tiennent sans défiler à 390 px (lettres plus serrées,
+   marges réduites, chaque onglet prend sa part de la ligne) ; à 360 px, les marges se resserrent
+   encore avant que la rangée ne défile. */
+.dock .tabs button {
+  flex: 1 1 auto;
+  margin-right: 0;
+  padding: 0 0.125rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 374px) {
+  .dock .tabs button {
+    padding: 0 0.0625rem;
+    letter-spacing: 0;
+  }
+}
+
+/* ───────────── Ligne de repère du dock : Retour, fil, Fermer le menu ───────────── */
+
+.dock-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 48px;
+}
+
+.dock .dock-head .btn.dock-back {
+  flex: none;
+  gap: 0.125rem;
+  min-height: 48px;
+  padding: 0 0.625rem 0 0.25rem;
+  pointer-events: auto;
+}
+
+.dock-back svg,
+.dock-close svg,
+.dock-open svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Le fil passe sur deux lignes plutôt que de couper ses morceaux ; chaque morceau reste entier. */
+.dock-crumbs {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-content: center;
+  align-items: center;
+  min-width: 0;
+  max-height: 48px;
+  margin: 0;
+  overflow: hidden;
+  line-height: 1.25;
+}
+
+.dock-crumbs > .eyebrow {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fil en casse normale, serré : « Peinture · Carrosserie · Couleur » tient à 390 px à côté des
+   deux boutons ; au-delà, les premiers morceaux se coupent, jamais le dernier (où l'on est). */
+.dock-crumb {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mute);
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+}
+
+.dock-crumb + .dock-crumb::before {
+  content: '·';
+  margin: 0 0.3125rem;
+  color: var(--ambre);
+}
+
+.dock-crumb-here {
+  flex-shrink: 0;
+  color: var(--chrome);
+  font-weight: 700;
+}
+
+.dock-close {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-left: auto;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--chrome);
+  pointer-events: auto;
+}
+
+/* Dock fermé : une seule pastille au pouce, la scène prend tout l'écran. */
+.dock[data-taille='ferme'] {
+  align-items: center;
+  padding-top: 0;
+  background: none;
+}
+
+.dock-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 48px;
+  padding: 0 1.25rem 0 1rem;
+  border: 1px solid var(--rouge);
+  border-radius: 999px;
+  background: rgba(10, 9, 17, 0.88);
+  color: var(--chrome);
+  font-family: var(--display);
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  box-shadow: 0 0 16px rgba(255, 45, 63, 0.35);
+  pointer-events: auto;
+}
+
+@media (hover: hover) {
+  .dock-close:hover,
+  .dock-open:hover {
+    border-color: rgba(233, 230, 242, 0.8);
+  }
+}
+
+/* Écrans bas (téléphone en paysage) : les boutons ronds passent en ligne sous la pastille d'état,
+   pour ne pas descendre jusqu'au dock ; la ligne du morceau en cours passe sous eux. */
+@media (max-height: 480px) {
+  .quick {
+    flex-direction: row;
+  }
+
+  .radio-mini {
+    top: calc(100% + 0.5rem);
+    right: 0;
+    transform: none;
+  }
+}
+
+/* Sections et entrées du dock : 48 px, la hauteur de cible, sans plus. */
+.dock .tabs button {
+  min-height: 48px;
+}
+
+/* Sections : écarts et marges serrés pour tenir sur une ligne à 390 px, dock agrandi compris ;
+   plus étroit ou texte plus grand, la rangée défile (compact) ou passe à la ligne (agrandi). */
+.dock .dock-tabs-row > .tabs {
+  gap: 0.25rem;
+}
+
+/* Entrées d'une section (second niveau) : plus discrètes que les sections. */
+.dock .dock-entries {
+  border-top: 1px solid var(--line);
+}
+
+.dock .dock-entries button {
+  flex: none;
+  padding: 0 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 0.8125rem;
+}
+
+/* Entrée pas encore disponible : estompée, « bientôt », sans action. */
+.dock .dock-entries .dock-soon {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dock-soon small {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ambre);
 }

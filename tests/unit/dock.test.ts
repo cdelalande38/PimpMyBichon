@@ -1,23 +1,78 @@
-// Dock : taille compacte ou agrandie (origine, lecture tolérante, sauvegarde) et recadrage de la
-// scène au-dessus du dock agrandi.
+// Dock : fermé, compact ou agrandi (origine, lecture tolérante, sauvegarde), pile des niveaux
+// (« Retour »), et recadrage de la scène au-dessus du dock agrandi.
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { createStore, get, set } from 'idb-keyval';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DOCK_TOP_MARGIN, dockShift, easeOutCubic } from '../../src/scene/fit.ts';
-import { DEFAULT_DOCK, DOCK_KEY, sanitizeDock } from '../../src/state/dock.ts';
+import { DEFAULT_DOCK, DOCK_KEY, dockSize, entryOf, sanitizeDock, sanitizeLevels } from '../../src/state/dock.ts';
 
 describe('taille du dock', () => {
   it('part du dock compact', () => {
-    expect(DEFAULT_DOCK).toEqual({ expanded: false });
+    expect(DEFAULT_DOCK).toEqual({ expanded: false, closed: false });
+    expect(dockSize(DEFAULT_DOCK)).toBe('compact');
     expect(Object.isFrozen(DEFAULT_DOCK)).toBe(true);
   });
 
-  it('lit une sauvegarde abîmée sans casser : seul un « vrai » explicite agrandit', () => {
-    expect(sanitizeDock({ expanded: true })).toEqual({ expanded: true });
-    for (const raw of [null, undefined, 42, 'agrandi', [], {}, { expanded: 'true' }, { expanded: 1 }, { expanded: false }]) {
-      expect(sanitizeDock(raw), JSON.stringify(raw)).toEqual({ expanded: false });
+  it('lit une sauvegarde abîmée sans casser : seul un « vrai » explicite agrandit ou ferme', () => {
+    // L'ancienne sauvegarde (`{ expanded }`, version 1) se relit telle quelle, dock ouvert.
+    expect(sanitizeDock({ expanded: true })).toEqual({ expanded: true, closed: false });
+    expect(sanitizeDock({ expanded: true, closed: true })).toEqual({ expanded: true, closed: true });
+    expect(dockSize({ expanded: true, closed: true })).toBe('ferme');
+    expect(dockSize({ expanded: true, closed: false })).toBe('agrandi');
+    for (const raw of [null, undefined, 42, 'agrandi', [], {}, { expanded: 'true' }, { expanded: 1 }, { expanded: false }, { closed: 'oui' }]) {
+      expect(sanitizeDock(raw), JSON.stringify(raw)).toEqual({ expanded: false, closed: false });
     }
+  });
+});
+
+describe('pile des niveaux du dock', () => {
+  it('n’accepte que l’ordre de l’atelier : une zone de peinture, puis le nuancier', () => {
+    const zone = { kind: 'zone', zone: 'carrosserie', step: 'couleur' } as const;
+    const picker = { kind: 'nuancier', target: 'color' } as const;
+    expect(sanitizeLevels('peinture', [zone, picker])).toEqual([zone, picker]);
+    expect(sanitizeLevels('peinture', [picker])).toEqual([]);
+    expect(sanitizeLevels('peinture', [zone, zone])).toEqual([zone]);
+    expect(sanitizeLevels('ambiance', [zone])).toEqual([]);
+    expect(sanitizeLevels('peinture', [{ kind: 'zone', zone: '<b>', step: 'couleur' }])).toEqual([]);
+    expect(sanitizeLevels('peinture', 'zone')).toEqual([]);
+  });
+
+  it('« Retour » remonte d’un niveau, toujours le même chemin ; changer d’onglet repart du haut', async () => {
+    vi.resetModules();
+    const { useDock } = await import('../../src/state/dock.ts');
+    const dock = useDock.getState;
+    dock().setSection('custom');
+    expect(dock().levels).toEqual([]);
+    dock().push({ kind: 'zone', zone: 'carrosserie', step: 'couleur' });
+    dock().replace({ kind: 'zone', zone: 'carrosserie', step: 'finition' });
+    dock().push({ kind: 'nuancier', target: 'color' });
+    expect(dock().levels.map((level) => level.kind)).toEqual(['zone', 'nuancier']);
+    expect(dock().back()).toBe(true);
+    expect(dock().levels).toEqual([{ kind: 'zone', zone: 'carrosserie', step: 'finition' }]);
+    expect(dock().back()).toBe(true);
+    expect(dock().levels).toEqual([]);
+    expect(dock().back()).toBe(false);
+    // La zone choisie reste pressée dans la liste.
+    expect(dock().zone).toBe('carrosserie');
+    dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
+    dock().setSection('garage');
+    expect(dock().levels).toEqual([]);
+    // Hors de la peinture, rien ne s'empile.
+    dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
+    expect(dock().levels).toEqual([]);
+    // Une entrée « bientôt » ne s'ouvre pas.
+    dock().setSection('custom');
+    dock().setEntry('stickers');
+    expect(entryOf('custom', dock().entries)).toBe('peinture');
+    // Ouverture de l'extérieur, sur une zone : le dock se rouvre s'il était fermé.
+    dock().setClosed(true);
+    dock().openEntry('peinture', 'jantes');
+    expect(dock().closed).toBe(false);
+    expect(dock().section).toBe('custom');
+    expect(dock().levels).toEqual([{ kind: 'zone', zone: 'jantes', step: 'couleur' }]);
+    dock().openEntry('ambiance');
+    expect(dock().section).toBe('garage');
   });
 });
 
@@ -44,7 +99,7 @@ describe('sauvegarde du dock', () => {
     first.getState().setTop(320);
     await vi.waitFor(async () => {
       const raw = await get<string>(DOCK_KEY, db());
-      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ expanded: true });
+      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ expanded: true, closed: false });
     });
 
     const second = await launch();
@@ -54,8 +109,22 @@ describe('sauvegarde du dock', () => {
     second.getState().setExpanded(false);
     await vi.waitFor(async () => {
       const raw = await get<string>(DOCK_KEY, db());
-      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ expanded: false });
+      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ expanded: false, closed: false });
     });
+
+    // Fermé : retenu d'une ouverture à l'autre, avec la taille d'avant la fermeture.
+    second.getState().setExpanded(true);
+    second.getState().setClosed(true);
+    const third = await launch();
+    expect(third.getState().closed).toBe(true);
+    expect(third.getState().expanded).toBe(true);
+  });
+
+  it('l’ancienne sauvegarde (version 1) rouvre le dock ouvert, à sa taille', async () => {
+    await set(DOCK_KEY, JSON.stringify({ state: { expanded: true }, version: 1 }), db());
+    const useDock = await launch();
+    expect(useDock.getState().expanded).toBe(true);
+    expect(useDock.getState().closed).toBe(false);
   });
 
   it('une sauvegarde illisible rouvre le dock compact', async () => {

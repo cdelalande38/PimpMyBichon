@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { capture, openApp, waitForBench } from './helpers.ts';
+import { capture, openApp, openAtelier, waitForBench } from './helpers.ts';
 
 // « Comparer » dans « Sous le capot » (src/render/frameMeter.ts, src/scene/FrameMeter.tsx) :
 // cinq variantes de la scène (réglage en cours, trame partout, sans reflet du sol, sans mobilier,
@@ -39,7 +39,7 @@ async function callsOf(line: Locator): Promise<number> {
 }
 
 async function openPanel(page: Page) {
-  await page.getByRole('button', { name: 'Sous le capot' }).click();
+  await openAtelier(page, 'Sous le capot');
   const dialog = page.getByRole('dialog', { name: 'Sous le capot' });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -154,7 +154,7 @@ test.describe('mesure comparée', () => {
     test.setTimeout(180_000);
     await openApp(page);
     await waitForBench(page);
-    await page.getByRole('button', { name: 'Réglages' }).click();
+    await openAtelier(page, 'Réglages');
     const settings = page.getByRole('dialog', { name: 'Réglages' });
     await settings.getByRole('button', { name: 'Texte' }).click();
     await settings.getByRole('button', { name: /^Grand/ }).click();

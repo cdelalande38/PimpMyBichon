@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import { capture, openApp, VIEWPORT, waitForBench, waitForScene } from './helpers.ts';
+import { capture, openApp, openAtelier, quick, VIEWPORT, waitForBench, waitForScene } from './helpers.ts';
 
 // Jalon 1, étape C2 : mode photo (§ 5.1, § 8 « Rendu photo ») et mesure de cadence de
 // « Sous le capot ». Captures : captures/jalon-1/photo-avant.png et photo-profil.png.
@@ -51,7 +51,7 @@ async function waitSharp(page: Page): Promise<void> {
 }
 
 async function setQuality(page: Page, label: string): Promise<void> {
-  await page.getByRole('button', { name: 'Réglages' }).click();
+  await openAtelier(page, 'Réglages');
   const dialog = page.getByRole('dialog', { name: 'Réglages' });
   await expect(dialog).toBeVisible();
   const button = dialog.getByRole('group', { name: 'Qualité' }).getByRole('button', { name: new RegExp(`^${label}`) });
@@ -76,7 +76,7 @@ test.describe('mode photo', () => {
     const bar = page.getByRole('contentinfo', { name: 'Mode photo' });
     await expect(bar).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Sous le capot' })).toBeHidden();
+    await expect(quick(page)).toHaveCount(0);
     const framings = bar.getByRole('group', { name: 'Cadrages' }).getByRole('button');
     await expect(framings).toHaveCount(5);
     await expect(bar.getByRole('button', { name: 'Enregistrer' })).toBeVisible();
@@ -101,7 +101,7 @@ test.describe('mode photo', () => {
     // « Retour » rend l'atelier.
     await bar.getByRole('button', { name: 'Retour' }).click();
     await expect(page).not.toHaveURL(/#\/photo$/);
-    await expect(page.getByRole('button', { name: 'Sous le capot' })).toBeVisible();
+    await expect(quick(page).getByRole('button', { name: 'Atelier', exact: true })).toBeVisible();
 
     // Image enregistrée, en économie (une image par tuile : le rendu logiciel est lent).
     await setQuality(page, 'Économie');
@@ -129,7 +129,7 @@ test.describe('mode photo', () => {
   test('« Mesurer » dans « Sous le capot » : cadence moyenne, pire centile, coût par image', async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
-    await page.getByRole('button', { name: 'Sous le capot' }).click();
+    await openAtelier(page, 'Sous le capot');
     const dialog = page.getByRole('dialog', { name: 'Sous le capot' });
     await expect(dialog).toBeVisible();
     await expect(dialog.locator('[data-fact="qualite"]')).toHaveText(/Auto, niveau standard/);

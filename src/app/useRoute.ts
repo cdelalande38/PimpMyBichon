@@ -68,6 +68,18 @@ export function openSheet(route: Exclude<Route, { name: 'garage' }>): void {
   window.dispatchEvent(new Event(ROUTE_EVENT));
 }
 
+/**
+ * Passe d'un panneau à un autre sans empiler d'entrée (rubriques d'un même panneau) : l'entrée
+ * courante est remplacée, son marqueur gardé, et « Retour » ferme toujours en un seul pas.
+ */
+export function switchSheet(route: Exclude<Route, { name: 'garage' }>): void {
+  if (closing) return;
+  const target = routeToHash(route);
+  if (target === window.location.hash) return;
+  window.history.replaceState(window.history.state, '', basePath() + target);
+  window.dispatchEvent(new Event(ROUTE_EVENT));
+}
+
 /** Revient au garage (panneau ou mode photo), sans laisser l'entrée derrière soi dans l'historique. */
 export function closeSheet(): void {
   // Double appui ou double clic : le premier suffit. Un second retour d'historique

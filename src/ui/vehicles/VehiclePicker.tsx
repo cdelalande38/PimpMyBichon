@@ -2,7 +2,7 @@
 // l'ordre du catalogue. Un substitut est annoncé, un modèle absent du build aussi. Chaque véhicule
 // garde son build : en changer ne perd rien.
 
-import { useEffect, useRef } from 'react';
+import { useRevealPressed } from '../scroll.ts';
 import { modelPresent, VEHICLES, resolveVehicle } from '../../data/vehicles.ts';
 import { resolvePaint, masterZone, useBuilds } from '../../state/builds.ts';
 import { useBench } from '../../state/bench.ts';
@@ -18,14 +18,9 @@ export function VehiclePicker() {
   const select = useBuilds((state) => state.select);
   const status = useBench((state) => state.status);
 
-  // La rangée défile : le véhicule à l'écran est amené dans le champ (après relecture aussi).
-  const row = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      row.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [current]);
+  // La rangée défile : le véhicule à l'écran est amené dans le champ s'il en est sorti (relecture
+  // de la sauvegarde) ; un choix au pouce ne déplace rien (src/ui/scroll.ts).
+  const row = useRevealPressed<HTMLDivElement>(current);
 
   return (
     <div ref={row} className="chips chips-vehicles" role="group" aria-label="Véhicule">

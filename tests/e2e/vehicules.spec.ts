@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { capture, changedRatio, openApp, paintAndReload, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill, waitOfflineReady } from './helpers.ts';
+import { capture, changedRatio, openApp, paintAndReload, quick, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill, waitOfflineReady } from './helpers.ts';
 
 // Jalon 2 : le catalogue des véhicules. Changer de véhicule et revenir (chacun garde ses peintures),
 // retrouver le véhicule après rechargement, un modèle absent annoncé, le dock et ses actions,
@@ -38,7 +38,7 @@ async function dismissPackOffer(page: Page): Promise<void> {
 const stage = (page: Page) => page.locator('.stage');
 
 async function chooseVehicle(page: Page, entry: Entry): Promise<void> {
-  await dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: 'Véhicule' }).tap();
+  await dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: 'Véhicule', exact: true }).tap();
   const chip = dock(page).getByRole('group', { name: 'Véhicule' }).locator(`[data-vehicle="${entry.id}"]`);
   await chip.tap();
   await expect(chip).toHaveAttribute('aria-pressed', 'true');
@@ -64,14 +64,16 @@ test.describe('catalogue des véhicules', () => {
       if (!hasModel(entry)) await expect(chip.locator('small')).toContainText('modèle absent');
     }
 
-    // Les onglets retirés (« Teinte », « Finition ») ont laissé place à « Peinture ».
+    // Quatre sections (src/data/dockMenu.ts) ; « Mécanique » n'apparaît que si le véhicule déclare un moteur.
     const tabs = dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button');
-    await expect(tabs).toHaveText(['Véhicule', 'Peinture', 'Ambiance']);
+    await expect(tabs).toHaveText(START.engine ? ['Véhicule', 'Custom', 'Mécanique', 'Garage'] : ['Véhicule', 'Custom', 'Garage']);
 
-    // Actions : chaque bouton fait 48 px, dans le tiers bas ; la rangée défile si elle déborde.
-    const acts = dock(page).getByRole('navigation', { name: 'Atelier', exact: true });
-    await expect(acts.getByRole('button', { name: 'Moteur' })).toHaveCount(START.engine ? 1 : 0);
-    for (const name of ['Sous le capot', 'Réglages', 'Photo']) await expect(acts.getByRole('button', { name })).toHaveCount(1);
+    // Le dock ne porte plus que la personnalisation : radio, photo et atelier sont les boutons ronds
+    // du haut de l'écran. Chaque bouton du dock fait 48 px, dans le tiers bas.
+    for (const name of ['Moteur', 'Sous le capot', 'Réglages', 'Photo']) {
+      await expect(dock(page).getByRole('navigation', { name: 'Atelier', exact: true }).getByRole('button', { name })).toHaveCount(0);
+    }
+    for (const name of [/^Radio/, /^Photo$/, /^Atelier$/]) await expect(quick(page).getByRole('button', { name })).toHaveCount(1);
     const buttons = dock(page).locator('button:visible');
     for (let i = 0; i < (await buttons.count()); i += 1) {
       const box = await buttons.nth(i).boundingBox();
@@ -80,14 +82,12 @@ test.describe('catalogue des véhicules', () => {
       expect(box.y).toBeGreaterThanOrEqual((844 * 2) / 3);
     }
     await capture(page, '20-dock-vehicules');
-    await acts.evaluate((element) => element.scrollTo({ left: element.scrollWidth }));
-    await capture(page, '21-dock-actions-defilees');
 
-    // « Moteur » ouvre le panneau de route moteur.
+    // « Mécanique » montre la fiche de préparation dans le dock.
     if (START.engine) {
-      await acts.getByRole('button', { name: 'Moteur' }).tap();
-      await expect(page).toHaveURL(/#\/moteur$/);
-      await expect(page.getByRole('dialog', { name: 'Préparation moteur' })).toBeVisible();
+      await tabs.filter({ hasText: 'Mécanique' }).tap();
+      await expect(dock(page).getByTestId('moteur-origine')).toBeVisible();
+      await capture(page, '21-dock-moteur');
     }
   });
 

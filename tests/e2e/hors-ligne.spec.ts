@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import sharp from 'sharp';
-import { capture, openApp, waitForBench, waitForScene, waitOfflineReady } from './helpers.ts';
+import { capture, openApp, openAtelier, waitForBench, waitForScene, waitOfflineReady } from './helpers.ts';
 
 // Critère d'acceptation du jalon 0 : l'app s'installe et s'ouvre en mode avion
 // après une première visite.
@@ -34,7 +34,7 @@ test.describe('hors ligne et installation', () => {
     expect((dockBox?.x ?? 0) + (dockBox?.width ?? 0), 'dock entier à l’écran').toBeLessThanOrEqual(360);
     expect(await page.evaluate(() => document.documentElement.scrollWidth), 'aucun débord horizontal').toBeLessThanOrEqual(360);
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'Sous le capot' }).click();
+    await openAtelier(page, 'Sous le capot');
     await expect(page.getByRole('dialog').getByText('Prêt : l’atelier s’ouvre sans réseau.')).toBeVisible();
     await expect(page.getByRole('dialog').getByText('Hors ligne.', { exact: true })).toBeVisible();
     await capture(page, '09-hors-ligne');

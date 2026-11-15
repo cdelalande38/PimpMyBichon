@@ -1,5 +1,5 @@
-// Coque de l'app : la scène 3D en fond, le HUD en haut (lecture seule), le dock en bas
-// (toutes les commandes), et un panneau bas piloté par l'adresse.
+// Coque de l'app : la scène 3D en fond, le HUD en haut (marque, état, boutons ronds de la radio, de
+// la photo et de l'atelier), le dock en bas (la personnalisation), et un panneau bas piloté par l'adresse.
 
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { resolveVehicle } from '../data/vehicles.ts';
@@ -55,7 +55,8 @@ export function App() {
         </>
       ) : (
         <>
-          <Hud />
+          {/* Panneau ouvert : le haut de l'écran et le dock passent derrière, hors d'atteinte. */}
+          <Hud sceneFailed={sceneFailed} covered={isSheetRoute(route)} />
 
           <div className="mid">
             {/* Jamais de substitut en silence : il est annoncé à l'écran, comme le chargement. */}
@@ -70,7 +71,7 @@ export function App() {
             {sceneFailed && <SceneFailure />}
           </div>
 
-          <Dock sceneFailed={sceneFailed} />
+          <Dock sceneFailed={sceneFailed} covered={isSheetRoute(route)} />
         </>
       )}
       <Sheets route={route} />
