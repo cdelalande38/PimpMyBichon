@@ -333,3 +333,32 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Dock agrandi : zones, couleurs et finitions ensemble, chacune sous son titre. */
+.paint-wide .paint-bar {
+  align-items: flex-start;
+}
+
+.paint-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.paint-head {
+  margin: 0.25rem 0 0;
+  color: var(--mute);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.paint-wide .paint-colors {
+  row-gap: 0.25rem;
+}
+
+.paint-wide .paint-sep {
+  align-self: center;
+}

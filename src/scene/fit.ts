@@ -56,3 +56,31 @@ export function orbitPosition(
     target[2] + Math.cos(azimuth) * s * distance,
   ];
 }
+
+/**
+ * Bande haute gardée libre au-dessus du véhicule quand le dock est agrandi (nom de l'atelier,
+ * pastille d'état), en part de la hauteur de l'écran.
+ */
+export const DOCK_TOP_MARGIN = 0.1;
+
+/**
+ * Dock agrandi : décalage vertical de la vue, en pixels vers le haut, qui amène la cible (au centre
+ * de l'image) au milieu de la partie libre, entre la bande haute et le haut du dock. Sans dock
+ * agrandi (`dockTop` nul), ou si la cible est déjà dans la partie libre, rien ne bouge : le cadrage
+ * d'origine reste celui du dock compact.
+ */
+export function dockShift(height: number, dockTop: number | null): number {
+  if (dockTop === null || !Number.isFinite(dockTop) || height <= 0) return 0;
+  const top = Math.min(Math.max(dockTop, 0), height);
+  const free = (height * DOCK_TOP_MARGIN + top) / 2;
+  return Math.max(0, Math.round(height / 2 - free));
+}
+
+/** Durée du recadrage quand le dock change de taille (coupé si l'on demande moins de mouvement). */
+export const DOCK_SHIFT_MS = 260;
+
+/** Courbe du recadrage : départ vif, arrivée douce. `t` dans [0, 1]. */
+export function easeOutCubic(t: number): number {
+  const clamped = Math.min(Math.max(t, 0), 1);
+  return 1 - (1 - clamped) ** 3;
+}

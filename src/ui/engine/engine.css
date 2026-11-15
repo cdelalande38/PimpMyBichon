@@ -127,3 +127,21 @@
 .engine-reset:disabled {
   opacity: 0.45;
 }
+
+/* Options d'une pièce : elles passent à la ligne au lieu de défiler, pour qu'aucune (« Origine »
+   comprise) ne sorte de l'écran quand on choisit la dernière. */
+.engine-chips {
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0.125rem 0;
+  overflow-x: visible;
+}
+
+.engine-chips .chip {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.engine-chips .chip small {
+  white-space: normal;
+}

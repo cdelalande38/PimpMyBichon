@@ -1,5 +1,6 @@
-// Commandes de l'atelier, dans le dock : une rangée d'onglets (Véhicule, Peinture, Ambiance), puis
-// le contenu de l'onglet. Le motif des réglages ; les listes viennent de src/data/ et des manifestes.
+// Commandes de l'atelier, dans le dock : une rangée d'onglets (Véhicule, Peinture, Ambiance) et, au
+// bout, la poignée qui agrandit le dock ; puis le contenu de l'onglet. Le motif des réglages ; les
+// listes viennent de src/data/ et des manifestes. Dock agrandi : les rangées passent à la ligne.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AMBIANCES } from '../data/ambiances.ts';
@@ -39,19 +40,27 @@ const TABS: ReadonlyArray<{ key: TabKey; label: string; body: () => ReactNode }>
   { key: 'ambiance', label: 'Ambiance', body: () => <AmbianceChoices /> },
 ];
 
-export function BenchControls() {
+interface BenchControlsProps {
+  /** Poignée du dock, au bout de la rangée d'onglets : dans la ligne, elle n'ajoute aucune hauteur. */
+  handle?: ReactNode;
+}
+
+export function BenchControls({ handle }: BenchControlsProps) {
   const [active, setActive] = useState<TabKey>('vehicule');
   const tab = TABS.find((item) => item.key === active) ?? TABS[0];
 
   return (
     <>
-      <nav className="tabs" aria-label="Onglets de l’atelier">
-        {TABS.map((item) => (
-          <button key={item.key} type="button" aria-current={active === item.key ? 'true' : undefined} onClick={() => setActive(item.key)}>
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      <div className="dock-tabs-row">
+        <nav className="tabs" aria-label="Onglets de l’atelier">
+          {TABS.map((item) => (
+            <button key={item.key} type="button" aria-current={active === item.key ? 'true' : undefined} onClick={() => setActive(item.key)}>
+              {item.label}
+            </button>
+          ))}
+        </nav>
+        {handle}
+      </div>
       {tab && <div key={tab.key} className="dock-tab">{tab.body()}</div>}
     </>
   );

@@ -10,7 +10,8 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { VignetteEffect } from 'postprocessing';
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
+import { Vector3, type PerspectiveCamera as Camera } from 'three';
 import { SceneBoundary } from '../app/SceneBoundary.tsx';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
@@ -28,10 +29,11 @@ import { ReflectionProbe } from '../render/ReflectionProbe.tsx';
 import { useRenderStats, type RenderStatsState } from '../render/renderStats.ts';
 import { useBench } from '../state/bench.ts';
 import { useBuilds } from '../state/builds.ts';
+import { useDock } from '../state/dock.ts';
 import { usePhoto } from '../state/photo.ts';
 import { useSettings } from '../state/store.ts';
 import { AutoQuality } from './AutoQuality.tsx';
-import { fitCamera, orbitPosition } from './fit.ts';
+import { DOCK_SHIFT_MS, dockShift, easeOutCubic, fitCamera, orbitPosition } from './fit.ts';
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
@@ -56,12 +58,20 @@ interface StageProps {
   floatTargets: boolean;
   /** Le système demande moins de mouvement : la coupe caméra bascule sans fondu. */
   reducedMotion: boolean;
+  /** Élément de la scène : on y pose, à la main, le cadre du véhicule à l'écran (tests, diagnostic). */
+  stage: RefObject<HTMLDivElement | null>;
+}
+
+/** Pose ou retire un attribut `data-*` sans toucher au DOM si rien ne change. */
+function putData(element: HTMLElement, key: string, value: string | null): void {
+  if (value === null) delete element.dataset[key];
+  else if (element.dataset[key] !== value) element.dataset[key] = value;
 }
 
 /** Sens de l'avant du véhicule dans la pièce : les cadrages photo en dépendent. */
 const FRONT_X = frontFromTurn(GARAGE.vehicle.turn);
 
-function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, reducedMotion }: StageProps) {
+function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, reducedMotion, stage }: StageProps) {
   const width = useThree((state) => state.size.width);
   const height = useThree((state) => state.size.height);
   // Véhicule courant (store des builds), ou celui de départ du catalogue.
@@ -121,6 +131,77 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   }, [camera, invalidate]);
   useFrame(() => {
     if (rotating) invalidate();
+  });
+
+  // Dock agrandi : la vue glisse vers le haut (fenêtre de vue décalée ; la caméra ne bouge pas, donc
+  // l'orbite, la coupe caméra et les mesures restent les mêmes) pour que le véhicule tienne dans la
+  // partie libre au-dessus du dock. Transition courte, coupée si l'on demande moins de mouvement.
+  // Rien en mode photo : le dock y est caché et la photo pose ses propres décalages.
+  const dockTop = useDock((state) => (state.expanded ? state.top : null));
+  const shiftGoal = photo ? 0 : dockShift(height, dockTop);
+  const shift = useRef({ value: 0, from: 0, goal: 0, start: 0, applied: '' });
+  useEffect(() => {
+    invalidate();
+  }, [shiftGoal, photo, invalidate]);
+  useFrame((state) => {
+    const s = shift.current;
+    const now = performance.now();
+    if (s.goal !== shiftGoal) {
+      s.from = s.value;
+      s.goal = shiftGoal;
+      s.start = now;
+    }
+    if (s.value !== s.goal) {
+      const t = reducedMotion || photo ? 1 : (now - s.start) / DOCK_SHIFT_MS;
+      s.value = t >= 1 ? s.goal : s.from + (s.goal - s.from) * easeOutCubic(t);
+      if (s.value !== s.goal) invalidate();
+    }
+    const view = state.camera as Camera;
+    if (photo) {
+      // Entrée en mode photo : le décalage du dock s'efface une fois, la photo pose ensuite le sien.
+      if (s.applied !== 'photo' && s.applied !== '' && view.view?.enabled) view.clearViewOffset();
+      s.applied = 'photo';
+      return;
+    }
+    // Nouvelle taille d'écran : la caméra recalcule sa projection, le décalage se repose.
+    const key = `${width}x${height}:${s.value}`;
+    if (s.applied === key) return;
+    if (s.value === 0) {
+      if (view.view?.enabled) view.clearViewOffset();
+    } else {
+      view.setViewOffset(width, height, 0, s.value, width, height);
+    }
+    s.applied = key;
+  }, -3);
+
+  // Cadre du véhicule à l'écran (haut et bas de sa boîte projetée, en pixels CSS) et décalage de la
+  // vue : posés sur la scène pour les parcours, qui vérifient que le véhicule reste au-dessus du dock.
+  const corner = useMemo(() => new Vector3(), []);
+  useFrame((state) => {
+    const element = stage.current;
+    if (!element) return;
+    let frame: string | null = null;
+    if (measure) {
+      const view = state.camera;
+      view.updateMatrixWorld();
+      const cos = Math.cos(GARAGE.vehicle.turn);
+      const sin = Math.sin(GARAGE.vehicle.turn);
+      let top = Infinity;
+      let bottom = -Infinity;
+      for (const x of [-measure.halfLength, measure.halfLength]) {
+        for (const z of [-measure.halfWidth, measure.halfWidth]) {
+          for (const y of [0, measure.height]) {
+            corner.set(x * cos + z * sin, y, -x * sin + z * cos).project(view);
+            const screen = ((1 - corner.y) / 2) * height;
+            top = Math.min(top, screen);
+            bottom = Math.max(bottom, screen);
+          }
+        }
+      }
+      frame = `${Math.round(top)},${Math.round(bottom)}`;
+    }
+    putData(element, 'vehiculeEcran', frame);
+    putData(element, 'decalage', String(Math.round(shift.current.value)));
   });
 
   // Rotation lente au temps : OrbitControls avance d'un angle fixe par image (deux fois plus vite à
@@ -292,6 +373,7 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
             autoLevel={quality === 'auto'}
             floatTargets={floatTargets}
             reducedMotion={reducedMotion}
+            stage={stage}
           />
         )}
       </Canvas>
