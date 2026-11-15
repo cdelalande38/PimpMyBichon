@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { expect, test, type Page, type Route } from '@playwright/test';
-import { capture, openApp, waitForBench } from './helpers.ts';
+import { capture, openApp, openEntry, waitForBench } from './helpers.ts';
 
 // Reprise après un modèle introuvable (réseau coupé pendant son chargement) : l'étiquette le dit et
 // propose « Réessayer » ; revenir sur le véhicule, ou appuyer sur le bouton, relance une vraie
@@ -32,8 +32,8 @@ const dock = (page: Page) => page.locator('footer.dock');
 const retry = (page: Page) => page.getByRole('button', { name: 'Réessayer', exact: true });
 
 async function chooseVehicle(page: Page, entry: Entry): Promise<void> {
-  const tab = dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: 'Véhicule', exact: true });
-  if ((await tab.getAttribute('aria-current')) !== 'true') await tab.tap();
+  // Le menu ne montre qu'un niveau à la fois : on ouvre le catalogue avant d'y choisir.
+  await openEntry(page, 'Véhicule');
   const chip = dock(page).getByRole('group', { name: 'Véhicule' }).locator(`[data-vehicle="${entry.id}"]`);
   await chip.tap();
   await expect(chip).toHaveAttribute('aria-pressed', 'true');

@@ -806,11 +806,36 @@ button {
   pointer-events: auto;
 }
 
-/* Onglet « Moteur » en dock compact : la fiche tient dans une zone bornée qui défile en hauteur ;
-   les trois chiffres restent en tête, les options passent dessous. */
+/* Contenu d'une entrée en dock compact : seul sous la ligne de repère, il a toute la hauteur du
+   tiers bas moins cette ligne (48 px), l'écart (6 px) et les marges du dock. Au-delà, il défile en
+   hauteur ; le dock ne bouge pas quand on choisit une option. */
+.dock[data-taille='compact'] {
+  --dock-body: calc(100dvh / 3 - 58px - 1.5rem - var(--safe-b));
+}
+
+/* Sections, entrées et contenus d'une rangée (Véhicule, Ambiance, liste des zones) : la même hauteur,
+   rangée posée en bas, sous le pouce. Le dock compact ne bouge pas d'un de ces niveaux à l'autre, et
+   la scène, qui cadre le véhicule au-dessus de lui, garde le même cadrage. */
+.dock[data-taille='compact'] .dock-tabs-row,
+.dock[data-taille='compact'] .dock-entries,
+.dock[data-taille='compact'] .dock-tab {
+  min-height: 4.25rem;
+}
+
+.dock[data-taille='compact'] .dock-tabs-row,
+.dock[data-taille='compact'] .dock-entries {
+  align-items: flex-end;
+}
+
+/* La fiche de préparation défile en hauteur : elle garde son début en haut. */
+.dock[data-taille='compact'] .dock-tab:not([data-onglet='preparation']) {
+  justify-content: flex-end;
+}
+
+/* Onglet « Préparation » en dock compact : la fiche tient dans cette zone et défile en hauteur ; les
+   trois chiffres restent en tête, sur une ligne serrée, les options passent dessous. */
 .dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] {
-  /* Ce qui reste du tiers bas une fois la ligne de repère, les sections et les entrées posées. */
-  max-height: max(60px, calc(100dvh / 3 - 200px));
+  max-height: var(--dock-body);
   margin: 0 calc(-1 * var(--pad-r)) 0 calc(-1 * var(--pad-l));
   padding: 0 var(--pad-r) 0.25rem var(--pad-l);
   overflow-y: auto;
@@ -834,9 +859,8 @@ button {
 .dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-figures dd {
   font-size: 1.125rem;
 }
-.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-spec,
-.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-hint,
-.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-note {
+/* Le moteur d'origine et la note restent ; l'explication de chaque poste attend le dock agrandi. */
+.dock[data-taille='compact'] .dock-tab[data-onglet='preparation'] .engine-hint {
   display: none;
 }
 
@@ -958,11 +982,11 @@ button {
   max-width: 100%;
 }
 
-/* Quatre onglets de personnalisation : ils tiennent sans défiler à 390 px (lettres plus serrées,
-   marges réduites, chaque onglet prend sa part de la ligne) ; à 360 px, les marges se resserrent
-   encore avant que la rangée ne défile. */
+/* Quatre sections : elles tiennent sans défiler à 390 px (lettres plus serrées, marges réduites,
+   chaque onglet prend sa part de la ligne) ; à 360 px, les marges se resserrent encore. Un libellé
+   n'est jamais plus large que son bouton : faute de place, la rangée défile. */
 .dock .tabs button {
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   margin-right: 0;
   padding: 0 0.125rem;
   font-size: 0.75rem;
@@ -1006,13 +1030,14 @@ button {
   stroke-linejoin: round;
 }
 
-/* Le fil passe sur deux lignes plutôt que de couper ses morceaux ; chaque morceau reste entier. */
+/* Le fil sur deux lignes : le chemin, dont les morceaux se coupent faute de place, puis où l'on est,
+   toujours entier. */
 .dock-crumbs {
   display: flex;
   flex: 1 1 auto;
-  flex-wrap: wrap;
-  align-content: center;
-  align-items: center;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
   min-width: 0;
   max-height: 48px;
   margin: 0;
@@ -1025,8 +1050,14 @@ button {
   text-overflow: ellipsis;
 }
 
-/* Fil en casse normale, serré : « Peinture · Carrosserie · Couleur » tient à 390 px à côté des
-   deux boutons ; au-delà, les premiers morceaux se coupent, jamais le dernier (où l'on est). */
+.dock-crumbs-path {
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Fil en casse normale, serré ; faute de place, les morceaux du chemin se coupent par une ellipse. */
 .dock-crumb {
   flex: 0 1 auto;
   min-width: 0;
@@ -1045,10 +1076,26 @@ button {
   color: var(--ambre);
 }
 
+/* Chemin de trois morceaux et plus (« Custom · Peinture · Toit ») : la section s'efface à l'écran,
+   pour que l'entrée et la zone restent lisibles au-dessus de l'étape. */
+.dock-crumbs-path > .dock-crumb:first-child:nth-last-child(n + 3) {
+  display: none;
+}
+
+.dock-crumbs-path > .dock-crumb:first-child:nth-last-child(n + 3) + .dock-crumb::before {
+  content: none;
+}
+
 .dock-crumb-here {
-  flex-shrink: 0;
+  max-width: 100%;
   color: var(--chrome);
   font-weight: 700;
+}
+
+.dock-head .dock-handle {
+  width: 48px;
+  min-height: 48px;
+  margin-left: auto;
 }
 
 .dock-close {
@@ -1057,7 +1104,6 @@ button {
   place-items: center;
   width: 48px;
   height: 48px;
-  margin-left: auto;
   border: 1px solid var(--edge);
   border-radius: 50%;
   background: var(--panel);

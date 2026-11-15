@@ -5,7 +5,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { openApp, openAtelier, quick, VIEWPORT, waitForScene } from './helpers.ts';
+import { backToSections, openApp, openAtelier, openEntry, quick, VIEWPORT, waitForScene } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
 const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
@@ -47,21 +47,30 @@ test.describe('raccourcis et dock de personnalisation', () => {
     expect(overflow, 'sections sans défilement').toBeLessThanOrEqual(1);
     await shot(page, '01-accueil');
 
-    // « Custom » : on arrive directement sur « Peinture » ; les entrées à venir, estompées, en fin de rangée.
+    // « Custom » : seulement ses entrées, les sections masquées ; les entrées à venir, estompées, en
+    // fin de rangée. « Peinture » ouvre ses choix, et masque à son tour les entrées.
     await tabs(page).getByRole('button', { name: 'Custom', exact: true }).tap();
     const entries = dock(page).getByRole('navigation', { name: 'Entrées · Custom' }).getByRole('button');
     await expect(entries).toHaveText([/^Peinture$/, /^Stickers/, /^Carrosserie/, /^Phares/, /^Ailerons/, /^Suspension/]);
     await expect(entries.first()).toHaveAttribute('aria-current', 'true');
     await expect(entries.nth(1)).toBeDisabled();
     await expect(entries.nth(1)).toHaveAccessibleName('Stickers, bientôt');
-    await expect(dock(page).getByRole('group', { name: 'Zones' })).toBeVisible();
-    await expect(dock(page).locator('.dock-crumb')).toHaveText(['Custom', 'Peinture']);
+    await expect(tabs(page)).toHaveCount(0);
+    await expect(dock(page).getByRole('group', { name: 'Zones' })).toHaveCount(0);
+    await expect(dock(page).locator('.dock-crumb')).toHaveText(['Custom']);
     await shot(page, '01b-custom');
-    // « Garage » : une seule entrée, pas de rangée d'entrées ; le fil dit « Garage · Ambiance ».
+    await entries.first().tap();
+    await expect(dock(page).getByRole('group', { name: 'Zones' })).toBeVisible();
+    await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
+    await expect(dock(page).locator('.dock-crumb')).toHaveText(['Custom', 'Peinture']);
+    await shot(page, '01c-custom-peinture');
+    // « Garage » : une seule entrée, pas d'écran d'entrées ; le fil dit « Garage · Ambiance ».
+    await backToSections(page);
     await tabs(page).getByRole('button', { name: 'Garage', exact: true }).tap();
     await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
     await expect(dock(page).getByRole('group', { name: 'Ambiance' })).toBeVisible();
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Garage', 'Ambiance']);
+    await backToSections(page);
 
     // À 360 px aussi.
     await page.setViewportSize({ width: 360, height: 780 });
@@ -108,16 +117,14 @@ test.describe('raccourcis et dock de personnalisation', () => {
     test.setTimeout(120_000);
     await openApp(page);
     await waitForScene(page);
-    await tabs(page).getByRole('button', { name: 'Mécanique' }).tap();
+    await openEntry(page, 'Préparation');
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Mécanique', 'Préparation']);
     const tab = dock(page).locator('.dock-tab');
     await expect(tab.getByTestId('moteur-origine')).toBeVisible();
     await expect(tab.getByTestId('moteur-prepare')).toBeInViewport();
     // Compact : le dock reste dans le tiers bas, la fiche défile en hauteur dans sa zone.
     const top = await dock(page).evaluate((footer) => footer.getBoundingClientRect().top);
-    const tabsBox = await tabs(page).boundingBox();
-    expect(tabsBox?.y ?? 0, 'onglets dans le tiers bas').toBeGreaterThanOrEqual((VIEWPORT.height * 2) / 3);
-    expect(top, 'dock compact').toBeGreaterThan(VIEWPORT.height / 2);
+    expect(top, 'dock compact dans le tiers bas').toBeGreaterThanOrEqual((VIEWPORT.height * 2) / 3);
     const scrolls = await tab.evaluate((element) => element.scrollHeight > element.clientHeight + 1);
     expect(scrolls, 'la fiche défile dans sa zone').toBe(true);
     await shot(page, '04-moteur-compact');

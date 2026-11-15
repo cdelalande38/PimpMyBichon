@@ -124,6 +124,8 @@ test('deux onglets : ce que l’un enregistre survit aux gestes de l’autre, qu
 
   // B, ouvert avant tout ça : un autre véhicule, le texte agrandi, le menu agrandi.
   await b.bringToFront();
+  // Le menu ne montre qu'un niveau à la fois : on ouvre le catalogue avant d'y choisir.
+  await openEntry(b, 'Véhicule');
   const vehicles = dock(b).getByRole('group', { name: 'Véhicule' });
   const otherVehicle = await vehicles.locator(`[aria-pressed="false"]:not([data-vehicle="${paintedVehicle}"])`).first().getAttribute('data-vehicle');
   const other = vehicles.locator(`[data-vehicle="${otherVehicle}"]`);

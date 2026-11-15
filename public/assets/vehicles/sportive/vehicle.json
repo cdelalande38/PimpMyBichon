@@ -12,6 +12,7 @@
     {
       "id": "carenage",
       "label": "Carénage",
+      "phrase": "le carénage",
       "materials": ["paint_carenage"],
       "group": "carrosserie",
       "paint": { "color": "#ff6a00", "finish": "satine" }

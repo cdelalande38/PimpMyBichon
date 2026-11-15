@@ -12,6 +12,7 @@
     {
       "id": "reservoir",
       "label": "Réservoir",
+      "phrase": "le réservoir",
       "materials": ["paint_reservoir"],
       "group": "carrosserie",
       "paint": { "color": "#0b0b0e", "finish": "brillant" }

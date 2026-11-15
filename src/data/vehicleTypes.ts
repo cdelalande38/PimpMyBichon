@@ -46,6 +46,11 @@ export interface Zone {
   paint: Paint;
   /** Zone 'carrosserie' détachée à l'origine (bi-ton d'usine) : `false`. Absent : liée. */
   linked?: boolean;
+  /**
+   * Zone maîtresse : son nom dans une phrase, article compris (« le réservoir », « le carénage »),
+   * pour le cadenas des autres zones (« Suit le réservoir »). Absent : « la carrosserie ».
+   */
+  phrase?: string;
 }
 
 /**

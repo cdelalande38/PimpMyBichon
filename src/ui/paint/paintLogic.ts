@@ -2,7 +2,7 @@
 // zones liées telle que l'interface la montre. Testée dans tests/unit/peinture.test.ts.
 
 import { finish as findFinish, type Finish, type FinishId } from '../../data/finishes.ts';
-import type { Build, Hex, VehicleManifest, Zone } from '../../data/vehicleTypes.ts';
+import type { Build, Hex, Paint, VehicleManifest, Zone } from '../../data/vehicleTypes.ts';
 import { flipColor } from '../../render/paint.ts';
 import { FLAKE_RANGE, isLinked, masterZone, normalizeHex, resolvePaint } from '../../state/builds.ts';
 
@@ -77,16 +77,64 @@ export function lockState(manifest: Zoned, build: Build | undefined, zoneId: str
   return isLinked(manifest, build, zoneId) ? 'ferme' : 'ouvert';
 }
 
+/** Zone maîtresse dans une phrase, article compris : « le réservoir » ; sans précision, « la carrosserie ». */
+export function masterPhrase(manifest: Zoned): string {
+  const phrase = masterZone(manifest)?.phrase;
+  return typeof phrase === 'string' && phrase.trim() !== '' ? phrase.trim() : 'la carrosserie';
+}
+
+/** « de » devant la zone maîtresse : « du réservoir », « de la carrosserie », « de l'aile ». */
+export function ofPhrase(phrase: string): string {
+  if (/^le /i.test(phrase)) return `du ${phrase.slice(3)}`;
+  if (/^les /i.test(phrase)) return `des ${phrase.slice(4)}`;
+  return `de ${phrase}`;
+}
+
 /** Nom accessible du bouton cadenas : l'état, puis le geste (sans accord à faire sur la zone). */
-export function lockLabel(zoneLabel: string, state: Exclude<LockState, 'aucun'>): string {
+export function lockLabel(zoneLabel: string, state: Exclude<LockState, 'aucun'>, phrase = 'la carrosserie'): string {
   return state === 'ferme'
-    ? `${zoneLabel} : carrosserie suivie, ouvrir le cadenas`
+    ? `${zoneLabel} : suit ${phrase}, ouvrir le cadenas`
     : `${zoneLabel} : peinture à part, refermer le cadenas`;
 }
 
-/** Message d'un appui sur une peinture verrouillée, et sa durée à l'écran. */
-export const LOCK_MESSAGE = 'Cette partie suit la carrosserie. Ouvre son cadenas pour lui donner sa propre peinture.';
+/** Rappel court de l'état du cadenas : « Suit le réservoir », « Peinture à part ». */
+export function lockReminder(state: Exclude<LockState, 'aucun'>, phrase = 'la carrosserie'): string {
+  return state === 'ferme' ? `Suit ${phrase}` : 'Peinture à part';
+}
+
+/** Message d'un appui sur une peinture verrouillée. */
+export function lockMessage(phrase = 'la carrosserie'): string {
+  return `Cette partie suit ${phrase}. Ouvre son cadenas pour lui donner sa propre peinture.`;
+}
+
+/** Message d'un appui sur une peinture verrouillée (voiture), et sa durée à l'écran. */
+export const LOCK_MESSAGE = lockMessage();
 export const LOCK_MESSAGE_MS = 6000;
+
+/** Deux peintures qui se voient pareil : couleur, finition, paillette et seconde teinte effectives. */
+function samePaint(a: Paint, b: Paint): boolean {
+  if (a.color !== b.color || a.finish !== b.finish) return false;
+  if (flakeValue(a.finish, a.flake) !== flakeValue(b.finish, b.flake)) return false;
+  const finish = findFinish(a.finish);
+  return !hasColor2(finish) || color2Value(a.color, a.finish, a.color2) === color2Value(b.color, b.finish, b.color2);
+}
+
+/**
+ * Vrai si refermer le cadenas de la zone ferait perdre quelque chose : la zone a sa propre peinture
+ * et elle diffère de celle de la zone maîtresse. Faux pour une zone déjà fermée ou sans cadenas.
+ */
+export function relockLoses(manifest: Zoned, build: Build | undefined, zoneId: string): boolean {
+  if (lockState(manifest, build, zoneId) !== 'ouvert') return false;
+  const master = masterZone(manifest);
+  const own = resolvePaint(manifest, build, zoneId);
+  const reference = master ? resolvePaint(manifest, build, master.id) : undefined;
+  return Boolean(own && reference && !samePaint(own, reference));
+}
+
+/** Question posée avant de refermer un cadenas qui ferait perdre une peinture à part. */
+export function relockQuestion(zoneLabel: string, phrase = 'la carrosserie'): string {
+  return `Refermer le cadenas de « ${zoneLabel} » ? Cette partie reprendra la peinture ${ofPhrase(phrase)} et perdra la sienne.`;
+}
 
 /**
  * Zone qui reçoit un coup de peinture donné sur `zoneId` : la zone maîtresse si la zone lui est

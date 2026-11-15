@@ -115,12 +115,14 @@ describe('bornes du regard', () => {
 
 describe('vue intérieure dans les manifestes', () => {
   // Le van l'attend : son habitacle de substitut est trop sombre pour être montré (TODO_ASSETS.md).
-  const SANS_INTERIEUR = new Set(['van']);
-
+  // On ne juge que les véhicules nommés ici et les motos : un autre fichier de tests dépose un
+  // véhicule d'essai dans le même dossier pendant qu'il tourne (tests/unit/vehicules.test.ts).
   it('la Cox et le concept la déclarent ; pas les motos, ni le van tant que son habitacle n’est pas modelé', () => {
+    for (const id of ['cox', 'concept']) expect(byId(id)?.interiorView, id).toBeDefined();
+    expect(byId('van'), 'le van est au catalogue').toBeDefined();
+    expect(byId('van')?.interiorView, 'van').toBeUndefined();
     for (const manifest of MANIFESTS) {
-      const attendu = manifest.kind === 'car' && !SANS_INTERIEUR.has(manifest.id);
-      expect(manifest.interiorView !== undefined, manifest.id).toBe(attendu);
+      if (manifest.kind === 'bike') expect(manifest.interiorView, manifest.id).toBeUndefined();
     }
   });
 

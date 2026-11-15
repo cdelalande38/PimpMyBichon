@@ -4,12 +4,14 @@
 import type { Route } from '../../app/router.ts';
 import type { EcranKey } from '../../data/tutos.ts';
 import type { EntryId, SectionId } from '../../data/dockMenu.ts';
+import type { MenuLevel } from '../../state/dock.ts';
 import type { ViewMode } from '../../state/view.ts';
 
 export interface EcranFaits {
   route: Route;
   vue: ViewMode;
-  dock: { closed: boolean; section: SectionId; entry: EntryId };
+  /** `menu` : niveau du menu à l'écran (src/state/dock.ts) ; absent, le contenu de l'entrée. */
+  dock: { closed: boolean; section: SectionId; entry: EntryId; menu?: MenuLevel };
   /** Vrai dès qu'on a quitté la section « Véhicule » depuis l'ouverture : on n'est plus à l'accueil. */
   sortiAccueil: boolean;
 }
@@ -22,7 +24,6 @@ export function ecranCourant({ route, vue, dock, sortiAccueil }: EcranFaits): Ec
     case 'radio':
     case 'reglages':
     case 'capot':
-    case 'moteur':
       return `panneau:${route.name}`;
     case 'garage':
       break;
@@ -31,6 +32,10 @@ export function ecranCourant({ route, vue, dock, sortiAccueil }: EcranFaits): Ec
   }
   if (vue === 'interieur') return 'vue:interieur';
   if (dock.closed) return 'accueil';
+  // Un seul niveau du menu à l'écran : les sections expliquent le menu (l'accueil) ; les entrées
+  // d'une section n'ont pas de tutoriel à elles. Le tutoriel d'une entrée attend son contenu.
+  if (dock.menu === 'sections') return 'accueil';
+  if (dock.menu === 'entrees') return null;
   // L'app s'ouvre sur « Véhicule » : tant qu'on n'en est pas sorti, c'est l'accueil.
   if (dock.section === 'vehicule' && !sortiAccueil) return 'accueil';
   return `entree:${dock.entry}`;

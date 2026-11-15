@@ -29,6 +29,7 @@ function useEcran(): EcranKey | null {
   const route = useRoute();
   const vue = useView((state) => state.mode);
   const closed = useDock((state) => state.closed);
+  const menu = useDock((state) => state.menu);
   const chosen = useDock((state) => state.section);
   const remembered = useDock((state) => state.entries);
   const hasEngine = resolveVehicle(useBuilds((state) => state.current)).engine !== undefined;
@@ -39,7 +40,7 @@ function useEcran(): EcranKey | null {
   const entry = section ? activeEntry(section, remembered[section.id]) : undefined;
 
   if (!section || !entry) return null;
-  return ecranCourant({ route, vue, dock: { closed, section: section.id, entry: entry.id }, sortiAccueil });
+  return ecranCourant({ route, vue, dock: { closed, section: section.id, entry: entry.id, menu }, sortiAccueil });
 }
 
 /** Rectangle qui englobe les éléments visés (visibles) ; `null` s'il n'y en a aucun à l'écran. */

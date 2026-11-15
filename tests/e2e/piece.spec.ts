@@ -79,11 +79,11 @@ test.describe('pièce cliquable', () => {
     await shot(page, 'pastilles-autre-cote');
     const engine = page.getByRole('button', { name: 'Préparer le moteur', exact: true });
     await engine.click();
-    await expect(tabs(page).getByRole('button', { name: 'Mécanique', exact: true })).toHaveAttribute('aria-current', 'true');
-    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Mécanique' }).getByRole('button', { name: 'Préparation', exact: true })).toHaveAttribute(
-      'aria-current',
-      'true',
-    );
+    // Un seul niveau du menu : la fiche de préparation, sections et entrées masquées.
+    await expect(dock(page).locator('.dock-crumb')).toHaveText(['Mécanique', 'Préparation']);
+    await expect(dock(page).locator('.dock-tab[data-onglet="preparation"]')).toBeVisible();
+    await expect(tabs(page)).toHaveCount(0);
+    await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
   });
 
   test('appui court sur le véhicule : la peinture, sur une zone ; un glissement ne déclenche rien', async ({ page }) => {
@@ -105,11 +105,12 @@ test.describe('pièce cliquable', () => {
     await page.reload();
     await ready(page);
     await page.touchscreen.tap(x, y);
-    await expect(custom).toHaveAttribute('aria-current', 'true');
-    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Custom' }).getByRole('button', { name: 'Peinture', exact: true })).toHaveAttribute(
-      'aria-current',
-      'true',
-    );
+    // Custom · Peinture, sur la zone touchée : le fil le dit, sections et entrées sont masquées.
+    await expect(dock(page).locator('.dock-crumb').nth(0)).toHaveText('Custom');
+    await expect(dock(page).locator('.dock-crumb').nth(1)).toHaveText('Peinture');
+    await expect(dock(page).locator('.dock-tab[data-onglet="peinture"]')).toBeVisible();
+    await expect(tabs(page)).toHaveCount(0);
+    await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
     // Dans une zone : les étapes « Couleur » et « Finition » sont là.
     await expect(dock(page).locator('.paint').getByRole('navigation', { name: 'Peinture' })).toBeVisible();
     await shot(page, 'apres-vehicule');

@@ -29,7 +29,7 @@ const handle = (page: Page) => dock(page).getByRole('button', { name: /^(Agrandi
 
 async function chooseVehicle(page: Page, id: string): Promise<void> {
   if ((await stage(page).getAttribute('data-vehicle')) === id) return;
-  await dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: 'Véhicule', exact: true }).tap();
+  await openEntry(page, 'Véhicule');
   const chip = dock(page).getByRole('group', { name: 'Véhicule' }).locator(`[data-vehicle="${id}"]`);
   await chip.tap();
   await expect(stage(page)).toHaveAttribute('data-vehicle', id);

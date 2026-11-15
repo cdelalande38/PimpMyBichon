@@ -4,15 +4,17 @@
 // La taille (fermé, compact, agrandi) est sauvegardée dans IndexedDB, sur le modèle du store du banc
 // (src/state/bench.ts), lecture tolérante comprise (l'ancienne sauvegarde `{ expanded }` se relit
 // telle quelle). L'onglet et les niveaux durent la séance : « Personnaliser » rouvre le dock là où on
-// l'avait laissé ; au lancement, l'atelier repart de « Véhicule ». Le haut du dock agrandi, mesuré à
+// l'avait laissé ; au lancement, l'atelier repart des sections. Le haut du dock agrandi, mesuré à
 // l'écran, n'est pas sauvegardé : la scène s'en sert pour recadrer le véhicule au-dessus.
 //
-// Les niveaux forment une pile explicite : « Retour » dépile un niveau, toujours le même chemin
-// (nuancier → couleurs, couleurs ou finitions d'une zone → liste des zones, onglet → rien). Un
+// Un seul niveau du menu à l'écran (`menu`) : les sections, les entrées d'une section, ou le contenu
+// d'une entrée. Sous le contenu, les niveaux forment une pile explicite : « Retour » dépile un niveau,
+// toujours le même chemin (nuancier → couleurs, couleurs ou finitions d'une zone → liste des zones,
+// contenu → entrées de la section, ou sections si elle n'a qu'une entrée, entrées → sections). Un
 // prochain menu s'y branche en ajoutant une sorte de niveau ici et son libellé dans le fil.
 
 import { create } from 'zustand';
-import { DOCK_MENU, type EntryId, type SectionId } from '../data/dockMenu.ts';
+import { directEntry, DOCK_MENU, type EntryId, type SectionId } from '../data/dockMenu.ts';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
@@ -22,6 +24,19 @@ export const DOCK_VERSION = 2;
 export type { EntryId, SectionId };
 
 export type PaintStep = 'couleur' | 'finition';
+
+/**
+ * Niveau du menu à l'écran, un seul à la fois : les sections, les entrées d'une section, ou le
+ * contenu d'une entrée (et ses niveaux à elle, `levels`). Une section à une seule entrée (Véhicule,
+ * Garage) passe directement des sections au contenu.
+ */
+export type MenuLevel = 'sections' | 'entrees' | 'contenu';
+
+/** Vrai si la section ouvre directement son entrée (aucun écran intermédiaire à un seul choix). */
+export function opensDirectly(section: SectionId): boolean {
+  const data = DOCK_MENU.find((item) => item.id === section);
+  return data !== undefined && directEntry(data) !== undefined;
+}
 export type PickerTarget = 'color' | 'color2';
 
 /** Un niveau sous l'onglet. */
@@ -90,6 +105,8 @@ export function entryOf(section: SectionId, entries: Partial<Record<SectionId, E
 export interface DockState extends DockChoices {
   /** Section ouverte (Véhicule, Custom, Mécanique, Garage). */
   section: SectionId;
+  /** Niveau du menu à l'écran : sections, entrées de la section, ou contenu de l'entrée. */
+  menu: MenuLevel;
   /** Dernière entrée utilisée de chaque section : on y revient sans appui de plus. */
   entries: Partial<Record<SectionId, EntryId>>;
   levels: DockLevel[];
@@ -103,15 +120,15 @@ export interface DockState extends DockChoices {
   setTop: (top: number | null) => void;
   /** Ferme le dock (pastille « Personnaliser ») ou le rouvre là où on l'avait laissé. */
   setClosed: (closed: boolean) => void;
-  /** Change de section : on arrive sur sa dernière entrée, en haut de l'entrée. */
+  /** Ouvre une section : ses entrées, ou directement son contenu si elle n'en a qu'une. */
   setSection: (section: SectionId) => void;
-  /** Change d'entrée dans la section ouverte : on repart du haut de l'entrée. */
+  /** Ouvre une entrée de la section ouverte : son contenu, depuis le haut. */
   setEntry: (entry: EntryId) => void;
   /** Descend d'un niveau. */
   push: (level: DockLevel) => void;
   /** Remplace le niveau courant (couleur ↔ finition d'une même zone). */
   replace: (level: DockLevel) => void;
-  /** Remonte d'un niveau ; rend faux s'il n'y avait rien à dépiler. */
+  /** Remonte d'un niveau (contenu → entrées → sections) ; rend faux si l'on était déjà aux sections. */
   back: () => boolean;
   /** Ouvre une entrée de l'extérieur (pastille de la pièce…), sur une zone de peinture si elle est donnée. */
   openEntry: (entry: EntryId, zone?: string) => void;
@@ -122,6 +139,7 @@ export const useDock = create<DockState>()(
     (set, get) => ({
       ...DEFAULT_DOCK,
       section: 'vehicule',
+      menu: 'sections',
       entries: {},
       levels: [],
       hydrated: false,
@@ -131,12 +149,12 @@ export const useDock = create<DockState>()(
       toggle: () => set((state) => ({ expanded: !state.expanded })),
       setTop: (top) => set((state) => (state.top === top ? state : { top })),
       setClosed: (closed) => set({ closed }),
-      setSection: (section) => set((state) => (state.section === section && state.levels.length === 0 ? state : { section, levels: [] })),
+      setSection: (section) => set({ section, menu: opensDirectly(section) ? 'contenu' : 'entrees', levels: [] }),
       setEntry: (entry) =>
         set((state) => {
           const owner = DOCK_MENU.find((item) => item.id === state.section);
           if (!owner?.entries.some((item) => item.id === entry && item.available)) return state;
-          return { entries: { ...state.entries, [state.section]: entry }, levels: [] };
+          return { entries: { ...state.entries, [state.section]: entry }, menu: 'contenu', levels: [] };
         }),
       push: (level) =>
         set((state) => {
@@ -149,9 +167,11 @@ export const useDock = create<DockState>()(
           return { levels, zone: level.kind === 'zone' ? level.zone : state.zone };
         }),
       back: () => {
-        const { levels } = get();
-        if (levels.length === 0) return false;
-        set({ levels: levels.slice(0, -1) });
+        const { levels, menu, section } = get();
+        if (levels.length > 0) set({ levels: levels.slice(0, -1) });
+        else if (menu === 'contenu') set({ menu: opensDirectly(section) ? 'sections' : 'entrees' });
+        else if (menu === 'entrees') set({ menu: 'sections' });
+        else return false;
         return true;
       },
       openEntry: (entry, zone) =>
@@ -161,6 +181,7 @@ export const useDock = create<DockState>()(
           const levels = zone === undefined ? [] : sanitizeLevels(entry, [{ kind: 'zone', zone, step: 'couleur' }]);
           return {
             section: owner.id,
+            menu: 'contenu',
             entries: { ...state.entries, [owner.id]: entry },
             levels,
             zone: zone ?? state.zone,

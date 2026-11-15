@@ -1,7 +1,8 @@
-// Navigation du dock : la ligne de repère (« Retour », fil, « Fermer le menu »), la pile des niveaux
-// de la peinture (zones → zone, couleur ou finition → nuancier), la pastille « Personnaliser » qui
-// rouvre le dock là où on l'avait laissé, Échap, et le tiers bas aux deux tailles d'écran et aux
-// trois tailles de texte, dock ouvert comme fermé. Captures : captures/navigation/.
+// Navigation du dock : un seul niveau du menu à la fois (sections, entrées d'une section, contenu
+// d'une entrée), la ligne de repère (« Retour », fil, « Fermer le menu »), la pile des niveaux de la
+// peinture (zones → zone, couleur ou finition → nuancier), la pastille « Personnaliser » qui rouvre
+// le dock là où on l'avait laissé, Échap et le focus au clavier, et le tiers bas aux deux tailles
+// d'écran et aux trois tailles de texte, dock ouvert comme fermé. Captures : captures/navigation/.
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
@@ -44,19 +45,58 @@ async function expectDockUnderThumb(page: Page, height: number, label: string): 
   return count;
 }
 
+/**
+ * Hauteur touchable de chaque élément : on l'amène au centre de sa zone qui défile, puis on compte,
+ * pixel par pixel sur une verticale au milieu, les points où elementFromPoint tombe sur lui.
+ */
+async function touchableHeights(page: Page, selector: string): Promise<Array<{ name: string; hits: number }>> {
+  return page.evaluate(async (selector) => {
+    const out: Array<{ name: string; hits: number }> = [];
+    for (const element of document.querySelectorAll<HTMLElement>(selector)) {
+      element.scrollIntoView({ block: 'center', inline: 'center' });
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const box = element.getBoundingClientRect();
+      const x = box.left + box.width / 2;
+      let hits = 0;
+      for (let y = Math.floor(box.top); y < box.bottom; y += 1) {
+        const hit = document.elementFromPoint(x, y);
+        if (hit && element.contains(hit)) hits += 1;
+      }
+      out.push({ name: (element.textContent ?? '').trim().slice(0, 24), hits });
+    }
+    return out;
+  }, selector);
+}
+
+/** Haut du dock, en pixels. */
+const dockTop = (page: Page) => dock(page).evaluate((footer) => Math.round(footer.getBoundingClientRect().top));
+
 test.describe('navigation du dock', () => {
   test('peinture : descendre jusqu’au nuancier, remonter niveau par niveau, fermer, rouvrir au même endroit, recharger', async ({ page }) => {
     test.setTimeout(150_000);
     await openApp(page);
     await waitForScene(page);
 
-    // Tout en haut (section « Véhicule ») : le véhicule à l'écran dans la ligne de repère.
+    // Tout en haut : les sections seules, le véhicule à l'écran dans la ligne de repère, pas de « Retour ».
     await expect(dock(page).locator('.dock-vehicle')).not.toBeEmpty();
     await expect(back(page)).toHaveCount(0);
-    // Haut de l'entrée « Peinture » : pas de « Retour », le fil dit où l'on est.
-    await openEntry(page, 'Peinture');
+    await expect(tabs(page)).toBeVisible();
+    await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
+    await shot(page, '00-sections');
+    // « Custom » : ses entrées seules, les sections masquées ; le fil dit « Custom ».
+    await tabs(page).getByRole('button', { name: 'Custom', exact: true }).tap();
+    const entries = dock(page).getByRole('navigation', { name: 'Entrées · Custom' });
+    await expect(entries).toBeVisible();
+    await expect(tabs(page)).toHaveCount(0);
+    await expect(back(page)).toBeVisible();
+    await expectCrumbs(page, ['Custom']);
+    await shot(page, '00b-custom-entrees');
+    // « Peinture » : ses choix seuls, entrées et sections masquées ; le fil dit « Custom · Peinture ».
+    await entries.getByRole('button', { name: 'Peinture', exact: true }).tap();
     await expectCrumbs(page, ['Custom', 'Peinture']);
-    await expect(back(page)).toHaveCount(0);
+    await expect(entries).toHaveCount(0);
+    await expect(tabs(page)).toHaveCount(0);
+    await expect(back(page)).toBeVisible();
     await expect(close(page)).toBeVisible();
     await expect(zones(page).first()).toBeVisible();
     await expect(colors(page)).toHaveCount(0);
@@ -82,12 +122,26 @@ test.describe('navigation du dock', () => {
     await expect(colors(page)).toBeVisible();
     await expectCrumbs(page, ['Custom', 'Peinture', zone, 'Couleur']);
 
-    // Les finitions sont une autre vue du même niveau : « Retour » mène à la liste des zones.
+    // Les finitions sont une autre vue du même niveau : « Retour » mène à la liste des zones,
+    // puis aux entrées de Custom, puis aux sections.
     await dock(page).getByRole('navigation', { name: 'Peinture' }).getByRole('button', { name: 'Finition' }).tap();
     await expectCrumbs(page, ['Custom', 'Peinture', zone, 'Finition']);
     await back(page).tap();
     await expect(zones(page).first()).toBeVisible();
+    await expectCrumbs(page, ['Custom', 'Peinture']);
+    await back(page).tap();
+    await expect(entries).toBeVisible();
+    await expectCrumbs(page, ['Custom']);
+    await back(page).tap();
+    await expect(tabs(page)).toBeVisible();
     await expect(back(page)).toHaveCount(0);
+    // Garage, une seule entrée : son contenu tout de suite, sans écran à un seul choix.
+    await tabs(page).getByRole('button', { name: 'Garage', exact: true }).tap();
+    await expect(dock(page).getByRole('group', { name: 'Ambiance' })).toBeVisible();
+    await expectCrumbs(page, ['Garage', 'Ambiance']);
+    await back(page).tap();
+    await expect(tabs(page)).toBeVisible();
+    await openEntry(page, 'Peinture');
 
     // Fermer le menu : une seule pastille au pouce, le cadrage d'origine.
     await zones(page).first().tap();
@@ -102,8 +156,9 @@ test.describe('navigation du dock', () => {
     // « Personnaliser » rouvre là où on l'avait laissé : même onglet, même zone.
     await reopen(page).tap();
     await expect(dock(page)).toHaveAttribute('data-taille', 'compact');
-    await expect(tabs(page).getByRole('button', { name: 'Custom' })).toHaveAttribute('aria-current', 'true');
+    await expect(tabs(page)).toHaveCount(0);
     await expectCrumbs(page, ['Custom', 'Peinture', zone, 'Couleur']);
+    await expect(colors(page)).toBeVisible();
 
     // Rechargement : le dock fermé est retrouvé.
     await close(page).tap();
@@ -115,7 +170,7 @@ test.describe('navigation du dock', () => {
     await expect(tabs(page)).toBeVisible();
   });
 
-  test('clavier : Échap remonte d’un niveau, puis ferme le menu ; les boutons se nomment', async ({ page }) => {
+  test('clavier : Échap remonte d’un niveau, puis ferme le menu ; le focus suit ; les boutons se nomment', async ({ page }) => {
     await openApp(page);
     await openEntry(page, 'Peinture');
     await zones(page).first().click();
@@ -126,11 +181,30 @@ test.describe('navigation du dock', () => {
     await expect(colors(page)).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(zones(page).first()).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Custom' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(tabs(page)).toBeVisible();
     await expect(back(page)).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(reopen(page)).toBeVisible();
-    // Au clavier, la pastille se trouve et rouvre le dock.
+    // Au clavier, la pastille se trouve et rouvre le dock ; le focus reste dans le dock.
+    const focusInDock = () => page.evaluate(() => Boolean(document.activeElement?.closest('footer.dock')));
     await reopen(page).focus();
+    await page.keyboard.press('Enter');
+    await expect(close(page)).toBeVisible();
+    await expect.poll(focusInDock, { message: 'focus après « Personnaliser »' }).toBe(true);
+    // « Retour » au clavier : le bouton disparaît avec son niveau, le focus passe au niveau suivant.
+    await tabs(page).getByRole('button', { name: 'Custom', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await back(page).focus();
+    await page.keyboard.press('Enter');
+    await expect(tabs(page)).toBeVisible();
+    await expect.poll(focusInDock, { message: 'focus après « Retour »' }).toBe(true);
+    // « Fermer le menu » au clavier : le focus passe à « Personnaliser ».
+    await close(page).focus();
+    await page.keyboard.press('Enter');
+    await expect(reopen(page)).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(close(page)).toBeVisible();
     // Un panneau ouvert garde sa touche Échap : le dock ne bouge pas.
@@ -163,6 +237,40 @@ test.describe('navigation du dock', () => {
         await zones(page).first().click();
         await expect(back(page)).toBeVisible();
         expect(await expectDockUnderThumb(page, viewport.height, `${label}, ouvert`)).toBeGreaterThan(4);
+        const top = await dockTop(page);
+
+        // Étape Finition, puis une finition à paillette : le menu ne bouge pas, il reste dans le
+        // tiers bas, plusieurs finitions se voient et chacune se touche sur 44 px au moins.
+        await dock(page).getByRole('navigation', { name: 'Peinture' }).getByRole('button', { name: 'Finition' }).click();
+        expect(await dockTop(page), `Finition : le menu reste où il est (${label})`).toBe(top);
+        const finishes = dock(page).getByRole('group', { name: 'Finitions' });
+        await finishes.getByRole('button', { name: /^Métallisé/ }).click();
+        await expect(dock(page).locator('.paint-flake input')).toBeVisible();
+        expect(await dockTop(page), `paillette : le menu reste où il est (${label})`).toBe(top);
+        await expectDockUnderThumb(page, viewport.height, `${label}, finition à paillette`);
+        await finishes.evaluate((row) => {
+          row.scrollLeft = 0;
+        });
+        const seen = await finishes.evaluate((row) => {
+          const box = row.getBoundingClientRect();
+          return [...row.querySelectorAll('button')].filter((chip) => {
+            const r = chip.getBoundingClientRect();
+            return Math.min(r.right, box.right) - Math.max(r.left, box.left) >= r.width * 0.6;
+          }).length;
+        });
+        if (size !== 'Très grand') expect(seen, `finitions visibles (${label})`).toBeGreaterThanOrEqual(2);
+        for (const chip of await touchableHeights(page, 'footer.dock [aria-label="Finitions"] button')) {
+          expect(chip.hits, `« ${chip.name} » touchable (${label})`).toBeGreaterThanOrEqual(44);
+        }
+        if (viewport.width === 390 && size === 'Normal') await shot(page, '07-finition-paillette-390');
+
+        // Mécanique · Préparation : le dock reste dans le tiers bas, chaque option se touche sur 44 px.
+        await openEntry(page, 'Préparation');
+        expect(await dockTop(page), `Préparation dans le tiers bas (${label})`).toBeGreaterThanOrEqual((viewport.height * 2) / 3);
+        const options = await touchableHeights(page, 'footer.dock .dock-tab[data-onglet="preparation"] .engine-chips button');
+        expect(options.length).toBeGreaterThan(3);
+        for (const option of options) expect(option.hits, `« ${option.name} » touchable (${label})`).toBeGreaterThanOrEqual(44);
+        if (viewport.width === 390 && size === 'Normal') await shot(page, '08-preparation-390');
 
         // Fermé : la seule pastille, au pouce.
         await close(page).click();
@@ -222,6 +330,8 @@ test.describe('navigation du dock', () => {
     expect(await ambianceRow.evaluate((row) => row.scrollLeft), 'ambiances : position inchangée').toBe(ambianceLeft);
 
     // Agrandi : couleurs et finitions d'une zone ; on descend jusqu'aux finitions, on en choisit une.
+    // Seul sous la ligne de repère, le contenu tient en 390 × 844 : un écran plus bas le fait défiler.
+    await page.setViewportSize({ width: 390, height: 640 });
     await dock(page).getByRole('button', { name: 'Agrandir le menu' }).tap();
     await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
     await openEntry(page, 'Peinture');
@@ -238,7 +348,7 @@ test.describe('navigation du dock', () => {
     await shot(page, '06-agrandi-finition-choisie');
 
     // Agrandi, Mécanique · Préparation : un stage choisi en bas de la fiche ne remonte rien.
-    await tabs(page).getByRole('button', { name: 'Mécanique', exact: true }).tap();
+    await openEntry(page, 'Préparation');
     const stage = body.getByRole('button', { name: /^Stage 2/ });
     await stage.evaluate((element) => element.scrollIntoView({ block: 'end' }));
     const engineTop = await body.evaluate((element) => element.scrollTop);
@@ -247,5 +357,64 @@ test.describe('navigation du dock', () => {
     await page.waitForTimeout(300);
     expect(await body.evaluate((element) => element.scrollTop), 'préparation : position inchangée').toBe(engineTop);
     await dock(page).getByRole('button', { name: 'Réduire le menu' }).tap();
+  });
+
+  test('dernières couleurs : la couleur touchée reste sous le doigt, l’ordre ne bouge pas', async ({ page }) => {
+    test.setTimeout(150_000);
+    await openApp(page);
+    await waitForScene(page);
+    // Douze dernières couleurs, hors palette, posées dans la sauvegarde des builds.
+    const recents = Array.from({ length: 12 }, (_, i) => `#${(0x102030 + i * 0x0b0a09).toString(16).padStart(6, '0')}`);
+    const current = await page.locator('.stage').getAttribute('data-vehicle');
+    await page.evaluate(
+      async ({ recents, current }) =>
+        new Promise<void>((resolve, reject) => {
+          const open = indexedDB.open('pimpmybichon');
+          open.onupgradeneeded = () => open.result.createObjectStore('kv');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const store = open.result.transaction('kv', 'readwrite').objectStore('kv');
+            const read = store.get('pmb-builds');
+            read.onsuccess = () => {
+              const saved = typeof read.result === 'string' ? JSON.parse(read.result) : { state: { current, builds: {} }, version: 1 };
+              saved.state.recents = recents;
+              const write = store.put(JSON.stringify(saved), 'pmb-builds');
+              write.onsuccess = () => {
+                open.result.close();
+                resolve();
+              };
+            };
+          };
+        }),
+      { recents, current },
+    );
+    await page.reload();
+    await waitForScene(page);
+    await openEntry(page, 'Peinture');
+    await zones(page).first().tap();
+    const row = colors(page);
+    await expect(row.getByRole('button', { name: /^Récente/ })).toHaveCount(12);
+    const order = () => row.getByRole('button', { name: /^Récente/ }).evaluateAll((items) => items.map((item) => item.getAttribute('aria-label')));
+    const before = await order();
+    // Rangée poussée au bout : on touche la dernière récente, puis l'avant-dernière.
+    const left = await row.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+      return element.scrollLeft;
+    });
+    for (const index of [11, 10]) {
+      const target = row.getByRole('button', { name: /^Récente/ }).nth(index);
+      const name = await target.getAttribute('aria-label');
+      const box = await target.boundingBox();
+      if (!box) throw new Error('récente hors écran');
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      await page.touchscreen.tap(x, y);
+      await expect(row.getByRole('button', { name: name ?? '' })).toHaveAttribute('aria-pressed', 'true');
+      await page.waitForTimeout(300);
+      expect(await row.evaluate((element) => element.scrollLeft), 'la rangée ne défile pas').toBe(left);
+      const under = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label'), { x, y });
+      expect(under, 'la couleur touchée reste sous le doigt').toBe(name);
+      expect(await order(), 'l’ordre des dernières couleurs ne change pas').toEqual(before);
+    }
   });
 });

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { capture, changedRatio, openApp, paintAndReload, quick, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill, waitOfflineReady } from './helpers.ts';
+import { backToSections, capture, changedRatio, openApp, openEntry, paintAndReload, quick, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill, waitOfflineReady } from './helpers.ts';
 
 // Jalon 2 : le catalogue des véhicules. Changer de véhicule et revenir (chacun garde ses peintures),
 // retrouver le véhicule après rechargement, un modèle absent annoncé, le dock et ses actions,
@@ -38,7 +38,7 @@ async function dismissPackOffer(page: Page): Promise<void> {
 const stage = (page: Page) => page.locator('.stage');
 
 async function chooseVehicle(page: Page, entry: Entry): Promise<void> {
-  await dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: 'Véhicule', exact: true }).tap();
+  await openEntry(page, 'Véhicule');
   const chip = dock(page).getByRole('group', { name: 'Véhicule' }).locator(`[data-vehicle="${entry.id}"]`);
   await chip.tap();
   await expect(chip).toHaveAttribute('aria-pressed', 'true');
@@ -55,6 +55,9 @@ test.describe('catalogue des véhicules', () => {
     await expect(stage(page)).toHaveAttribute('data-vehicle', START.id);
     await expect(dock(page).locator('.dock-vehicle')).toHaveText(START.name);
 
+    // « Véhicule » ouvre directement le catalogue (une seule entrée) ; le véhicule reste nommé.
+    await openEntry(page, 'Véhicule');
+    await expect(dock(page).locator('.dock-vehicle')).toHaveText(START.name);
     const chips = dock(page).getByRole('group', { name: 'Véhicule' }).getByRole('button');
     await expect(chips).toHaveCount(CATALOG.length);
     for (const [index, entry] of CATALOG.entries()) {
@@ -65,6 +68,7 @@ test.describe('catalogue des véhicules', () => {
     }
 
     // Quatre sections (src/data/dockMenu.ts) ; « Mécanique » n'apparaît que si le véhicule déclare un moteur.
+    await backToSections(page);
     const tabs = dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button');
     await expect(tabs).toHaveText(START.engine ? ['Véhicule', 'Custom', 'Mécanique', 'Garage'] : ['Véhicule', 'Custom', 'Garage']);
 
@@ -85,7 +89,7 @@ test.describe('catalogue des véhicules', () => {
 
     // « Mécanique » montre la fiche de préparation dans le dock.
     if (START.engine) {
-      await tabs.filter({ hasText: 'Mécanique' }).tap();
+      await openEntry(page, 'Préparation');
       await expect(dock(page).getByTestId('moteur-origine')).toBeVisible();
       await capture(page, '21-dock-moteur');
     }

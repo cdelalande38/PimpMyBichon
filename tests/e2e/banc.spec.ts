@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { capture, changedRatio, openApp, openEntry, paintAndReload, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { backToSections, capture, changedRatio, openApp, openEntry, paintAndReload, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 // L'atelier dans le dock : onglets Véhicule, Peinture, Ambiance. L'ambiance se change au pouce ;
 // la peinture est posée par la sauvegarde des builds (l'interface de peinture a ses propres parcours).
@@ -70,6 +70,8 @@ test.describe('atelier', () => {
       await expect(dialog).toBeHidden();
 
       for (const tab of ['Véhicule', 'Custom', 'Mécanique', 'Garage']) {
+        // Un seul niveau du menu à la fois : on remonte aux sections avant chaque section.
+        await backToSections(page);
         await tabs(page).getByRole('button', { name: tab, exact: true }).click();
         const buttons = dock(page).locator('button:visible');
         const count = await buttons.count();

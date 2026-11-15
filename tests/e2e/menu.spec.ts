@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { openApp, quick, waitForBench, waitForScene } from './helpers.ts';
+import { backToSections, openApp, openEntry, quick, waitForBench, waitForScene } from './helpers.ts';
 
 // Menu agrandi : la poignée du dock fait monter le menu (60 % de l'écran au plus) et passe les
 // options de l'onglet sur plusieurs lignes, sans défilement en largeur. Le véhicule reste au-dessus
@@ -105,7 +105,17 @@ test.describe('menu agrandi', () => {
     await expect(handle(page)).toHaveAccessibleName('Réduire le menu');
 
     for (const tab of TABS) {
+      // Un seul niveau du menu à la fois : on remonte aux sections avant chaque section.
+      await backToSections(page);
       await tabs(page).getByRole('button', { name: tab, exact: true }).tap();
+      // Section à plusieurs entrées : ses entrées seules, sans débord, puis la première disponible.
+      const entries = dock(page).getByRole('navigation', { name: `Entrées · ${tab}` });
+      if (await entries.isVisible()) {
+        expect(await overflowingRows(page), `${tab} : entrées sans débord en largeur`).toEqual([]);
+        await expectButtonsInside(page, width, `${tab} · entrées`);
+        await entries.getByRole('button', { disabled: false }).first().tap();
+      }
+      await expect(dock(page).locator('.dock-tab')).toBeVisible();
       const box = await dock(page).boundingBox();
       expect(box?.height ?? 0, `${tab} : 60 % de l'écran au plus`).toBeLessThanOrEqual(height * 0.6 + 1);
       expect(await overflowingRows(page), `${tab} : aucune rangée ne déborde en largeur`).toEqual([]);
@@ -123,8 +133,8 @@ test.describe('menu agrandi', () => {
         }
       }
       if (tab === 'Custom') {
-        // La liste des zones, puis une zone : ses couleurs et finitions ensemble, plus d'alternance
-        // Couleur / Finition (la pile des niveaux : src/state/dock.ts).
+        // Peinture : la liste des zones, puis une zone, ses couleurs et finitions ensemble, plus
+        // d'alternance Couleur / Finition (la pile des niveaux : src/state/dock.ts).
         await expect(dock(page).getByRole('group', { name: 'Zones' })).toBeVisible();
         await dock(page).getByRole('group', { name: 'Zones' }).getByRole('button').first().tap();
         await expect(dock(page).getByRole('group', { name: 'Couleurs' })).toBeVisible();
@@ -161,7 +171,11 @@ test.describe('menu agrandi', () => {
     await waitForBench(page);
     await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
     await expect(handle(page)).toHaveAccessibleName('Réduire le menu');
+    // Au lancement, le menu montre les sections (une ligne) : le véhicule reste au-dessus du dock.
+    // Dans une entrée, le dock agrandi monte, et la vue se décale pour garder le véhicule en vue.
+    await openEntry(page, 'Véhicule');
     await expectVehicleAboveDock(page);
+    await backToSections(page);
 
     // Au clavier : la poignée réduit le menu ; la géométrie et le cadrage d'origine reviennent.
     await handle(page).focus();
@@ -188,6 +202,7 @@ test.describe('menu agrandi', () => {
       await expect(dialog).toBeHidden();
       await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
       for (const tab of TABS) {
+        await backToSections(page);
         await tabs(page).getByRole('button', { name: tab, exact: true }).click();
         const box = await dock(page).boundingBox();
         expect(box?.height ?? 0, `${tab} (${size}) : 60 % de l'écran au plus`).toBeLessThanOrEqual(780 * 0.6 + 1);
@@ -198,13 +213,49 @@ test.describe('menu agrandi', () => {
     await shot(page, '10-agrandi-360-texte-tres-grand');
   });
 
+  test('sur 360 × 780 en texte grand et très grand, dock compact : onglets, fil et cadenas lisibles', async ({ page }) => {
+    test.setTimeout(150_000);
+    await page.setViewportSize({ width: 360, height: 780 });
+    for (const size of ['Grand', 'Très grand']) {
+      await openApp(page, '#/reglages');
+      const dialog = page.getByRole('dialog', { name: 'Réglages' });
+      await dialog.getByRole('button', { name: 'Texte' }).click();
+      await dialog.getByRole('button', { name: new RegExp(`^${size}`) }).click();
+      await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
+      await expect(dialog).toBeHidden();
+      if ((await dock(page).getAttribute('data-taille')) === 'agrandi') await handle(page).click();
+      await expect(dock(page)).toHaveAttribute('data-taille', 'compact');
+      // Sections : aucun libellé plus large que son bouton.
+      await backToSections(page);
+      const clipped = await tabs(page).evaluate((nav) =>
+        [...nav.querySelectorAll('button')].filter((button) => button.scrollWidth > button.clientWidth + 1).map((button) => button.textContent),
+      );
+      expect(clipped, `sections (${size}) : libellés entiers`).toEqual([]);
+      // Une zone à cadenas : le dernier morceau du fil (où l'on est) se lit en entier.
+      await openEntry(page, 'Peinture');
+      await dock(page).locator('.paint-zone-pair .paint-zone').first().click();
+      const here = dock(page).locator('.dock-crumb-here');
+      await expect(here).toHaveText('Couleur');
+      expect(await here.evaluate((crumb) => crumb.scrollWidth <= crumb.clientWidth + 1), `fil (${size}) : « Couleur » entier`).toBe(true);
+      await expect(here).toBeInViewport({ ratio: 1 });
+      // Dock agrandi : le texte du cadenas ne passe pas sous son bouton.
+      await handle(page).click();
+      const line = dock(page).locator('.paint-lockline');
+      const [text, button] = await Promise.all([line.locator('.paint-lockline-text').boundingBox(), line.locator('.paint-lockline-btn').boundingBox()]);
+      const overlap = text && button && text.y < button.y + button.height && button.y < text.y + text.height ? text.x + text.width - button.x : 0;
+      expect(overlap, `cadenas (${size}) : le texte ne passe pas sous le bouton`).toBeLessThanOrEqual(0);
+      await handle(page).click();
+    }
+    await shot(page, '11-compact-360-texte-tres-grand');
+  });
+
   test('fiche moteur : les options passent à la ligne, « Origine » reste à l’écran au stage 3', async ({ page }) => {
     test.setTimeout(150_000);
     await openApp(page);
-    await tabs(page).getByRole('button', { name: 'Véhicule', exact: true }).tap();
+    await openEntry(page, 'Véhicule');
     await dock(page).getByRole('group', { name: 'Véhicule' }).locator('[data-vehicle="van"]').tap();
     // La fiche vit dans « Mécanique · Préparation », dock agrandi pour la voir en entier.
-    await tabs(page).getByRole('button', { name: 'Mécanique', exact: true }).tap();
+    await openEntry(page, 'Préparation');
     await dock(page).getByRole('button', { name: 'Agrandir le menu' }).tap();
     const sheet = dock(page).locator('.dock-tab');
     await expect(sheet).toBeVisible();

@@ -36,24 +36,37 @@ export async function openAtelier(page: Page, rubrique: 'Réglages' | 'Sous le c
   await expect(page.getByRole('dialog', { name: rubrique })).toBeVisible();
 }
 
+/** Dock : remonte aux sections par « Retour » (un seul niveau du menu à l'écran). */
+export async function backToSections(page: Page): Promise<void> {
+  const dock = page.locator('footer.dock');
+  const sections = dock.getByRole('navigation', { name: 'Onglets de l’atelier' });
+  const back = dock.getByRole('button', { name: 'Retour', exact: true });
+  for (let i = 0; i < 5 && !(await sections.isVisible()); i += 1) {
+    if (!(await back.isVisible())) break;
+    await back.tap();
+  }
+  await expect(sections).toBeVisible();
+}
+
 /**
  * Ouvre une entrée du dock par son libellé (« Peinture », « Préparation », « Ambiance »,
- * « Véhicule ») : la section qui la porte (src/data/dockMenu.ts), puis l'entrée si la section en a
- * plusieurs. On arrive en haut de l'entrée.
+ * « Véhicule ») : on remonte aux sections, on touche la section qui la porte
+ * (src/data/dockMenu.ts), puis l'entrée si la section en montre plusieurs. On arrive en haut de
+ * l'entrée, seule à l'écran sous la ligne de repère.
  */
 export async function openEntry(page: Page, label: string): Promise<void> {
   const section = DOCK_MENU.find((item) => item.entries.some((entry) => entry.label === label));
-  if (!section) throw new Error(`entrée inconnue : ${label}`);
+  const entry = section?.entries.find((item) => item.label === label);
+  if (!section || !entry) throw new Error(`entrée inconnue : ${label}`);
   const dock = page.locator('footer.dock');
-  const sectionButton = dock.getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: section.label, exact: true });
-  await sectionButton.tap();
-  await expect(sectionButton).toHaveAttribute('aria-current', 'true');
+  await backToSections(page);
+  await dock.getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: section.label, exact: true }).tap();
   const entries = dock.getByRole('navigation', { name: `Entrées · ${section.label}` });
-  if (await entries.count()) {
-    const entryButton = entries.getByRole('button', { name: label, exact: true });
-    await entryButton.tap();
-    await expect(entryButton).toHaveAttribute('aria-current', 'true');
-  }
+  const body = dock.locator(`.dock-tab[data-onglet="${entry.id}"]`);
+  await expect(entries.or(body)).toBeVisible();
+  if (await entries.isVisible()) await entries.getByRole('button', { name: label, exact: true }).tap();
+  await expect(body).toBeVisible();
+  await expect(dock.getByRole('navigation', { name: 'Onglets de l’atelier' })).toHaveCount(0);
 }
 
 export async function sceneBand(page: Page): Promise<Buffer> {

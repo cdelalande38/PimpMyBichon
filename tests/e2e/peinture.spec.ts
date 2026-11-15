@@ -39,7 +39,7 @@ function finishChip(page: Page, label: string): Locator {
     .filter({ has: page.locator('b', { hasText: new RegExp(`^${label}$`) }) });
 }
 
-/** L'entrée « Peinture » de la section « Custom » du dock (l'atelier s'ouvre sur « Véhicule »). */
+/** L'entrée « Peinture » de la section « Custom » du dock (l'atelier s'ouvre sur les sections). */
 async function openPaintTab(page: Page): Promise<void> {
   await openEntry(page, 'Peinture');
 }
@@ -47,7 +47,7 @@ async function openPaintTab(page: Page): Promise<void> {
 /** Remonte à la liste des zones (« Retour » de la ligne de repère du dock), si on n'y est pas. */
 async function backToZones(page: Page): Promise<void> {
   const back = page.locator('footer.dock').getByRole('button', { name: 'Retour', exact: true });
-  if (await back.isVisible()) await back.tap();
+  for (let i = 0; i < 2 && !(await zones(page).first().isVisible()); i += 1) await back.tap();
   await expect(zones(page).first()).toBeVisible();
 }
 
@@ -167,7 +167,7 @@ test.describe('peinture', () => {
     await expect(paint(page).locator('.paint-zone-pair').filter({ has: zones(page).first() })).toHaveCount(0);
     const zoneLock = firstLock.locator('.paint-lock');
     await expect(zoneLock).toHaveAttribute('data-cadenas', 'ferme');
-    await expect(zoneLock).toHaveAccessibleName(/carrosserie suivie, ouvrir le cadenas$/);
+    await expect(zoneLock).toHaveAccessibleName(/suit la carrosserie, ouvrir le cadenas$/);
     const lockBox = await zoneLock.boundingBox();
     expect(lockBox?.height ?? 0).toBeGreaterThanOrEqual(48);
     expect(lockBox?.width ?? 0).toBeGreaterThanOrEqual(48);
@@ -176,7 +176,7 @@ test.describe('peinture', () => {
 
     // Zone verrouillée (compact) : rappel sous les choix, choix grisés qui montrent la carrosserie.
     await expect(lock(page)).toHaveAttribute('data-cadenas', 'ferme');
-    await expect(lock(page)).toHaveAccessibleName(`${zoneName} : carrosserie suivie, ouvrir le cadenas`);
+    await expect(lock(page)).toHaveAccessibleName(`${zoneName} : suit la carrosserie, ouvrir le cadenas`);
     const reminder = paint(page).locator('.paint-reminder');
     await expect(reminder).toHaveText('Suit la carrosserie');
     const navy = color(page, 'Bleu nuit');
@@ -225,11 +225,42 @@ test.describe('peinture', () => {
     await waitForStill(page);
     await shot(page, '09-cadenas-deverrouille');
 
-    // Refermer : la zone revient à la carrosserie, ses choix se verrouillent de nouveau.
+    // Refermer une zone qui a sa propre peinture : rien ne change avant confirmation. Une question
+    // dans le menu nomme la zone et la carrosserie ; « Garder sa peinture » est le choix par défaut.
+    const confirm = paint(page).getByRole('alertdialog');
+    const keep = confirm.getByRole('button', { name: 'Garder sa peinture' });
     await lock(page).tap();
+    await expect(confirm).toContainText(`Refermer le cadenas de « ${zoneName} » ? Cette partie reprendra la peinture de la carrosserie et perdra la sienne.`);
+    await expect(keep).toBeFocused();
+    for (const button of await confirm.getByRole('button').all()) {
+      const box = await button.boundingBox();
+      expect(box?.height ?? 0, 'boutons de la question : 48 px').toBeGreaterThanOrEqual(48);
+    }
+    await shot(page, '10-cadenas-question');
+    await keep.tap();
+    await expect(confirm).toHaveCount(0);
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ouvert');
+    await expect(navy).toHaveAttribute('aria-pressed', 'true');
+    // Échap vaut « garder », et ne fait pas remonter le menu.
+    await lock(page).tap();
+    await expect(keep).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(confirm).toHaveCount(0);
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ouvert');
+    await expect(navy).toHaveAttribute('aria-pressed', 'true');
+    // Confirmer : la zone revient à la carrosserie, ses choix se verrouillent de nouveau.
+    await lock(page).tap();
+    await confirm.getByRole('button', { name: 'Refermer le cadenas' }).tap();
+    await expect(confirm).toHaveCount(0);
     await expect(lock(page)).toHaveAttribute('data-cadenas', 'ferme');
     await expect(color(page, wornName ?? '')).toHaveAttribute('aria-pressed', 'true');
     await expect(navy).toHaveAttribute('aria-disabled', 'true');
+    // Ouvrir puis refermer sans rien changer : rien à perdre, donc pas de question.
+    await lock(page).tap();
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ouvert');
+    await lock(page).tap();
+    await expect(confirm).toHaveCount(0);
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ferme');
 
     // Dock agrandi : la ligne du cadenas reste en vue quand on fait défiler les peintures.
     await dock(page).getByRole('button', { name: 'Agrandir le menu' }).tap();
@@ -259,6 +290,29 @@ test.describe('peinture', () => {
     await expect(paint(page).locator('.paint-zone-pair').first().locator('.paint-lock')).toHaveAttribute('data-cadenas', 'ferme', {
       timeout: 120_000,
     });
+  });
+
+  test('cadenas d’une moto : le rappel, le message et le nom accessible parlent du réservoir', async ({ page }) => {
+    test.setTimeout(150_000);
+    await openApp(page);
+    await waitForScene(page);
+    await openEntry(page, 'Véhicule');
+    await dock(page).getByRole('group', { name: 'Véhicule' }).locator('[data-vehicle="bobber"]').tap();
+    await expect(page.locator('.stage')).toHaveAttribute('data-vehicle', 'bobber');
+    await openPaintTab(page);
+    // Zone maîtresse du bobber : le réservoir, en tête et sans cadenas.
+    await expect(zones(page).first().locator('b')).toHaveText('Réservoir');
+    const pair = paint(page).locator('.paint-zone-pair').first();
+    const zoneLock = pair.locator('.paint-lock');
+    await expect(zoneLock).toHaveAccessibleName('Garde-boue : suit le réservoir, ouvrir le cadenas');
+    await expect(zoneLock).toHaveAttribute('title', 'Suit le réservoir');
+    await pair.locator('.paint-zone').tap();
+    await expect(lock(page)).toHaveAccessibleName('Garde-boue : suit le réservoir, ouvrir le cadenas');
+    await expect(paint(page).locator('.paint-reminder')).toHaveText('Suit le réservoir');
+    await color(page, 'Bleu nuit').tap({ force: true });
+    await expect(notice(page)).toContainText('Cette partie suit le réservoir. Ouvre son cadenas pour lui donner sa propre peinture.');
+    await expect(dock(page)).not.toContainText('carrosserie');
+    await shot(page, '11-cadenas-bobber');
   });
 
   test('cadenas en 360 × 780, texte très grand : le rappel garde le dock dans le tiers bas', async ({ page }) => {

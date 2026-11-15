@@ -19,10 +19,16 @@ import {
   hsvToHex,
   LOCK_MESSAGE,
   lockLabel,
+  lockMessage,
+  lockReminder,
   lockState,
+  masterPhrase,
+  ofPhrase,
   orderedZones,
   paintTarget,
   pickableColors,
+  relockLoses,
+  relockQuestion,
 } from '../../src/ui/paint/paintLogic.ts';
 
 const MANIFEST: VehicleManifest = {
@@ -106,9 +112,51 @@ describe('zones vues par l’interface', () => {
   });
 
   it('cadenas : nom accessible en clair (état, puis geste), message en tutoiement', () => {
-    expect(lockLabel('Toit', 'ferme')).toBe('Toit : carrosserie suivie, ouvrir le cadenas');
+    expect(lockLabel('Toit', 'ferme')).toBe('Toit : suit la carrosserie, ouvrir le cadenas');
     expect(lockLabel('Ailes', 'ouvert')).toBe('Ailes : peinture à part, refermer le cadenas');
     expect(LOCK_MESSAGE).toBe('Cette partie suit la carrosserie. Ouvre son cadenas pour lui donner sa propre peinture.');
+  });
+
+  it('cadenas d’une moto : la zone maîtresse nommée par le manifeste, article compris', () => {
+    const moto = {
+      zones: [
+        { id: 'reservoir', label: 'Réservoir', phrase: 'le réservoir', materials: ['paint_reservoir'], group: 'carrosserie' as const, paint: { color: '#111111', finish: 'brillant' as const } },
+        { id: 'garde_boue', label: 'Garde-boue', materials: ['paint_garde_boue'], group: 'carrosserie' as const, paint: { color: '#111111', finish: 'brillant' as const } },
+      ],
+    };
+    expect(masterPhrase(MANIFEST)).toBe('la carrosserie');
+    const phrase = masterPhrase(moto);
+    expect(phrase).toBe('le réservoir');
+    expect(lockLabel('Garde-boue', 'ferme', phrase)).toBe('Garde-boue : suit le réservoir, ouvrir le cadenas');
+    expect(lockReminder('ferme', phrase)).toBe('Suit le réservoir');
+    expect(lockReminder('ouvert', phrase)).toBe('Peinture à part');
+    expect(lockMessage(phrase)).toBe('Cette partie suit le réservoir. Ouvre son cadenas pour lui donner sa propre peinture.');
+    expect(ofPhrase('le réservoir')).toBe('du réservoir');
+    expect(ofPhrase('la carrosserie')).toBe('de la carrosserie');
+    expect(ofPhrase('l’aile')).toBe('de l’aile');
+    expect(relockQuestion('Garde-boue', phrase)).toBe(
+      'Refermer le cadenas de « Garde-boue » ? Cette partie reprendra la peinture du réservoir et perdra la sienne.',
+    );
+    // Une précision vide ne vaut rien : « la carrosserie ».
+    expect(masterPhrase({ zones: [{ ...moto.zones[0]!, phrase: '  ' }] })).toBe('la carrosserie');
+  });
+
+  it('refermer un cadenas : une question seulement s’il y a quelque chose à perdre', () => {
+    // Toit détaché d'origine, sa propre peinture (crème satiné) : la refermer la perdrait.
+    expect(relockLoses(MANIFEST, undefined, 'toit')).toBe(true);
+    // Même peinture que la carrosserie (paillette d'origine comprise) : rien à perdre.
+    const same = { paints: { toit: { color: '#0a3a46', finish: 'paillete' as const } } };
+    expect(relockLoses(MANIFEST, same, 'toit')).toBe(false);
+    // La même couleur avec une autre taille de paillette : il y a quelque chose à perdre.
+    const flake = { paints: { toit: { color: '#0a3a46', finish: 'paillete' as const, flake: 1.4 } } };
+    expect(relockLoses(MANIFEST, flake, 'toit')).toBe(true);
+    // La carrosserie repeinte en crème satiné : le toit lui ressemble, rien à perdre.
+    const repainted = { paints: { caisse: { color: '#e6dcc0', finish: 'satine' as const } } };
+    expect(relockLoses(MANIFEST, repainted, 'toit')).toBe(false);
+    // Zone fermée, zone maîtresse, accastillage : pas de question.
+    expect(relockLoses(MANIFEST, undefined, 'capot')).toBe(false);
+    expect(relockLoses(MANIFEST, undefined, 'caisse')).toBe(false);
+    expect(relockLoses(MANIFEST, undefined, 'jantes')).toBe(false);
   });
 
   it('peindre une zone liée repeint la maîtresse ; détachée, la zone seule', () => {

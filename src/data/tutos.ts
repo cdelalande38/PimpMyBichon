@@ -21,8 +21,7 @@ export type EcranKey =
   | `entree:${EntryId}`
   | 'panneau:radio'
   | 'panneau:reglages'
-  | 'panneau:capot'
-  | 'panneau:moteur';
+  | 'panneau:capot';
 
 export interface TutoEtape {
   texte: string;
@@ -86,7 +85,7 @@ export const TUTOS: readonly Tuto[] = [
   },
   {
     id: 'preparation',
-    ecrans: ['entree:preparation', 'panneau:moteur'],
+    ecrans: ['entree:preparation'],
     titre: 'La préparation moteur',
     but: 'Ici, tu gonfles le moteur et tu vois tout de suite ce que ça donne.',
     etapes: [

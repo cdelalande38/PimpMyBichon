@@ -83,12 +83,18 @@ describe('écran courant', () => {
     expect(ecranCourant({ ...base, dock: { closed: false, section: 'custom', entry: 'peinture' }, sortiAccueil: true })).toBe('entree:peinture');
   });
 
+  it('un seul niveau du menu : les sections sont l’accueil, les entrées n’ont pas de tutoriel, le contenu a le sien', () => {
+    const custom = { closed: false, section: 'custom' as const, entry: 'peinture' as const };
+    expect(ecranCourant({ ...base, dock: { ...custom, menu: 'sections' }, sortiAccueil: true })).toBe('accueil');
+    expect(ecranCourant({ ...base, dock: { ...custom, menu: 'entrees' }, sortiAccueil: true })).toBeNull();
+    expect(ecranCourant({ ...base, dock: { ...custom, menu: 'contenu' }, sortiAccueil: true })).toBe('entree:peinture');
+  });
+
   it('panneaux, photo et vue intérieure passent devant le dock', () => {
     const routes: [Route, EcranKey | null][] = [
       [{ name: 'radio' }, 'panneau:radio'],
       [{ name: 'reglages' }, 'panneau:reglages'],
       [{ name: 'capot' }, 'panneau:capot'],
-      [{ name: 'moteur' }, 'panneau:moteur'],
       [{ name: 'photo' }, 'photo'],
       [{ name: 'commande' }, null],
       [{ name: 'illisible', kind: 'build' }, null],

@@ -88,6 +88,16 @@ export function activeEntry(section: DockSection, last: EntryId | undefined): Do
   return ready.find((entry) => entry.id === last) ?? ready[0];
 }
 
+/**
+ * Entrée qu'une section ouvre directement : la seule disponible, quand la section n'en annonce
+ * aucune autre (« bientôt » comprises). Véhicule et Garage n'ont pas d'écran intermédiaire à un seul
+ * choix ; Custom et Mécanique montrent d'abord leurs entrées.
+ */
+export function directEntry(section: DockSection, showUpcoming = SHOW_UPCOMING): DockEntry | undefined {
+  const list = sectionEntries(section, showUpcoming);
+  return list.length === 1 && list[0]?.available ? list[0] : undefined;
+}
+
 export function sectionOf(entry: EntryId, menu: readonly DockSection[] = DOCK_MENU): DockSection | undefined {
   return menu.find((section) => section.entries.some((item) => item.id === entry));
 }

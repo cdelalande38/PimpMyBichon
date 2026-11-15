@@ -1,8 +1,18 @@
 // Arbre du dock (src/data/dockMenu.ts) : sections, entrées, « bientôt », section Mécanique liée au moteur.
 import { describe, expect, it } from 'vitest';
-import { activeEntry, DOCK_MENU, sectionEntries, sectionOf, visibleSections } from '../../src/data/dockMenu.ts';
+import { activeEntry, directEntry, DOCK_MENU, sectionEntries, sectionOf, visibleSections } from '../../src/data/dockMenu.ts';
 
 describe('arbre du dock', () => {
+  it('Véhicule et Garage ouvrent directement leur contenu ; Custom et Mécanique montrent leurs entrées', () => {
+    const direct = (id: string) => directEntry(DOCK_MENU.find((section) => section.id === id)!)?.id;
+    expect(direct('vehicule')).toBe('vehicule');
+    expect(direct('garage')).toBe('ambiance');
+    expect(direct('custom')).toBeUndefined();
+    expect(direct('mecanique')).toBeUndefined();
+    // Sans les « bientôt », Custom n'aurait plus qu'une entrée : elle s'ouvrirait directement.
+    expect(directEntry(DOCK_MENU.find((section) => section.id === 'custom')!, false)?.id).toBe('peinture');
+  });
+
   it('quatre sections dans l’ordre, chacune au moins une entrée disponible, identifiants uniques', () => {
     expect(DOCK_MENU.map((section) => section.label)).toEqual(['Véhicule', 'Custom', 'Mécanique', 'Garage']);
     const ids = DOCK_MENU.flatMap((section) => section.entries.map((entry) => entry.id));

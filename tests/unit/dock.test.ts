@@ -42,7 +42,13 @@ describe('pile des niveaux du dock', () => {
     vi.resetModules();
     const { useDock } = await import('../../src/state/dock.ts');
     const dock = useDock.getState;
+    // Au lancement : les sections, un seul niveau à l'écran.
+    expect(dock().menu).toBe('sections');
     dock().setSection('custom');
+    // Custom : ses entrées seulement ; Peinture : son contenu seulement.
+    expect(dock().menu).toBe('entrees');
+    dock().setEntry('peinture');
+    expect(dock().menu).toBe('contenu');
     expect(dock().levels).toEqual([]);
     dock().push({ kind: 'zone', zone: 'carrosserie', step: 'couleur' });
     dock().replace({ kind: 'zone', zone: 'carrosserie', step: 'finition' });
@@ -52,12 +58,25 @@ describe('pile des niveaux du dock', () => {
     expect(dock().levels).toEqual([{ kind: 'zone', zone: 'carrosserie', step: 'finition' }]);
     expect(dock().back()).toBe(true);
     expect(dock().levels).toEqual([]);
+    // Puis du contenu aux entrées de Custom, et des entrées aux sections ; plus rien ensuite.
+    expect(dock().menu).toBe('contenu');
+    expect(dock().back()).toBe(true);
+    expect(dock().menu).toBe('entrees');
+    expect(dock().back()).toBe(true);
+    expect(dock().menu).toBe('sections');
     expect(dock().back()).toBe(false);
     // La zone choisie reste pressée dans la liste.
     expect(dock().zone).toBe('carrosserie');
+    dock().setSection('custom');
+    dock().setEntry('peinture');
     dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
+    // Garage, une seule entrée : son contenu tout de suite, et « Retour » ramène aux sections.
     dock().setSection('garage');
+    expect(dock().menu).toBe('contenu');
     expect(dock().levels).toEqual([]);
+    expect(dock().back()).toBe(true);
+    expect(dock().menu).toBe('sections');
+    dock().setSection('garage');
     // Hors de la peinture, rien ne s'empile.
     dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
     expect(dock().levels).toEqual([]);
@@ -70,9 +89,14 @@ describe('pile des niveaux du dock', () => {
     dock().openEntry('peinture', 'jantes');
     expect(dock().closed).toBe(false);
     expect(dock().section).toBe('custom');
+    expect(dock().menu).toBe('contenu');
     expect(dock().levels).toEqual([{ kind: 'zone', zone: 'jantes', step: 'couleur' }]);
+    dock().back();
+    dock().back();
+    expect(dock().menu).toBe('entrees');
     dock().openEntry('ambiance');
     expect(dock().section).toBe('garage');
+    expect(dock().menu).toBe('contenu');
   });
 });
 

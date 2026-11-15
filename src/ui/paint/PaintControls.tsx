@@ -22,13 +22,17 @@ import {
   formatMillimeters,
   hasColor2,
   hasFlake,
-  LOCK_MESSAGE,
   LOCK_MESSAGE_MS,
   lockLabel,
+  lockMessage,
+  lockReminder,
   lockState,
+  masterPhrase,
   orderedZones,
   paintTarget,
   pickableColors,
+  relockLoses,
+  relockQuestion,
 } from './paintLogic.ts';
 import './paint.css';
 
@@ -44,7 +48,7 @@ const STEPS: ReadonlyArray<{ id: Step; label: string }> = [
  * hauteur au menu), non bloquant, lu par les lecteurs d'écran. Il s'efface seul, ou au choix suivant.
  * `token` : 0, rien ; toute autre valeur, un nouvel appui (le compte à rebours repart).
  */
-function LockNotice({ token, onOpen, onDone }: { token: number; onOpen: () => void; onDone: () => void }) {
+function LockNotice({ token, message, onOpen, onDone }: { token: number; message: string; onOpen: () => void; onDone: () => void }) {
   const [bottom, setBottom] = useState<number | null>(null);
   useEffect(() => {
     if (!token) return;
@@ -63,12 +67,46 @@ function LockNotice({ token, onOpen, onDone }: { token: number; onOpen: () => vo
       {token > 0 && (
         <div key={token} className="paint-notice" style={bottom === null ? undefined : { bottom }}>
           <Padlock open={false} />
-          <p>{LOCK_MESSAGE}</p>
+          <p>{message}</p>
           <button type="button" className="btn paint-notice-open" onClick={onOpen}>
             Ouvrir le cadenas
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Avant de refermer un cadenas qui ferait perdre une peinture à part : la question, dans le menu,
+ * et deux boutons de 48 px. « Garder » est le choix par défaut (il prend le focus) ; Échap vaut
+ * « garder ». Rien ne change avant « Refermer ».
+ */
+function RelockConfirm({ question, onKeep, onConfirm }: { question: string; onKeep: () => void; onConfirm: () => void }) {
+  useEffect(() => {
+    // Phase de capture : Échap répond ici avant de faire remonter le dock d'un niveau.
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      onKeep();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onKeep]);
+  return (
+    <div className="paint-confirm" role="alertdialog" aria-modal="false" aria-labelledby="paint-confirm-q">
+      <p id="paint-confirm-q">
+        <Padlock open={false} />
+        {question}
+      </p>
+      <div className="paint-confirm-acts">
+        <button type="button" className="btn cta paint-confirm-keep" autoFocus onClick={onKeep}>
+          Garder sa peinture
+        </button>
+        <button type="button" className="btn paint-confirm-ok" onClick={onConfirm}>
+          Refermer le cadenas
+        </button>
+      </div>
     </div>
   );
 }
@@ -84,6 +122,8 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   const wide = useDock((state) => state.expanded);
 
   const zones = useMemo(() => orderedZones(manifest), [manifest]);
+  // Zone maîtresse dans une phrase : « la carrosserie », « le réservoir » (manifeste).
+  const phrase = masterPhrase(manifest);
   // Niveaux dans la pile du dock (src/state/dock.ts) : liste des zones, puis une zone (couleur ou
   // finition), puis le nuancier. « Retour » (fil du dock, ou Échap) remonte d'un niveau.
   const levels = useDock((state) => state.levels);
@@ -126,6 +166,18 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   const zoneRow = useRevealPressed<HTMLDivElement>(`${vehicle}-${zoneId}`);
   const choiceRow = useRevealPressed<HTMLDivElement>(`${wide}-${step}-${paint?.color}-${paint?.finish}`);
 
+  // Dernières couleurs : l'ordre affiché est figé tant que la zone est ouverte. Le store range la
+  // couleur choisie en tête ; la rangée, elle, ne bouge pas sous le doigt. Une couleur nouvelle
+  // (nuancier, palette) s'ajoute au bout ; celles qui sortent du store restent jusqu'à la sortie.
+  const freezeKey = `${zoneLevel ? zoneId : ''}|${picker ?? ''}`;
+  const [frozen, setFrozen] = useState({ key: freezeKey, list: recents });
+  if (frozen.key !== freezeKey) setFrozen({ key: freezeKey, list: recents });
+  const shownRecents = frozen.key === freezeKey ? [...frozen.list, ...recents.filter((hex) => !frozen.list.includes(hex))] : recents;
+
+  // Refermer un cadenas qui ferait perdre une peinture à part : une question d'abord (zone en attente).
+  const [relock, setRelock] = useState<string | null>(null);
+  const keepPaint = useCallback(() => setRelock(null), []);
+
   if (!zone || !paint || !finish) {
     return <p className="paint-note">Ce véhicule n’a pas de zone à peindre.</p>;
   }
@@ -147,7 +199,13 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
     });
   // Ouvrir garde l'image telle quelle : la peinture du moment (celle de la carrosserie) devient
   // celle de la zone. Refermer rend la zone à la carrosserie.
-  const toggleZoneLock = (id: string, seed: Paint | undefined) => setLinked(vehicle, id, !isLinked(manifest, build, id), seed);
+  const toggleZoneLock = (id: string, seed: Paint | undefined) => {
+    if (!isLinked(manifest, build, id) && relockLoses(manifest, build, id)) {
+      setRelock(id);
+      return;
+    }
+    setLinked(vehicle, id, !isLinked(manifest, build, id), seed);
+  };
   const toggleLock = () => {
     setNotice(0);
     toggleZoneLock(zoneId, paint);
@@ -203,8 +261,8 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
                 type="button"
                 className="paint-lock"
                 data-cadenas={state}
-                aria-label={lockLabel(item.label, state)}
-                title={state === 'ferme' ? 'Suit la carrosserie' : 'Peinture à part'}
+                aria-label={lockLabel(item.label, state, phrase)}
+                title={lockReminder(state, phrase)}
                 onClick={() => toggleZoneLock(item.id, itemPaint)}
               >
                 <Padlock open={state === 'ouvert'} />
@@ -222,17 +280,16 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   const lockLine = lock !== 'aucun' && (
     <div className="paint-lockline" data-cadenas={lock}>
       <Padlock open={!locked} />
-      <span className="paint-lockline-text">{locked ? 'Suit la carrosserie' : 'Peinture à part'}</span>
-      <button type="button" className="btn paint-lockline-btn" aria-label={lockLabel(zone.label, lock)} onClick={toggleLock}>
+      <span className="paint-lockline-text">{lockReminder(lock, phrase)}</span>
+      <button type="button" className="btn paint-lockline-btn" aria-label={lockLabel(zone.label, lock, phrase)} onClick={toggleLock}>
         {locked ? 'Ouvrir le cadenas' : 'Refermer'}
       </button>
     </div>
   );
 
-  // Dock compact : le cadenas à droite des choix, sur la hauteur de la rangée et du rappel, pour ne
-  // pas ajouter de ligne de 48 px au tiers bas. Fermé, « Ouvrir » ; ouvert, « Refermer ».
+  // Dock compact : le cadenas au bout de la ligne des étapes. Fermé, « Ouvrir » ; ouvert, « Refermer ».
   const lockButton = lock !== 'aucun' && (
-    <button type="button" className="paint-lockbtn" data-cadenas={lock} aria-label={lockLabel(zone.label, lock)} onClick={toggleLock}>
+    <button type="button" className="paint-lockbtn" data-cadenas={lock} aria-label={lockLabel(zone.label, lock, phrase)} onClick={toggleLock}>
       <Padlock open={!locked} />
       <span aria-hidden="true">{locked ? 'Ouvrir' : 'Refermer'}</span>
     </button>
@@ -241,7 +298,7 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   const reminder = lock !== 'aucun' && (
     <p className="paint-reminder" data-cadenas={lock}>
       <Padlock open={!locked} />
-      {locked ? 'Suit la carrosserie' : 'Peinture à part'}
+      {lockReminder(lock, phrase)}
     </p>
   );
 
@@ -265,12 +322,12 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
           <span className="paint-dot-disc" aria-hidden="true" style={{ background: color.hex }} />
         </button>
       ))}
-      {recents.length > 0 && (
+      {shownRecents.length > 0 && (
         <span className="paint-sep" aria-hidden="true">
           Dernières
         </span>
       )}
-      {recents.map((hex) => (
+      {shownRecents.map((hex) => (
         <button
           key={hex}
           type="button"
@@ -338,8 +395,24 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
     </div>
   );
 
-  const noticeEl = <LockNotice token={locked ? notice : 0} onOpen={toggleLock} onDone={hideNotice} />;
+  const noticeEl = <LockNotice token={locked ? notice : 0} message={lockMessage(phrase)} onOpen={toggleLock} onDone={hideNotice} />;
   const rootClass = ['paint', wide && 'paint-wide', locked && 'paint-locked'].filter(Boolean).join(' ');
+
+  const relockZone = relock !== null && lockState(manifest, build, relock) === 'ouvert' ? manifest.zones.find((item) => item.id === relock) : undefined;
+  if (relockZone) {
+    return (
+      <div className={wide ? 'paint paint-wide' : 'paint'}>
+        <RelockConfirm
+          question={relockQuestion(relockZone.label, phrase)}
+          onKeep={keepPaint}
+          onConfirm={() => {
+            setRelock(null);
+            setLinked(vehicle, relockZone.id, true);
+          }}
+        />
+      </div>
+    );
+  }
 
   if (!zoneLevel) {
     return <div className={wide ? 'paint paint-wide' : 'paint'}>{zonesBar}</div>;
@@ -367,9 +440,22 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
     );
   }
 
+  // Dock compact, une zone : la ligne des étapes (et le cadenas au bout), les choix sur toute la
+  // largeur, puis une ligne de 48 px : la paillette et la seconde teinte à l'étape Finition quand la
+  // finition en a, sinon le rappel du cadenas ou la finition en cours. La hauteur ne change ni d'une
+  // étape à l'autre ni d'une finition à l'autre : le menu reste où il est.
+  const foot =
+    step === 'finition' && extraRow ? (
+      extraRow
+    ) : lock !== 'aucun' ? (
+      reminder
+    ) : (
+      <p className="paint-now">
+        {step === 'couleur' ? `Finition : ${finish.label}` : 'Pas de paillette sur cette finition'}
+      </p>
+    );
   return (
     <div className={rootClass}>
-      {/* Une rangée sous les onglets (tiers bas, § 2) : étapes et choix ; cadenas et rappel. */}
       <div className="paint-frame">
         <div className="paint-bar paint-bar-steps">
           <nav className="tabs paint-steps" aria-label="Peinture">
@@ -384,12 +470,11 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
               </button>
             ))}
           </nav>
-          {step === 'couleur' ? colorRow : finishRow}
+          {lockButton}
         </div>
-        {reminder}
-        {lockButton}
+        {step === 'couleur' ? colorRow : finishRow}
+        <div className="paint-foot">{foot}</div>
       </div>
-      {step !== 'couleur' && extraRow}
       {noticeEl}
     </div>
   );

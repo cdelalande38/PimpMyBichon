@@ -9,8 +9,6 @@ export type Route =
   | { name: 'commande' }
   /** La radio du garage : packs de musique, playlist, lecture (§ 5.12). */
   | { name: 'radio' }
-  /** Fiche de préparation du moteur du véhicule courant (§ 5.4). */
-  | { name: 'moteur' }
   /** Mode photo (§ 5.1) : l'interface s'efface, restent les cadrages, « Enregistrer » et « Retour ». */
   | { name: 'photo' }
   /** Lien de build reçu : `#b=<code>` (§ 5.7). */
@@ -38,7 +36,6 @@ const PAGES = new Map<string, Route>([
   ['/capot', { name: 'capot' }],
   ['/commande', { name: 'commande' }],
   ['/radio', { name: 'radio' }],
-  ['/moteur', { name: 'moteur' }],
   ['/photo', { name: 'photo' }],
 ]);
 
