@@ -25,6 +25,13 @@ Atelier de customisation de voitures et de motos en 3D temps réel, sur téléph
 - Routage par hash uniquement, chemins d'assets relatifs, `base` Vite réglé sur `/PimpMyBichon/`.
 - Aucune requête vers un tiers à l'exécution : polices, textures, sons et modèles sont servis par l'app. Deux exceptions : la télé du garage (§ 5.12 du cahier des charges), en option, qui n'ouvre le lecteur YouTube que sur un geste de l'utilisateur et sur la playlist qu'il a lui-même renseignée ; et le pack de musique (§ 9), téléchargé à l'adresse que l'utilisateur a saisie, ou dès l'ouverture d'un lien vers l'app qui porte cette adresse. Aucune adresse externe n'est écrite dans le code.
 
+## Quota et travail en continu
+
+- **Contrôler le quota en continu.** Dès le début d'une session, et après chaque relance de Claude Code, lire le quota (`claude -p "/usage" --output-format text` : session de 5 heures, semaine, Fable) et lancer une garde de fond qui le relit toutes les cinq minutes. Le relire avant tout lancement d'agents.
+- **Seuils.** À 90 % de la session de 5 heures : ne plus rien lancer et passer en mode économe (laisser finir les agents en vol, intégrer leur travail). Pour la semaine, on peut travailler jusqu'à 96 %. Prévenir tôt quand une jauge va bloquer, avec l'heure prévue. Les remises à zéro sont déclenchées par le commanditaire, jamais par Claude.
+- **Réveil par cron.** Poser un réveil à un seul tir (outil de planification de la session) cinq minutes après chaque retour à zéro de la session de 5 heures, pour que le travail reprenne tout seul : le réveil relit le quota, vérifie le dépôt, la CI et le site, reprend le travail en cours, puis repose le réveil suivant.
+- **Après un plantage ou une relance**, la garde et les réveils ont disparu avec la session : les reposer avant toute autre chose.
+
 ## Interdits
 
 - Noms et logos de constructeurs, d'équipementiers, de sponsors, d'émissions ou de jeux vidéo ; personnages de dessin animé.
