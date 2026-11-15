@@ -1,6 +1,7 @@
 // @ts-check
 // Lecture d'un conteneur GLB en Node pur : en-tête, bloc JSON, bloc binaire ; comptage des
-// triangles et des primitives ; dimensions des images embarquées (KTX2, PNG, JPEG, WebP).
+// triangles et des primitives (déclarés, et posés par les nœuds) ; noms du JSON ; dimensions
+// des images embarquées (KTX2, PNG, JPEG, WebP).
 // Aucune fonction ne lève d'exception sur des octets malformés : elles retournent un échec.
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -40,9 +41,10 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /**
  * @typedef {object} GlbStats
- * @property {number} triangles
- * @property {number} primitives
+ * @property {number} triangles   posés par les nœuds (un maillage partagé compte à chaque nœud)
+ * @property {number} primitives  posées par les nœuds : une primitive posée, un appel de dessin
  * @property {number} meshes
+ * @property {number} nodes       nœuds qui portent un maillage
  * @property {ImageInfo[]} images
  */
 
@@ -211,6 +213,63 @@ export function countGeometry(json) {
 }
 
 /**
+ * Triangles et primitives réellement posés : chaque nœud qui porte un maillage le dessine une
+ * fois. Un maillage partagé par quatre nœuds (une roue) compte donc quatre fois, comme à l'écran ;
+ * un maillage qu'aucun nœud ne pose ne compte pas. Même règle que tools/vehicles/build.mjs.
+ * @param {Record<string, any>} json
+ * @returns {{ triangles: number, primitives: number, meshes: number, nodes: number }}
+ *   nodes : nombre de nœuds qui portent un maillage
+ */
+export function countPlacedGeometry(json) {
+  const meshes = Array.isArray(json.meshes) ? json.meshes : [];
+  const nodes = Array.isArray(json.nodes) ? json.nodes : [];
+  // Un maillage à la fois, par le même calcul que countGeometry.
+  const perMesh = meshes.map((mesh) => countGeometry({ accessors: json.accessors, meshes: [mesh] }));
+  let triangles = 0;
+  let primitives = 0;
+  let placed = 0;
+  for (const node of nodes) {
+    if (!isRecord(node) || typeof node.mesh !== 'number') continue;
+    const mesh = perMesh[node.mesh];
+    if (!mesh) continue;
+    placed += 1;
+    triangles += mesh.triangles;
+    primitives += mesh.primitives;
+  }
+  return { triangles, primitives, meshes: meshes.length, nodes: placed };
+}
+
+/**
+ * Noms portés par le JSON d'un GLB (nœuds, maillages, matériaux, scènes, textures, images,
+ * animations, peaux, caméras) : ils restent lisibles dans le fichier livré.
+ * @param {Record<string, any>} json
+ * @returns {Array<{ kind: string, index: number, name: string }>}
+ */
+export function namesOf(json) {
+  /** @type {Array<[string, string]>} */
+  const kinds = [
+    ['nodes', 'nœud'],
+    ['meshes', 'maillage'],
+    ['materials', 'matériau'],
+    ['scenes', 'scène'],
+    ['textures', 'texture'],
+    ['images', 'image'],
+    ['animations', 'animation'],
+    ['skins', 'peau'],
+    ['cameras', 'caméra'],
+  ];
+  /** @type {Array<{ kind: string, index: number, name: string }>} */
+  const names = [];
+  for (const [key, kind] of kinds) {
+    const list = Array.isArray(json[key]) ? json[key] : [];
+    list.forEach((item, index) => {
+      if (isRecord(item) && typeof item.name === 'string' && item.name !== '') names.push({ kind, index, name: item.name });
+    });
+  }
+  return names;
+}
+
+/**
  * Octets d'une image du JSON : vue du binaire, URI de données, ou fichier voisin du GLB.
  * @param {Record<string, any>} json
  * @param {Uint8Array} bin
@@ -244,7 +303,8 @@ function imageBytes(json, bin, image, baseDir) {
 }
 
 /**
- * Mesures d'un GLB : triangles, primitives, maillages, et une ligne par image.
+ * Mesures d'un GLB : triangles et primitives posés par les nœuds (countPlacedGeometry),
+ * maillages, nœuds qui en portent un, et une ligne par image.
  * @param {GlbContainer} container
  * @param {string} [baseDir]  dossier du fichier, pour les images à URI relative
  * @returns {GlbStats}
@@ -252,7 +312,7 @@ function imageBytes(json, bin, image, baseDir) {
 export function measureGlb({ json, bin }, baseDir) {
   const images = Array.isArray(json.images) ? json.images : [];
   return {
-    ...countGeometry(json),
+    ...countPlacedGeometry(json),
     images: images.map((image, index) => {
       const bytes = imageBytes(json, bin, image, baseDir);
       const size = bytes ? imageSize(bytes) : null;

@@ -15,7 +15,8 @@ import {
   tokenize,
 } from '../../../tools/lib/brands.mjs';
 import { runGuard } from '../../../tools/lib/guard.mjs';
-import { BINARY, fake, hashesOf, located, useTempTrees } from './helpers.ts';
+import { makeGlb } from './glb-fixture.ts';
+import { BINARY, fake, hashesOf, located, messagesOf, useTempTrees } from './helpers.ts';
 
 // Un mot, deux mots, trois mots, et un nom à majuscule interne.
 const brandHashes = hashesOf('Xqzorbl', 'Vlimpf Krabouille', 'Trophée des Blorps', 'McZwörg');
@@ -141,17 +142,54 @@ describe('guard — marques dans l’app', () => {
     ]);
   });
 
-  it('ne contrôle ni le prototype, ni la documentation, ni les outils, ni les tests', () => {
+  it('contrôle aussi les tests, les outils et la documentation, contenu et noms de fichiers', () => {
+    const line = 'Une ligne propre, puis le Trophée des Blorps\n';
+    const root = tree({
+      'tests/unit/peinture.test.ts': `// rien\n// ${line}`,
+      'tests/e2e/xqzorbl.spec.ts': 'export {};\n',
+      'tools/vehicles/kit.mjs': `// ${line}`,
+      'docs/DEPLOIEMENT.md': line,
+    });
+    expect(located(runGuard({ root, brandHashes }).errors)).toEqual([
+      'docs/DEPLOIEMENT.md:1 marque',
+      'tests/e2e/xqzorbl.spec.ts:0 marque',
+      'tests/unit/peinture.test.ts:2 marque',
+      'tools/vehicles/kit.mjs:1 marque',
+    ]);
+  });
+
+  it('laisse hors de la règle le prototype, les documents de la racine et l’exception nommée', () => {
     const line = 'Xqzorbl, Vlimpf Krabouille et le Trophée des Blorps\n';
     const root = tree({
       'README.md': line,
       'docs/SOURCING_AUDIO.md': line,
-      'docs/xqzorbl.md': line,
       'proto/index.html': line,
-      'tools/outil.mjs': `// ${line}`,
-      'tests/unit/xqzorbl.test.ts': `// ${line}`,
       'CAHIER_DES_CHARGES.md': line,
     });
+    const report = runGuard({ root, brandHashes });
+    expect(report.errors).toEqual([]);
+    expect(located(report.notes)).toContain('docs/SOURCING_AUDIO.md:0 exception');
+  });
+
+  it('lit les noms des nœuds, des matériaux et des maillages d’un GLB', () => {
+    const clean = makeGlb({ meshes: [[{ indices: 3 }]], nodeNames: ['caisse'], materialNames: ['paint_carrosserie'] });
+    const node = makeGlb({ meshes: [[{ indices: 3 }]], nodes: [0, 0], nodeNames: ['caisse', 'logo_xqzorbl'] });
+    const material = makeGlb({ meshes: [[{ indices: 3 }]], materialNames: ['Chrome Vlimpf Krabouille'] });
+    const root = tree({
+      'public/assets/vehicles/propre/body.glb': clean,
+      'public/assets/vehicles/demo/body.glb': node,
+      'tests/fixtures/essai.glb': material,
+      'proto/ancien.glb': node,
+    });
+    const report = runGuard({ root, brandHashes });
+    expect(located(report.errors)).toEqual(['public/assets/vehicles/demo/body.glb:0 marque', 'tests/fixtures/essai.glb:0 marque']);
+    expect(report.errors[0]?.message).toContain('« xqzorbl » dans le nom du nœud 1 du GLB');
+    expect(report.errors[1]?.message).toContain('dans le nom du matériau 0 du GLB');
+    expect(messagesOf(report.notes)).toContain('3 GLB dont les noms sont contrôlés');
+  });
+
+  it('passe sur un GLB illisible sans planter : assets-check le refuse', () => {
+    const root = tree({ 'public/assets/vehicles/demo/body.glb': BINARY });
     expect(runGuard({ root, brandHashes }).errors).toEqual([]);
   });
 

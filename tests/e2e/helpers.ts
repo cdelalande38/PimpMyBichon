@@ -68,7 +68,9 @@ async function sceneLooksRendered(page: Page): Promise<boolean> {
 
 export async function waitForScene(page: Page): Promise<void> {
   await expect(page.locator('.stage canvas')).toBeVisible({ timeout: 30_000 });
-  await expect.poll(() => sceneLooksRendered(page), { timeout: 30_000 }).toBe(true);
+  // Première image : à froid (premier parcours, nuanceurs à compiler en rendu logiciel), aussi
+  // lente que le véhicule posé ; même délai que waitForBench.
+  await expect.poll(() => sceneLooksRendered(page), { timeout: 120_000 }).toBe(true);
 }
 
 /** Le véhicule à l'écran est chargé et posé dans la scène (lent en rendu logiciel). */

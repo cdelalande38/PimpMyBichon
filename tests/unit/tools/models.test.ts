@@ -3,9 +3,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { countGeometry, imageSize, measureGlb, parseGlb } from '../../../tools/lib/glb.mjs';
+import { countGeometry, countPlacedGeometry, imageSize, measureGlb, parseGlb } from '../../../tools/lib/glb.mjs';
 import { runAssetsCheck } from '../../../tools/lib/assets.mjs';
 import { MODEL_LIMITS } from '../../../tools/lib/models.mjs';
+import { buildVehicle } from '../../../tools/vehicles/build.mjs';
 import { jpeg, ktx2, makeGlb, manyPrimitives, png, TINY_GLB, webp } from './glb-fixture.ts';
 import { creditsFile, located, messagesOf, useTempTrees } from './helpers.ts';
 import type { GlbSpec } from './glb-fixture.ts';
@@ -90,6 +91,18 @@ describe('GLB — triangles et primitives', () => {
     expect(stats).toMatchObject({ triangles: 8 + 4, primitives: 4 });
   });
 
+  it('compte un maillage partagé à chaque nœud qui le pose, et ignore celui qu’aucun nœud ne pose', () => {
+    // Caisse (deux primitives), roue posée par quatre nœuds, maillage orphelin.
+    const stats = measure({ meshes: [[{ indices: 30 }, { indices: 3 }], [{ indices: 6 }], [{ indices: 300 }]], nodes: [0, 1, 1, 1, 1] });
+    expect(stats).toMatchObject({ triangles: 11 + 4 * 2, primitives: 2 + 4, meshes: 3, nodes: 5 });
+    expect(countPlacedGeometry({ meshes: [{ primitives: [{}] }], nodes: [{ mesh: 0 }, { mesh: 7 }, 'x', {}] })).toEqual({
+      triangles: 0,
+      primitives: 1,
+      meshes: 1,
+      nodes: 1,
+    });
+  });
+
   it('ne plante pas sur un JSON sans maillage ou aux accesseurs absents', () => {
     expect(countGeometry({})).toEqual({ triangles: 0, primitives: 0, meshes: 0 });
     expect(countGeometry({ meshes: [{ primitives: [{ indices: 9 }, 'x', {}] }, 'y'] })).toEqual({
@@ -97,6 +110,20 @@ describe('GLB — triangles et primitives', () => {
       primitives: 2,
       meshes: 2,
     });
+  });
+});
+
+describe('GLB — véhicules du catalogue, construits en mémoire', () => {
+  // Les roues de la Cox et du van sont un maillage posé par quatre nœuds : assets:check doit
+  // compter comme build.mjs (38 et 34 appels), pas un appel par maillage (30 et 22).
+  it.each(['cox', 'van'])('compte pour %s les mêmes appels et triangles que build.mjs', async (id) => {
+    const { bytes, summary } = await buildVehicle(id);
+    const parsed = parseGlb(bytes);
+    if (!parsed.ok) throw new Error(parsed.message);
+    const stats = measureGlb(parsed.container);
+    expect(stats.primitives).toBe(summary.primitives);
+    expect(stats.triangles).toBe(summary.triangles);
+    expect(stats.primitives).toBeGreaterThan(countGeometry(parsed.container.json).primitives);
   });
 });
 
@@ -160,6 +187,14 @@ describe('assets-check — budgets des véhicules', () => {
     const report = runAssetsCheck({ root: tree(vehicleWith(body)) });
     expect(located(report.errors)).toEqual([`${VEHICLE}/body.glb:0 modele-appels`]);
     expect(report.errors[0]?.message).toContain('81 primitives');
+  });
+
+  it('compte les appels d’une roue partagée à chacun de ses quatre nœuds', () => {
+    // 70 primitives de caisse et une roue de 3 primitives posée quatre fois : 82 appels, pas 73.
+    const body = makeGlb({ meshes: [manyPrimitives(70).flat(), manyPrimitives(3).flat()], nodes: [0, 1, 1, 1, 1] });
+    const report = runAssetsCheck({ root: tree(vehicleWith(body)) });
+    expect(located(report.errors)).toEqual([`${VEHICLE}/body.glb:0 modele-appels`]);
+    expect(report.errors[0]?.message).toContain('82 primitives');
   });
 
   it('compte les primitives de tous les maillages, pas seulement celles du premier', () => {

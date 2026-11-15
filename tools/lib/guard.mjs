@@ -1,14 +1,17 @@
 // @ts-check
 // Garde-fous du dépôt public. Assemble trois familles de règles :
 //   a. requêtes vers un tiers                 third-party.mjs   code de l'app, puis build
-//   b. noms de marques                        brands.mjs        app
+//   b. noms de marques                        brands.mjs        app, tests, outils, docs, noms des GLB
 //   c. données personnelles et identifiants   secrets.mjs       tous les fichiers texte
 //
-// « L'app » désigne src/, public/ et index.html. Le prototype (proto/) et la documentation
-// (docs/) ne sont contrôlés que par la famille c.
+// « L'app » désigne src/, public/, assets-src/ et index.html. La règle des marques couvre aussi
+// tests/, tools/ et docs/ (sauf l'exception nommée de BRAND_EXEMPT), et les noms écrits dans le
+// JSON de chaque GLB de ce périmètre. Le prototype (proto/) n'est contrôlé que par la famille c.
 
+import { readFileSync } from 'node:fs';
 import { createBrandMatcher } from './brands.mjs';
 import { walkTree } from './fs-walk.mjs';
+import { namesOf, parseGlb } from './glb.mjs';
 import { countLabel, createReport, finding, mergeInto, notChecked, sortReport } from './report.mjs';
 import { findHomePaths, scanLineForSecrets, SECRET_RULES } from './secrets.mjs';
 import { readTextFile, splitLines } from './text.mjs';
@@ -72,6 +75,16 @@ export function parseDirective(line) {
   return { rule, reason };
 }
 
+/**
+ * Fichiers hors de la règle des marques, chacun avec sa raison. La présélection des sons cite les
+ * titres des enregistrements tels que leurs auteurs les ont publiés : sans eux, la licence d'un
+ * son ne se retrouve plus. Rien de ce fichier n'entre dans l'app.
+ * @type {Readonly<Record<string, string>>}
+ */
+export const BRAND_EXEMPT = Object.freeze({
+  'docs/SOURCING_AUDIO.md': 'titres d’enregistrements cités tels que publiés, pour retrouver leur licence ; rien n’entre dans l’app',
+});
+
 /** @param {string} rel */
 export function isAppPath(rel) {
   // assets-src/ : dessins en attente, destinés à l'app. Ils reçoivent les mêmes contrôles qu'elle.
@@ -81,14 +94,48 @@ export function isAppPath(rel) {
 }
 
 /**
+ * Périmètre de la règle des marques : l'app, les tests, les outils et la documentation.
+ * @param {string} rel
+ */
+export function isBrandPath(rel) {
+  if (Object.hasOwn(BRAND_EXEMPT, rel)) return false;
+  return isAppPath(rel) || rel.startsWith('tests/') || rel.startsWith('tools/') || rel.startsWith('docs/');
+}
+
+/**
  * @param {BrandHit} hit
  * @param {string} [where]
  */
 function brandMessage(hit, where = '') {
   return (
     `nom de marque « ${hit.term} »${where} (empreinte ${hit.hash.slice(0, 12)}…) : aucun nom de ` +
-    "constructeur, d'équipementier, de sponsor, d'émission ou de jeu vidéo dans l'app"
+    "constructeur, d'équipementier, de sponsor, d'émission ou de jeu vidéo dans le dépôt (app, tests, outils, docs)"
   );
+}
+
+/**
+ * Règle des marques sur les noms du JSON d'un GLB (nœuds, matériaux, maillages…), lisibles dans
+ * le fichier livré. Un GLB illisible est laissé à assets-check (règle « modele »).
+ * @param {Report} report
+ * @param {string} rel
+ * @param {string} abs
+ * @param {(text: string) => BrandHit[]} matchBrands
+ * @returns {boolean}  vrai si le JSON a pu être lu
+ */
+function scanGlbNames(report, rel, abs, matchBrands) {
+  let parsed;
+  try {
+    parsed = parseGlb(new Uint8Array(readFileSync(abs)));
+  } catch {
+    return false;
+  }
+  if (!parsed.ok) return false;
+  for (const { kind, index, name } of namesOf(parsed.container.json)) {
+    for (const hit of matchBrands(name)) {
+      report.errors.push(finding(rel, 0, 'marque', brandMessage(hit, ` dans le nom du ${kind} ${index} du GLB`)));
+    }
+  }
+  return true;
 }
 
 /**
@@ -97,11 +144,12 @@ function brandMessage(hit, where = '') {
  * @param {string} rel
  * @param {string} text
  * @param {object} options
- * @param {boolean} options.inApp
+ * @param {boolean} options.inApp   règle des URL tierces
+ * @param {boolean} options.brands  règle des marques
  * @param {ReadonlySet<string>} [options.skip]
  * @param {(line: string) => BrandHit[]} options.matchBrands
  */
-function scanText(report, rel, text, { inApp, skip, matchBrands }) {
+function scanText(report, rel, text, { inApp, brands, skip, matchBrands }) {
   /** @type {Array<Directive & { line: number, used: boolean }>} */
   let pending = [];
 
@@ -131,10 +179,8 @@ function scanText(report, rel, text, { inApp, skip, matchBrands }) {
     const hits = [];
     if (line.trim() !== '') {
       hits.push(...scanLineForSecrets(line, skip));
-      if (inApp) {
-        for (const message of scanLineForUrls(line)) hits.push({ rule: 'url-tierce', message });
-        for (const hit of matchBrands(line)) hits.push({ rule: 'marque', message: brandMessage(hit) });
-      }
+      if (inApp) for (const message of scanLineForUrls(line)) hits.push({ rule: 'url-tierce', message });
+      if (brands) for (const hit of matchBrands(line)) hits.push({ rule: 'marque', message: brandMessage(hit) });
     }
 
     const directive = parseDirective(line);
@@ -171,7 +217,9 @@ export function runGuard({ root, brandHashes }) {
 
   let textFiles = 0;
   let appTextFiles = 0;
+  let brandTextFiles = 0;
   let binaryFiles = 0;
+  let glbFiles = 0;
   /** @type {string[]} */
   const lockfiles = [];
   /** @type {Set<string>} */
@@ -179,9 +227,10 @@ export function runGuard({ root, brandHashes }) {
 
   for (const file of tree.files) {
     const inApp = isAppPath(file.rel);
+    const brands = isBrandPath(file.rel);
     const segments = file.rel.split('/');
 
-    if (inApp) {
+    if (brands) {
       // Les noms de fichiers et de dossiers font partie de l'app (un identifiant de véhicule
       // est un nom de dossier) : chaque nom est contrôlé une fois.
       let path = '';
@@ -200,13 +249,23 @@ export function runGuard({ root, brandHashes }) {
     const text = readTextFile(file.abs);
     if (text === null) {
       binaryFiles += 1;
+      if (brands && /\.glb$/i.test(file.rel) && scanGlbNames(report, file.rel, file.abs, matchBrands)) glbFiles += 1;
       continue;
     }
     textFiles += 1;
     if (inApp) appTextFiles += 1;
+    if (brands) brandTextFiles += 1;
     const isLockfile = LOCKFILES.has(segments.at(-1) ?? '');
     if (isLockfile) lockfiles.push(file.rel);
-    scanText(report, file.rel, text, { inApp, skip: isLockfile ? LOCKFILE_SKIPPED_RULES : undefined, matchBrands });
+    scanText(report, file.rel, text, {
+      inApp,
+      brands,
+      skip: isLockfile ? LOCKFILE_SKIPPED_RULES : undefined,
+      matchBrands,
+    });
+  }
+  for (const [rel, reason] of Object.entries(BRAND_EXEMPT)) {
+    if (tree.files.some((file) => file.rel === rel)) report.notes.push(finding(rel, 0, 'exception', `règle « marque » non appliquée : ${reason}`));
   }
 
   for (const link of tree.links) {
@@ -228,8 +287,10 @@ export function runGuard({ root, brandHashes }) {
       0,
       'perimetre',
       `${countLabel(textFiles, 'fichier texte contrôlé', 'fichiers texte contrôlés')} (données personnelles et ` +
-        `identifiants), dont ${appTextFiles} dans l'app (URL et marques, ${countLabel(brandHashes.size, 'empreinte')}) ; ` +
-        `${countLabel(binaryFiles, 'fichier binaire non lu', 'fichiers binaires non lus')}`,
+        `identifiants), dont ${appTextFiles} dans l'app (URL) et ${brandTextFiles} pour les marques ` +
+        `(app, tests, outils, docs ; ${countLabel(brandHashes.size, 'empreinte')}) ; ` +
+        `${glbFiles} GLB dont les noms sont contrôlés ; ` +
+        `${countLabel(binaryFiles, 'fichier binaire', 'fichiers binaires')} dont le contenu n'est pas lu autrement`,
     ),
   );
   for (const rel of lockfiles) {
@@ -240,7 +301,10 @@ export function runGuard({ root, brandHashes }) {
   mergeInto(report, scanDistHosts(root));
   report.notes.push(
     notChecked("requêtes dont l'adresse est calculée à l'exécution (seules les URL écrites en toutes lettres sont vues)"),
-    notChecked('contenu des fichiers binaires (nœuds et textures des GLB, métadonnées des images et des sons)'),
+    notChecked(
+      'contenu des fichiers binaires (textures des GLB, métadonnées des images et des sons ; seuls les noms du JSON des GLB sont lus), ' +
+        'GLB produits après le garde (npm run vehicles:build) et prototype (proto/) pour les marques',
+    ),
   );
   return sortReport(report);
 }

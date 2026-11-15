@@ -244,6 +244,16 @@ function useGarageProps(): { count: number; names: string[] } | null {
   return props;
 }
 
+/**
+ * Attribution du modèle sous licence CC-BY 4.0 (titre, auteur, licence, modifications), recopiée
+ * de CREDITS.md : la licence demande qu'elle soit visible là où le modèle est montré. Du texte
+ * seulement, aucune adresse (tests/unit/credits-et-libelles.test.ts la confronte à CREDITS.md).
+ * « CC-BY 4.0 » ne se coupe jamais : liant de mots (U+2060) après le tiret, espace insécable avant la version.
+ */
+const MODEL_CREDITS =
+  'Le concept : modèle « Car Concept » d’Eric Chadwick, Darmstadt Graphics Group GmbH (2024), sous licence CC-\u2060BY\u00a04.0. ' +
+  'Modifié pour l’atelier : logos retirés, plaque unie. Tous les crédits (polices, bibliothèques) sont dans CREDITS.md.';
+
 function substitutesLine(props: { count: number; names: string[] } | null): string {
   const detail = props === null || props.count === 0 ? '' : ` : ${count(props.count, 'objet')} (${props.names.join(', ')}…)`;
   return `Le mobilier du garage, modelé par le code${detail}, et les véhicules substituts (placeholder_banc pour le concept, placeholder_* pour les autres), en attendant les vrais modèles. Liste complète dans TODO_ASSETS.md.`;
@@ -389,6 +399,9 @@ export function UnderHoodPanel() {
 
       <dt>Substituts</dt>
       <dd data-fact="substituts">{typo(substitutesLine(garageProps))}</dd>
+
+      <dt>Crédits</dt>
+      <dd data-fact="credits">{typo(MODEL_CREDITS)}</dd>
     </dl>
   );
 }

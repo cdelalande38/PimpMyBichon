@@ -41,11 +41,11 @@ Avec `--json`, la sortie est un objet `{ tool, ok, errors, warnings, notes }` ; 
 - Jamais lus : `node_modules` et `.git` à toute profondeur ; à la racine du dépôt seulement, `dist`, `dev-dist`, `test-results`, `playwright-report`, `captures`, `coverage` et `.private-assets`. Un dossier du même nom rangé plus bas (dans `src/` ou `public/`) reste contrôlé.
 - `dist/` n'est lu que par les règles qui le visent : hôtes externes du build (guard) et poids du site (assets-check).
 - Les liens symboliques ne sont jamais suivis ; ils sont signalés.
-- Un fichier qui contient un octet nul dans son début est tenu pour binaire : son contenu n'est pas lu.
+- Un fichier qui contient un octet nul dans son début est tenu pour binaire : son contenu n'est pas lu (sauf les noms du JSON d'un GLB, lus par la règle `marque`).
 
 ## guard : garde-fous du dépôt public
 
-« L'app » désigne `src/`, `public/`, `index.html` et `assets-src/` (dessins en attente, destinés à l'app). Le prototype (`proto/`), la documentation, les outils et les tests ne sont concernés que par la famille c.
+« L'app » désigne `src/`, `public/`, `index.html` et `assets-src/` (dessins en attente, destinés à l'app). La règle `marque` couvre en plus `tests/`, `tools/` et `docs/`. Le prototype (`proto/`) et les documents de la racine (`README.md`, cahier des charges…) ne sont concernés que par la famille c.
 
 ### a. Requêtes vers un tiers
 
@@ -61,7 +61,10 @@ Les bundles citent des pages de documentation sans effet : c'est pour cela qu'un
 
 ### b. Noms de marques : règle `marque`
 
-Aucun nom de constructeur automobile ou moto, d'équipementier, de sponsor, d'émission ou de jeu vidéo dans l'app : contenu des fichiers texte, noms de fichiers et de dossiers.
+Aucun nom de constructeur automobile ou moto, d'équipementier, de sponsor, d'émission ou de jeu vidéo dans l'app, les tests (`tests/`), les outils (`tools/`) et la documentation (`docs/`) : contenu des fichiers texte, noms de fichiers et de dossiers, et noms écrits dans le JSON de chaque `.glb` de ce périmètre (nœuds, maillages, matériaux, scènes, textures, images, animations, peaux, caméras), lisibles dans le fichier livré.
+
+- **Exception nommée** : `docs/SOURCING_AUDIO.md` (constante `BRAND_EXEMPT` de `tools/lib/guard.mjs`). La présélection des sons cite les titres des enregistrements tels que leurs auteurs les ont publiés, pour retrouver leur licence ; rien n'en entre dans l'app. Le rapport le rappelle par une note `exception`.
+- **GLB produits** : les modèles des substituts n'existent qu'après `npm run vehicles:build`. Le garde lit les GLB présents ; leurs noms viennent de `assets-src/vehicles/` et de `tools/vehicles/`, contrôlés comme texte.
 
 La liste d'interdits ne figure nulle part en clair dans le dépôt. `tools/guard-brands.sha256` contient une empreinte SHA-256 par ligne, celle du terme normalisé (minuscules, sans accents, espaces simples). Le scan découpe le texte en mots (aux espaces, à la ponctuation et aux frontières d'un identifiant : majuscules internes, chiffres, tirets, soulignés), normalise, puis compare l'empreinte de chaque suite de un, deux ou trois mots.
 
@@ -75,7 +78,7 @@ node tools/guard.mjs --add-brand "<terme>"
 - Un terme fait un à trois mots, au moins trois caractères et deux lettres.
 - Un terme à majuscule interne reçoit deux empreintes : découpé comme il s'écrit, et d'un seul tenant.
 - L'option se répète pour ajouter plusieurs termes ; ils sont traités dans l'ordre.
-- N'ajoute aucun terme qui soit aussi un mot courant français ou anglais, un prénom, ou un identifiant plausible dans le code d'une app 3D : il bloquerait du code légitime. En cas de doute, écarte-le.
+- N'ajoute aucun terme qui soit aussi un mot courant français ou anglais, un prénom, ou un identifiant plausible dans le code d'une app 3D : il bloquerait du code légitime. En cas de doute, écarte-le. Seule exception admise : le nom commercial des modèles dont les véhicules du catalogue s'inspirent, même s'il est aussi un mot courant ; un emploi légitime de ce mot passe alors par une exception motivée (`guard-ignore-next-line marque : <raison>`).
 
 **Retirer un terme** : le message d'erreur donne le début de l'empreinte du terme trouvé ; supprime la ligne qui commence ainsi dans `tools/guard-brands.sha256`.
 
@@ -125,7 +128,8 @@ Les règles d'`assets-check` et d'`audio-check`, ainsi que `hote-cdn` et `hote-e
 ### Ce que le garde ne voit pas
 
 - Les requêtes dont l'adresse est calculée à l'exécution : seules les URL écrites en toutes lettres sont vues.
-- Le contenu des fichiers binaires : nœuds et textures des GLB, métadonnées des images et des sons (`assets-check` mesure les GLB, mais le garde ne les lit pas).
+- Le contenu des fichiers binaires : textures des GLB, métadonnées des images et des sons. Des GLB, le garde ne lit que les noms du JSON (`assets-check` les mesure).
+- Les GLB qui n'existent pas encore quand il tourne (substituts produits ensuite par `npm run vehicles:build`).
 
 ## assets-check : assets et budgets
 
@@ -146,15 +150,16 @@ Les mégaoctets sont décimaux (1 Mo vaut un million d'octets) : c'est la lectur
 
 Chaque `.glb` sous `public/assets/` est lu en Node pur (en-tête, bloc JSON, bloc binaire ; `tools/lib/glb.mjs`) et reçoit une note chiffrée : triangles, primitives, maillages, nombre de textures, plus grande texture, part de KTX2, poids.
 
+- **Posé, pas déclaré** : triangles et primitives sont comptés par nœud qui porte un maillage (`countPlacedGeometry`), comme `tools/vehicles/build.mjs`. Une roue déclarée une fois et posée par quatre nœuds compte quatre fois ; un maillage qu'aucun nœud ne pose ne compte pas.
 - **Triangles** : somme sur les primitives en mode triangles (indices divisés par 3, ou sommets divisés par 3 sans indices) ; une bande ou un éventail compte n - 2 ; points et lignes n'en comptent pas.
-- **Appels de dessin** : une primitive vaut un appel, tous maillages du fichier confondus. C'est un majorant : les instances et la fusion à l'exécution ne sont pas simulées.
+- **Appels de dessin** : une primitive posée vaut un appel. C'est un majorant : les instances et la fusion à l'exécution ne sont pas simulées.
 - **Textures** : les images du JSON, avec leurs dimensions lues dans l'en-tête de l'image (KTX2, PNG, JPEG, WebP), qu'elle soit embarquée, en URI de données ou dans un fichier voisin du GLB.
 
 | Règle | Où | Ce qui la déclenche |
 |---|---|---|
 | `modele` | tout `public/assets/` | GLB illisible (en-tête absent, version autre que 2, fichier ou bloc tronqué, JSON invalide) : erreur. Un fichier vide est refusé par `vehicule`, sans doublon |
 | `modele-triangles` | véhicules : erreur ; substitut déclaré (manifeste avec `placeholder`) ou banc d'essai : avertissement | plus de 400 000 triangles dans un fichier |
-| `modele-appels` | idem | plus de 80 primitives dans un fichier |
+| `modele-appels` | idem | plus de 80 primitives posées dans un fichier |
 | `modele-texture` | idem | une texture de plus de 2048 px, de largeur ou de hauteur ; avertissement partout si des dimensions n'ont pas pu être lues |
 | `modele-format` | avertissement | une texture qui n'est pas en KTX2 |
 
@@ -286,7 +291,7 @@ node tools/captures/cadence.mjs --root /chemin/avant --root . --tour images --to
 
 - **Racines** : `--root <dossier>` désigne un dossier qui contient `dist/` (défaut : ce dépôt), répétable ; `--label` nomme chaque racine (défaut : nom du dossier). Une ancienne version se prépare par `git archive <commit> | tar -x -C <dossier>`, un lien `node_modules` vers celui du dépôt, puis `npx vite build` dans ce dossier.
 - **Serveur** : intégré, une racine par port à partir de `--port` (4321 par défaut), sous `/PimpMyBichon/` comme GitHub Pages ; service worker bloqué (pas de précache pendant la mesure).
-- **Page** : Chromium de Playwright sur la vraie carte (ANGLE sur OpenGL ES : `--use-angle=gl-egl --ignore-gpu-blocklist --enable-gpu`), 412 × 915 à densité 2 (rendu de 824 × 1830 px, proche du téléphone de référence), mouvement non réduit. Une série = une page neuve : niveau choisi dans les réglages, rechargement, la rotation lente repart de la vue de départ.
+- **Page** : Chromium de Playwright sur la vraie carte (ANGLE sur OpenGL ES : `--use-angle=gl-egl --ignore-gpu-blocklist --enable-gpu`), 412 × 915 à densité 2 (rendu de 824 × 1830 px, proche du téléphone de référence), mouvement non réduit. Une série = une page neuve : niveau choisi par le bouton rond « Atelier », rubrique « Réglages » (menus éclatés), rechargement, la rotation lente repart de la vue de départ. Une version d'avant les menus éclatés (bouton « Réglages » dans le dock) ne se mesure plus telle quelle : l'outil ne cherche plus ce bouton.
 - **Relevé** : crochets posés avant le code de l'app (aucune aide de sa part, donc valable sur une ancienne version) : une requête de minuterie autour de chaque rappel `requestAnimationFrame` qui dessine, appels et triangles comptés sur `drawElements`/`drawArrays`, programmes comptés sur `createProgram`/`deleteProgram`. On attend le véhicule posé, on saute `--skip` images (120), puis on garde un tour entier de rotation lente (la médiane ne dépend donc pas de l'instant de départ) : au temps (`--tour temps`, défaut : 66,7 s de rotation, écarts entre images dessinées bornés à 0,1 s comme l'app, quelle que soit la cadence) ou en images (`--tour images`, versions jusqu'à 8dc262f, où la rotation avançait d'un angle fixe par image : 4 000 images). Un `--tour` par `--root`, dans l'ordre. `--frames <n>` impose n images à toutes les racines (essai court). Contrôlé par l'azimut réel : 359,6° à 58 i/s, 357,1° à 43 i/s.
 - **Bruit** : `--repeat` séries par racine et par niveau (3), ordre des racines inversé une série sur deux. La synthèse donne la médiane des médianes de série, et le bruit comme demi-étendue de ces médianes. Relever aussi `uptime` : sur un poste chargé (rendu logiciel d'autres parcours), le temps de carte monte de quelques pour cent ; refaire la série finale au calme.
 - **Détail** : `--detail` ajoute au JSON, par série, chaque image `[rang, angle en degrés depuis la première image gardée, temps de carte en ms, appels, matériaux en trame]` (« matériaux en trame » vaut −1 sur une version qui n'expose pas `data-trame`). Sur ce poste, une même fenêtre d'angle varie de ± 1 ms d'une série à l'autre (perturbations passagères) : comparer des médianes de série, pas des fenêtres isolées.

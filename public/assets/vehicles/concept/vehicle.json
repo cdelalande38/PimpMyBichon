@@ -18,7 +18,7 @@
     },
     {
       "id": "secondaire",
-      "label": "Seconde teinte",
+      "label": "Toit et rétros",
       "materials": ["Paint 2 Carmine"],
       "group": "carrosserie",
       "paint": { "color": "#0a3a46", "finish": "metallise" }

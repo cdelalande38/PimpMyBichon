@@ -12,6 +12,11 @@ export interface PrimitiveSpec {
 export interface GlbSpec {
   /** Un maillage par entrée, chacun avec ses primitives. */
   meshes?: PrimitiveSpec[][];
+  /** Maillage posé par chaque nœud (un maillage peut l'être par plusieurs) ; par défaut, un nœud par maillage. */
+  nodes?: number[];
+  /** Noms écrits dans le JSON : nœuds et matériaux (un matériau par nom). */
+  nodeNames?: string[];
+  materialNames?: string[];
   /** Images embarquées dans le bloc binaire, dans l'ordre. */
   images?: Uint8Array[];
   /** JSON brut à la place de celui qui est fabriqué (cas malformés). */
@@ -73,6 +78,11 @@ export function makeGlb(spec: GlbSpec = {}): Uint8Array {
       asset: { version: '2.0' },
       accessors,
       meshes,
+      nodes: (spec.nodes ?? meshes.map((_mesh, index) => index)).map((mesh, index) => ({
+        mesh,
+        ...(spec.nodeNames?.[index] === undefined ? {} : { name: spec.nodeNames[index] }),
+      })),
+      ...(spec.materialNames ? { materials: spec.materialNames.map((name) => ({ name })) } : {}),
       images: images.map((_image, index) => ({ bufferView: index })),
       bufferViews,
       buffers: bin.length > 0 ? [{ byteLength: bin.length }] : [],
