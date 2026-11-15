@@ -67,6 +67,28 @@ export function canLink(manifest: Zoned, zoneId: string): boolean {
 }
 
 /**
+ * Cadenas d'une zone : « aucun » (zone maîtresse, accastillage), « fermé » (la zone suit la
+ * carrosserie : ses choix sont verrouillés) ou « ouvert » (elle a sa propre peinture).
+ */
+export type LockState = 'aucun' | 'ferme' | 'ouvert';
+
+export function lockState(manifest: Zoned, build: Build | undefined, zoneId: string): LockState {
+  if (!canLink(manifest, zoneId)) return 'aucun';
+  return isLinked(manifest, build, zoneId) ? 'ferme' : 'ouvert';
+}
+
+/** Nom accessible du bouton cadenas : l'état, puis le geste (sans accord à faire sur la zone). */
+export function lockLabel(zoneLabel: string, state: Exclude<LockState, 'aucun'>): string {
+  return state === 'ferme'
+    ? `${zoneLabel} : carrosserie suivie, ouvrir le cadenas`
+    : `${zoneLabel} : peinture à part, refermer le cadenas`;
+}
+
+/** Message d'un appui sur une peinture verrouillée, et sa durée à l'écran. */
+export const LOCK_MESSAGE = 'Cette partie suit la carrosserie. Ouvre son cadenas pour lui donner sa propre peinture.';
+export const LOCK_MESSAGE_MS = 6000;
+
+/**
  * Zone qui reçoit un coup de peinture donné sur `zoneId` : la zone maîtresse si la zone lui est
  * liée (on repeint toute la carrosserie), sinon la zone elle-même.
  */

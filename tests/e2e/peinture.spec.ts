@@ -4,12 +4,21 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { changedRatio, openApp, openEntry, sceneBand, waitForScene, waitForStill } from './helpers.ts';
 
 // Jalon 3 (§ 5.2) : l'onglet « Peinture » du dock. Zone, couleur saisie en hexadécimal,
-// finition, zone détachée de la carrosserie : tout est retrouvé après rechargement.
+// finition, zone détachée de la carrosserie : tout est retrouvé après rechargement. Le cadenas :
+// fermé, la zone suit la carrosserie et ses choix sont verrouillés ; un appui l'explique.
 
 const VIEW_HEIGHT = 844;
+const dock = (page: Page) => page.locator('footer.dock');
 const paint = (page: Page) => page.locator('footer.dock .paint');
-const zones = (page: Page) => paint(page).getByRole('group', { name: 'Zones' }).getByRole('button');
-const lock = (page: Page) => paint(page).locator('.paint-lock');
+// Puces de zone seules (chaque zone de carrosserie autre que la maîtresse porte aussi son cadenas).
+const zones = (page: Page) => paint(page).getByRole('group', { name: 'Zones' }).locator('.paint-zone');
+/** Cadenas de la zone choisie (dock compact). */
+const lock = (page: Page) => paint(page).locator('.paint-lockbtn');
+/** Ligne du cadenas de la zone choisie (dock agrandi), collée en haut. */
+const lockLine = (page: Page) => paint(page).locator('.paint-lockline');
+// Région annoncée du message (l'« output » de la paillette porte aussi le rôle « status »).
+const notice = (page: Page) => paint(page).locator('.paint-notice-live');
+const color = (page: Page, name: string) => paint(page).getByRole('group', { name: 'Couleurs' }).getByRole('button', { name, exact: true });
 
 async function shot(page: Page, name: string): Promise<void> {
   const path = resolve('captures', 'peinture', `${name}.png`);
@@ -121,9 +130,9 @@ test.describe('peinture', () => {
     // Une zone de carrosserie liée se détache au cadenas, puis prend sa propre couleur.
     await step(page, 'Couleur');
     const detached = await linkableZone(page);
-    await expect(lock(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ferme');
     await lock(page).tap();
-    await expect(lock(page)).toHaveAttribute('aria-pressed', 'false');
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ouvert');
     const navy = paint(page).getByRole('button', { name: 'Bleu nuit', exact: true });
     await navy.tap();
     await expect(navy).toHaveAttribute('aria-pressed', 'true');
@@ -142,7 +151,135 @@ test.describe('peinture', () => {
     await step(page, 'Couleur');
     await backToZones(page);
     await zones(page).nth(detached).tap();
-    await expect(lock(page)).toHaveAttribute('aria-pressed', 'false');
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ouvert');
     await expect(paint(page).getByRole('button', { name: 'Bleu nuit', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  });
+  test('cadenas : zone verrouillée, message au toucher, ouverture sans changer l’image, rappel en vue, refermeture retrouvée', async ({
+    page,
+  }) => {
+    await openApp(page);
+    await waitForScene(page);
+    await openPaintTab(page);
+    await expect(zones(page).first()).toBeVisible({ timeout: 120_000 });
+
+    // Liste des zones : la zone maîtresse n'a pas de cadenas, une zone de carrosserie suivie en a un, fermé.
+    const firstLock = paint(page).locator('.paint-zone-pair').first();
+    await expect(paint(page).locator('.paint-zone-pair').filter({ has: zones(page).first() })).toHaveCount(0);
+    const zoneLock = firstLock.locator('.paint-lock');
+    await expect(zoneLock).toHaveAttribute('data-cadenas', 'ferme');
+    await expect(zoneLock).toHaveAccessibleName(/carrosserie suivie, ouvrir le cadenas$/);
+    const lockBox = await zoneLock.boundingBox();
+    expect(lockBox?.height ?? 0).toBeGreaterThanOrEqual(48);
+    expect(lockBox?.width ?? 0).toBeGreaterThanOrEqual(48);
+    const zoneName = ((await firstLock.locator('.paint-zone b').textContent()) ?? '').trim();
+    await firstLock.locator('.paint-zone').tap();
+
+    // Zone verrouillée (compact) : rappel sous les choix, choix grisés qui montrent la carrosserie.
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ferme');
+    await expect(lock(page)).toHaveAccessibleName(`${zoneName} : carrosserie suivie, ouvrir le cadenas`);
+    const reminder = paint(page).locator('.paint-reminder');
+    await expect(reminder).toHaveText('Suit la carrosserie');
+    const navy = color(page, 'Bleu nuit');
+    await expect(navy).toHaveAttribute('aria-disabled', 'true');
+    await expect(paint(page).getByRole('button', { name: 'Autre couleur' })).toHaveAttribute('aria-disabled', 'true');
+    const worn = paint(page).getByRole('group', { name: 'Couleurs' }).locator('[aria-pressed="true"]');
+    await expect(worn).toHaveCount(1);
+    const wornName = await worn.getAttribute('aria-label');
+    expect(wornName, 'la zone montre la peinture de la carrosserie').not.toBe('Bleu nuit');
+    // Le rappel n'emmène pas le dock hors du tiers bas ; tout bouton fait 48 px.
+    const reminderBox = await reminder.boundingBox();
+    expect(reminderBox?.y ?? 0).toBeGreaterThanOrEqual((VIEW_HEIGHT * 2) / 3);
+    for (const button of await dock(page).locator('button:visible').all()) {
+      const box = await button.boundingBox();
+      if (!box) continue;
+      expect(box.height).toBeGreaterThanOrEqual(48);
+      expect(box.y).toBeGreaterThanOrEqual((VIEW_HEIGHT * 2) / 3);
+    }
+    await waitForStill(page);
+    await shot(page, '06-cadenas-compact-verrouille');
+
+    // Un appui sur une peinture verrouillée : rien ne change, le message s'affiche (annoncé).
+    const before = await sceneBand(page);
+    await navy.tap({ force: true });
+    await expect(notice(page)).toContainText('Cette partie suit la carrosserie. Ouvre son cadenas pour lui donner sa propre peinture.');
+    await expect(navy).toHaveAttribute('aria-pressed', 'false');
+    await expect(worn).toHaveAttribute('aria-label', wornName ?? '');
+    await shot(page, '07-cadenas-message');
+    await step(page, 'Finition');
+    await finishChip(page, 'Candy').tap({ force: true });
+    await expect(finishChip(page, 'Candy')).toHaveAttribute('aria-pressed', 'false');
+    await expect(notice(page)).toContainText('Cette partie suit la carrosserie');
+    await step(page, 'Couleur');
+
+    // « Ouvrir le cadenas » (dans le message) : les choix deviennent actifs, l'image ne bouge pas.
+    await notice(page).getByRole('button', { name: 'Ouvrir le cadenas', exact: true }).tap();
+    await expect(notice(page).getByRole('button')).toHaveCount(0);
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ouvert');
+    await expect(reminder).toHaveText('Peinture à part');
+    await expect(navy).not.toHaveAttribute('aria-disabled', 'true');
+    await expect(worn).toHaveAttribute('aria-label', wornName ?? '');
+    await waitForStill(page);
+    expect(await changedRatio(before, await sceneBand(page)), 'ouvrir le cadenas garde l’image').toBeLessThan(0.01);
+    await navy.tap();
+    await expect(navy).toHaveAttribute('aria-pressed', 'true');
+    await waitForStill(page);
+    await shot(page, '09-cadenas-deverrouille');
+
+    // Refermer : la zone revient à la carrosserie, ses choix se verrouillent de nouveau.
+    await lock(page).tap();
+    await expect(lock(page)).toHaveAttribute('data-cadenas', 'ferme');
+    await expect(color(page, wornName ?? '')).toHaveAttribute('aria-pressed', 'true');
+    await expect(navy).toHaveAttribute('aria-disabled', 'true');
+
+    // Dock agrandi : la ligne du cadenas reste en vue quand on fait défiler les peintures.
+    await dock(page).getByRole('button', { name: 'Agrandir le menu' }).tap();
+    await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
+    await expect(lockLine(page)).toContainText('Suit la carrosserie');
+    const body = dock(page).locator('.dock-tab');
+    const top = await body.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+      return element.scrollTop;
+    });
+    expect(top, 'la zone de l’entrée défile en agrandi').toBeGreaterThan(0);
+    const [lineBox, bodyBox] = await Promise.all([lockLine(page).boundingBox(), body.boundingBox()]);
+    expect(lineBox?.y ?? 0, 'le rappel reste en haut de la zone qui défile').toBeGreaterThanOrEqual((bodyBox?.y ?? 0) - 4);
+    expect(lineBox?.y ?? 0).toBeLessThan((bodyBox?.y ?? 0) + 16);
+    await page.waitForTimeout(300);
+    await shot(page, '08-cadenas-agrandi-defile');
+    // Un appui verrouillé tout en bas (dernière finition, en vue) ne fait rien défiler.
+    await paint(page).getByRole('group', { name: 'Finitions' }).getByRole('button').last().tap({ force: true });
+    await expect(notice(page)).toContainText('Cette partie suit la carrosserie');
+    await page.waitForTimeout(300);
+    expect(await body.evaluate((element) => element.scrollTop), 'agrandi : position inchangée').toBe(top);
+
+    // Rechargement : la zone est retrouvée refermée, avec la peinture de la carrosserie.
+    await page.reload();
+    await waitForScene(page);
+    await openPaintTab(page);
+    await expect(paint(page).locator('.paint-zone-pair').first().locator('.paint-lock')).toHaveAttribute('data-cadenas', 'ferme', {
+      timeout: 120_000,
+    });
+  });
+
+  test('cadenas en 360 × 780, texte très grand : le rappel garde le dock dans le tiers bas', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width: 360, height: 780 });
+    await openApp(page, '#/reglages');
+    const dialog = page.getByRole('dialog', { name: 'Réglages' });
+    await dialog.getByRole('button', { name: 'Texte' }).click();
+    await dialog.getByRole('button', { name: /^Très grand/ }).click();
+    await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
+    await expect(dialog).toBeHidden();
+    await openPaintTab(page);
+    await paint(page).locator('.paint-zone-pair').first().locator('.paint-zone').click();
+    await expect(paint(page).locator('.paint-reminder')).toBeVisible();
+    for (const button of await dock(page).locator('button:visible').all()) {
+      const box = await button.boundingBox();
+      if (!box) continue;
+      const name = (await button.getAttribute('aria-label')) ?? (await button.innerText());
+      expect(box.height, `hauteur de « ${name} »`).toBeGreaterThanOrEqual(48);
+      expect(box.width, `largeur de « ${name} »`).toBeGreaterThanOrEqual(48);
+      expect(box.y, `« ${name} » dans le tiers bas`).toBeGreaterThanOrEqual((780 * 2) / 3);
+    }
   });
 });

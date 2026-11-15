@@ -17,6 +17,9 @@ import {
   hasFlake,
   hexToHsv,
   hsvToHex,
+  LOCK_MESSAGE,
+  lockLabel,
+  lockState,
   orderedZones,
   paintTarget,
   pickableColors,
@@ -90,6 +93,22 @@ describe('zones vues par l’interface', () => {
     expect(canLink(MANIFEST, 'capot')).toBe(true);
     expect(canLink(MANIFEST, 'toit')).toBe(true);
     expect(canLink(MANIFEST, 'inconnue')).toBe(false);
+  });
+
+  it('cadenas : aucun sur la maîtresse et l’accastillage, fermé si la zone suit, ouvert sinon', () => {
+    expect(lockState(MANIFEST, undefined, 'caisse')).toBe('aucun');
+    expect(lockState(MANIFEST, undefined, 'jantes')).toBe('aucun');
+    expect(lockState(MANIFEST, undefined, 'capot')).toBe('ferme');
+    expect(lockState(MANIFEST, undefined, 'toit')).toBe('ouvert');
+    const build = { paints: { capot: { linked: false, color: '#111111', finish: 'mat' as const }, toit: { linked: true } } };
+    expect(lockState(MANIFEST, build, 'capot')).toBe('ouvert');
+    expect(lockState(MANIFEST, build, 'toit')).toBe('ferme');
+  });
+
+  it('cadenas : nom accessible en clair (état, puis geste), message en tutoiement', () => {
+    expect(lockLabel('Toit', 'ferme')).toBe('Toit : carrosserie suivie, ouvrir le cadenas');
+    expect(lockLabel('Ailes', 'ouvert')).toBe('Ailes : peinture à part, refermer le cadenas');
+    expect(LOCK_MESSAGE).toBe('Cette partie suit la carrosserie. Ouvre son cadenas pour lui donner sa propre peinture.');
   });
 
   it('peindre une zone liée repeint la maîtresse ; détachée, la zone seule', () => {
