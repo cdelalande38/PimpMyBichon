@@ -61,7 +61,7 @@ import {
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
-import { VehicleModel, type VehicleMeasure } from './vehicle/VehicleModel.tsx';
+import { forgetModel, VehicleModel, type VehicleMeasure } from './vehicle/VehicleModel.tsx';
 
 /** Angle vertical borné de l'orbite (src/data/garage.ts). */
 const { minPolar: MIN_POLAR, maxPolar: MAX_POLAR } = GARAGE.orbit;
@@ -156,10 +156,41 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   const ambiance = findAmbiance(useBench((state) => state.ambiance));
   const setStatus = useBench((state) => state.setStatus);
   // Chaque changement de véhicule repart de « chargement » (ou « absent » si le build n'a pas son
-  // modèle) ; le véhicule dit « prêt » une fois posé.
+  // modèle) ; le véhicule dit « prêt » une fois posé. Un modèle tombé (« erreur ») est oublié du
+  // cache (forgetModel) : un nouvel essai (`attempt`, clé du garde-fou) relance une vraie requête.
+  const [attempt, setAttempt] = useState(0);
+  // Essai tombé (« véhicule:essai »), et celui relancé d'office après une erreur gardée.
+  const failed = useRef<string | null>(null);
+  const relaunched = useRef<string | null>(null);
   useLayoutEffect(() => {
+    const mount = `${vehicle.id}:${attempt}`;
+    if (failed.current === mount) {
+      // Tombé dans le rendu même qui le montait : l'erreur gardée d'une requête partie avant, puis
+      // abandonnée en route. Elle vient d'être oubliée : une relance d'office, une seule.
+      if (relaunched.current === mount) return;
+      failed.current = null;
+      relaunched.current = `${vehicle.id}:${attempt + 1}`;
+      setAttempt(attempt + 1);
+      return;
+    }
+    failed.current = null;
     setStatus(present === false ? 'absent' : 'chargement');
-  }, [vehicle.id, present, setStatus]);
+  }, [vehicle.id, attempt, present, setStatus]);
+  // « Réessayer » (étiquette, src/app/App.tsx) repasse le banc de « erreur » à « chargement » : nouvel essai.
+  useEffect(
+    () =>
+      useBench.subscribe((state, previous) => {
+        if (failed.current === null || previous.status !== 'erreur' || state.status !== 'chargement') return;
+        failed.current = null;
+        setAttempt((value) => value + 1);
+      }),
+    [],
+  );
+  const onFail = () => {
+    forgetModel(vehicle);
+    failed.current = `${vehicle.id}:${attempt}`;
+    setStatus('erreur');
+  };
   const position = useMemo(() => orbitPosition(fit.target, fit.distance, fit.azimuth), [fit]);
   const home = useMemo(() => ({ position, target: fit.target, fov: fit.fov }), [position, fit]);
 
@@ -503,12 +534,12 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       {/* En photo, la sonde passe en haute résolution (src/render/photo/plan.ts). */}
       <ReflectionProbe size={photo ? plan.probeSize : profile.probeSize} position={GARAGE.probe} version={ambiance.id} epoch={epoch} />
       {/* Le modèle arrive après le décor ; s'il manque (absent du build, ou première visite sans
-          réseau), le garage reste et l'étiquette le dit. Un véhicule par clé : en changer libère
-          l'ancien (modèle, peinture, ombre) et remet à zéro le garde-fou. */}
+          réseau), le garage reste et l'étiquette le dit. Un véhicule et un essai par clé : en changer
+          libère l'ancien (modèle, peinture, ombre) et remet à zéro le garde-fou. */}
       {/* Pose du véhicule dans la pièce (nez à gauche, ou à droite selon presentSide) : on tourne son groupe, pas le modèle. */}
       <group rotation-y={turn}>
         {buildsRead && present !== false && (
-          <SceneBoundary key={vehicle.id} onFail={() => setStatus('erreur')}>
+          <SceneBoundary key={`${vehicle.id}:${attempt}`} onFail={onFail}>
             <Suspense fallback={null}>
               <VehicleModel vehicle={vehicle} onMeasured={onMeasured} bodyEnv={ambiance.bodyEnv} />
             </Suspense>

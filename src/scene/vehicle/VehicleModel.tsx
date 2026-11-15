@@ -306,6 +306,17 @@ function releaseModel(url: string, gltf: GLTF): void {
 }
 
 /**
+ * Oublie un chargement tombé (réseau coupé, fichier introuvable) : sinon useLoader garde l'erreur
+ * et la relance à chaque retour sur le véhicule, sans nouvelle requête. Un modèle monté n'est pas
+ * touché : releaseModel le libère et l'oublie à son démontage.
+ */
+export function forgetModel(vehicle: Pick<VehicleManifest, 'id' | 'glb'>): void {
+  const url = modelUrl(vehicle);
+  if ((mounted.get(url) ?? 0) > 0) return;
+  useLoader.clear(GLTFLoader, url);
+}
+
+/**
  * Ombre de contact (src/render/vehicleShadow.ts) : elle ne voit que le véhicule. Rendue une fois, à la
  * première image après sa pose ; remontée à chaque contexte WebGL rendu (clé d'époque), libérée au
  * démontage. Ses trois programmes sont lancés d'avance, avec ceux du véhicule.

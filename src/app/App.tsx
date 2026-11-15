@@ -1,7 +1,7 @@
 // Coque de l'app : la scène 3D en fond, le HUD en haut (marque, état, boutons ronds de la radio, de
 // la photo et de l'atelier), le dock en bas (la personnalisation), et un panneau bas piloté par l'adresse.
 
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react';
 import { resolveVehicle } from '../data/vehicles.ts';
 import { useBench } from '../state/bench.ts';
 import { useBuilds } from '../state/builds.ts';
@@ -20,6 +20,12 @@ import { useRoute } from './useRoute.ts';
 // three.js et la scène arrivent dans un second temps : la coque s'affiche d'abord.
 const GarageCanvas = lazy(() => import('../scene/GarageCanvas.tsx'));
 
+/**
+ * « Réessayer » : en bas de la zone centrale, comme l'alerte, à portée du pouce (le haut à gauche est
+ * pris par le bouton « ? »). La zone laisse passer les gestes vers la scène ; le bouton, lui, se touche.
+ */
+const RETRY: CSSProperties = { flex: 'none', marginTop: 'auto', pointerEvents: 'auto' };
+
 function SceneFailure() {
   return (
     <p className="alert" role="alert">
@@ -34,6 +40,7 @@ export function App() {
   const textSize = useSettings((state) => state.textSize);
   const [sceneFailed, setSceneFailed] = useState(false);
   const benchStatus = useBench((state) => state.status);
+  const setBenchStatus = useBench((state) => state.setStatus);
   const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const photo = route.name === 'photo' && !sceneFailed;
 
@@ -73,6 +80,12 @@ export function App() {
                   {benchStatus === 'absent' && ' · modèle absent de cette version'}
                   {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}
                 </p>
+              )}
+              {/* Modèle tombé : nouvel essai sur le même véhicule (src/scene/GarageCanvas.tsx), sous le pouce. */}
+              {!sceneFailed && benchStatus === 'erreur' && (
+                <button type="button" className="btn" style={RETRY} onClick={() => setBenchStatus('chargement')}>
+                  Réessayer
+                </button>
               )}
               {sceneFailed && <SceneFailure />}
             </div>
