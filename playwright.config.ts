@@ -14,8 +14,9 @@ export default defineConfig({
   outputDir: 'test-results',
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,
-  // WebGL en rendu logiciel occupe un cœur entier par page : inutile d'en lancer davantage.
-  workers: 2,
+  // WebGL en rendu logiciel occupe un cœur entier par page. Sur le poste, un seul parcours à la fois,
+  // pour laisser la machine au reste ; en CI, deux, pour tenir la durée.
+  workers: process.env.CI ? 2 : 1,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   timeout: 60_000,
   expect: { timeout: 15_000 },
