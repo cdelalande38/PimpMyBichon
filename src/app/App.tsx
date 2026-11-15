@@ -11,6 +11,8 @@ import { Hud } from '../ui/Hud.tsx';
 import { SceneOverlay } from '../ui/overlay/SceneOverlay.tsx';
 import { PhotoBar } from '../ui/PhotoBar.tsx';
 import { Sheets } from '../ui/Sheets.tsx';
+import { Chargement } from '../ui/tuto/Chargement.tsx';
+import { Tutos } from '../ui/tuto/Tutos.tsx';
 import { isSheetRoute } from './router.ts';
 import { SceneBoundary } from './SceneBoundary.tsx';
 import { useRoute } from './useRoute.ts';
@@ -41,43 +43,48 @@ export function App() {
   }, [textSize]);
 
   return (
-    <div className="app">
-      <SceneBoundary onFail={() => setSceneFailed(true)}>
-        <Suspense fallback={<p className="stage-wait">Ouverture du garage…</p>}>
-          <GarageCanvas paused={isSheetRoute(route)} photo={photo} />
-        </Suspense>
-      </SceneBoundary>
+    <>
+      <div className="app">
+        <SceneBoundary onFail={() => setSceneFailed(true)}>
+          <Suspense fallback={<p className="stage-wait">Ouverture du garage…</p>}>
+            <GarageCanvas paused={isSheetRoute(route)} photo={photo} />
+          </Suspense>
+        </SceneBoundary>
 
-      {photo ? (
-        // Mode photo : l'interface s'efface, la scène prend l'écran.
-        <>
-          <div className="mid" />
-          <PhotoBar />
-        </>
-      ) : (
-        <>
-          {/* Panneau ouvert : le haut de l'écran et le dock passent derrière, hors d'atteinte. */}
-          <Hud sceneFailed={sceneFailed} covered={isSheetRoute(route)} />
-          {/* Ce qui se pose sur l'image sans toucher à ce fichier (pastilles de la pièce). */}
-          {!sceneFailed && <SceneOverlay covered={isSheetRoute(route)} />}
+        {photo ? (
+          // Mode photo : l'interface s'efface, la scène prend l'écran.
+          <>
+            <div className="mid" />
+            <PhotoBar />
+          </>
+        ) : (
+          <>
+            {/* Panneau ouvert : le haut de l'écran et le dock passent derrière, hors d'atteinte. */}
+            <Hud sceneFailed={sceneFailed} covered={isSheetRoute(route)} />
+            {/* Ce qui se pose sur l'image sans toucher à ce fichier (pastilles de la pièce). */}
+            {!sceneFailed && <SceneOverlay covered={isSheetRoute(route)} />}
 
-          <div className="mid">
-            {/* Jamais de substitut en silence : il est annoncé à l'écran, comme le chargement. */}
-            {!sceneFailed && (vehicle.placeholder !== undefined || benchStatus !== 'pret') && (
-              <p className="tag" role="status">
-                {vehicle.placeholder !== undefined ? `Substitut · ${vehicle.name}` : vehicle.name}
-                {benchStatus === 'chargement' && ' · en route…'}
-                {benchStatus === 'absent' && ' · modèle absent de cette version'}
-                {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}
-              </p>
-            )}
-            {sceneFailed && <SceneFailure />}
-          </div>
+            <div className="mid">
+              {/* Jamais de substitut en silence : il est annoncé à l'écran, comme le chargement. */}
+              {!sceneFailed && (vehicle.placeholder !== undefined || benchStatus !== 'pret') && (
+                <p className="tag" role="status">
+                  {vehicle.placeholder !== undefined ? `Substitut · ${vehicle.name}` : vehicle.name}
+                  {benchStatus === 'chargement' && ' · en route…'}
+                  {benchStatus === 'absent' && ' · modèle absent de cette version'}
+                  {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}
+                </p>
+              )}
+              {sceneFailed && <SceneFailure />}
+            </div>
 
-          <Dock sceneFailed={sceneFailed} covered={isSheetRoute(route)} />
-        </>
-      )}
-      <Sheets route={route} />
-    </div>
+            <Dock sceneFailed={sceneFailed} covered={isSheetRoute(route)} />
+          </>
+        )}
+        <Sheets route={route} />
+      </div>
+      {/* Accueil d'un nouvel utilisateur, hors de la coque : écran de chargement, tutos et bouton « ? ». */}
+      <Chargement sceneFailed={sceneFailed} />
+      <Tutos />
+    </>
   );
 }
