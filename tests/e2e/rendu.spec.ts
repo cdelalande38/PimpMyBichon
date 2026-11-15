@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import sharp from 'sharp';
-import { capture, changedRatio, openApp, sceneBand, VIEWPORT, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { capture, changedRatio, openApp, paintAndReload, sceneBand, VIEWPORT, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 // Jalon 1, rendu cible : une capture par ambiance, la planche de revue (3 ambiances × 4
 // peintures, captures/jalon-1/planche-c.jpg) et les relevés de « Sous le capot » (coût d'une
@@ -11,7 +11,7 @@ import { capture, changedRatio, openApp, sceneBand, VIEWPORT, waitForBench, wait
 const dock = (page: Page) => page.locator('footer.dock');
 
 async function pick(page: Page, tab: string, choice: string): Promise<void> {
-  await dock(page).getByRole('navigation', { name: 'Banc d’essai' }).getByRole('button', { name: tab }).tap();
+  await dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: tab }).tap();
   // Le nom exact (« Chrome » n'est pas « Chrome coloré ») est dans le <b> du bouton.
   const button = dock(page)
     .getByRole('group', { name: tab })
@@ -98,22 +98,30 @@ test.describe('rendu cible', () => {
     await waitForBench(page);
 
     const ambiances = ['Bichon', 'Néon', 'Atelier'] as const;
+    // Peinture de la carrosserie posée par la sauvegarde des builds (l'interface de peinture a ses
+    // propres parcours) : un rechargement par peinture, puis les trois ambiances au pouce.
     const looks: ReadonlyArray<readonly [color: string, finish: string, caption: string]> = [
-      ['Vert Bichon', 'Pailleté', 'Vert Bichon pailleté'],
-      ['Orange piste', 'Brillant', 'Orange piste brillant'],
-      ['Violet', 'Chrome coloré', 'Violet chrome coloré'],
-      ['Noir', 'Brillant', 'Noir brillant'],
+      ['#0a3a46', 'paillete', 'Vert Bichon pailleté'],
+      ['#ff6a00', 'brillant', 'Orange piste brillant'],
+      ['#5b1a8e', 'chrome-colore', 'Violet chrome coloré'],
+      ['#0b0b0e', 'brillant', 'Noir brillant'],
     ];
+    const vehicle = (await page.locator('.stage').getAttribute('data-vehicle')) ?? '';
+    const taken = new Map<string, Buffer>();
+    for (const [color, finish, caption] of looks) {
+      await paintAndReload(page, vehicle, { carrosserie: { color, finish } });
+      for (const ambiance of ambiances) {
+        await pick(page, 'Ambiance', ambiance);
+        await waitForStill(page);
+        taken.set(`${ambiance} · ${caption}`, await page.screenshot());
+      }
+    }
     const shots: Array<{ png: Buffer; caption: string }> = [];
     const stats: Record<string, { voiture: number[]; haut: number[]; bas: number[] }> = {};
     for (const ambiance of ambiances) {
-      await pick(page, 'Ambiance', ambiance);
-      for (const [color, finish, caption] of looks) {
-        await pick(page, 'Teinte', color);
-        await pick(page, 'Finition', finish);
-        await waitForStill(page);
-        const png = await page.screenshot();
+      for (const [, , caption] of looks) {
         const label = `${ambiance} · ${caption}`;
+        const png = taken.get(label) as Buffer;
         shots.push({ png, caption: label });
         stats[label] = {
           voiture: await meanColor(png, { x: 0.3, y: 0.36, w: 0.4, h: 0.06 }),

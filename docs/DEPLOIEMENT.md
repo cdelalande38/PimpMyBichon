@@ -156,6 +156,30 @@ Un temps de carte proche du temps entre deux images dit que l'image est limitée
 - **Processeur graphique sans cibles flottantes** : niveau Économie imposé, reflets de la carrosserie écrêtés, image nettement plus sombre que le chemin normal (sonde de réflexion en 8 bits linéaires) ; sans flottants 32 bits, le Max se rend au Standard. Essayé en rendu logiciel et sur le poste de mesure, extensions masquées.
 - **Parcours automatiques** : le fondu de la coupe n'est éprouvé qu'au niveau Standard ; la perte du contexte WebGL n'a pas de parcours.
 
+## 5 bis. Recette de la première version livrable (vague G)
+
+Sur le téléphone, après « Recharger » si le bandeau de nouvelle version s'affiche.
+
+1. **Changer de véhicule** : onglet « Véhicule » du dock, touche « La Cox » ou « Le van ». Le dock affiche « Au garage · <nom> · substitut ». Reviens au concept : sa peinture est restée. Ferme l'app et rouvre-la : elle rouvre sur le dernier véhicule choisi, même en mode avion.
+2. **Peindre une zone** : onglet « Peinture ». Première rangée : la zone (carrosserie en tête) ; à droite, le cadenas « Liée / Détachée » quand la zone suit la carrosserie. Deuxième rangée : « Couleur » ou « Finition », puis les choix. Le disque arc-en-ciel ouvre le nuancier (carré, barre de teinte, code hexadécimal, pipette sur les autres zones) ; « C'est bon » le ferme. Détache une zone au cadenas pour lui donner sa propre couleur.
+3. **Préparer le moteur** : bouton « Moteur » (rangée du bas, qui défile au pouce). Choisis « Stage 3 » sur le van : origine 102 ch, gain + 73 ch, reprogrammé 175 ch. « Tout remettre d'origine » annule. Chiffres d'atelier, rien ne change à l'écran ni au son.
+4. **Importer un pack de musique** :
+   - sur le poste : `npm run radio:pack -- <dossier de musique> ~/pack-musique.zip` (un sous-dossier = une station ; `--par-station` pour un ZIP par station) ;
+   - dépose le ZIP sur un hébergement en https qui donne un lien direct vers le fichier et envoie l'en-tête `Access-Control-Allow-Origin: *` (pour reprendre après une coupure : requêtes `Range` acceptées, `Content-Length` et `Content-Range` exposés) ;
+   - compose le lien `<adresse de l'app>?pack=<adresse directe du ZIP>` et envoie-le-toi ; ouvert dans Chrome, il ouvre le panneau « La radio » sur « Un pack de musique t'attend » : touche « Télécharger » (en Wi-Fi) et garde l'app ouverte jusqu'à « Stations ajoutées ». L'adresse du pack est retirée de la barre d'adresse, et rien ne part vers l'hébergement avant ton appui ;
+   - sans hébergement compatible : télécharge le ZIP sur le téléphone, puis « Radio » → « Ajouter un pack » → « Depuis un fichier ». « Depuis une adresse » accepte aussi l'adresse collée. « Ajouter mes morceaux » range des morceaux isolés dans « Ma playlist ».
+   - Écoute une station : la musique continue panneau fermé, avec le mini-lecteur dans la rangée du bas.
+
+À vérifier d'abord sur le S26 : que le panneau Radio n'affiche pas « stockage privé indisponible » (la radio écrit le ZIP dans le stockage privé du navigateur).
+
+### Pas fait dans cette version, ou pas comme demandé
+
+- **Catalogue** : trois véhicules sur cinq ; le bobber et la sportive sont reportés. La Cox et le van sont modelés par le code (substituts) : moins de 150 000 triangles, silhouettes simplifiées. Le concept dépasse le budget d'appels de dessin (109 primitives pour 60).
+- **Lien de pack** : il faut un appui sur « Télécharger » (aucune requête vers l'hébergement sans ton geste). Ouvrir un ZIP depuis la messagerie (cible de partage Android) n'est pas fait. Un téléchargement interrompu par la fermeture de l'app est à recommencer.
+- **Peinture** : à côté des étapes « Couleur / Finition », trois ou quatre couleurs seulement se voient à la fois sur un écran de 360 px ; la rangée défile.
+- **Moteur** : chiffres seulement ; ni pièces visibles, ni son, ni effet en sortie.
+- Rien de tout cela n'est encore essayé sur le S26.
+
 ## 6. Mise à jour de l'app installée
 
 Une nouvelle version se télécharge en arrière-plan. L'app ne se recharge jamais toute seule : un bandeau « Nouvelle version de l'atelier prête » propose « Recharger ». Sans réponse, la nouvelle version s'applique au prochain lancement, une fois l'app complètement fermée.

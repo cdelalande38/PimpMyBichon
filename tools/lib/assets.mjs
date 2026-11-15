@@ -5,7 +5,7 @@
 //   - poids des véhicules, des décors, de chaque fichier et du site construit ;
 //   - structure de chaque dossier de véhicule.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { checkLicenseCoverage, CREDITS_FILE, loadCredits } from './credits.mjs';
 import { isDirectory, isRegularFile, listDirectories, walkTree } from './fs-walk.mjs';
@@ -57,8 +57,8 @@ export const DEFAULT_LIMITS = Object.freeze({
 const ASSETS_DIR = 'public/assets';
 const VEHICLES_DIR = `${ASSETS_DIR}/vehicles`;
 
-/** Fichiers attendus dans un dossier de véhicule, en plus du manifeste. */
-const VEHICLE_FILES = ['body.glb', 'thumb.webp'];
+/** Vignette facultative d'un dossier de véhicule (le catalogue s'en passe aujourd'hui). */
+const VEHICLE_THUMB = 'thumb.webp';
 
 /**
  * Taille lisible, à la française : « 743 ko », « 15,2 Mo », « 1,04 Go ».
@@ -211,6 +211,9 @@ function checkVehicles(report, root, files, limits) {
     }
 
     const manifest = `${dir}/vehicle.json`;
+    /** @type {string} */
+    let model = 'body.glb';
+    let placeholder = false;
     if (!isRegularFile(join(root, manifest))) {
       report.errors.push(finding(manifest, 0, 'vehicule', 'manifeste manquant : chaque véhicule a son vehicle.json'));
     } else {
@@ -219,6 +222,10 @@ function checkVehicles(report, root, files, limits) {
         report.errors.push(finding(manifest, parsed.line, 'vehicule', `JSON invalide : ${parsed.message}`));
       } else {
         const value = parsed.value;
+        if (typeof value === 'object' && value !== null) {
+          if ('glb' in value && typeof value.glb === 'string') model = value.glb;
+          placeholder = 'placeholder' in value && typeof value.placeholder === 'string';
+        }
         const declared = typeof value === 'object' && value !== null && 'id' in value ? value.id : undefined;
         if (declared !== id) {
           report.errors.push(
@@ -234,11 +241,15 @@ function checkVehicles(report, root, files, limits) {
       }
     }
 
-    for (const name of VEHICLE_FILES) {
-      const rel = `${dir}/${name}`;
-      const file = files.find((item) => item.rel === rel);
-      if (!file) report.errors.push(finding(rel, 0, 'vehicule', `fichier manquant : chaque véhicule a son ${name}`));
-      else if (file.size === 0) report.errors.push(finding(rel, 0, 'vehicule', 'fichier vide'));
+    // Le modèle d'un substitut est produit avant le build (npm run vehicles:build), jamais versionné :
+    // son absence est notée, le catalogue dit « modèle absent ». Un modèle définitif est exigé.
+    const rel = `${dir}/${model}`;
+    const file = isRegularFile(join(root, rel)) ? { size: statSync(join(root, rel)).size } : undefined;
+    if (!file && placeholder) report.notes.push(finding(rel, 0, 'vehicule', 'modèle du substitut absent : à produire par npm run vehicles:build'));
+    else if (!file) report.errors.push(finding(rel, 0, 'vehicule', `fichier manquant : le manifeste annonce ${model}`));
+    else if (file.size === 0) report.errors.push(finding(rel, 0, 'vehicule', 'fichier vide'));
+    if (!files.some((item) => item.rel === `${dir}/${VEHICLE_THUMB}`)) {
+      report.notes.push(finding(`${dir}/${VEHICLE_THUMB}`, 0, 'vehicule', 'vignette absente (facultative)'));
     }
   }
   report.notes.push(finding('', 0, 'vehicule', `${countLabel(ids.length, 'véhicule contrôlé', 'véhicules contrôlés')} : ${ids.join(', ')}`));

@@ -6,7 +6,7 @@ import { capture, openApp, waitForBench, waitForScene, waitOfflineReady } from '
 // après une première visite.
 
 test.describe('hors ligne et installation', () => {
-  test('après une première visite, l’app s’ouvre sans réseau, banc d’essai compris', async ({
+  test('après une première visite, l’app s’ouvre sans réseau, véhicule de départ compris', async ({
     page,
     context,
   }) => {
@@ -29,8 +29,10 @@ test.describe('hors ligne et installation', () => {
 
     // Ce libellé est le plus long de l'indicateur : sur un écran étroit, il ne doit rien pousser hors champ.
     await page.setViewportSize({ width: 360, height: 780 });
-    const settings = await page.getByRole('button', { name: 'Réglages' }).boundingBox();
-    expect((settings?.x ?? 0) + (settings?.width ?? 0), 'dock entier à l’écran').toBeLessThanOrEqual(360);
+    // La rangée d'actions défile dans le dock : le dock, lui, tient dans l'écran, sans défilement de page.
+    const dockBox = await page.locator('footer.dock').boundingBox();
+    expect((dockBox?.x ?? 0) + (dockBox?.width ?? 0), 'dock entier à l’écran').toBeLessThanOrEqual(360);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth), 'aucun débord horizontal').toBeLessThanOrEqual(360);
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: 'Sous le capot' }).click();
     await expect(page.getByRole('dialog').getByText('Prêt : l’atelier s’ouvre sans réseau.')).toBeVisible();
@@ -59,7 +61,7 @@ test.describe('hors ligne et installation', () => {
     expect(paths.some((path) => /\/assets\/GarageCanvas-[\w-]+\.js$/.test(path))).toBe(true);
     expect(paths.some((path) => path.endsWith('.woff2'))).toBe(true);
     expect(paths.some((path) => path.endsWith('/icons/pwa-512.png'))).toBe(true);
-    expect(paths.some((path) => path.endsWith('/assets/bench/carconcept/CarConcept.glb'))).toBe(true);
+    expect(paths.some((path) => path.endsWith('/assets/vehicles/concept/body.glb'))).toBe(true);
     expect(paths.some((path) => path.endsWith('/libs/basis/basis_transcoder.js'))).toBe(true);
     expect(paths.some((path) => path.endsWith('/libs/basis/basis_transcoder.wasm'))).toBe(true);
     expect(cached.every((url) => url.startsWith(baseURL ?? ''))).toBe(true);

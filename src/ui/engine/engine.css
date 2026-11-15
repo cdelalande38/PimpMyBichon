@@ -1,0 +1,129 @@
+/* Fiche de préparation du moteur (src/ui/engine/). Les rangées de puces reprennent .chips et
+   .chip de src/app/styles.css ; ici, seulement la mise en page de la fiche. */
+
+.engine {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.engine-spec {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0;
+}
+
+.engine-spec strong {
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.0625rem;
+  letter-spacing: 0.01em;
+}
+
+.engine-spec span,
+.engine-hint,
+.engine-note {
+  color: var(--mute);
+  font-size: 0.8125rem;
+}
+
+/* Les trois chiffres en grand, côte à côte, comme sur l'écran d'un préparateur. */
+.engine-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.engine-figures > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.625rem 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.engine-figures dt {
+  overflow: hidden;
+  color: var(--mute);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.engine-figures dd {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.25rem, 6.4vw, 1.75rem);
+  line-height: 1.1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.engine-gain dd {
+  color: var(--ambre);
+}
+
+.engine-result {
+  border-color: var(--rouge) !important;
+  box-shadow: 0 0 14px rgba(255, 45, 63, 0.28) inset;
+}
+
+.engine-result dd {
+  color: var(--chrome);
+}
+
+.engine-nitro {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--bleu);
+  background: rgba(59, 123, 255, 0.1);
+  font-size: 0.875rem;
+}
+
+.engine-nitro strong {
+  color: var(--bleu);
+}
+
+.engine-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.engine-slot h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 0.9375rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.engine-hint,
+.engine-note,
+.engine-empty {
+  margin: 0;
+}
+
+.engine-chips .chip {
+  min-height: var(--tap-chip);
+}
+
+.engine-reset {
+  flex: none;
+  align-self: flex-start;
+  min-height: var(--tap);
+  padding: 0 1rem;
+}
+
+.engine-reset:disabled {
+  opacity: 0.45;
+}

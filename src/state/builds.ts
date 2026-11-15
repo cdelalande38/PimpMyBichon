@@ -21,8 +21,11 @@ export const BUILDS_KEY = 'pmb-builds';
 export const BUILDS_VERSION = 1;
 /** Nombre de dernières couleurs retenues (§ 5.2). */
 export const RECENT_COLORS = 12;
-/** Bornes de la taille de paillette, en millimètres. */
-export const FLAKE_RANGE = Object.freeze({ min: 0.2, max: 2 });
+/**
+ * Bornes de la taille de paillette, en millimètres. Le haut couvre la finition à grosses
+ * paillettes (3 mm d'origine) : le curseur doit pouvoir y revenir.
+ */
+export const FLAKE_RANGE = Object.freeze({ min: 0.2, max: 3 });
 
 const MAX_VEHICLES = 64;
 const MAX_ZONES = 64;

@@ -1,0 +1,335 @@
+/* Onglet « Peinture » du dock : zones, couleurs, finitions, nuancier (src/ui/paint/).
+   Les rangées défilantes reprennent .chips et .chip de src/app/styles.css. */
+
+.paint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Le dock laisse passer le toucher vers l'orbite : seules les commandes le prennent. */
+.paint input,
+.paint output,
+.paint label,
+.paint-picker {
+  pointer-events: auto;
+}
+
+/* Puces de zone : une ligne, à hauteur de pouce, la teinte effective en pastille. */
+.paint-zones .chip {
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0.25rem 1rem;
+}
+
+.paint-zone small {
+  margin-left: 0.125rem;
+}
+
+.paint-steps {
+  flex: 1;
+  min-width: 0;
+  /* Pas de débord ici : le cadenas partage la ligne. */
+  margin: 0;
+  padding: 0.125rem 0;
+}
+
+.paint-lock {
+  flex: none;
+  gap: 0.375rem;
+  min-width: 7.5rem;
+}
+
+.paint-lock[aria-pressed='false'] {
+  border-color: var(--ambre);
+  color: var(--ambre);
+}
+
+.paint-lock-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Couleurs : des disques ronds de 48 px, la palette puis les dernières couleurs. */
+.paint-colors {
+  align-items: center;
+}
+
+.paint-dot {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  border-radius: 999px;
+}
+
+.paint-dot-disc {
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+}
+
+.paint-dot[aria-pressed='true'] .paint-dot-disc {
+  border-color: var(--night);
+  box-shadow:
+    0 0 0 2px var(--chrome),
+    0 0 10px 2px rgba(236, 233, 244, 0.45);
+}
+
+.paint-other {
+  padding: 0 0.75rem 0 0.375rem;
+  border: 1px solid var(--edge);
+  background: var(--panel);
+}
+
+.paint-dot-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.paint-rainbow {
+  background: conic-gradient(#ff2d3f, #ffb224, #f5f53d, #22d3b6, #3b7bff, #a23bff, #ff2d3f);
+}
+
+.paint-sep {
+  flex: none;
+  padding: 0 0.25rem 0 0.5rem;
+  border-left: 1px solid var(--line);
+  color: var(--mute);
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* Réglages propres à la finition : taille de paillette, seconde teinte. */
+.paint-extra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.paint-flake {
+  display: flex;
+  flex: 1 1 9rem;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.paint-flake input {
+  flex: 1;
+  min-width: 0;
+  height: var(--tap);
+  accent-color: var(--ambre);
+}
+
+.paint-flake output {
+  min-width: 3.75rem;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.paint-color2 {
+  flex: 0 1 auto;
+  gap: 0.5rem;
+}
+
+.paint-note {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.75rem;
+}
+
+/* Nuancier : il peut monter plus haut que le dock, jamais au-delà de la moitié de l'écran. */
+.paint-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: calc(50dvh - 7rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.paint-picker-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.paint-picker-head b {
+  flex: 1;
+  min-width: 2rem;
+  overflow: hidden;
+  font-size: 0.9375rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paint-picker-now {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.paint-done {
+  flex: none;
+}
+
+.paint-sv,
+.paint-hue {
+  position: relative;
+  flex: none;
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.paint-sv {
+  height: clamp(5.5rem, 15dvh, 9rem);
+  background-image: linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent);
+}
+
+.paint-hue {
+  height: var(--tap);
+  background: linear-gradient(to right, #f00, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00);
+}
+
+.paint-thumb {
+  position: absolute;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.paint-hue .paint-thumb {
+  top: 50%;
+}
+
+.paint-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.paint-hex {
+  flex: none;
+  width: 6.25rem;
+  min-height: var(--tap);
+  padding: 0 0.5rem;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+  /* 16 px au moins : le navigateur ne zoome pas sur le champ. */
+  font: 700 max(1rem, 16px) / 1 ui-monospace, monospace;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+
+/* La pipette défile dans la place qui reste, sans déborder du panneau. */
+.paint-pipette {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0.125rem 0;
+}
+
+.paint-pick {
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0.25rem 0.875rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .paint-dot-disc {
+    transition: box-shadow 0.15s ease-out;
+  }
+}
+
+/* Deux rangées sous les onglets du dock : zones (et cadenas à droite), puis étapes (à gauche) et
+   choix. Le dock entier doit tenir dans le tiers bas, même en 360 × 780 et en texte très grand. */
+.paint-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.paint-bar > .chips {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* La rangée défilante ne déborde que du côté de l'écran, pas sous le voisin fixe. */
+.paint-bar:has(> .paint-lock) > .chips {
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.paint-bar-steps > .chips {
+  margin-left: 0;
+  padding-left: 0;
+}
+
+.paint-bar-steps > .paint-steps {
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border-right: 1px solid var(--edge);
+}
+
+.paint-bar-steps > .paint-steps button {
+  margin-right: 0.375rem;
+}
+
+/* Hauteur des deux rangées : 48 px à toutes les tailles de texte (le minimum tactile), sans marge
+   verticale, pour laisser les onglets du dock dans le tiers bas en texte très grand. */
+.paint-bar > .chips {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.paint-bar button,
+.paint-bar .chip {
+  min-height: 48px;
+}
+
+.paint:has(> .paint-bar) {
+  gap: 0.375rem;
+}
+
+/* Faute de place à côté des étapes, « Autre couleur » n'affiche que son disque arc-en-ciel ; le
+   libellé reste lu par les lecteurs d'écran. */
+.paint-bar .paint-other {
+  position: relative;
+  padding: 0;
+}
+
+.paint-bar .paint-dot-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -1,71 +1,28 @@
-// Commandes du banc d'essai, dans le dock : une rangée d'onglets (Teinte, Finition, Ambiance),
-// une rangée de choix. Le motif des réglages ; les listes viennent de src/data/.
+// Commandes de l'atelier, dans le dock : une rangée d'onglets (Véhicule, Peinture, Ambiance), puis
+// le contenu de l'onglet. Le motif des réglages ; les listes viennent de src/data/ et des manifestes.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AMBIANCES } from '../data/ambiances.ts';
-import { FINISHES } from '../data/finishes.ts';
-import { PAINT_COLORS } from '../data/paintColors.ts';
-import { useBench, type BenchChoices } from '../state/bench.ts';
+import { useBench } from '../state/bench.ts';
+import { PaintControls } from './paint/PaintControls.tsx';
+import { VehiclePicker } from './vehicles/VehiclePicker.tsx';
 
-interface Choice {
-  id: string;
-  label: string;
-  hint?: string;
-  /** Pastille de couleur devant le nom. */
-  swatch?: string;
-}
-
-interface BenchTab {
-  key: keyof BenchChoices;
-  label: string;
-  choices: readonly Choice[];
-}
-
-const TABS: readonly BenchTab[] = [
-  {
-    key: 'color',
-    label: 'Teinte',
-    choices: PAINT_COLORS.map(({ id, label, hex }) => ({ id, label, swatch: hex })),
-  },
-  {
-    key: 'finish',
-    label: 'Finition',
-    choices: FINISHES.map(({ id, label, hint }) => ({ id, label, hint })),
-  },
-  {
-    key: 'ambiance',
-    label: 'Ambiance',
-    choices: AMBIANCES.map(({ id, label, hint }) => ({ id, label, hint })),
-  },
-];
-
-function Choices({ tab }: { tab: BenchTab }) {
-  const current = useBench((state) => state[tab.key]);
+function AmbianceChoices() {
+  const current = useBench((state) => state.ambiance);
   const choose = useBench((state) => state.choose);
   // La rangée défile : le choix en cours est amené dans le champ (après relecture de la sauvegarde aussi).
   const row = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      row.current
-        ?.querySelector('[aria-pressed="true"]')
-        ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      row.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [tab.key, current]);
+  }, [current]);
 
   return (
-    <div ref={row} className="chips" role="group" aria-label={tab.label}>
-      {tab.choices.map((choice) => (
-        <button
-          key={choice.id}
-          type="button"
-          className={choice.swatch ? 'chip chip-swatch' : 'chip'}
-          aria-pressed={current === choice.id}
-          onClick={() => choose(tab.key, choice.id as BenchChoices[typeof tab.key])}
-        >
-          {choice.swatch && (
-            <span className="swatch" aria-hidden="true" style={{ background: choice.swatch }} />
-          )}
+    <div ref={row} className="chips" role="group" aria-label="Ambiance">
+      {AMBIANCES.map((choice) => (
+        <button key={choice.id} type="button" className="chip" aria-pressed={current === choice.id} onClick={() => choose('ambiance', choice.id)}>
           <b>{choice.label}</b>
           {choice.hint && <small>{choice.hint}</small>}
         </button>
@@ -74,25 +31,28 @@ function Choices({ tab }: { tab: BenchTab }) {
   );
 }
 
+type TabKey = 'vehicule' | 'peinture' | 'ambiance';
+
+const TABS: ReadonlyArray<{ key: TabKey; label: string; body: () => ReactNode }> = [
+  { key: 'vehicule', label: 'Véhicule', body: () => <VehiclePicker /> },
+  { key: 'peinture', label: 'Peinture', body: () => <PaintControls /> },
+  { key: 'ambiance', label: 'Ambiance', body: () => <AmbianceChoices /> },
+];
+
 export function BenchControls() {
-  const [active, setActive] = useState<keyof BenchChoices>('color');
+  const [active, setActive] = useState<TabKey>('vehicule');
   const tab = TABS.find((item) => item.key === active) ?? TABS[0];
 
   return (
     <>
-      <nav className="tabs" aria-label="Banc d’essai">
+      <nav className="tabs" aria-label="Onglets de l’atelier">
         {TABS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            aria-current={active === item.key ? 'true' : undefined}
-            onClick={() => setActive(item.key)}
-          >
+          <button key={item.key} type="button" aria-current={active === item.key ? 'true' : undefined} onClick={() => setActive(item.key)}>
             {item.label}
           </button>
         ))}
       </nav>
-      {tab && <Choices key={tab.key} tab={tab} />}
+      {tab && <div key={tab.key} className="dock-tab">{tab.body()}</div>}
     </>
   );
 }

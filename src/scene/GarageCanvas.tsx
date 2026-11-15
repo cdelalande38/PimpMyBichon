@@ -1,6 +1,6 @@
 // Scène du garage. Chargée à la demande (three.js pèse lourd) : la coque de l'app s'affiche avant.
-// Au jalon 1, le modèle de banc d'essai dans le garage du § 4, sous l'ambiance choisie, avec
-// sa sonde de réflexion, son sol réfléchissant, son atmosphère et sa chaîne d'image, selon le
+// Le véhicule courant du catalogue (src/data/vehicles.ts) dans le garage du § 4, sous l'ambiance
+// choisie, avec sa sonde de réflexion, son sol réfléchissant, son atmosphère et sa chaîne d'image, selon le
 // niveau de qualité (src/render/quality.ts). Tout est servi par l'app : modèle, textures KTX2 et
 // transcodeur ; les textures du garage sont dessinées sur place.
 // Vue de départ : le véhicule nez à gauche, la caméra côté gauche (trois quarts avant), le mur
@@ -10,11 +10,11 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { VignetteEffect } from 'postprocessing';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { SceneBoundary } from '../app/SceneBoundary.tsx';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
-import { BENCH_MODEL } from '../data/bench.ts';
+import { modelPresent, resolveVehicle } from '../data/vehicles.ts';
 import { GARAGE } from '../data/garage.ts';
 import { CAMERA_LAYERS } from '../render/layers.ts';
 import { AccumulatePass } from '../render/photo/AccumulatePass.ts';
@@ -27,14 +27,15 @@ import { QUALITY_PROFILES, resolveQuality, type QualityLevel, type QualityProfil
 import { ReflectionProbe } from '../render/ReflectionProbe.tsx';
 import { useRenderStats, type RenderStatsState } from '../render/renderStats.ts';
 import { useBench } from '../state/bench.ts';
+import { useBuilds } from '../state/builds.ts';
 import { usePhoto } from '../state/photo.ts';
 import { useSettings } from '../state/store.ts';
 import { AutoQuality } from './AutoQuality.tsx';
-import { BenchCar, type BenchMeasure } from './bench/BenchCar.tsx';
 import { fitCamera, orbitPosition } from './fit.ts';
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
+import { VehicleModel, type VehicleMeasure } from './vehicle/VehicleModel.tsx';
 
 /** Cible, angle vertical borné et marge de cadrage de l'orbite (src/data/garage.ts). */
 const TARGET: [number, number, number] = [...GARAGE.orbit.target];
@@ -63,16 +64,29 @@ const FRONT_X = frontFromTurn(GARAGE.vehicle.turn);
 function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, reducedMotion }: StageProps) {
   const width = useThree((state) => state.size.width);
   const height = useThree((state) => state.size.height);
+  // Véhicule courant (store des builds), ou celui de départ du catalogue.
+  const vehicle = resolveVehicle(useBuilds((state) => state.current));
+  // Le véhicule attend la relecture des builds (quelques millisecondes) : sinon le véhicule de
+  // départ commencerait à se charger pour rien avant celui qu'on avait laissé à l'écran.
+  const buildsRead = useBuilds((state) => state.hydrated);
+  const present = modelPresent(vehicle);
   // Cadrage d'attente, puis cadrage sur la demi-longueur mesurée une fois le modèle posé. La
-  // mesure entière sert aussi à la coupe caméra (volume protégé autour du véhicule).
-  const [measure, setMeasure] = useState<BenchMeasure | null>(null);
-  const halfLength = measure?.halfLength ?? BENCH_MODEL.halfLengthHint;
-  const onMeasured = useCallback((next: BenchMeasure) => setMeasure(next), []);
+  // mesure entière sert aussi à la coupe caméra (volume protégé autour du véhicule). Une mesure
+  // ne vaut que pour son véhicule : au changement, retour au cadrage d'attente du nouveau.
+  const [measured, setMeasured] = useState<{ id: string; measure: VehicleMeasure } | null>(null);
+  const measure = measured?.id === vehicle.id ? measured.measure : null;
+  const halfLength = measure?.halfLength ?? vehicle.halfLengthHint;
+  const onMeasured = useCallback((id: string, next: VehicleMeasure) => setMeasured({ id, measure: next }), []);
   const fit = useMemo(() => fitCamera(width, height, halfLength * FRAME_MARGIN), [width, height, halfLength]);
 
   // Ambiance : sources, lumières et étalonnage. La sonde de réflexion se refait à chaque changement.
   const ambiance = findAmbiance(useBench((state) => state.ambiance));
   const setStatus = useBench((state) => state.setStatus);
+  // Chaque changement de véhicule repart de « chargement » (ou « absent » si le build n'a pas son
+  // modèle) ; le véhicule dit « prêt » une fois posé.
+  useLayoutEffect(() => {
+    setStatus(present === false ? 'absent' : 'chargement');
+  }, [vehicle.id, present, setStatus]);
   const position = useMemo(() => orbitPosition(TARGET, fit.distance), [fit.distance]);
   const home = useMemo(() => ({ position, target: TARGET, fov: fit.fov }), [position, fit.fov]);
 
@@ -152,15 +166,18 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       <Garage ambiance={ambiance} profile={profile} vehicle={measure} instantCut={reducedMotion || photo} />
       {/* En photo, la sonde passe en haute résolution (src/render/photo/plan.ts). */}
       <ReflectionProbe size={photo ? plan.probeSize : profile.probeSize} position={GARAGE.probe} version={ambiance.id} epoch={epoch} />
-      {/* Le modèle arrive après le décor ; s'il manque (première visite sans réseau), le garage
-          reste et l'étiquette le dit. */}
+      {/* Le modèle arrive après le décor ; s'il manque (absent du build, ou première visite sans
+          réseau), le garage reste et l'étiquette le dit. Un véhicule par clé : en changer libère
+          l'ancien (modèle, peinture, ombre) et remet à zéro le garde-fou. */}
       {/* Pose du véhicule dans la pièce (nez à gauche) : on tourne son groupe, pas le modèle. */}
       <group rotation-y={GARAGE.vehicle.turn}>
-        <SceneBoundary onFail={() => setStatus('erreur')}>
-          <Suspense fallback={null}>
-            <BenchCar model={BENCH_MODEL} onMeasured={onMeasured} bodyEnv={ambiance.bodyEnv} />
-          </Suspense>
-        </SceneBoundary>
+        {buildsRead && present !== false && (
+          <SceneBoundary key={vehicle.id} onFail={() => setStatus('erreur')}>
+            <Suspense fallback={null}>
+              <VehicleModel vehicle={vehicle} onMeasured={onMeasured} bodyEnv={ambiance.bodyEnv} />
+            </Suspense>
+          </SceneBoundary>
+        )}
       </group>
 
       <PostChain ambiance={ambiance} profile={profile} accumulate={accumulate} vignette={vignette} floatTargets={floatTargets} />
@@ -210,6 +227,7 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
   const quality = useSettings((state) => state.quality);
   const autoRotate = useSettings((state) => state.autoRotate);
   const benchStatus = useBench((state) => state.status);
+  const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const autoLevel = useRenderStats((state) => state.auto.level);
   // Connu à la création du contexte (onCreated) : la scène attend, plutôt que de se monter un
@@ -248,9 +266,10 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
       className="stage"
       role="img"
       data-bench={benchStatus}
+      data-vehicle={vehicle.id}
       data-quality={level}
       data-busy={exporting}
-      aria-label="Vue 3D du garage, avec le modèle de banc d’essai. Glisse pour tourner autour, pince pour zoomer."
+      aria-label={`Vue 3D du garage, avec ${vehicle.name.replace(/^L[ea] |^L’/, (article) => article.toLowerCase())}. Glisse pour tourner autour, pince pour zoomer.`}
     >
       <Canvas
         // Rendu à la demande : quand rien ne bouge, le téléphone ne calcule rien (§ 8, budgets).

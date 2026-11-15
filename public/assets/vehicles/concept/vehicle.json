@@ -1,0 +1,64 @@
+{
+  "id": "concept",
+  "name": "Le concept",
+  "kind": "car",
+  "wave": 0,
+  "order": 0,
+  "glb": "body.glb",
+  "hint": "Coupé d’essai du garage",
+  "placeholder": "placeholder_banc",
+  "halfLengthHint": 2.3,
+  "zones": [
+    {
+      "id": "carrosserie",
+      "label": "Carrosserie",
+      "materials": ["Paint 1 Carmine"],
+      "group": "carrosserie",
+      "paint": { "color": "#0a3a46", "finish": "metallise" }
+    },
+    {
+      "id": "secondaire",
+      "label": "Seconde teinte",
+      "materials": ["Paint 2 Carmine"],
+      "group": "carrosserie",
+      "paint": { "color": "#0a3a46", "finish": "metallise" }
+    },
+    {
+      "id": "jantes",
+      "label": "Jantes",
+      "materials": ["Rim2"],
+      "group": "accastillage",
+      "paint": { "color": "#d4d6dc", "finish": "chrome" }
+    },
+    {
+      "id": "etriers",
+      "label": "Étriers",
+      "materials": ["Brake"],
+      "group": "accastillage",
+      "paint": { "color": "#a6120e", "finish": "brillant" }
+    },
+    {
+      "id": "sellerie",
+      "label": "Sellerie",
+      "materials": ["Interior 3 Carmine"],
+      "group": "accastillage",
+      "paint": { "color": "#7f1408", "finish": "satine" }
+    }
+  ],
+  "engine": { "label": "V8 central", "fuel": "essence", "feed": "injection", "boost": "atmo", "power": 480 },
+  "adapt": {
+    "yawQuarterTurns": 0,
+    "glass": { "materials": ["Glass"], "color": "#0c0e14", "opacity": 0.55 },
+    "lamps": [
+      { "materials": ["Headlight"], "color": "#fff3e0", "intensity": 12 },
+      { "materials": ["Brakelight"], "color": "#ff1206", "intensity": 10 },
+      { "materials": ["Signallight"], "color": "#ff8a10", "intensity": 4 }
+    ],
+    "plainMaterials": ["License"],
+    "plainColor": "#d8d6cf",
+    "logoTextures": [
+      { "material": "License", "maps": ["map"] },
+      { "material": "Tireside", "maps": ["map", "normalMap"], "color": "#1a1a1c" }
+    ]
+  }
+}

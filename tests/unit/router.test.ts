@@ -15,6 +15,8 @@ describe('parseHash', () => {
     expect(parseHash('#/capot')).toEqual({ name: 'capot' });
     expect(parseHash('#/commande')).toEqual({ name: 'commande' });
     expect(parseHash('/commande')).toEqual({ name: 'commande' });
+    expect(parseHash('#/radio')).toEqual({ name: 'radio' });
+    expect(parseHash('#/moteur')).toEqual({ name: 'moteur' });
   });
 
   it('tolère une barre finale et des paramètres collés', () => {
@@ -77,6 +79,8 @@ describe('routeToHash', () => {
       { name: 'reglages' },
       { name: 'capot' },
       { name: 'commande' },
+      { name: 'radio' },
+      { name: 'moteur' },
       { name: 'build', code: CODE },
       { name: 'defi', code: CODE },
     ];
@@ -94,6 +98,8 @@ describe('isSheetRoute', () => {
   it('distingue le garage des panneaux', () => {
     expect(isSheetRoute({ name: 'garage' })).toBe(false);
     expect(isSheetRoute({ name: 'reglages' })).toBe(true);
+    expect(isSheetRoute({ name: 'radio' })).toBe(true);
+    expect(isSheetRoute({ name: 'moteur' })).toBe(true);
     expect(isSheetRoute({ name: 'illisible', kind: 'defi' })).toBe(true);
   });
 });

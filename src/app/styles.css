@@ -703,3 +703,66 @@ button {
 .stage[data-busy='true'] canvas {
   visibility: hidden;
 }
+
+/* ───────────── Dock de l'atelier : véhicule, onglets, actions ───────────── */
+
+/* Nom du véhicule à l'écran, dans la ligne de tête du dock. */
+.dock-vehicle {
+  color: var(--chrome);
+  font-weight: 700;
+}
+
+/* Contenu d'un onglet : ses commandes prennent le toucher, le reste laisse passer l'orbite. */
+.dock-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.dock-tab > *,
+.dock .acts {
+  pointer-events: auto;
+}
+
+/* Rangée d'actions : jusqu'à cinq boutons (radio, moteur, capot, réglages, photo). Elle défile
+   au pouce, jusqu'aux bords de l'écran, comme les onglets ; chaque bouton garde 48 px de haut. */
+.dock .acts {
+  margin: 0 calc(-1 * var(--pad-r)) 0 calc(-1 * var(--pad-l));
+  padding: 0 var(--pad-r) 0 var(--pad-l);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.dock .acts::-webkit-scrollbar {
+  display: none;
+}
+.dock .acts > * {
+  flex: none;
+}
+/* Radio en cours dans la rangée : le titre du morceau se coupe au lieu de pousser les autres
+   boutons hors de l'écran. */
+.dock .acts > .radio-dock {
+  max-width: min(22rem, 78vw);
+}
+.dock .acts > .btn {
+  padding: 0 1rem;
+  white-space: nowrap;
+}
+
+/* Catalogue : la ligne d'atelier d'un véhicule peut être longue ; la puce reste à taille de pouce. */
+.chips-vehicles .chip {
+  max-width: 15rem;
+}
+.chips-vehicles .chip b,
+.chips-vehicles .chip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Le nom du véhicule reste entier ; seule la description se coupe. */
+.chips-vehicles .chip b {
+  flex: none;
+  white-space: nowrap;
+}
+.chips-vehicles .chip small {
+  min-width: 0;
+  white-space: nowrap;
+}

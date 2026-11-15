@@ -35,10 +35,66 @@ export async function waitForScene(page: Page): Promise<void> {
   await expect.poll(() => sceneLooksRendered(page), { timeout: 30_000 }).toBe(true);
 }
 
-/** Le modèle de banc d'essai est chargé et posé dans la scène (lent en rendu logiciel). */
+/** Le véhicule à l'écran est chargé et posé dans la scène (lent en rendu logiciel). */
 export async function waitForBench(page: Page): Promise<void> {
   await expect(page.locator('.stage[data-bench="pret"]')).toBeAttached({ timeout: 120_000 });
   await waitForStill(page);
+}
+
+/** Sauvegarde des builds telle que le store la range (src/state/builds.ts, clé « pmb-builds »). */
+export interface SavedBuilds {
+  current: string | null;
+  builds: Record<string, { paints: Record<string, { color?: string; finish?: string; linked?: boolean }> }>;
+  recents: string[];
+}
+
+/** Lit la sauvegarde des builds dans IndexedDB (`null` : rien de sauvegardé). */
+export async function readBuilds(page: Page): Promise<SavedBuilds | null> {
+  return page.evaluate(
+    () =>
+      new Promise<SavedBuilds | null>((done, fail) => {
+        const open = indexedDB.open('pimpmybichon');
+        open.onupgradeneeded = () => open.result.createObjectStore('kv');
+        open.onerror = () => fail(open.error);
+        open.onsuccess = () => {
+          const read = open.result.transaction('kv', 'readonly').objectStore('kv').get('pmb-builds');
+          read.onsuccess = () => {
+            const raw = read.result as string | undefined;
+            done(raw ? ((JSON.parse(raw) as { state: SavedBuilds }).state) : null);
+          };
+          read.onerror = () => fail(read.error);
+        };
+      }),
+  );
+}
+
+/**
+ * Peint des zones sans passer par l'interface de peinture (testée à part) : la sauvegarde des builds
+ * est réécrite, puis l'app relancée, qui la relit au démarrage. Attend le véhicule posé.
+ */
+export async function paintAndReload(page: Page, vehicle: string, paints: SavedBuilds['builds'][string]['paints']): Promise<void> {
+  const saved = (await readBuilds(page)) ?? { current: null, builds: {}, recents: [] };
+  const next: SavedBuilds = {
+    ...saved,
+    builds: { ...saved.builds, [vehicle]: { paints: { ...saved.builds[vehicle]?.paints, ...paints } } },
+  };
+  await page.evaluate(
+    (value) =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open('pimpmybichon');
+        open.onupgradeneeded = () => open.result.createObjectStore('kv');
+        open.onerror = () => fail(open.error);
+        open.onsuccess = () => {
+          const transaction = open.result.transaction('kv', 'readwrite');
+          transaction.objectStore('kv').put(JSON.stringify({ state: value, version: 1 }), 'pmb-builds');
+          transaction.oncomplete = () => done();
+          transaction.onerror = () => fail(transaction.error);
+        };
+      }),
+    next,
+  );
+  await page.reload();
+  await waitForBench(page);
 }
 
 /** Attend que l'image ne bouge plus : chargement de textures et rendus à la demande terminés. */

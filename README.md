@@ -7,7 +7,14 @@ Le périmètre, la stack, les budgets et les jalons sont dans [CAHIER_DES_CHARGE
 ## Où en est le projet
 
 - **Jalon 0, le socle** : accepté le 14 novembre 2026. Vite, React, React Three Fiber, PWA hors ligne, CI et déploiement Pages.
-- **Jalon 1, le rendu cible** : en ligne, en attente de sa validation sur téléphone. Rendu showroom néon sur un modèle de banc d'essai, trois ambiances, mode photo. Le garage est construit d'après des données : son mobilier est modelé par le code en formes arrondies, les enseignes néon sont en tubes, les œuvres dessinées pour le projet sont accrochées. Quand on tourne autour du véhicule, les murs et les objets qui passeraient devant lui sortent de l'image (coupe caméra). « Sous le capot » mesure la cadence sur le téléphone (« Mesurer ») et dit où part le temps d'une image (« Comparer »). Le modèle de banc d'essai et chaque meuble sont des substituts déclarés dans [TODO_ASSETS.md](TODO_ASSETS.md). Pas encore de véhicule du catalogue, pas encore de son. La recette sur le téléphone et la liste de ce qui n'est pas fait, ou pas comme le cahier le demande, sont dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md), § 5.
+- **Jalon 1, le rendu cible** : en ligne, en attente de sa validation sur téléphone. Rendu showroom néon sur un modèle de banc d'essai, trois ambiances, mode photo. Le garage est construit d'après des données : son mobilier est modelé par le code en formes arrondies, les enseignes néon sont en tubes, les œuvres dessinées pour le projet sont accrochées. Quand on tourne autour du véhicule, les murs et les objets qui passeraient devant lui sortent de l'image (coupe caméra). « Sous le capot » mesure la cadence sur le téléphone (« Mesurer ») et dit où part le temps d'une image (« Comparer »). Le modèle de banc d'essai et chaque meuble sont des substituts déclarés dans [TODO_ASSETS.md](TODO_ASSETS.md). La recette sur le téléphone et la liste de ce qui n'est pas fait, ou pas comme le cahier le demande, sont dans [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md), § 5.
+
+- **Première version livrable (vague G, 15 novembre 2026)** : le catalogue des véhicules, la peinture par zone, la fiche moteur et la radio.
+  - **Catalogue** : trois véhicules, tous substituts déclarés ([TODO_ASSETS.md](TODO_ASSETS.md)) : « Le concept » (l'ancien modèle de banc d'essai, sous licence CC-BY 4.0), la Cox et le van, ces deux-là modelés par le code (`assets-src/vehicles/`, GLB produits au build par `npm run vehicles:build`). Le bobber et la sportive sont reportés. Un véhicule = un dossier `public/assets/vehicles/<id>/` et son manifeste, découverts au build. Chaque véhicule garde sa peinture, et l'app rouvre sur le dernier véhicule choisi, hors ligne compris.
+  - **Peinture** (onglet du dock) : couleur libre par zone (palette, dernières couleurs, nuancier avec saisie hexadécimale et pipette), dix finitions, taille de paillette, seconde teinte du caméléon, zones liées à la carrosserie ou détachées.
+  - **Moteur** (bouton « Moteur ») : reprogrammation, carburation et nitro, avec la puissance d'origine, le gain et la puissance préparée. Chiffres d'atelier ; aucune pièce visible, aucun son.
+  - **Radio** (bouton « Radio ») : packs de musique en ZIP, importés depuis un fichier du téléphone, une adresse, ou un lien vers l'app `?pack=<adresse>` (un appui pour lancer le téléchargement). Aucun morceau n'est fourni. Le pack se fabrique avec `npm run radio:pack`.
+  - Pas encore : stickers, flammes, intérieurs, moteur sur l'établi, sortie de nuit, son moteur.
 
 ## Démarrer
 
@@ -49,7 +56,7 @@ src/
   state/      réglages et sauvegarde IndexedDB
   data/       ambiances, finitions, cadrages, garage (pièce, mobilier, formes, œuvres, néons)
   render/     niveaux de qualité, reflets, sol, coupe caméra, mesures du rendu
-  scene/      scène du garage, banc d'essai, mode photo
+  scene/      scène du garage, véhicule du catalogue (vehicle/), mode photo
   ui/         HUD, dock, panneaux
   dev/        pages de développement (studio des formes, planche des œuvres), hors du site construit
 assets-src/   dessins sources faits pour le projet (œuvres du garage, stickers)

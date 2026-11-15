@@ -21,7 +21,8 @@ import {
   type WebGLRenderer,
 } from 'three';
 import { describe, expect, it, vi } from 'vitest';
-import { BENCH_MODEL, type BenchModel } from '../../src/data/bench.ts';
+import { VEHICLES } from '../../src/data/vehicles.ts';
+import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import { CAMERA_LAYERS, PROBE_ONLY_LAYER } from '../../src/render/layers.ts';
 import { primeCutDither, programsReady, type CutDitherProgram } from '../../src/render/cutDither.ts';
@@ -37,7 +38,7 @@ interface PreparedLike {
   owned: { geometries: BufferGeometry[]; materials: Array<{ name: string; addEventListener: (type: 'dispose', listener: () => void) => void }> };
 }
 interface BenchCarModule {
-  prepare: (source: Group, model: BenchModel) => PreparedLike;
+  prepare: (source: Group, vehicle: VehicleManifest) => PreparedLike;
   disposePrepared: (prepared: PreparedLike) => void;
 }
 interface ExposureLike {
@@ -47,7 +48,9 @@ interface ExposureLike {
 }
 type PrecompileSeen = (gl: WebGLRenderer, root: Object3D, scene: Scene, camera: Camera, target: WebGLRenderTarget) => Set<unknown>;
 type AfterPriming = (programs: readonly CutDitherProgram[], done: () => void) => () => void;
-const BENCH_CAR = '../../src/scene/bench/BenchCar.tsx';
+const BENCH_CAR = '../../src/scene/vehicle/VehicleModel.tsx';
+/** Le modèle de banc d'essai, devenu « Le concept » du catalogue (vague 0). */
+const BENCH_MODEL = VEHICLES.find((vehicle) => vehicle.wave === 0) as VehicleManifest;
 const POST_CHAIN = '../../src/render/PostChain.tsx';
 const PROBE = '../../src/render/ReflectionProbe.tsx';
 const { prepare, disposePrepared } = (await import(/* @vite-ignore */ BENCH_CAR)) as BenchCarModule;

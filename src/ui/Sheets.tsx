@@ -3,10 +3,11 @@
 import type { ReactNode } from 'react';
 import { isSheetRoute, type Route, type SheetRouteName } from '../app/router.ts';
 import { closeSheet } from '../app/useRoute.ts';
+import { EnginePanel } from './engine/EnginePanel.tsx';
+import { RadioPanel } from './radio/RadioPanel.tsx';
 import { SettingsPanel } from './SettingsPanel.tsx';
 import { Sheet } from './Sheet.tsx';
 import { MeterButton, UnderHoodPanel } from './UnderHoodPanel.tsx';
-import { RadioPanel } from './radio/RadioPanel.tsx';
 
 interface SheetContent {
   eyebrow: string;
@@ -28,6 +29,16 @@ const CONTENT: Record<SheetRouteName, SheetContent> = {
     body: <UnderHoodPanel />,
     actions: <MeterButton />,
   },
+  radio: {
+    eyebrow: 'Au garage',
+    title: 'La radio',
+    body: <RadioPanel />,
+  },
+  moteur: {
+    eyebrow: 'Sur l’établi',
+    title: 'Préparation moteur',
+    body: <EnginePanel />,
+  },
   commande: {
     eyebrow: 'Passer commande à Bichon',
     title: 'Le carnet de commandes n’est pas encore ouvert',
@@ -38,7 +49,6 @@ const CONTENT: Record<SheetRouteName, SheetContent> = {
       </p>
     ),
   },
-  radio: { eyebrow: 'Atelier', title: 'Radio', body: <RadioPanel /> },
   build: {
     eyebrow: 'Lien de build',
     title: 'Tu as reçu un build',

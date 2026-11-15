@@ -31,3 +31,8 @@ coverage/
 !.env.example
 .DS_Store
 *.log
+
+# Véhicules substituts : GLB produits par npm run vehicles:build depuis assets-src/vehicles/<id>/model.mjs.
+# Le concept (modèle de banc d'essai sous licence) reste versionné.
+public/assets/vehicles/*/body.glb
+!public/assets/vehicles/concept/body.glb

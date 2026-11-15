@@ -305,8 +305,22 @@ export function flipColor(hex: string, finish: Pick<Finish, 'flipHue'>): Color {
   return new Color(hex).offsetHSL(finish.flipHue / 360, 0, 0);
 }
 
+/**
+ * Réglages propres à une zone, par-dessus ceux de la finition : taille de paillette, en
+ * millimètres, et seconde teinte du caméléon. Absents : ceux de la finition.
+ */
+export interface PaintOptions {
+  flake?: number;
+  color2?: string;
+}
+
 /** Applique une teinte et une finition à un matériau de carrosserie. */
-export function applyPaint(material: MeshPhysicalMaterial, hex: string, finish: Finish): void {
+export function applyPaint(
+  material: MeshPhysicalMaterial,
+  hex: string,
+  finish: Finish,
+  options?: PaintOptions,
+): void {
   material.color.copy(paintBaseColor(hex, finish));
   material.metalness = finish.metalness;
   material.roughness = finish.roughness;
@@ -321,13 +335,14 @@ export function applyPaint(material: MeshPhysicalMaterial, hex: string, finish: 
 
   const uniforms = uniformsOf(material);
   uniforms.pmbFlake.value = finish.flake;
-  uniforms.pmbFlakeSize.value = finish.flakeSize / 1000;
+  uniforms.pmbFlakeSize.value = (options?.flake ?? finish.flakeSize) / 1000;
   uniforms.pmbPeel.value = finish.orangePeel;
   uniforms.pmbFresnel.value = finish.fresnel;
   uniforms.pmbCandy.value = finish.candy;
   uniforms.pmbCandyColor.value.set(hex);
   uniforms.pmbFlip.value = finish.flip;
-  uniforms.pmbFlipColor.value.copy(flipColor(hex, finish));
+  if (options?.color2 === undefined) uniforms.pmbFlipColor.value.copy(flipColor(hex, finish));
+  else uniforms.pmbFlipColor.value.set(options.color2);
   // Passer d'une finition sans vernis ni irisation à l'inverse change le programme du shader.
   material.needsUpdate = true;
 }

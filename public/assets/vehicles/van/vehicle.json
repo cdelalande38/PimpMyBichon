@@ -1,0 +1,49 @@
+{
+  "id": "van",
+  "name": "Le van",
+  "kind": "car",
+  "wave": 1,
+  "order": 20,
+  "glb": "body.glb",
+  "hint": "Fourgon blanc rabaissé, jantes tôle : prêt pour la route des vacances",
+  "placeholder": "placeholder_van",
+  "halfLengthHint": 2.45,
+  "zones": [
+    {
+      "id": "carrosserie",
+      "label": "Carrosserie",
+      "materials": ["paint_carrosserie"],
+      "group": "carrosserie",
+      "paint": { "color": "#f0efe9", "finish": "satine" }
+    },
+    {
+      "id": "toit",
+      "label": "Toit",
+      "materials": ["paint_toit"],
+      "group": "carrosserie",
+      "paint": { "color": "#f0efe9", "finish": "satine" }
+    },
+    {
+      "id": "boucliers",
+      "label": "Boucliers",
+      "materials": ["paint_boucliers"],
+      "group": "carrosserie",
+      "paint": { "color": "#3a3d42", "finish": "mat" },
+      "linked": false
+    },
+    {
+      "id": "jantes",
+      "label": "Jantes",
+      "materials": ["paint_jantes"],
+      "group": "accastillage",
+      "paint": { "color": "#f0efe9", "finish": "satine" }
+    }
+  ],
+  "engine": {
+    "label": "4 cylindres turbo diesel",
+    "fuel": "diesel",
+    "feed": "injection",
+    "boost": "turbo",
+    "power": 102
+  }
+}

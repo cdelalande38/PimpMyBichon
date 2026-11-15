@@ -1,0 +1,52 @@
+// Rôles des matériaux d'un modèle aux conventions du § 8 : le nom du matériau dans le GLB dit ce
+// qu'il est, l'app décide de son rendu. `paint_<zone>` reçoit la peinture multicouche de la zone
+// (src/render/paint.ts) ; les autres rôles reçoivent les réglages ci-dessous. Un matériau au nom
+// inconnu garde ce que le modèle lui donne.
+
+import type { Hex } from './vehicleTypes.ts';
+
+export type MaterialRoleId = 'chrome' | 'alu' | 'black' | 'rubber' | 'leather' | 'glass' | 'lamp' | 'tail' | 'signal';
+
+export interface MaterialRole {
+  id: MaterialRoleId;
+  color: Hex;
+  metalness: number;
+  roughness: number;
+  /** Part du reflet de l'environnement (multipliée par celle de l'ambiance pour les métaux). */
+  envMapIntensity: number;
+  /** Vitrage : transparent et teinté, jamais réfractant (une passe de rendu de moins, § 8). */
+  opacity?: number;
+  /** Optique allumée : couleur et force de l'émission (au-delà de 1 : halo du bloom). */
+  emissive?: { color: Hex; intensity: number };
+}
+
+export const MATERIAL_ROLES: readonly MaterialRole[] = [
+  { id: 'chrome', color: '#f2f3f5', metalness: 1, roughness: 0.06, envMapIntensity: 1.2 },
+  { id: 'alu', color: '#c9ccd2', metalness: 1, roughness: 0.32, envMapIntensity: 1 },
+  { id: 'black', color: '#121214', metalness: 0, roughness: 0.55, envMapIntensity: 0.6 },
+  { id: 'rubber', color: '#141416', metalness: 0, roughness: 0.9, envMapIntensity: 0.3 },
+  { id: 'leather', color: '#2a1e18', metalness: 0, roughness: 0.6, envMapIntensity: 0.5 },
+  { id: 'glass', color: '#0c0e14', metalness: 0, roughness: 0.04, envMapIntensity: 1, opacity: 0.55 },
+  { id: 'lamp', color: '#ffffff', metalness: 0, roughness: 0.2, envMapIntensity: 1, emissive: { color: '#fff3e0', intensity: 12 } },
+  { id: 'tail', color: '#3a0402', metalness: 0, roughness: 0.2, envMapIntensity: 1, emissive: { color: '#ff1206', intensity: 10 } },
+  { id: 'signal', color: '#3a1a02', metalness: 0, roughness: 0.2, envMapIntensity: 1, emissive: { color: '#ff8a10', intensity: 4 } },
+];
+
+/** Préfixe des matériaux peints : `paint_<id de zone>`. */
+export const PAINT_PREFIX = 'paint_';
+
+/**
+ * Rôle d'un matériau d'après son nom. Les exporteurs ajoutent souvent un suffixe (« chrome.001 »,
+ * « chrome_2 ») : seul le nom avant le premier point ou le dernier « _<chiffres> » compte.
+ */
+export function materialRole(name: string): MaterialRole | undefined {
+  const base = name.toLowerCase().split('.')[0]?.replace(/_\d+$/, '') ?? '';
+  return MATERIAL_ROLES.find((role) => role.id === base);
+}
+
+/** Zone peinte d'un matériau `paint_<zone>`, ou `null`. */
+export function paintZoneOf(name: string): string | null {
+  if (!name.startsWith(PAINT_PREFIX)) return null;
+  const zone = name.slice(PAINT_PREFIX.length).split('.')[0] ?? '';
+  return zone === '' ? null : zone;
+}

@@ -3,20 +3,24 @@ import {
   capture,
   changedRatio,
   openApp,
+  paintAndReload,
+  readBuilds,
   sceneBand,
   waitForBench,
   waitForScene,
   waitForStill,
 } from './helpers.ts';
 
-// Jalon 1 : le modèle de banc d'essai et ses commandes (teinte, finition, ambiance).
+// L'atelier dans le dock : onglets Véhicule, Peinture, Ambiance. L'ambiance se change au pouce ;
+// la peinture est posée par la sauvegarde des builds (l'interface de peinture a ses propres parcours).
 
 const dock = (page: Page) => page.locator('footer.dock');
+const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
 
 /** Touche un onglet du dock, puis un choix de sa rangée, au pouce. */
 async function pick(page: Page, tab: string, choice: string): Promise<void> {
-  await dock(page).getByRole('navigation', { name: 'Banc d’essai' }).getByRole('button', { name: tab }).tap();
-  // Le nom exact (« Chrome » n'est pas « Chrome coloré ») est dans le <b> du bouton.
+  await tabs(page).getByRole('button', { name: tab }).tap();
+  // Le nom exact est dans le <b> du bouton.
   const button = dock(page)
     .getByRole('group', { name: tab })
     .getByRole('button')
@@ -26,51 +30,41 @@ async function pick(page: Page, tab: string, choice: string): Promise<void> {
 }
 
 async function pressed(page: Page, tab: string): Promise<string> {
-  await dock(page).getByRole('navigation', { name: 'Banc d’essai' }).getByRole('button', { name: tab }).tap();
+  await tabs(page).getByRole('button', { name: tab }).tap();
   const button = dock(page).getByRole('group', { name: tab }).locator('[aria-pressed="true"]');
   return (await button.locator('b').innerText()).trim();
 }
 
-test.describe('banc d’essai', () => {
+test.describe('atelier', () => {
   test.setTimeout(240_000);
 
-  test('teinte, finition et ambiance se changent au pouce et restent après rechargement', async ({
-    page,
-  }) => {
+  test('peinture et ambiance changent l’image et restent après rechargement', async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
     await waitForBench(page);
-
-    // Origine : Vert Bichon métallisé, ambiance Bichon.
-    expect(await pressed(page, 'Teinte')).toBe('Vert Bichon');
-    expect(await pressed(page, 'Finition')).toBe('Métallisé');
+    const vehicle = (await page.locator('.stage').getAttribute('data-vehicle')) ?? '';
     expect(await pressed(page, 'Ambiance')).toBe('Bichon');
 
-    const steps: Array<[tab: string, choice: string]> = [
-      ['Teinte', 'Orange piste'],
-      ['Finition', 'Chrome'],
-      ['Ambiance', 'Néon'],
-    ];
-    for (const [tab, choice] of steps) {
-      const before = await sceneBand(page);
-      await pick(page, tab, choice);
-      await waitForStill(page);
-      expect(await changedRatio(before, await sceneBand(page)), `« ${choice} » change l’image`).toBeGreaterThan(0.01);
-    }
+    let before = await sceneBand(page);
+    await paintAndReload(page, vehicle, { carrosserie: { color: '#ff6a00', finish: 'chrome' } });
+    expect(await changedRatio(before, await sceneBand(page)), 'la peinture change l’image').toBeGreaterThan(0.01);
+
+    before = await sceneBand(page);
+    await pick(page, 'Ambiance', 'Néon');
+    await waitForStill(page);
+    expect(await changedRatio(before, await sceneBand(page)), '« Néon » change l’image').toBeGreaterThan(0.01);
     await capture(page, '02-banc-orange-chrome-neon');
 
-    await pick(page, 'Finition', 'Candy');
-    await pick(page, 'Teinte', 'Violet');
+    await paintAndReload(page, vehicle, { carrosserie: { color: '#5b1a8e', finish: 'candy' } });
     await pick(page, 'Ambiance', 'Atelier');
     await waitForStill(page);
     await capture(page, '03-banc-violet-candy-atelier');
 
-    // Reprise : la sauvegarde IndexedDB est relue au lancement suivant.
+    // Reprise : les sauvegardes IndexedDB sont relues au lancement suivant.
     await page.reload();
     await waitForBench(page);
-    expect(await pressed(page, 'Teinte')).toBe('Violet');
-    expect(await pressed(page, 'Finition')).toBe('Candy');
     expect(await pressed(page, 'Ambiance')).toBe('Atelier');
+    expect((await readBuilds(page))?.builds[vehicle]?.paints.carrosserie).toEqual({ color: '#5b1a8e', finish: 'candy' });
   });
 
   test('sur un écran plus petit (360 × 780), le dock reste sous le pouce à toutes les tailles de texte', async ({
@@ -85,8 +79,8 @@ test.describe('banc d’essai', () => {
       await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
       await expect(dialog).toBeHidden();
 
-      for (const tab of ['Teinte', 'Finition', 'Ambiance']) {
-        await dock(page).getByRole('navigation', { name: 'Banc d’essai' }).getByRole('button', { name: tab }).click();
+      for (const tab of ['Véhicule', 'Peinture', 'Ambiance']) {
+        await tabs(page).getByRole('button', { name: tab }).click();
         const buttons = dock(page).locator('button:visible');
         const count = await buttons.count();
         expect(count).toBeGreaterThan(4);

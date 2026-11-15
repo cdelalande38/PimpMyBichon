@@ -1,0 +1,76 @@
+{
+  "id": "cox",
+  "name": "La Cox",
+  "kind": "car",
+  "wave": 1,
+  "order": 10,
+  "glb": "body.glb",
+  "hint": "Ronde, posée bas, jantes 8 branches : la reine de l'atelier",
+  "placeholder": "placeholder_cox",
+  "halfLengthHint": 2.04,
+  "zones": [
+    {
+      "id": "carrosserie",
+      "label": "Carrosserie",
+      "materials": ["paint_carrosserie"],
+      "group": "carrosserie",
+      "paint": { "color": "#0a3a46", "finish": "paillete" }
+    },
+    {
+      "id": "toit",
+      "label": "Toit",
+      "materials": ["paint_toit"],
+      "group": "carrosserie",
+      "paint": { "color": "#0a3a46", "finish": "paillete" }
+    },
+    {
+      "id": "capot",
+      "label": "Capot avant",
+      "materials": ["paint_capot"],
+      "group": "carrosserie",
+      "paint": { "color": "#0a3a46", "finish": "paillete" }
+    },
+    {
+      "id": "capot_moteur",
+      "label": "Capot moteur",
+      "materials": ["paint_capot_moteur"],
+      "group": "carrosserie",
+      "paint": { "color": "#0a3a46", "finish": "paillete" }
+    },
+    {
+      "id": "ailes",
+      "label": "Ailes",
+      "materials": ["paint_ailes"],
+      "group": "carrosserie",
+      "paint": { "color": "#0a3a46", "finish": "paillete" }
+    },
+    {
+      "id": "jantes",
+      "label": "Jantes",
+      "materials": ["paint_jantes"],
+      "group": "accastillage",
+      "paint": { "color": "#d9dde2", "finish": "chrome" }
+    },
+    {
+      "id": "sellerie",
+      "label": "Sellerie",
+      "materials": ["paint_sellerie"],
+      "group": "accastillage",
+      "paint": { "color": "#111114", "finish": "satine" }
+    },
+    {
+      "id": "pommeau",
+      "label": "Pommeau",
+      "materials": ["paint_pommeau"],
+      "group": "accastillage",
+      "paint": { "color": "#e9e0c8", "finish": "satine" }
+    }
+  ],
+  "engine": {
+    "label": "4 cylindres à plat refroidi par air",
+    "fuel": "essence",
+    "feed": "carburateur",
+    "boost": "atmo",
+    "power": 50
+  }
+}

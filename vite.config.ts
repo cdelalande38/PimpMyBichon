@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -42,6 +42,29 @@ const buildInfo = {
 };
 
 const NIGHT = '#0a0911';
+
+/**
+ * Modèles de véhicules présents au moment du build (« <id>/<fichier> »). Les GLB des substituts
+ * sont produits avant le build (npm run vehicles:build) et peuvent manquer : le catalogue garde
+ * le véhicule et dit « modèle absent » (src/data/vehicles.ts, modelPresent).
+ */
+function vehicleModels(): string[] {
+  const dir = join(root, 'public/assets/vehicles');
+  if (!existsSync(dir)) return [];
+  const found: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const manifest = join(dir, entry.name, 'vehicle.json');
+    if (!existsSync(manifest)) continue;
+    try {
+      const { glb } = JSON.parse(readFileSync(manifest, 'utf8')) as { glb?: unknown };
+      if (typeof glb === 'string' && existsSync(join(dir, entry.name, glb))) found.push(`${entry.name}/${glb}`);
+    } catch {
+      // Manifeste illisible : le catalogue lèvera une erreur claire en le validant.
+    }
+  }
+  return found.sort();
+}
 
 /** Dossier, sous le socle de l'app, où le transcodeur des textures KTX2 est servi (cf. src/data/bench.ts). */
 const BASIS_DIR = 'libs/basis/';
@@ -90,6 +113,7 @@ export default defineConfig({
   base,
   define: {
     __PMB_BUILD__: JSON.stringify(buildInfo),
+    __PMB_VEHICLE_MODELS__: JSON.stringify(vehicleModels()),
   },
   plugins: [
     react(),
@@ -139,15 +163,17 @@ export default defineConfig({
       injectManifest: {
         // Script classique : le type de service worker le plus largement pris en charge.
         rollupFormat: 'iife',
-        // Précache : toute la coque de l'app, le modèle de banc d'essai et le transcodeur de ses
-        // textures, les œuvres du garage (assets/garage/art/*.svg, ≈ 92 ko, prises par « svg »).
-        // Les véhicules et la musique n'y entrent pas, ils se téléchargent à la demande
-        // puis restent hors ligne (§ 7).
+        // Précache : toute la coque de l'app, le transcodeur des textures, les œuvres du garage
+        // (assets/garage/art/*.svg, ≈ 92 ko, prises par « svg ») et, pour l'instant, tous les
+        // véhicules du catalogue (le concept ≈ 10 Mo, les substituts sont légers) : l'app s'ouvre en
+        // mode avion avec tout son catalogue. Le téléchargement à la demande viendra quand les vrais
+        // modèles alourdiront le catalogue (§ 7). Les manifestes entrent dans le bundle JS. La
+        // musique n'y entre pas.
         globPatterns: ['**/*.{js,css,html,woff2,svg,png,webp,ico,glb,wasm}'],
         // Copie hachée du transcodeur émise par KTX2Loader (son chemin par défaut, `new URL(…)`) :
         // jamais lue, l'app fixe transcoderPath sur libs/basis/. Inutile de la précacher (≈ 0,6 Mo).
-        globIgnores: ['assets/vehicles/**', 'assets/audio/**', 'assets/basis_transcoder-*'],
-        // Le modèle de banc d'essai pèse près de 10 Mo (budget d'un véhicule : 8 à 15 Mo, § 8).
+        globIgnores: ['assets/audio/**', 'assets/basis_transcoder-*'],
+        // Le concept pèse près de 10 Mo (budget d'un véhicule : 8 à 15 Mo, § 8).
         maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
       },
       devOptions: { enabled: false },

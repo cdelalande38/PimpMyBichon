@@ -1,10 +1,11 @@
 // @ts-check
 // Budgets des modèles 3D (§ 8 du cahier des charges) : triangles, appels de dessin (une primitive
 // vaut un appel) et textures de chaque GLB de public/assets/. Les véhicules sont contrôlés pour de
-// bon ; le banc d'essai (substitut déclaré) ne reçoit que des avertissements.
+// bon ; un substitut déclaré (manifeste avec « placeholder », ou ancien dossier du banc d'essai)
+// ne reçoit que des avertissements.
 
-import { readFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { measureGlb, parseGlb } from './glb.mjs';
 import { countLabel, finding } from './report.mjs';
 
@@ -30,6 +31,22 @@ export const MODEL_LIMITS = Object.freeze({
 const ASSETS_DIR = 'public/assets';
 const VEHICLES_PREFIX = `${ASSETS_DIR}/vehicles/`;
 const BENCH_PREFIX = `${ASSETS_DIR}/bench/`;
+
+/**
+ * Vrai si le modèle est celui d'un véhicule dont le manifeste déclare un substitut (`placeholder`).
+ * @param {string} abs  chemin absolu du GLB
+ */
+function isPlaceholderVehicle(abs) {
+  const manifest = join(dirname(abs), 'vehicle.json');
+  if (!existsSync(manifest)) return false;
+  try {
+    const value = JSON.parse(readFileSync(manifest, 'utf8'));
+    return typeof value === 'object' && value !== null && typeof value.placeholder === 'string';
+  } catch {
+    // Manifeste illisible : la règle « vehicule » le signale déjà.
+    return false;
+  }
+}
 
 /** @param {number} value  entier groupé par milliers, avec des espaces ordinaires */
 function grouped(value) {
@@ -77,8 +94,10 @@ export function checkModels(report, files, format) {
   for (const model of models) {
     // Un fichier vide est déjà refusé par la règle « vehicule » : pas de doublon.
     if (model.size === 0) continue;
-    const strict = model.rel.startsWith(VEHICLES_PREFIX);
-    const lenient = model.rel.startsWith(BENCH_PREFIX);
+    const vehicle = model.rel.startsWith(VEHICLES_PREFIX);
+    const bench = model.rel.startsWith(BENCH_PREFIX);
+    const lenient = bench || (vehicle && isPlaceholderVehicle(model.abs));
+    const strict = vehicle && !lenient;
     const over = strict ? report.errors : report.warnings;
 
     let parsed;
@@ -96,7 +115,11 @@ export function checkModels(report, files, format) {
     report.notes.push(finding(model.rel, 0, 'modele', describeModel(stats, model.size, format)));
 
     if (!strict && !lenient) continue;
-    const where = lenient ? ' (banc d\'essai, substitut déclaré : avertissement seulement)' : '';
+    const where = bench
+      ? ' (banc d\'essai, substitut déclaré : avertissement seulement)'
+      : lenient
+        ? ' (véhicule substitut déclaré : avertissement seulement)'
+        : '';
 
     if (stats.triangles > MODEL_LIMITS.triangles) {
       over.push(

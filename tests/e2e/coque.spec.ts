@@ -10,7 +10,7 @@ import {
 } from './helpers.ts';
 
 test.describe('coque de l’app', () => {
-  test('l’écran principal s’affiche en 390 × 844, banc d’essai compris', async ({ page }) => {
+  test('l’écran principal s’affiche en 390 × 844, véhicule de départ compris', async ({ page }) => {
     test.setTimeout(180_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -22,8 +22,9 @@ test.describe('coque de l’app', () => {
     await waitForScene(page);
     await waitForBench(page);
 
-    await expect(page.getByText('Substitut · modèle de banc d’essai')).toBeVisible();
-    await expect(page.getByText('Banc d’essai · jalon 1')).toBeVisible();
+    // Le véhicule de départ est un substitut déclaré : il est annoncé à l'écran et nommé dans le dock.
+    await expect(page.locator('.tag')).toHaveText(/^Substitut · /);
+    await expect(page.locator('footer.dock .dock-vehicle')).not.toBeEmpty();
     await expect(page.getByRole('button', { name: 'Sous le capot' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Réglages' })).toBeVisible();
     await capture(page, '01-garage');

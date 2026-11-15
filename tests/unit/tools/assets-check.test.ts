@@ -294,10 +294,22 @@ describe('assets-check — structure d’un dossier de véhicule', () => {
     expect(messagesOf(report.notes)).toContain('aucun véhicule sous public/assets/vehicles/');
   });
 
+  it('accepte un véhicule sans vignette, et le note', () => {
+    const report = runAssetsCheck({ root: tree({ ...ALL_ASSETS_CREDITED, ...without('thumb.webp') }) });
+    expect(report.errors).toEqual([]);
+    expect(messagesOf(report.notes)).toContain('vignette absente (facultative)');
+  });
+
+  it('accepte un substitut dont le modèle n’est pas encore produit, et le note', () => {
+    const files = { ...without('body.glb'), [`${dir}/vehicle.json`]: '{ "id": "demo", "placeholder": "placeholder_demo" }' };
+    const report = runAssetsCheck({ root: tree({ ...ALL_ASSETS_CREDITED, ...files }) });
+    expect(report.errors).toEqual([]);
+    expect(messagesOf(report.notes)).toContain('modèle du substitut absent : à produire par npm run vehicles:build');
+  });
+
   const broken: Array<[string, TreeSpec, string, string]> = [
     ['sans vehicle.json', without('vehicle.json'), `${dir}/vehicle.json`, 'manifeste manquant'],
     ['sans body.glb', without('body.glb'), `${dir}/body.glb`, 'fichier manquant'],
-    ['sans thumb.webp', without('thumb.webp'), `${dir}/thumb.webp`, 'fichier manquant'],
     ['dont le body.glb est vide', { ...complete, [`${dir}/body.glb`]: '' }, `${dir}/body.glb`, 'fichier vide'],
     ['dont le manifeste n’est pas du JSON', { ...complete, [`${dir}/vehicle.json`]: '{ "id": "demo", }' }, `${dir}/vehicle.json`, 'JSON invalide'],
     [

@@ -2,7 +2,9 @@
 // (toutes les commandes), et un panneau bas piloté par l'adresse.
 
 import { lazy, Suspense, useEffect, useState } from 'react';
+import { resolveVehicle } from '../data/vehicles.ts';
 import { useBench } from '../state/bench.ts';
+import { useBuilds } from '../state/builds.ts';
 import { useSettings } from '../state/store.ts';
 import { Dock } from '../ui/Dock.tsx';
 import { Hud } from '../ui/Hud.tsx';
@@ -29,6 +31,7 @@ export function App() {
   const textSize = useSettings((state) => state.textSize);
   const [sceneFailed, setSceneFailed] = useState(false);
   const benchStatus = useBench((state) => state.status);
+  const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const photo = route.name === 'photo' && !sceneFailed;
 
   // La taille du texte s'applique à la racine : toute l'interface est dimensionnée en rem.
@@ -55,11 +58,12 @@ export function App() {
           <Hud />
 
           <div className="mid">
-            {/* Jamais de substitut en silence : celui-ci est annoncé à l'écran. */}
-            {!sceneFailed && (
+            {/* Jamais de substitut en silence : il est annoncé à l'écran, comme le chargement. */}
+            {!sceneFailed && (vehicle.placeholder !== undefined || benchStatus !== 'pret') && (
               <p className="tag" role="status">
-                Substitut · modèle de banc d’essai
+                {vehicle.placeholder !== undefined ? `Substitut · ${vehicle.name}` : vehicle.name}
                 {benchStatus === 'chargement' && ' · en route…'}
+                {benchStatus === 'absent' && ' · modèle absent de cette version'}
                 {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}
               </p>
             )}

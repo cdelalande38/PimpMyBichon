@@ -246,7 +246,7 @@ function useGarageProps(): { count: number; names: string[] } | null {
 
 function substitutesLine(props: { count: number; names: string[] } | null): string {
   const detail = props === null || props.count === 0 ? '' : ` : ${count(props.count, 'objet')} (${props.names.join(', ')}…)`;
-  return `Le mobilier du garage, modelé par le code en attendant des modèles${detail}, et placeholder_banc à la place des véhicules. Liste complète dans TODO_ASSETS.md.`;
+  return `Le mobilier du garage, modelé par le code${detail}, et les véhicules substituts (placeholder_banc pour le concept, placeholder_* pour les autres), en attendant les vrais modèles. Liste complète dans TODO_ASSETS.md.`;
 }
 
 export function UnderHoodPanel() {

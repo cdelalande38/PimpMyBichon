@@ -1,15 +1,17 @@
-// Banc d'essai du jalon 1 : listes de données, lecture tolérante, sauvegarde, peinture.
+// Atelier : listes de données, ambiance (lecture tolérante, sauvegarde, reprise de la peinture du
+// banc d'essai par les builds), peinture.
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { createStore, get, set } from 'idb-keyval';
 import { MeshPhysicalMaterial } from 'three';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AMBIANCES, DEFAULT_AMBIANCE } from '../../src/data/ambiances.ts';
-import { BASIS_TRANSCODER_DIR, BENCH_MODEL } from '../../src/data/bench.ts';
+import { BASIS_TRANSCODER_DIR } from '../../src/data/bench.ts';
 import { DEFAULT_FINISH, finish, FINISHES } from '../../src/data/finishes.ts';
 import { DEFAULT_PAINT_COLOR, PAINT_COLORS } from '../../src/data/paintColors.ts';
 import { applyPaint, createPaintMaterial, paintBaseColor } from '../../src/render/paint.ts';
-import { DEFAULT_BENCH, sanitizeBench } from '../../src/state/bench.ts';
+import { modelUrl, VEHICLES } from '../../src/data/vehicles.ts';
+import { DEFAULT_BENCH, legacyPaint, sanitizeBench } from '../../src/state/bench.ts';
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -76,14 +78,14 @@ describe('données du banc d’essai', () => {
     }
   });
 
-  it('le modèle est servi par l’app, sous un chemin relatif', () => {
-    for (const path of [BENCH_MODEL.file, BASIS_TRANSCODER_DIR]) {
-      expect(path).not.toMatch(/^(\/|[a-z]+:)/i);
+  it('les modèles sont servis par l’app, sous le socle', () => {
+    expect(BASIS_TRANSCODER_DIR).not.toMatch(/^(\/|[a-z]+:)/i);
+    for (const vehicle of VEHICLES) {
+      expect(modelUrl(vehicle)).toBe(`${import.meta.env.BASE_URL}assets/vehicles/${vehicle.id}/${vehicle.glb}`);
     }
-    expect(BENCH_MODEL.file).toMatch(/^assets\/bench\/.+\.glb$/);
-    expect(BENCH_MODEL.paintZones.length).toBeGreaterThan(0);
-    expect(BENCH_MODEL.paintZones.every((zone) => zone.materials.length > 0)).toBe(true);
-    expect(BENCH_MODEL.plainMaterials).toContain('License');
+    const concept = VEHICLES.find((vehicle) => vehicle.wave === 0);
+    expect(concept?.zones.filter((zone) => zone.group === 'carrosserie').every((zone) => zone.materials.length > 0)).toBe(true);
+    expect(concept?.adapt?.plainMaterials).toContain('License');
   });
 });
 
@@ -94,17 +96,15 @@ describe('lecture tolérante du banc', () => {
     }
   });
 
-  it('chaque champ inconnu retombe seul sur l’origine', () => {
-    expect(sanitizeBench({ color: 'violet', finish: 'paillettes-or', ambiance: 7 })).toEqual({
-      color: 'violet',
-      finish: DEFAULT_BENCH.finish,
-      ambiance: DEFAULT_BENCH.ambiance,
-    });
-    expect(sanitizeBench({ color: 'fuchsia', finish: 'chrome', ambiance: 'neon', extra: true })).toEqual({
-      color: DEFAULT_BENCH.color,
-      finish: 'chrome',
-      ambiance: 'neon',
-    });
+  it('ne garde que l’ambiance, et une ambiance inconnue retombe sur l’origine', () => {
+    expect(sanitizeBench({ color: 'violet', finish: 'chrome', ambiance: 7 })).toEqual(DEFAULT_BENCH);
+    expect(sanitizeBench({ ambiance: 'neon', extra: true })).toEqual({ ambiance: 'neon' });
+  });
+
+  it('lit la teinte et la finition de la version 1 quand elles sont connues', () => {
+    expect(legacyPaint({ color: 'orange', finish: 'candy' })).toEqual({ color: '#ff6a00', finish: 'candy' });
+    expect(legacyPaint({ color: 'fuchsia', finish: 'candy' })).toBeNull();
+    expect(legacyPaint(null)).toBeNull();
   });
 });
 
@@ -124,36 +124,33 @@ describe('sauvegarde du banc', () => {
     globalThis.indexedDB = new IDBFactory();
   });
 
-  it('retrouve teinte, finition et ambiance au lancement suivant, sans l’état du modèle', async () => {
+  it('retrouve l’ambiance au lancement suivant, sans l’état du modèle', async () => {
     const first = await launch();
-    first.getState().choose('color', 'orange');
-    first.getState().choose('finish', 'candy');
     first.getState().choose('ambiance', 'atelier');
     first.getState().setStatus('pret');
     await vi.waitFor(async () => {
       const raw = await get<string>('pmb-banc', db());
-      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({
-        color: 'orange',
-        finish: 'candy',
-        ambiance: 'atelier',
-      });
+      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ ambiance: 'atelier' });
     });
 
     const second = await launch();
-    const { color, finish: finishId, ambiance, status } = second.getState();
-    expect({ color, finish: finishId, ambiance, status }).toEqual({
-      color: 'orange',
-      finish: 'candy',
-      ambiance: 'atelier',
-      status: 'chargement',
-    });
+    const { ambiance, status } = second.getState();
+    expect({ ambiance, status }).toEqual({ ambiance: 'atelier', status: 'chargement' });
+  });
+
+  it('la teinte et la finition de la version 1 deviennent la peinture de départ du concept', async () => {
+    await set('pmb-banc', JSON.stringify({ state: { color: 'orange', finish: 'candy', ambiance: 'neon' }, version: 1 }), db());
+    const useBench = await launch();
+    expect(useBench.getState().ambiance).toBe('neon');
+    const { useBuilds } = await import('../../src/state/builds.ts');
+    const concept = VEHICLES.find((vehicle) => vehicle.wave === 0);
+    await vi.waitFor(() => expect(useBuilds.getState().builds[concept?.id ?? '']?.paints.carrosserie).toEqual({ color: '#ff6a00', finish: 'candy' }));
   });
 
   it('une sauvegarde trafiquée ne bloque pas l’ouverture', async () => {
     await set('pmb-banc', JSON.stringify({ state: { color: '<script>', finish: null }, version: 1 }), db());
     const useBench = await launch();
-    const { color, finish: finishId, ambiance } = useBench.getState();
-    expect({ color, finish: finishId, ambiance }).toEqual(DEFAULT_BENCH);
+    expect({ ambiance: useBench.getState().ambiance }).toEqual(DEFAULT_BENCH);
   });
 });
 

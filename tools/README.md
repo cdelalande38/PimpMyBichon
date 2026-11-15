@@ -137,7 +137,7 @@ Les règles d'`assets-check` et d'`audio-check`, ainsi que `hote-cdn` et `hote-e
 | `poids-vehicule` | un dossier `public/assets/vehicles/<id>/` de plus de 15 Mo, toutes variantes comprises |
 | `poids-decor` | `public/assets/garage/` de plus de 10 Mo, ou `public/assets/city/` de plus de 12 Mo |
 | `poids-site` | `dist/` de plus de 1 Go (limite de l'hébergeur) ; en dessous, une note donne le total et les cinq plus gros fichiers |
-| `vehicule` | un dossier de véhicule sans `vehicle.json` (JSON valide, champ `id` égal au nom du dossier), sans `body.glb` ou sans `thumb.webp`, ou dont l'un de ces deux fichiers est vide |
+| `vehicule` | un dossier de véhicule sans `vehicle.json` (JSON valide, champ `id` égal au nom du dossier), sans le modèle annoncé par son champ `glb` (simple note pour un substitut déclaré ; `thumb.webp` facultatif), ou dont l'un de ces fichiers est vide |
 | `lien-symbolique` | avertissement : un lien symbolique sous `public/`, dont la cible échappe aux contrôles |
 
 Les mégaoctets sont décimaux (1 Mo vaut un million d'octets) : c'est la lecture la plus stricte des budgets. Dossier absent, aucun véhicule, pas de `dist/` : une note le dit, sans erreur.
@@ -153,7 +153,7 @@ Chaque `.glb` sous `public/assets/` est lu en Node pur (en-tête, bloc JSON, blo
 | Règle | Où | Ce qui la déclenche |
 |---|---|---|
 | `modele` | tout `public/assets/` | GLB illisible (en-tête absent, version autre que 2, fichier ou bloc tronqué, JSON invalide) : erreur. Un fichier vide est refusé par `vehicule`, sans doublon |
-| `modele-triangles` | véhicules : erreur ; banc d'essai : avertissement | plus de 400 000 triangles dans un fichier |
+| `modele-triangles` | véhicules : erreur ; substitut déclaré (manifeste avec `placeholder`) ou banc d'essai : avertissement | plus de 400 000 triangles dans un fichier |
 | `modele-appels` | idem | plus de 80 primitives dans un fichier |
 | `modele-texture` | idem | une texture de plus de 2048 px, de largeur ou de hauteur ; avertissement partout si des dimensions n'ont pas pu être lues |
 | `modele-format` | avertissement | une texture qui n'est pas en KTX2 |
@@ -321,3 +321,17 @@ npx vitest run tests/unit/mobilier.test.ts                         # noms, maté
 - **Page à la main** : `npx vite --port 5191 --strictPort`, puis `/PimpMyBichon/src/dev/studio/index.html?planche=formes&eclairage=garage` ; souris pour tourner autour.
 - **Ajouter une planche** : un fichier dans `src/dev/studio/planches/` qui exporte `planches` (nom → liste de pièces : forme, position, rotation, couleur, rugosité, métal, étiquette ; ou `materiau` du garage, `objet`, `oeuvre`). Outils de `src/dev/studio/registre.ts` : `grille` range des pièces isolées sur le sol, `objet` pose un objet composé (décalage et lacet). Planches fournies : `formes` (toutes les formes et variantes, étiquetées avec leur nombre de triangles) et `exemples` (canapé en coussins, roue, casque).
 - **Test** : `tests/unit/formes.test.ts` vérifie chaque forme et ses variantes (nombres finis, normales unitaires et du côté de la face, boîte englobante, budget, surface fermée et tournée vers l'extérieur, volume, coordonnées de texture en mètres), la fusion de toutes les formes, les paramètres refusés, et que les formes d'origine se construisent comme le faisait `partGeometry`.
+
+## Véhicules modelés par le code, aperçu, pack de musique
+
+Hors des trois contrôles ci-dessus.
+
+| Commande | Script | Ce qu'elle fait |
+|---|---|---|
+| `npm run vehicles:build [-- <id>…]` | `tools/vehicles/build.mjs` | importe `assets-src/vehicles/<id>/model.mjs` et écrit `public/assets/vehicles/<id>/body.glb` (jamais versionné) ; affiche triangles, appels de dessin, matériaux, nœuds, boîte englobante, poids et durée. Lancé d'office avant `npm run dev`, avant `npm run build` et dans `npm run check` |
+| `node tools/captures/vehicule.mjs <id> [--port <n>]` | `tools/captures/vehicule.mjs` | page d'aperçu `src/dev/vehicule/` (peinture de l'app, studio à deux barres néon) sur la vraie carte : six vues, `planche.png` et la vignette `thumb.webp` dans `captures/vehicules/<id>/` |
+| `npm run radio:pack -- <source> <sortie> [--par-station]` | `tools/radio/pack.mjs` | fabrique un pack de musique (ZIP sans compression, noms UTF-8) : un ZIP version 2 pour tous les sous-dossiers de `<source>` (un sous-dossier = une station), ou un ZIP version 1 par station ; jamais versionné |
+
+- **Générateur** : boîte à outils `tools/vehicles/kit.mjs` (loft, révolution, tube, symétrie, roues voiture et moto, optiques), écrivain GLB `tools/vehicles/glb-writer.mjs` ; elle refuse tout matériau hors des conventions du § 8. Mode d'emploi et exemple : `assets-src/vehicles/LISEZ-MOI.md`. Le build est déterministe (octets identiques d'un build à l'autre).
+- **Catalogue** : un dossier `public/assets/vehicles/<id>/` avec `vehicle.json` suffit ; `src/data/vehicles.ts` le découvre au build, le valide (une erreur cite le fichier) et le trie par `order`. La liste des modèles présents est relevée au démarrage de Vite : en développement, un GLB produit après le démarrage reste « modèle absent » jusqu'au redémarrage du serveur.
+- **Pack de musique** : chaque sous-dossier devient une station ; titre et artiste viennent des étiquettes ID3, sinon du nom de fichier (« 01 - Artiste - Titre.mp3 »). Le ZIP s'importe dans l'app par fichier, par adresse, ou par un lien `…/PimpMyBichon/?pack=<adresse du ZIP>` (recette dans `docs/DEPLOIEMENT.md`). L'hébergement doit servir le ZIP en https avec l'en-tête `Access-Control-Allow-Origin` ; pour la reprise après coupure, il doit aussi accepter les requêtes `Range` et exposer `Content-Length` et `Content-Range`.
