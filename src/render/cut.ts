@@ -6,6 +6,12 @@
 // - En fondu : trame de points stable à l'écran (rejet de fragments) pour les matériaux opaques,
 //   atténuation pour les additifs (cônes de lumière) et pour les voiles transparents (ombres de
 //   contact : c'est leur opacité qui baisse).
+// - La trame vit sous `#ifdef PMB_CUT_DITHER` : un `discard` présent dans un programme, même jamais
+//   pris, peut priver une carte de téléphone de son test de profondeur précoce (LRZ sur Adreno) sur
+//   tout ce que le programme dessine (soupçon après la chute de cadence sur le téléphone de
+//   référence ; une carte de bureau n'en montre rien). Un matériau opaque ne porte ce define que
+//   pendant qu'un de ses éléments est en fondu (règle pure : `ditherNeeds`, src/scene/garage/cut.ts ;
+//   bascule et préchauffage : src/render/cutDither.ts).
 // Les valeurs sont celles de la passe en cours : le reflet du sol voit la même coupe ; la sonde
 // de réflexion, elle, voit tout (le crochet `onProbe` du garage remet tout à 1 le temps d'une capture).
 // GLSL ES 3.00 sans extension : indexation dynamique d'un tableau d'uniformes et d'un vec4 dans
@@ -13,6 +19,8 @@
 // l'élément).
 
 export const CUT_ATTRIBUTE = 'pmbCut';
+/** Define de la variante « trame » des matériaux opaques (seule à contenir le rejet de fragments). */
+export const CUT_DITHER_DEFINE = 'PMB_CUT_DITHER';
 /** Nombre d'identifiants (0 compris) : taille du tableau d'uniformes, quatre par vec4. */
 export const CUT_CAPACITY = 128;
 const CUT_SLOTS = CUT_CAPACITY / 4;
@@ -40,17 +48,23 @@ const VERTEX_BODY = /* glsl */ `
 }`;
 
 const FRAGMENT_HEAD = /* glsl */ `
-varying float vPmbFade;
+varying float vPmbFade;`;
+
+const FRAGMENT_DITHER_HEAD = /* glsl */ `
+#ifdef ${CUT_DITHER_DEFINE}
 // Seuil de Bayer 4 × 4 au pixel : la trame reste fixe à l'écran pendant le fondu.
 float pmbBayer( vec2 fragCoord ) {
   ivec2 q = ivec2( mod( fragCoord, 4.0 ) );
   int s = q.x ^ q.y;
   int b = ( ( s & 1 ) << 3 ) | ( ( q.y & 1 ) << 2 ) | ( ( ( s >> 1 ) & 1 ) << 1 ) | ( ( q.y >> 1 ) & 1 );
   return ( float( b ) + 0.5 ) / 16.0;
-}`;
+}
+#endif`;
 
 const FRAGMENT_DITHER = /* glsl */ `
-if ( vPmbFade < 1.0 && vPmbFade <= pmbBayer( gl_FragCoord.xy ) ) discard;`;
+#ifdef ${CUT_DITHER_DEFINE}
+if ( vPmbFade < 1.0 && vPmbFade <= pmbBayer( gl_FragCoord.xy ) ) discard;
+#endif`;
 
 const FRAGMENT_ATTENUATE = /* glsl */ `
 gl_FragColor.rgb *= vPmbFade;`;
@@ -66,7 +80,8 @@ function inject(source: string, anchor: string, code: string): string {
 /**
  * Ajoute la coupe aux sources d'un matériau de three (standard ou basique). `additive` : le
  * matériau s'ajoute à l'image (fondu par atténuation, après le brouillard) ; `alpha` : voile
- * transparent mélangé par son opacité (fondu par l'opacité) ; sinon, trame de points.
+ * transparent mélangé par son opacité (fondu par l'opacité) ; sinon, trame de points, compilée
+ * seulement avec le define PMB_CUT_DITHER (sans lui, un élément est visible ou masqué, sans rejet).
  */
 export function patchCutShader(shader: { vertexShader: string; fragmentShader: string }, additive: boolean, alpha = false): void {
   shader.vertexShader = inject(shader.vertexShader, '#include <common>', VERTEX_HEAD);
@@ -74,5 +89,8 @@ export function patchCutShader(shader: { vertexShader: string; fragmentShader: s
   shader.fragmentShader = inject(shader.fragmentShader, '#include <common>', FRAGMENT_HEAD);
   if (additive) shader.fragmentShader = inject(shader.fragmentShader, '#include <fog_fragment>', FRAGMENT_ATTENUATE);
   else if (alpha) shader.fragmentShader = inject(shader.fragmentShader, '#include <fog_fragment>', FRAGMENT_ATTENUATE_ALPHA);
-  else shader.fragmentShader = inject(shader.fragmentShader, '#include <clipping_planes_fragment>', FRAGMENT_DITHER);
+  else {
+    shader.fragmentShader = inject(shader.fragmentShader, '#include <common>', FRAGMENT_DITHER_HEAD);
+    shader.fragmentShader = inject(shader.fragmentShader, '#include <clipping_planes_fragment>', FRAGMENT_DITHER);
+  }
 }

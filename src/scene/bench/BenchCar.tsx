@@ -53,6 +53,9 @@ export interface BenchMeasure {
   height: number;
 }
 
+/** Rang de dessin des pièces opaques du véhicule : avant le décor (0) et son sol (1). */
+const VEHICLE_RENDER_ORDER = -2;
+
 interface Prepared extends BenchMeasure {
   root: Group;
   paints: MeshPhysicalMaterial[];
@@ -174,6 +177,11 @@ function prepare(source: Group, model: BenchModel): Prepared {
   // Les pièces fusionnées sont déjà dans le repère du parent du modèle : elles vont à côté.
   turn.add(scene, merged);
   root.add(turn);
+  // Ordre de dessin : les pièces opaques du véhicule avant le décor (il occupe le milieu de l'image,
+  // le décor caché derrière lui n'est plus calculé) ; les vitrages, transparents, gardent le leur.
+  turn.traverse((object) => {
+    if (object instanceof Mesh && !materialsOf(object).some((material) => material.transparent)) object.renderOrder = VEHICLE_RENDER_ORDER;
+  });
   // Boîte précise (sommets) : celle des boîtes englobantes tournées déborde sous les roues,
   // et le véhicule flotterait au-dessus du sol.
   let size = new Box3().setFromObject(turn, true).getSize(new Vector3());

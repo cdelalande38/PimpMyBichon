@@ -6,8 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AMBIANCES } from '../../src/data/ambiances.ts';
 import { FRAMINGS } from '../../src/data/framings.ts';
 import { GARAGE } from '../../src/data/garage.ts';
-import { CUT_ATTRIBUTE, CUT_CAPACITY } from '../../src/render/cut.ts';
-import { patchGarageShader } from '../../src/render/floor.ts';
+import { CUT_ATTRIBUTE, CUT_CAPACITY, CUT_DITHER_DEFINE } from '../../src/render/cut.ts';
+import { hasCutDither } from '../../src/render/cutDither.ts';
+import { isDitherCarrier, patchGarageShader, patchSurfaceShader } from '../../src/render/floor.ts';
 import { framingPose, frontFromTurn } from '../../src/render/photo/framing.ts';
 import { fitCamera, orbitPosition } from '../../src/scene/fit.ts';
 import type { GarageScene } from '../../src/scene/garage/build.ts';
@@ -16,6 +17,9 @@ import {
   boxInHull,
   createCutState,
   decideCut,
+  ditherNeeds,
+  ditherOwners,
+  inFade,
   protectedBoxes,
   stepFades,
   supportsOf,
@@ -171,6 +175,42 @@ describe('coupe : R1, R3 et hystérésis sur une pièce d’essai', () => {
   });
 });
 
+/**
+ * Source telle que le préprocesseur la voit avec ou sans un define : les blocs `#ifdef name` /
+ * `#ifndef name` (avec leur `#else`) sont gardés ou retirés, les autres directives laissées telles
+ * quelles. Les sources brutes de three n'ont pas leurs `#include` développés : un `discard` qui y
+ * reste vient forcément d'un patch.
+ */
+function preprocess(source: string, name: string, defined: boolean): string {
+  const out: string[] = [];
+  // Pile des blocs ouverts : null pour un bloc qui ne porte pas sur `name` (gardé tel quel).
+  const stack: Array<{ keep: boolean } | null> = [];
+  const keeping = () => stack.every((block) => block === null || block.keep);
+  for (const line of source.split('\n')) {
+    const directive = /^\s*#\s*(ifdef|ifndef|if|else|endif)\b\s*(\S*)/.exec(line);
+    if (directive) {
+      const [, kind, argument] = directive;
+      if ((kind === 'ifdef' || kind === 'ifndef') && argument === name) {
+        stack.push({ keep: kind === 'ifdef' ? defined : !defined });
+        continue;
+      }
+      if (kind === 'ifdef' || kind === 'ifndef' || kind === 'if') stack.push(null);
+      else if (kind === 'else') {
+        const top = stack.at(-1);
+        if (top) {
+          top.keep = !top.keep;
+          continue;
+        }
+      } else if (kind === 'endif') {
+        if (stack.pop()) continue;
+      }
+    }
+    if (keeping()) out.push(line);
+  }
+  expect(stack, `blocs ouverts dans la source`).toEqual([]);
+  return out.join('\n');
+}
+
 describe('coupe : nuanceurs', () => {
   it('les repères existent dans three.js : standard (trame), basique opaque (trame), basique additif (atténuation)', () => {
     const cases = [
@@ -183,9 +223,35 @@ describe('coupe : nuanceurs', () => {
       expect(() => patchGarageShader(shader, { standard, surface: false, additive })).not.toThrow();
       expect(shader.vertexShader).toContain(`attribute float ${CUT_ATTRIBUTE}`);
       expect(shader.vertexShader).toContain(`pmbCutFade[ ${CUT_CAPACITY / 4} ]`);
-      expect(shader.fragmentShader.includes('discard'), `trame ${standard}/${additive}`).toBe(!additive);
+      const dithered = preprocess(shader.fragmentShader, CUT_DITHER_DEFINE, true);
+      expect(dithered.includes('discard'), `trame ${standard}/${additive}`).toBe(!additive);
       expect(shader.fragmentShader.includes('gl_FragColor.rgb *= vPmbFade'), `atténuation ${standard}/${additive}`).toBe(additive);
     }
+  });
+
+  it('sans le define PMB_CUT_DITHER, aucun programme de la coupe ne contient de discard', () => {
+    const cases = [
+      { name: 'décor standard', lib: ShaderLib.standard, variant: { standard: true, surface: false, additive: false } },
+      { name: 'sol et plafond', lib: ShaderLib.standard, variant: { standard: true, surface: true, additive: false } },
+      { name: 'basique opaque', lib: ShaderLib.basic, variant: { standard: false, surface: false, additive: false } },
+      { name: 'basique additif', lib: ShaderLib.basic, variant: { standard: false, surface: false, additive: true } },
+      { name: 'voile', lib: ShaderLib.basic, variant: { standard: false, surface: false, additive: false, alpha: true } },
+    ];
+    for (const { name, lib, variant } of cases) {
+      const shader = { vertexShader: lib.vertexShader, fragmentShader: lib.fragmentShader };
+      patchGarageShader(shader, variant);
+      for (const source of [shader.vertexShader, shader.fragmentShader]) {
+        expect(preprocess(source, CUT_DITHER_DEFINE, false).includes('discard'), name).toBe(false);
+        // Le seul discard de la coupe est le rejet de la trame, dans son bloc.
+        expect(source.match(/discard/g)?.length ?? 0, name).toBe(source === shader.fragmentShader && !variant.additive && variant.alpha !== true ? 1 : 0);
+      }
+    }
+    const surface = { vertexShader: ShaderLib.standard.vertexShader, fragmentShader: ShaderLib.standard.fragmentShader };
+    patchSurfaceShader(surface);
+    const trame = preprocess(surface.fragmentShader, CUT_DITHER_DEFINE, true);
+    expect(trame).toContain('if ( vPmbFade < 1.0 && vPmbFade <= pmbBayer( gl_FragCoord.xy ) ) discard;');
+    expect(trame).toContain('float pmbBayer( vec2 fragCoord )');
+    expect(preprocess(surface.fragmentShader, CUT_DITHER_DEFINE, false)).not.toContain('pmbBayer');
   });
 
   it('voile transparent (ombres de contact) : fondu par l’opacité, sans trame', () => {
@@ -193,6 +259,60 @@ describe('coupe : nuanceurs', () => {
     patchGarageShader(shader, { standard: false, surface: false, additive: false, alpha: true });
     expect(shader.fragmentShader).toContain('gl_FragColor.a *= vPmbFade');
     expect(shader.fragmentShader.includes('discard')).toBe(false);
+  });
+});
+
+describe('coupe : quel matériau porte la trame', () => {
+  it('en fondu : strictement entre 0 (masqué) et 1 (visible)', () => {
+    expect([0, 1e-6, 0.5, 0.999, 1].map(inFade)).toEqual([false, true, true, true, false]);
+  });
+
+  it('porteurs : identifiants triés, sans doublon ni 0', () => {
+    const owners = ditherOwners([[3, 0, 1, 3], [], new Set([0]), [2]]);
+    expect(owners.count).toBe(4);
+    expect(Array.from(owners.ids)).toEqual([1, 3, 2]);
+    expect(Array.from(owners.start)).toEqual([0, 2, 2, 2, 3]);
+  });
+
+  it('un porteur prend la trame si l’un de ses éléments est en fondu, la quitte dès qu’il est posé', () => {
+    // Porteur 0 : éléments 1 et 2 ; porteur 1 : élément 2 ; porteur 2 : élément 3 ; porteur 3 : rien.
+    const owners = ditherOwners([[1, 2], [2], [3], [0]]);
+    const fades = new Float32Array(8).fill(1);
+    const out = new Uint8Array(4).fill(7);
+    // Au repos, tout visible : aucune trame.
+    expect(ditherNeeds(fades, owners, out)).toBe(0);
+    expect(Array.from(out)).toEqual([0, 0, 0, 0]);
+    // Masqué d'un coup (mouvement réduit, photo) : toujours aucune trame.
+    fades[1] = 0;
+    fades[3] = 0;
+    expect(ditherNeeds(fades, owners, out)).toBe(0);
+    // L'élément 2 en fondu : ses deux porteurs, et eux seuls.
+    fades[2] = 0.6;
+    expect(ditherNeeds(fades, owners, out)).toBe(2);
+    expect(Array.from(out)).toEqual([1, 1, 0, 0]);
+    fades[3] = 0.01;
+    expect(ditherNeeds(fades, owners, out)).toBe(3);
+    expect(Array.from(out)).toEqual([1, 1, 1, 0]);
+    // Fondus terminés : plus rien.
+    fades[2] = 0;
+    fades[3] = 1;
+    expect(ditherNeeds(fades, owners, out)).toBe(0);
+    expect(Array.from(out)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('suit stepFades : trame pendant le fondu, aucune avec un pas de 1', () => {
+    const owners = ditherOwners([[1], [2]]);
+    const fades = new Float32Array(4).fill(1);
+    const hidden = Uint8Array.from([1, 0]);
+    const out = new Uint8Array(2);
+    const seen: number[] = [];
+    while (stepFades(fades, hidden, 0.3)) seen.push(ditherNeeds(fades, owners, out));
+    seen.push(ditherNeeds(fades, owners, out));
+    expect(seen).toEqual([1, 1, 1, 0]);
+    hidden[0] = 0;
+    hidden[1] = 1;
+    stepFades(fades, hidden, 1);
+    expect(ditherNeeds(fades, owners, out)).toBe(0);
   });
 });
 
@@ -345,6 +465,69 @@ describe('coupe : garage réel', () => {
       }
     }
     expect(failures).toEqual([]);
+  });
+
+  it('trame : portée par les seuls matériaux opaques dont un élément est en fondu ; jamais dans la sonde', () => {
+    const { dither, fades } = garage.cut;
+    const ambiance = AMBIANCES[0];
+    if (!ambiance) throw new Error('aucune ambiance');
+    garage.update(ambiance);
+    const patched = new Set<Material>();
+    for (const mesh of meshesOf(garage)) if ((mesh.material as Material).userData.pmbCut === true) patched.add(mesh.material as Material);
+    // Porteurs : tous les opaques patchés (sol, murs, mobilier, sources, œuvres), ni additifs ni voiles.
+    expect(new Set(dither.carriers)).toEqual(new Set([...patched].filter(isDitherCarrier)));
+    expect(dither.carriers.length).toBeGreaterThan(5);
+    for (const material of patched) {
+      if (!isDitherCarrier(material)) expect(material.transparent, material.name).toBe(true);
+    }
+    // Chaque élément dessiné par un matériau opaque est connu de ses porteurs.
+    const owned = new Set(Array.from(dither.owners.ids));
+    const furnitureIds = structure.names.flatMap((name, i) => (name.startsWith('placeholder_') ? [i + 1] : []));
+    for (const id of furnitureIds) expect(owned.has(id), structure.names[id - 1]).toBe(true);
+
+    const reset = () => {
+      fades.fill(1);
+      dither.apply(true);
+    };
+    reset();
+    expect(dither.active).toBe(0);
+    expect(dither.carriers.filter(hasCutDither)).toEqual([]);
+    // Un objet du mobilier en fondu : ses matériaux, et eux seuls.
+    const id = furnitureIds[0] ?? 1;
+    fades[id] = 0.4;
+    const active = dither.apply(true);
+    const expected = dither.carriers.filter((_, m) => {
+      for (let k = dither.owners.start[m] ?? 0; k < (dither.owners.start[m + 1] ?? 0); k += 1) if (dither.owners.ids[k] === id) return true;
+      return false;
+    });
+    expect(active).toBe(expected.length);
+    expect(active).toBeGreaterThan(0);
+    expect(dither.carriers.filter(hasCutDither)).toEqual(expected);
+    // Pendant la capture de la sonde : tout visible, aucune trame ; elle revient ensuite.
+    const restore = (garage.root.userData.onProbe as () => () => void)();
+    expect(dither.carriers.filter(hasCutDither)).toEqual([]);
+    expect(fades[id]).toBe(1);
+    restore();
+    expect(dither.carriers.filter(hasCutDither)).toEqual(expected);
+    expect(fades[id]).toBeCloseTo(0.4, 6);
+    // Fondu interdit (variantes pas prêtes, mouvement réduit, photo) : aucune trame.
+    expect(dither.apply(false)).toBe(0);
+    expect(dither.carriers.filter(hasCutDither)).toEqual([]);
+    // Fondu posé : plus rien.
+    fades[id] = 0;
+    expect(dither.apply(true)).toBe(0);
+    expect(dither.carriers.filter(hasCutDither)).toEqual([]);
+    reset();
+  });
+
+  it('ordre de dessin : le sol après tous les autres opaques du décor, murs et plafond à leur place', async () => {
+    const { FLOOR_RENDER_ORDER } = await import('../../src/scene/garage/build.ts');
+    expect(garage.floor.renderOrder).toBe(FLOOR_RENDER_ORDER);
+    for (const mesh of meshesOf(garage)) {
+      if (mesh === garage.floor || (mesh.material as Material).transparent) continue;
+      expect(mesh.renderOrder, mesh.name).toBeLessThan(FLOOR_RENDER_ORDER);
+      if (/^(plafond|mur_)/.test(mesh.name)) expect(mesh.renderOrder, mesh.name).toBe(0);
+    }
   });
 
   it('rien ne flotte : tout élément tient au sol, à un mur, au plafond ou à un autre élément', () => {

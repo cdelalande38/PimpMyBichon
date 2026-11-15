@@ -563,3 +563,58 @@ export function stepFades(fades: Float32Array, hidden: Uint8Array, step: number)
   }
   return moving;
 }
+
+/**
+ * Porteurs de la trame : les matériaux opaques du décor, chacun avec les éléments qu'il dessine.
+ * Identifiants de coupe (élément i : i + 1), à plat, triés, sans doublon ni 0 (jamais masqué), et
+ * début de chaque porteur dans la liste.
+ */
+export interface DitherOwners {
+  readonly count: number;
+  readonly ids: Uint16Array;
+  readonly start: Uint32Array;
+}
+
+/** Prépare les porteurs à partir des identifiants que chacun dessine (dans n'importe quel ordre). */
+export function ditherOwners(lists: ReadonlyArray<Iterable<number>>): DitherOwners {
+  const start = new Uint32Array(lists.length + 1);
+  const flat: number[] = [];
+  lists.forEach((list, i) => {
+    start[i] = flat.length;
+    const ids = [...new Set(list)].filter((id) => Number.isInteger(id) && id > 0).sort((a, b) => a - b);
+    flat.push(...ids);
+  });
+  start[lists.length] = flat.length;
+  return { count: lists.length, ids: Uint16Array.from(flat), start };
+}
+
+/**
+ * Un élément est en fondu quand sa valeur est strictement entre 0 (masqué : ses sommets quittent le
+ * volume de vue) et 1 (visible) : c'est seulement là que la trame rejette des fragments.
+ */
+export function inFade(value: number): boolean {
+  return value > 0 && value < 1;
+}
+
+/**
+ * Quel porteur doit porter la trame : celui dont au moins un élément est en fondu. Les autres
+ * dessinent sans aucun rejet de fragments (variante sans `discard`). `fades` : valeur par
+ * identifiant (`stepFades`). Écrit 1 ou 0 par porteur dans `out` et rend le nombre de porteurs en
+ * trame. Aucune allocation.
+ */
+export function ditherNeeds(fades: ArrayLike<number>, owners: DitherOwners, out: Uint8Array): number {
+  let active = 0;
+  for (let m = 0; m < owners.count; m += 1) {
+    let need = 0;
+    const end = owners.start[m + 1] ?? 0;
+    for (let k = owners.start[m] ?? 0; k < end; k += 1) {
+      if (inFade(fades[owners.ids[k] ?? 0] ?? 1)) {
+        need = 1;
+        break;
+      }
+    }
+    out[m] = need;
+    active += need;
+  }
+  return active;
+}

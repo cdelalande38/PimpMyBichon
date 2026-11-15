@@ -17,6 +17,7 @@ import {
   Matrix4,
   MeshStandardMaterial,
   Vector2,
+  type Material,
   type MeshBasicMaterial,
   type Texture,
   type WebGLProgramParametersWithUniforms,
@@ -189,6 +190,15 @@ export function patchGarageMaterial(
     return `pmb-garage-1:${surface ? 'surface' : standard ? 'decor' : 'basique'}:${additive ? 'additif' : alpha ? 'voile' : 'opaque'}`;
   };
   material.userData.pmbCut = true;
+}
+
+/**
+ * Matériau patché opaque : sa coupe passe par la trame de points, compilée seulement sous le define
+ * PMB_CUT_DITHER (src/render/cutDither.ts). Additifs et voiles s'effacent sans rejet de fragments.
+ * Même règle que la variante de `patchGarageMaterial`.
+ */
+export function isDitherCarrier(material: Material): boolean {
+  return material.userData.pmbCut === true && material.blending !== AdditiveBlending && !material.transparent;
 }
 
 /** Active ou coupe la réflexion planaire d'un matériau patché (recompile une fois). */

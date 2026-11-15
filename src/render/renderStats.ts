@@ -41,6 +41,20 @@ export interface RenderStatsState {
    * protégée (mesurée, ou d'attente) ; `null` avant la scène.
    */
   cut: { hidden: number; total: number; vehicle: { min: readonly number[]; max: readonly number[] } } | null;
+  /**
+   * Trame de la coupe (src/render/cutDither.ts) : variantes « trame » préparées et prêtes (sinon la
+   * coupe bascule sans fondu), matériaux qui la portent en ce moment (un de leurs éléments est en
+   * fondu), sur le nombre de matériaux opaques du décor ; `null` avant la scène.
+   */
+  cutDither: {
+    ready: boolean;
+    active: number;
+    carriers: number;
+    /** Dernier préchauffage : temps passé sur le fil principal, et délai jusqu'aux variantes prêtes (ms). */
+    warm: { ms: number; readyMs: number } | null;
+  } | null;
+  /** Programmes de nuanceur vivants (renderer.info.programs) ; `null` avant la scène. */
+  programs: number | null;
 }
 
 export const useRenderStats = create<RenderStatsState>()(() => ({
@@ -55,6 +69,8 @@ export const useRenderStats = create<RenderStatsState>()(() => ({
   floatTargets: null,
   gpuEpoch: 0,
   cut: null,
+  cutDither: null,
+  programs: null,
 }));
 
 /** Applique une décision du moniteur de cadence au niveau « auto ». */

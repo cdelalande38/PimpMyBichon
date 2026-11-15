@@ -87,6 +87,14 @@ function cutLine(cut: RenderStatsState['cut']): string {
   return `${count(cut.hidden, 'élément')} du décor sur ${cut.total} ${verb} devant le véhicule.${protectedBox}`;
 }
 
+function ditherLine(dither: RenderStatsState['cutDither']): string {
+  if (dither === null) return '';
+  if (!dither.ready) return ' Fondu en trame pas prêt : le décor bascule d’un coup (mouvement réduit, photo, ou nuanceurs en préparation).';
+  const now = dither.active > 0 ? ` (${count(dither.active, 'matériau', 'matériaux')} en fondu)` : '';
+  const warm = dither.warm ? `, préparé en ${dither.warm.ms} ms (prêt en ${dither.warm.readyMs} ms)` : '';
+  return ` Fondu en trame prêt, compilé à part pour ${count(dither.carriers, 'matériau opaque', 'matériaux opaques')}${warm}${now}.`;
+}
+
 /** « Mesurer » : cinq secondes de rotation, cadence et coût par image au niveau en cours. */
 export function MeterButton() {
   const running = useRenderStats((state) => state.meter.running);
@@ -115,6 +123,8 @@ export function UnderHoodPanel() {
   const floatTargets = useRenderStats((state) => state.floatTargets);
   const meter = useRenderStats((state) => state.meter);
   const cut = useRenderStats((state) => state.cut);
+  const dither = useRenderStats((state) => state.cutDither);
+  const programs = useRenderStats((state) => state.programs);
   const storage = useStorageStatus();
 
   const date = formatBuildDate(BUILD.date);
@@ -163,7 +173,8 @@ export function UnderHoodPanel() {
         {typo(
           frame === null
             ? 'Pas encore dessinée.'
-            : `${frame.calls.toLocaleString('fr-FR')} appels de dessin · ${frame.triangles.toLocaleString('fr-FR')} triangles.`,
+            : `${frame.calls.toLocaleString('fr-FR')} appels de dessin · ${frame.triangles.toLocaleString('fr-FR')} triangles` +
+                `${programs === null ? '' : ` · ${programs} programmes de nuanceur`}.`,
         )}
       </dd>
 
@@ -185,7 +196,7 @@ export function UnderHoodPanel() {
       </dd>
 
       <dt>Coupe</dt>
-      <dd data-fact="coupe">{typo(cutLine(cut))}</dd>
+      <dd data-fact="coupe">{typo(cutLine(cut) + ditherLine(dither))}</dd>
 
       <dt>Qualité</dt>
       <dd data-fact="qualite">

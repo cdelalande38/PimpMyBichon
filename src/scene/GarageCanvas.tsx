@@ -24,7 +24,7 @@ import { photoPlan } from '../render/photo/plan.ts';
 import { PostChain } from '../render/PostChain.tsx';
 import { QUALITY_PROFILES, resolveQuality, type QualityLevel, type QualityProfile } from '../render/quality.ts';
 import { ReflectionProbe } from '../render/ReflectionProbe.tsx';
-import { useRenderStats } from '../render/renderStats.ts';
+import { useRenderStats, type RenderStatsState } from '../render/renderStats.ts';
 import { useBench } from '../state/bench.ts';
 import { usePhoto } from '../state/photo.ts';
 import { useSettings } from '../state/store.ts';
@@ -205,15 +205,22 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
   const level = resolveQuality(quality, autoLevel, floatTargets);
   const profile = QUALITY_PROFILES[level];
 
-  // Nombre d'éléments du décor retirés par la coupe caméra (tests, diagnostic) : posé à la main
-  // sur la scène, pour ne pas refaire le rendu React de toute la scène pendant un glissé.
+  // Nombre d'éléments du décor retirés par la coupe caméra, trame du fondu (variantes prêtes,
+  // matériaux qui la portent en ce moment) et programmes de nuanceur vivants (tests, diagnostic) :
+  // posés à la main sur la scène, pour ne pas refaire le rendu React de toute la scène pendant un glissé.
   const stage = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const show = ({ cut }: { cut: { hidden: number } | null }) => {
+    const put = (element: HTMLDivElement, key: 'coupe' | 'trame' | 'tramePret' | 'programmes', value: string | null) => {
+      if (value === null) delete element.dataset[key];
+      else if (element.dataset[key] !== value) element.dataset[key] = value;
+    };
+    const show = ({ cut, cutDither, programs }: Pick<RenderStatsState, 'cut' | 'cutDither' | 'programs'>) => {
       const element = stage.current;
       if (!element) return;
-      if (cut === null) delete element.dataset.coupe;
-      else if (element.dataset.coupe !== String(cut.hidden)) element.dataset.coupe = String(cut.hidden);
+      put(element, 'coupe', cut === null ? null : String(cut.hidden));
+      put(element, 'trame', cutDither === null ? null : String(cutDither.active));
+      put(element, 'tramePret', cutDither === null ? null : cutDither.ready ? 'oui' : 'non');
+      put(element, 'programmes', programs === null ? null : String(programs));
     };
     show(useRenderStats.getState());
     return useRenderStats.subscribe(show);

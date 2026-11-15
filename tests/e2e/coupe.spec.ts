@@ -4,6 +4,8 @@ import { capture, openApp, VIEWPORT, waitForBench, waitForScene, waitForStill } 
 // Coupe caméra (src/scene/garage/cut.ts) : en tournant autour du véhicule, le décor qui
 // passerait devant lui quitte l'image. Le nombre d'éléments retirés est lu sur la scène
 // (attribut data-coupe) ; au repos, plus aucun dessin. Captures : captures/jalon-1/coupe-*.png.
+// Trame du fondu (src/render/cutDither.ts) : lue sur la scène elle aussi (data-trame : matériaux
+// qui la portent ; data-trame-pret : variantes préparées ; data-programmes : programmes vivants).
 
 /** Compte les appels de dessin WebGL de la page. */
 const COUNT_DRAWS = `
@@ -16,7 +18,16 @@ const COUNT_DRAWS = `
     };
   }`;
 
+/** Retient le plus grand nombre de matériaux en trame vu sur la scène (window.__trameMax). */
+const WATCH_DITHER = `
+  window.__trameMax = 0;
+  new MutationObserver(() => {
+    const value = Number(document.querySelector('.stage')?.getAttribute('data-trame') ?? 0);
+    if (value > window.__trameMax) window.__trameMax = value;
+  }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-trame'] });`;
+
 const draws = (page: Page) => page.evaluate(() => (window as unknown as { __draws: number }).__draws);
+const ditherMax = (page: Page) => page.evaluate(() => (window as unknown as { __trameMax: number }).__trameMax);
 
 async function drawsOverTwoSeconds(page: Page): Promise<number> {
   const before = await draws(page);
@@ -49,7 +60,7 @@ test.describe('coupe caméra', () => {
   test.setTimeout(900_000);
 
   test('tourner autour : la coupe suit le côté, l’image se pose, le repos ne dessine rien', async ({ page }) => {
-    await page.addInitScript({ content: COUNT_DRAWS });
+    await page.addInitScript({ content: COUNT_DRAWS + WATCH_DITHER });
     const errors = watchShaderErrors(page);
     await openApp(page);
     await waitForScene(page);
@@ -68,6 +79,9 @@ test.describe('coupe caméra', () => {
     test.info().annotations.push({ type: 'coupe', description: seen.join(' ') });
     expect(new Set(seen).size, `éléments retirés au fil du tour : ${seen.join(' ')}`).toBeGreaterThan(1);
     expect(seen.every((value) => value > 0), 'de chaque côté, un mur meublé passe devant').toBe(true);
+    // Mouvement réduit : la coupe bascule d'un coup, aucun matériau ne prend jamais la trame.
+    expect(await ditherMax(page), 'aucune trame en mouvement réduit').toBe(0);
+    await expect(page.locator('.stage')).toHaveAttribute('data-trame-pret', 'non');
 
     // L'image est redevenue immobile ; au repos, rien n'est dessiné.
     await expect.poll(() => drawsOverTwoSeconds(page), { message: 'aucun dessin au repos', timeout: 60_000, intervals: [250] }).toBe(0);
@@ -79,8 +93,8 @@ test.describe('coupe caméra', () => {
     expect(errors).toEqual([]);
   });
 
-  test('avec le fondu (mouvement non réduit, rotation coupée) : il se termine, puis la scène se tait', async ({ page }) => {
-    await page.addInitScript({ content: COUNT_DRAWS });
+  test('avec le fondu (mouvement non réduit, rotation coupée) : trame le temps du fondu, rien de compilé, puis la scène se tait', async ({ page }) => {
+    await page.addInitScript({ content: COUNT_DRAWS + WATCH_DITHER });
     const errors = watchShaderErrors(page);
     await openApp(page);
     await waitForScene(page);
@@ -96,11 +110,26 @@ test.describe('coupe caméra', () => {
     await expect(dialog).toBeHidden();
     await page.emulateMedia({ reducedMotion: 'no-preference' });
 
+    // Variantes « trame » préparées sans rien dessiner ; au repos, aucun matériau ne la porte.
+    const stage = page.locator('.stage');
+    await expect(stage).toHaveAttribute('data-trame-pret', 'oui', { timeout: 120_000 });
+    await expect(stage).toHaveAttribute('data-trame', '0');
+    const programs = (await stage.getAttribute('data-programmes')) ?? '';
+    expect(Number(programs), 'programmes vivants après le préchauffage').toBeGreaterThan(0);
+    expect(await ditherMax(page), 'aucune trame avant le premier fondu').toBe(0);
+
     const before = await cut(page);
     await turn(page, 1 / 2);
     await expect.poll(() => cut(page), { message: 'la coupe change de l’autre côté', timeout: 60_000 }).not.toBe(before);
     await waitForStill(page);
     await expect.poll(() => drawsOverTwoSeconds(page), { message: 'fondu terminé, aucun dessin', timeout: 90_000, intervals: [250] }).toBe(0);
+    // Pendant le fondu, au moins un matériau a porté la trame ; au repos, plus aucun ; et le
+    // premier fondu n'a compilé aucun programme.
+    const peak = await ditherMax(page);
+    test.info().annotations.push({ type: 'trame', description: `au plus ${peak} matériau(x) en trame, ${programs} programmes avant et après` });
+    expect(peak, 'trame pendant le fondu').toBeGreaterThan(0);
+    await expect(stage).toHaveAttribute('data-trame', '0');
+    await expect(stage).toHaveAttribute('data-programmes', programs);
     await capture(page, 'coupe-autre-cote');
     expect(errors).toEqual([]);
   });

@@ -269,7 +269,28 @@ node tools/captures/orbite.mjs --prefix essai --out captures/autre --port 4180
 - **Préfixes déjà rangés** : `avant` (garage d'origine, sans coupe), `apres` et `apres2` (coupe caméra), `deco` (mobilier remodelé, œuvres, néons en tubes, ombres de contact).
 - **Relevé** `<préfixe>-coupe.json` : pour chaque planche, le nombre d'éléments du décor retirés à chaque vue (attribut `data-coupe` de la scène).
 - Le script lance `vite preview` sur le port donné (4179 par défaut) et le Chromium de Playwright en rendu logiciel, avec les arguments de `playwright.config.ts`. Compter une vingtaine de minutes ; lancer un seul tour à la fois sur une machine partagée.
-- Les preuves chiffrées de la coupe sont dans `tests/unit/coupe.test.ts` (règles, garde-fou de structure, balayage de 2 170 positions d'œil vérifié par lancer de rayons) et `tests/e2e/coupe.spec.ts` (glissés, fondu, repos sans dessin).
+- Les preuves chiffrées de la coupe sont dans `tests/unit/coupe.test.ts` (règles, garde-fou de structure, balayage de 2 170 positions d'œil vérifié par lancer de rayons, sources de nuanceur sans `discard` hors du define `PMB_CUT_DITHER`, règle « quel matériau porte la trame ») et `tests/e2e/coupe.spec.ts` (glissés, fondu, repos sans dessin, trame seulement pendant le fondu, aucun programme compilé au premier fondu ; attributs `data-trame`, `data-trame-pret` et `data-programmes` de la scène).
+
+## Cadence : temps de carte graphique par image
+
+Hors des trois contrôles ci-dessus. La ligne « Cadence » de « Sous le capot » est plafonnée par l'écran (60 i/s) : elle ne dit rien d'une carte qui a de la marge. `tools/captures/cadence.mjs` relève, image par image pendant la rotation lente, le **temps de carte graphique** (requête de minuterie `TIME_ELAPSED` d'`EXT_disjoint_timer_query_webgl2`), les appels de dessin, les triangles et les programmes de nuanceur vivants, sur un ou plusieurs sites construits.
+
+```sh
+npx vite build                                                     # dist/ de ce dépôt
+node tools/captures/cadence.mjs                                    # ce dépôt, Standard et Max, 3 séries
+node tools/captures/cadence.mjs --root /chemin/avant --root . --label avant --label apres --repeat 4
+node tools/captures/cadence.mjs --levels max --frames 1000 --repeat 1 --out captures/cadence/essai.json
+node tools/captures/cadence.mjs --root /chemin/avant --root . --levels standard --repeat 2 --detail
+```
+
+- **Racines** : `--root <dossier>` désigne un dossier qui contient `dist/` (défaut : ce dépôt), répétable ; `--label` nomme chaque racine (défaut : nom du dossier). Une ancienne version se prépare par `git archive <commit> | tar -x -C <dossier>`, un lien `node_modules` vers celui du dépôt, puis `npx vite build` dans ce dossier.
+- **Serveur** : intégré, une racine par port à partir de `--port` (4321 par défaut), sous `/PimpMyBichon/` comme GitHub Pages ; service worker bloqué (pas de précache pendant la mesure).
+- **Page** : Chromium de Playwright sur la vraie carte (ANGLE sur OpenGL ES : `--use-angle=gl-egl --ignore-gpu-blocklist --enable-gpu`), 412 × 915 à densité 2 (rendu de 824 × 1830 px, proche du téléphone de référence), mouvement non réduit. Une série = une page neuve : niveau choisi dans les réglages, rechargement, la rotation lente repart de la vue de départ.
+- **Relevé** : crochets posés avant le code de l'app (aucune aide de sa part, donc valable sur une ancienne version) : une requête de minuterie autour de chaque rappel `requestAnimationFrame` qui dessine, appels et triangles comptés sur `drawElements`/`drawArrays`, programmes comptés sur `createProgram`/`deleteProgram`. On attend le véhicule posé, on saute `--skip` images (120), puis on garde `--frames` images (4 000 : un tour entier, la rotation avance d'un angle fixe par image ; la médiane ne dépend donc pas de l'instant de départ).
+- **Bruit** : `--repeat` séries par racine et par niveau (3), ordre des racines inversé une série sur deux. La synthèse donne la médiane des médianes de série, et le bruit comme demi-étendue de ces médianes. Relever aussi `uptime` : sur un poste chargé (rendu logiciel d'autres parcours), le temps de carte monte de quelques pour cent ; refaire la série finale au calme.
+- **Détail** : `--detail` ajoute au JSON, par série, chaque image `[rang, temps de carte en ms, appels, matériaux en trame]` (le rang depuis la première image donne l'angle de rotation ; « matériaux en trame » vaut −1 sur une version qui n'expose pas `data-trame`). Sur ce poste, une même fenêtre d'angle varie de ± 1 ms d'une série à l'autre (perturbations passagères) : comparer des médianes de série, pas des fenêtres isolées.
+- **Sortie** : une ligne par série pendant la mesure, puis une ligne par racine et par niveau (`médiane … ms (± bruit) · p90 … · appels · triangles · programmes · véhicule posé à … s`) ; relevé complet en JSON (`--out`, défaut `captures/cadence/cadence-<date>.json`) : par série, médiane, neuvième décile, moyenne et maximum du temps de carte, appels, triangles, programmes, images par seconde, fréquence de la carte (Intel, sysfs), instants de démarrage (première image, véhicule posé, trame de la coupe prête si la version l'expose), attributs de `.stage`.
+- **Limites** : une carte de bureau ne reproduit pas forcément le coût d'une carte de téléphone (tuiles, test de profondeur précoce) : ce relevé compare des versions sur ce poste, il ne prédit pas la cadence d'un Adreno. `--logiciel` passe en rendu logiciel (pas de minuterie : seuls appels, triangles et programmes ont un sens). Compter environ une minute et demie par série.
 
 ## Formes du décor : studio de contrôle
 

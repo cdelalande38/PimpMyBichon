@@ -45,7 +45,8 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Ambiance } from '../../data/ambiances.ts';
 import { CUT_ATTRIBUTE, CUT_CAPACITY } from '../../render/cut.ts';
-import { createSurfaceUniforms, patchGarageMaterial, setReflection, type SurfaceUniforms } from '../../render/floor.ts';
+import { hasCutDither, setCutDither } from '../../render/cutDither.ts';
+import { createSurfaceUniforms, isDitherCarrier, patchGarageMaterial, setReflection, type SurfaceUniforms } from '../../render/floor.ts';
 import { ATMOSPHERE_LAYER, NO_MIRROR_LAYER, PROBE_ONLY_LAYER } from '../../render/layers.ts';
 import {
   colorOf,
@@ -63,10 +64,13 @@ import { artSize, garageArt, type GarageArtId } from '../../data/garageArt.ts';
 import type { GarageShape } from '../../data/garageShapes.ts';
 import { NEON_SIGNS } from '../../data/neonAlphabet.ts';
 import { acquireArtwork, type ArtworkOptions } from './artwork.ts';
-import { analyzeCut, type Box, type CutElement, type CutStructure } from './cut.ts';
+import { analyzeCut, ditherNeeds, ditherOwners, type Box, type CutElement, type CutStructure, type DitherOwners } from './cut.ts';
 import { neonSign } from './neon.ts';
 import { roundedRectContour, shapeGeometry } from './shapes.ts';
 import { garageTexture, haloTexture, type HaloKind } from './textures.ts';
+
+/** Rang de dessin du sol parmi les opaques (0 : tout le reste ; véhicule à −2, BenchCar.tsx). */
+export const FLOOR_RENDER_ORDER = 1;
 
 /** Spots de la retombée, de gauche à droite : leur rang dans les listes de l'ambiance. */
 const SPOT_SLOTS: readonly ColorKey[] = ['spotLeft', 'spotCenter', 'spotRight'];
@@ -376,6 +380,23 @@ function paint(geometry: BufferGeometry, color: Color): BufferGeometry {
   return geometry;
 }
 
+/**
+ * Trame de la coupe (src/render/cutDither.ts) : les matériaux opaques du décor ne compilent le rejet
+ * de fragments que pendant qu'un de leurs éléments est en fondu.
+ */
+export interface GarageDither {
+  /** Matériaux opaques du décor qui peuvent porter la trame, et les éléments que chacun dessine. */
+  readonly carriers: readonly Material[];
+  readonly owners: DitherOwners;
+  /**
+   * Applique la règle aux fondus en cours (`ditherNeeds`) ; `allowed` faux : aucune trame (variantes
+   * pas prêtes, mouvement réduit, mode photo). Rend le nombre de matériaux en trame. Aucune allocation.
+   */
+  apply: (allowed: boolean) => number;
+  /** Matériaux en trame après le dernier `apply`. */
+  readonly active: number;
+}
+
 export interface GarageCut {
   /** Éléments de la coupe : l'identifiant de l'élément i est i + 1. */
   elements: readonly CutElement[];
@@ -383,6 +404,7 @@ export interface GarageCut {
   structure: CutStructure;
   /** Fondu par identifiant (uniforme partagé par tous les matériaux du décor). */
   fades: Float32Array;
+  dither: GarageDither;
 }
 
 export interface GarageScene {
@@ -415,16 +437,69 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
   // (autre ambiance, véhicule compris). Elle voit en revanche tout le décor, coupe levée : la
   // voiture continue de refléter ce qui est masqué (§ 8, ingrédient 2). Elle appelle ce crochet
   // avant sa capture (ReflectionProbe).
+  // Tout visible : la trame n'a rien à rejeter, la sonde dessine sans elle (sa clé de programme,
+  // sans environnement, n'a pas de variante « trame » préparée).
   root.userData.onProbe = () => {
     const strength = surfaceUniforms.pmbReflectionStrength;
     const value = strength.value;
     strength.value = 0;
     fadesBeforeProbe.set(fades);
     fades.fill(1);
+    const dithered = dither.carriers.filter((carrier) => setCutDither(carrier, false));
     return () => {
       strength.value = value;
       fades.set(fadesBeforeProbe);
+      for (const carrier of dithered) setCutDither(carrier, true);
     };
+  };
+
+  // Porteurs de la trame : relevés sur les maillages (attribut de coupe), refaits à chaque ambiance
+  // (les sources sont reconstruites). `has` : état posé ; `want` : tampon de la règle.
+  const dither = {
+    carriers: [] as Material[],
+    owners: ditherOwners([]),
+    has: new Uint8Array(0),
+    want: new Uint8Array(0),
+    active: 0,
+    apply(allowed: boolean): number {
+      const { carriers, owners, has, want } = dither;
+      if (allowed) dither.active = ditherNeeds(fades, owners, want);
+      else {
+        want.fill(0);
+        dither.active = 0;
+      }
+      for (let m = 0; m < carriers.length; m += 1) {
+        if (want[m] === has[m]) continue;
+        const carrier = carriers[m];
+        if (carrier) setCutDither(carrier, want[m] === 1);
+        has[m] = want[m] ?? 0;
+      }
+      return dither.active;
+    },
+  };
+  const refreshDither = () => {
+    const owned = new Map<Material, Set<number>>();
+    root.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const mat = object.material as Material;
+      if (!isDitherCarrier(mat)) return;
+      const ids = owned.get(mat) ?? new Set<number>();
+      owned.set(mat, ids);
+      const attribute = (object.geometry as BufferGeometry).getAttribute(CUT_ATTRIBUTE);
+      if (!attribute) return;
+      const values = attribute.array;
+      let last = -1;
+      for (let i = 0; i < values.length; i += 1) {
+        const id = values[i] ?? 0;
+        if (id !== last) ids.add(id);
+        last = id;
+      }
+    });
+    for (const carrier of dither.carriers) if (!owned.has(carrier)) setCutDither(carrier, false);
+    dither.carriers = [...owned.keys()];
+    dither.owners = ditherOwners([...owned.values()]);
+    dither.has = Uint8Array.from(dither.carriers, (carrier) => (hasCutDither(carrier) ? 1 : 0));
+    dither.want = new Uint8Array(dither.carriers.length);
   };
 
   // Éléments de la coupe caméra, dans l'ordre de leur identifiant (1, 2…).
@@ -477,6 +552,11 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
   patchGarageMaterial(floorMaterial, surfaceUniforms, { surface: true });
   patchGarageMaterial(ceilingMaterial, surfaceUniforms, { surface: true });
   const floor = add(shell, floorUv(plane(extent, extent, [0, -0.002, 0], '+y'), -W / 2, -D / 2), floorMaterial, 'sol');
+  // Ordre de dessin des opaques : le sol (le plus grand, et le plus cher avec son reflet) après
+  // tout le reste, pour que la profondeur déjà écrite lui évite les pixels cachés. Pas les murs ni
+  // le plafond : leurs arêtes ont des égalités de profondeur avec le mobilier, l'ordre y changerait
+  // des pixels (comparaison de captures, captures/notes-agents/jalon1-cadence.md).
+  floor.renderOrder = FLOOR_RENDER_ORDER;
   add(shell, floorUv(plane(extent, extent, [0, H, 0], '-y'), -W / 2, -D / 2), ceilingMaterial, 'plafond');
   add(shell, plane(W, H, [0, H / 2, -D / 2], '+z'), material(surfaces.back), 'mur_fond');
   add(shell, plane(W, H, [0, H / 2, D / 2], '-z'), material(surfaces.front), 'mur_avant');
@@ -880,6 +960,7 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
     lights.right.intensity = ambiance.sideIntensity;
     lights.key.color.set(ambiance.key);
     lights.key.intensity = ambiance.keyIntensity;
+    refreshDither();
   }
 
   function setQuality({ reflection, atmosphere: misty }: { reflection: boolean; atmosphere: boolean }): void {
@@ -896,5 +977,6 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
     for (const release of releases) release();
   }
 
-  return { root, floor, surfaces: surfaceUniforms, cut: { elements, structure, fades }, update, setQuality, dispose };
+  refreshDither();
+  return { root, floor, surfaces: surfaceUniforms, cut: { elements, structure, fades, dither }, update, setQuality, dispose };
 }
