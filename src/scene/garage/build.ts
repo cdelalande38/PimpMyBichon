@@ -162,11 +162,42 @@ function spotGeometry(spot: Spot): BufferGeometry {
   return new CylinderGeometry(spot.radius, spot.radius, SPOT_THICKNESS, 16).translate(...spot.at);
 }
 
-/** Cône de lumière sous un spot : deux plans croisés. */
+/**
+ * Cône de lumière sous un spot : deux plans croisés, coupés à `layout.beam.stop` (le dessin du cône
+ * entier, tronqué) ; trois rangées de sommets, la dernière au bas, celle du milieu au début du
+ * fondu (beamFade).
+ */
 function beamGeometries(spot: Spot, layout: GarageLayout): [BufferGeometry, BufferGeometry] {
-  const { height: bh, radius: br } = layout.beam;
-  const at: Vec3 = [spot.at[0], spot.at[1] - bh / 2, spot.at[2] + br * 0.7];
-  return [plane(br * 2, bh, at, '+z', false), plane(br * 2, bh, at, '+x', false)];
+  const { height: bh, radius: br, stop, fade } = layout.beam;
+  const top = spot.at[1];
+  const bottom = Math.max(top - bh, Math.min(top, stop));
+  const rows = [top, Math.min(top, bottom + fade), bottom];
+  const make = (facing: Facing) => {
+    const geometry = new PlaneGeometry(br * 2, 1, 1, 2);
+    const position = geometry.getAttribute('position');
+    const uv = geometry.getAttribute('uv');
+    for (let i = 0; i < position.count; i += 1) {
+      const y = rows[Math.round((0.5 - position.getY(i)) * 2)] ?? bottom;
+      position.setY(i, y);
+      uv.setY(i, 1 - (top - y) / bh);
+    }
+    const matrix = new Matrix4().compose(new Vector3(spot.at[0], 0, spot.at[2] + br * 0.7), new Quaternion().setFromEuler(FACING[facing]), new Vector3(1, 1, 1));
+    return geometry.applyMatrix4(matrix);
+  };
+  return [make('+z'), make('+x')];
+}
+
+/** Fondu du bas d'un cône (après `paint`) : éteint à sa dernière rangée, plein dès celle du milieu. */
+function beamFade(geometry: BufferGeometry, layout: GarageLayout, spot: Spot): BufferGeometry {
+  const { height: bh, stop, fade } = layout.beam;
+  const bottom = Math.max(spot.at[1] - bh, Math.min(spot.at[1], stop));
+  const position = geometry.getAttribute('position');
+  const color = geometry.getAttribute('color');
+  for (let i = 0; i < position.count; i += 1) {
+    const f = fade > 0 ? Math.min(1, Math.max(0, (position.getY(i) - bottom) / fade)) : 1;
+    color.setXYZ(i, color.getX(i) * f, color.getY(i) * f, color.getZ(i) * f);
+  }
+  return geometry;
 }
 
 /** Pied de tube LED : socle, tige, tube (émissif). */
@@ -268,8 +299,11 @@ export const CONTACT = {
   maxExtent: 3,
   /** Épaisseur sous laquelle un objet est un plat collé au mur (crédence, plaque) : pas de tache. */
   flat: 0.03,
-  /** Écart de hauteur admis entre le bas d'un objet posé et le dessus d'une pièce de son porteur. */
-  seat: 0.05,
+  /**
+   * Écart admis entre la hauteur d'appui déclarée d'un objet posé (Prop.rest) et le dessus des
+   * pièces de son porteur qui forment le dessus où s'arrête sa tache.
+   */
+  seat: 0.005,
 } as const;
 
 /** Distances d'un point aux bords d'une emprise (x, z), le long de directions du plan horizontal. */
@@ -335,15 +369,21 @@ function contactPatch(
 
 /** Appui d'un objet du mobilier (assombrissement de pied, ombre de contact). */
 export interface PropRest {
-  /** Hauteur de l'appui : 0 au sol, le bas de l'objet sur un meuble. */
+  /** Hauteur de l'appui : 0 au sol, le dessus du porteur (Prop.rest.top) sur un meuble. */
   height: number;
-  /** Sur un meuble : emprise (x, z) du dessus qui le porte, que sa tache ne dépasse pas. Nulle au sol. */
+  /** Pente du dessus (Prop.rest.slope), qui monte vers −z ; 0 au sol et sur un dessus plat. */
+  slope: number;
+  /**
+   * Sur un meuble : emprise (x, z) du dessus qui le porte, que sa tache ne dépasse pas (pièces du
+   * porteur dont le dessus est à la hauteur d'appui et qui recouvrent l'objet). Nulle au sol, et
+   * sur un meuble dont aucune pièce n'a son dessus à cette hauteur (dessus en pente).
+   */
   footprint: Box | null;
 }
 
 /** Objet du mobilier posé dans la pièce : identifiant de coupe, boîte d'ensemble, boîtes des pièces. */
 interface PlacedProp {
-  id: number;
+  prop: Prop;
   box: Box | null;
   boxes: readonly Box[];
 }
@@ -351,25 +391,26 @@ interface PlacedProp {
 const overlaps = (a: Box, b: Box, axis: number) => Math.min(a.max[axis] ?? 0, b.max[axis] ?? 0) > Math.max(a.min[axis] ?? 0, b.min[axis] ?? 0);
 
 /**
- * Appui d'un objet : le sol (bas sous CONTACT.ground), le dessus d'un meuble qui le porte, ou rien
- * (accroché : `null`). Posé : une pièce d'un de ses porteurs (supports de la coupe) a son dessus à
- * CONTACT.seat près du bas de l'objet et le recouvre en x et en z. Le reste du porteur peut monter
- * plus haut (fronton du flipper, dérouleur des meubles d'atelier). L'emprise est celle des pièces
- * de ce dessus (à 1 cm près du plus haut : les planches d'un plateau). Un plat collé au mur
- * (crédence, plaque) n'est jamais posé.
+ * Appui d'un objet : le meuble déclaré par ses données (Prop.rest : porteur et hauteur du dessus),
+ * le sol (bas sous CONTACT.ground), ou rien (accroché : `null`). Rien n'est deviné : un évier
+ * encastré repose sur le plan de travail par son rebord, pas sur le caisson sous sa cuve.
  */
-function restOf(item: PlacedProp, furniture: ReadonlyMap<number, PlacedProp>, supports: readonly number[]): PropRest | null {
-  const { box } = item;
+function restOf(item: PlacedProp, byName: ReadonlyMap<string, PlacedProp>): PropRest | null {
+  const { box, prop } = item;
   if (!box) return null;
-  if (box.min[1] < CONTACT.ground) return { height: 0, footprint: null };
-  if (Math.min(box.max[0] - box.min[0], box.max[2] - box.min[2]) < CONTACT.flat) return null;
-  const bottom = box.min[1];
-  const seats = supports.flatMap((k) =>
-    (furniture.get(k)?.boxes ?? []).filter((part) => Math.abs((part.max[1] ?? 0) - bottom) <= CONTACT.seat && overlaps(part, box, 0) && overlaps(part, box, 2)),
-  );
-  if (seats.length === 0) return null;
-  const top = Math.max(...seats.map((part) => part.max[1] ?? 0));
-  return { height: bottom, footprint: unionBox(seats.filter((part) => (part.max[1] ?? 0) >= top - 0.01)) };
+  if (prop.rest) {
+    const { on, top, slope = 0 } = prop.rest;
+    const carrier = byName.get(on);
+    if (!carrier) throw new Error(`Garage : ${prop.name} posé sur « ${on} », absent du mobilier`);
+    // Dessus plat : les pièces dont le dessus est à la hauteur d'appui. En pente : celles qui la
+    // contiennent (leur boîte monte plus haut, vers le haut de la pente).
+    const level = (part: Box) =>
+      slope === 0 ? Math.abs((part.max[1] ?? 0) - top) <= CONTACT.seat : (part.min[1] ?? 0) <= top && top <= (part.max[1] ?? 0) + CONTACT.seat;
+    const seats = carrier.boxes.filter((part) => level(part) && overlaps(part, box, 0) && overlaps(part, box, 2));
+    return { height: top, slope, footprint: unionBox(seats) };
+  }
+  if (box.min[1] < CONTACT.ground) return { height: 0, slope: 0, footprint: null };
+  return null;
 }
 
 /**
@@ -777,14 +818,10 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
 
   // Tous les éléments sont posés : la coupe s'analyse (adossements, supports).
   const structure = analyzeCut(layout.room, elements, { wall: layout.cut.wallTolerance, contact: layout.cut.contactTolerance });
-  const supportOf = (id: number): number[] => {
-    const i = id - 1;
-    return Array.from(structure.supportList.subarray(structure.supportStart[i] ?? 0, structure.supportStart[i + 1] ?? 0), (k) => k + 1);
-  };
-  const furnitureById = new Map(furnished.map((item) => [item.id, item]));
-  // Appui de chaque objet (assombrissement de pied, ombre de contact) : le sol, le dessus d'un
-  // meuble qui le porte, ou rien (accroché).
-  const rests = new Map(furnished.map((item) => [item.id, restOf(item, furnitureById, supportOf(item.id))]));
+  const furnitureByName = new Map(furnished.map((item) => [item.prop.name as string, item]));
+  // Appui de chaque objet (assombrissement de pied, ombre de contact) : le sol, le meuble déclaré
+  // par ses données, ou rien (accroché).
+  const rests = new Map(furnished.map((item) => [item.id, restOf(item, furnitureByName)]));
 
   // Mobilier : assombrissement de pied, puis fusion par matériau.
   for (const item of furnished) {
@@ -858,6 +895,9 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
       // Au sol ou sur un meuble : emprise dans le repère de l'objet, tournée avec lui. Sur un
       // meuble, la tache s'éteint avant le bord du dessus qui le porte ; un objet posé de biais
       // y prend l'emprise de sa boîte, alignée sur la pièce comme ce bord (la borne reste exacte).
+      // Une tache plate ne se pose que sur un dessus plat (sur une pente, l'objet dit `contact:
+      // false`) : sans pièce du porteur à la hauteur déclarée, pas de tache (scene-decor.test.ts le signale).
+      if (prop.rest && rest.footprint === null) continue;
       const kind = rest.footprint === null ? CONTACT.floor : CONTACT.rest;
       const quarter = (prop.turn ?? 0) / (Math.PI / 2);
       const square = rest.footprint === null || Math.abs(quarter - Math.round(quarter)) < 1e-6;
@@ -870,7 +910,14 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
       centre.y = rest.height + kind.lift;
       const half = [(frame.max[0] - frame.min[0]) / 2, (frame.max[2] - frame.min[2]) / 2] as const;
       const reach = rest.footprint ? reachWithin(centre, [u.clone().negate(), u, v.clone().negate(), v], rest.footprint) : undefined;
-      patches.push(tagCut(contactPatch(centre, u, v, half, kind.margin, kind.opacity, reach), item.id));
+      const patch = contactPatch(centre, u, v, half, kind.margin, kind.opacity, reach);
+      if (rest.slope !== 0) {
+        // Dessus en pente : la tache suit le plan du porteur, à partir de l'aplomb de l'origine de l'objet.
+        const position = patch.getAttribute('position');
+        const rise = Math.tan(rest.slope);
+        for (let i = 0; i < position.count; i += 1) position.setY(i, position.getY(i) + (prop.at[2] - position.getZ(i)) * rise);
+      }
+      patches.push(tagCut(patch, item.id));
       continue;
     }
     const kind = CONTACT.wall;
@@ -1007,7 +1054,7 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
       if (id === 0) return;
       const slot = SPOT_SLOTS.indexOf(spot.color);
       const color = hdr(ambiance, spot.color, ambiance.beamGain * (ambiance.spotHaloGain[slot] ?? 1));
-      beams.push(...beamGeometries(spot, layout).map((geometry) => tagCut(paint(geometry, color), id)));
+      beams.push(...beamGeometries(spot, layout).map((geometry) => tagCut(beamFade(paint(geometry, color), layout, spot), id)));
     });
     const mists = layout.mists.map((mist) => paint(plane(mist.size[0], mist.size[1], mist.at, mist.facing, false), hdr(ambiance, mist.color, mist.gain * ambiance.mistGain)));
     for (const [parts, kind] of [[beams, 'cone'], [mists, 'nappe']] as const) {

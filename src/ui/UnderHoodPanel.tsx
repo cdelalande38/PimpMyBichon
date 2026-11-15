@@ -6,7 +6,17 @@ import { useEffect, useState } from 'react';
 import { BUILD, formatBuildDate } from '../app/buildInfo.ts';
 import { precachePercent, usePwa } from '../pwa/pwaStore.ts';
 import { QUALITY_LABELS, resolveQuality } from '../render/quality.ts';
-import { COMPARE_STEPS, COMPARE_WINDOW_MS, METER_DURATION_MS, type CompareOutcome } from '../render/frameMeter.ts';
+import {
+  atScreenCap,
+  COMPARE_ANNOUNCED_S,
+  COMPARE_ORDER,
+  COMPARE_STEPS,
+  inNoise,
+  METER_DURATION_MS,
+  readCompare,
+  type CompareOutcome,
+  type CompareReading,
+} from '../render/frameMeter.ts';
 import { abortCompare, startCompare, startMeter, useRenderStats, type CompareState, type RenderStatsState } from '../render/renderStats.ts';
 import { readStorageStatus, type StorageStatus } from '../state/persistence.ts';
 import { useSettings } from '../state/store.ts';
@@ -57,6 +67,8 @@ function installLine(standalone: boolean, canInstall: boolean): string {
   return 'Dans le navigateur. Pour l’installer : menu de Chrome, puis « Ajouter à l’écran d’accueil ».';
 }
 
+const EMPTY_READING: CompareReading = { noiseMs: null, noiseGpuMs: null, redo: false };
+
 const decimal = (value: number) => value.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 function qualityLine(quality: string, level: string, auto: RenderStatsState['auto'], floatTargets: boolean | null, fullFloat: boolean | null): string {
@@ -98,53 +110,117 @@ function ditherLine(dither: RenderStatsState['cutDither']): string {
   return ` Fondu en trame prêt, compilé à part pour ${count(dither.carriers, 'matériau opaque', 'matériaux opaques')}${warm}${now}.`;
 }
 
-const signedMs = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : '±'}${decimal(Math.abs(value))} ms`;
+// Lignes de « Comparer » : nombre et unité liés par une espace insécable (jamais coupés en fin de
+// ligne), et recopiables telles quelles dans un message.
+const NBSP = '\u00a0';
+const withUnit = (value: string, unit: string) => `${value}${NBSP}${unit}`;
+const ms = (value: number) => withUnit(decimal(value), 'ms');
+const signedMs = (value: number) => withUnit(`${value > 0 ? '+' : value < 0 ? '−' : '±'}${decimal(Math.abs(value))}`, 'ms');
+/** Séparateur des morceaux d'une ligne : le point médian reste en fin de ligne, jamais en tête. */
+const SEP = `${NBSP}· `;
 
-/** Une ligne de la comparaison ; l'écart de temps par image se lit contre le réglage en cours. */
-function compareLine(outcome: CompareOutcome, base: CompareOutcome | undefined): string {
+/** Écart au réglage en cours, et s'il tient dans le bruit de l'essai. */
+function gapText(delta: number, noise: number | null): string {
+  return ` (${signedMs(delta)}${inNoise(delta, noise) ? ', dans le bruit' : ''})`;
+}
+
+/**
+ * Une ligne de la comparaison : cadence (et son écart au réglage en cours, ou le plafond de
+ * l'écran), temps de carte (et son écart), écarts aller-retour, processeur, appels.
+ */
+function compareLine(outcome: CompareOutcome, base: CompareOutcome | undefined, reading: CompareReading, screenMs: number | null, timed: boolean): string {
   if (!outcome.measured) return `${outcome.label} : non mesurée, ${outcome.reason}.`;
   const { summary } = outcome;
-  const gap = outcome.id !== 'courant' && base?.measured ? ` (${signedMs(summary.meanMs - base.summary.meanMs)})` : '';
+  const reference = outcome.id !== 'courant' && base?.measured ? base.summary : null;
+  const capped = atScreenCap(summary, screenMs);
+  const cadence =
+    `${withUnit(decimal(summary.fps), 'i/s')}, ${ms(summary.meanMs)}` +
+    (capped ? ', au plafond de l’écran' : reference ? gapText(summary.meanMs - reference.meanMs, reading.noiseMs) : '');
+  // Sans minuterie de la carte (navigateur qui ne la donne pas), l'état le dit une fois pour toutes.
+  const gpu =
+    summary.gpuMs === null
+      ? timed
+        ? `${SEP}carte pas chronométrée`
+        : ''
+      : `${SEP}carte ${ms(summary.gpuMs)}` + (reference?.gpuMs != null ? gapText(summary.gpuMs - reference.gpuMs, reading.noiseGpuMs) : '');
+  const gaps =
+    summary.gapGpuMs === null
+      ? `aller-retour à ${ms(summary.gapMs)} près`
+      : `aller-retour à ${decimal(summary.gapMs)} et ${ms(summary.gapGpuMs)} près`;
   return (
-    `${outcome.label} : ${decimal(summary.fps)} i/s · ${decimal(summary.meanMs)} ms par image${gap} · ` +
-    `${decimal(summary.worstFps)} i/s au pire centile · processeur ${decimal(summary.cpuMs)} ms · ` +
-    `${summary.calls.toLocaleString('fr-FR')} appels.`
+    `${outcome.label} : ${cadence}${gpu}${SEP}${gaps}${SEP}processeur ${ms(summary.cpuMs)}${SEP}` +
+    `${withUnit(summary.calls.toLocaleString('fr-FR'), 'appels')}.`
   );
 }
 
-function compareStatus(compare: CompareState): string {
+/** Au moins une variante a son temps de carte (minuterie de la carte présente). */
+const isTimed = (outcomes: readonly CompareOutcome[]) => outcomes.some((outcome) => outcome.measured && outcome.summary.gpuMs !== null);
+
+function compareStatus(compare: CompareState, reading: CompareReading | null): string {
   if (compare.running) {
     const step = COMPARE_STEPS[compare.step];
-    return `Mesure ${compare.step + 1} sur ${COMPARE_STEPS.length}${step ? ` (${step.label.toLowerCase()})` : ''}… Ne touche à rien.`;
+    const pass = compare.slot < COMPARE_STEPS.length ? 'aller' : 'retour';
+    return `Mesure ${compare.slot + 1} sur ${COMPARE_ORDER.length}${step ? ` (${step.label.toLowerCase()}, ${pass})` : ''}… Ne touche à rien.`;
   }
   const result = compare.result;
   if (compare.aborted !== null) return `Comparaison interrompue : ${compare.aborted}. Relance-la quand tu veux.`;
   if (result === null) {
-    return '« Comparer » enchaîne quatre mesures au niveau en cours : compte une vingtaine de secondes, pose le téléphone et ne touche à rien.';
+    return (
+      `« Comparer » mesure ${withUnit(String(COMPARE_STEPS.length), 'variantes')} de la scène, deux fois chacune (aller puis retour) : ` +
+      `compte ${withUnit(String(COMPARE_ANNOUNCED_S), 'secondes')}, pose le téléphone et ne touche à rien.`
+    );
   }
   const ratio = result.dpr.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  return `${QUALITY_LABELS[result.level]}, pixel ratio ${ratio}, ${COMPARE_WINDOW_MS / 1000} secondes de rotation par mesure :`;
+  const noise =
+    reading?.noiseMs == null
+      ? ''
+      : ` Bruit : ${ms(reading.noiseMs)} par image${reading.noiseGpuMs === null ? '' : `, ${ms(reading.noiseGpuMs)} de carte`}.`;
+  const screen = result.screenMs === null ? ' Rythme de l’écran pas reconnu.' : ` Écran : ${withUnit(String(Math.round(1000 / result.screenMs)), 'i/s')}.`;
+  const untimed = isTimed(result.outcomes) ? '' : ' Carte pas chronométrée : ce navigateur ne donne pas sa minuterie.';
+  const redo = reading?.redo ? ' Trop de bruit pour conclure : relance « Comparer », téléphone posé, rien d’autre d’ouvert.' : '';
+  return `${QUALITY_LABELS[result.level]}, pixel ratio ${ratio}, deux passages par variante.${noise}${screen}${untimed}${redo}`;
 }
+
+/** Libellé d'un bouton qui garde la largeur du plus long de ses libellés (la rangée ne saute pas). */
+function SteadyLabel({ text, widest }: { text: string; widest: readonly string[] }) {
+  return (
+    <span className="btn-cale">
+      {widest.map((wide) => (
+        <span key={wide} aria-hidden="true">
+          {wide}
+        </span>
+      ))}
+      <span>{text}</span>
+    </span>
+  );
+}
+
+const METER_LABELS = ['Mesurer', 'Mesure…'] as const;
+const COMPARE_LABELS = ['Comparer', `${COMPARE_ORDER.length} sur ${COMPARE_ORDER.length}…`] as const;
 
 /**
  * « Mesurer » (cinq secondes de rotation, cadence et coût par image au niveau en cours) et
- * « Comparer » (quatre mesures, une variante de la scène chacune ; src/scene/FrameMeter.tsx).
+ * « Comparer » (cinq variantes de la scène, deux passages chacune ; src/scene/FrameMeter.tsx).
+ * Leurs libellés gardent leur largeur pendant la mesure : la rangée de boutons ne saute pas.
  */
 export function MeterButton() {
   const running = useRenderStats((state) => state.meter.running);
   const comparing = useRenderStats((state) => state.compare.running);
-  const step = useRenderStats((state) => state.compare.step);
+  const slot = useRenderStats((state) => state.compare.slot);
   const ready = useRenderStats((state) => state.gpu !== null);
   // Panneau fermé pendant la comparaison : elle s'arrête, la scène revient à son état d'origine.
   useEffect(() => () => abortCompare('panneau fermé'), []);
   const busy = running || comparing;
   return (
     <>
-      <button type="button" className="btn btn-mesure" disabled={busy || !ready} onClick={startMeter}>
-        {running ? 'Mesure…' : 'Mesurer'}
+      <button type="button" className="btn btn-mesure" disabled={busy || !ready} aria-busy={running} onClick={startMeter}>
+        <SteadyLabel text={running ? METER_LABELS[1] : METER_LABELS[0]} widest={METER_LABELS} />
       </button>
-      <button type="button" className="btn btn-mesure" disabled={busy || !ready} onClick={startCompare}>
-        {comparing ? `${Math.min(step + 1, COMPARE_STEPS.length)} sur ${COMPARE_STEPS.length}…` : 'Comparer'}
+      <button type="button" className="btn btn-mesure" disabled={busy || !ready} aria-busy={comparing} onClick={startCompare}>
+        <SteadyLabel
+          text={comparing ? `${Math.min(slot + 1, COMPARE_ORDER.length)} sur ${COMPARE_ORDER.length}…` : COMPARE_LABELS[0]}
+          widest={COMPARE_LABELS}
+        />
       </button>
     </>
   );
@@ -191,6 +267,9 @@ export function UnderHoodPanel() {
   const fullFloat = useRenderStats((state) => state.fullFloatTargets);
   const meter = useRenderStats((state) => state.meter);
   const compare = useRenderStats((state) => state.compare);
+  // Bruit et conseil : seulement une fois l'essai allé au bout (les deux passages de chaque variante).
+  const finished = compare.result !== null && !compare.running && compare.aborted === null;
+  const reading = finished && compare.result ? readCompare(compare.result.outcomes, compare.result.screenMs) : null;
   const garageProps = useGarageProps();
   const cut = useRenderStats((state) => state.cut);
   const dither = useRenderStats((state) => state.cutDither);
@@ -280,8 +359,14 @@ export function UnderHoodPanel() {
       </dd>
 
       <dt>Comparer</dt>
-      <dd data-fact="comparer" aria-live="polite" data-etat={compare.running ? 'en-cours' : compare.aborted !== null ? 'interrompue' : compare.result ? 'finie' : 'vide'}>
-        {typo(compareStatus(compare))}
+      <dd
+        data-fact="comparer"
+        aria-live="polite"
+        data-etat={compare.running ? 'en-cours' : compare.aborted !== null ? 'interrompue' : compare.result ? 'finie' : 'vide'}
+        data-ecran={compare.result?.screenMs == null ? undefined : Math.round(1000 / compare.result.screenMs)}
+        data-recommencer={reading === null ? undefined : reading.redo ? 'oui' : 'non'}
+      >
+        {typo(compareStatus(compare, reading))}
         {compare.result !== null && compare.result.outcomes.length > 0 && (
           <ul className="comparaison">
             {compare.result.outcomes.map((outcome, _, all) => (
@@ -290,8 +375,9 @@ export function UnderHoodPanel() {
                 data-fact={`comparer-${outcome.id}`}
                 data-mesuree={outcome.measured ? 'oui' : 'non'}
                 data-programmes={outcome.measured ? outcome.programs : undefined}
+                data-plafond={outcome.measured && !compare.running ? (atScreenCap(outcome.summary, compare.result?.screenMs ?? null) ? 'oui' : 'non') : undefined}
               >
-                {typo(compareLine(outcome, all.find((entry) => entry.id === 'courant')))}
+                {typo(compareLine(outcome, all.find((entry) => entry.id === 'courant'), reading ?? EMPTY_READING, compare.result?.screenMs ?? null, isTimed(all)))}
               </li>
             ))}
           </ul>

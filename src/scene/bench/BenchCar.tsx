@@ -2,9 +2,8 @@
 // catalogue. Tout ce qui lui est propre (fichier, matériaux de carrosserie, logos à masquer)
 // vient de src/data/bench.ts ; ce composant ne connaît aucun nom de matériau.
 
-import { ContactShadows } from '@react-three/drei';
-import { useLoader, useThree } from '@react-three/fiber';
-import { memo, useEffect, useLayoutEffect, useMemo } from 'react';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   Box3,
   Group,
@@ -16,6 +15,7 @@ import {
   WebGLRenderTarget,
   type BufferGeometry,
   type Material,
+  type Object3D,
   type WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -24,10 +24,11 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { BASIS_TRANSCODER_DIR, type BenchModel } from '../../data/bench.ts';
 import { finish as findFinish, type Finish } from '../../data/finishes.ts';
 import { paintColor } from '../../data/paintColors.ts';
-import { programsReady } from '../../render/cutDither.ts';
-import { applyPaint, createPaintMaterial, paintWitnesses, warmPaintPrograms } from '../../render/paint.ts';
+import { primeCutDither, programsReady, type CutDitherProgram } from '../../render/cutDither.ts';
+import { applyPaint, createPaintMaterial, paintWitnessPrograms, paintWitnesses, warmPaintPrograms } from '../../render/paint.ts';
 import { precompileSeen } from '../../render/ReflectionProbe.tsx';
 import { useRenderStats } from '../../render/renderStats.ts';
+import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
 import { useBench } from '../../state/bench.ts';
 
 const BASE = import.meta.env.BASE_URL;
@@ -227,15 +228,35 @@ function paintBody(paints: readonly MeshPhysicalMaterial[], hex: string, finish:
 }
 
 /**
- * Ombre de contact, rendue une fois. Mémoïsée : le compteur d'images de ContactShadows repart
- * à zéro à chaque rendu React, et un changement de peinture referait tout un rendu de scène.
+ * Ombre de contact (src/render/vehicleShadow.ts) : elle ne voit que le véhicule. Rendue une fois, à la
+ * première image après sa pose ; remontée à chaque contexte WebGL rendu (clé d'époque), libérée au
+ * démontage. Ses trois programmes sont lancés d'avance, avec ceux du véhicule.
  */
-const ContactShadow = memo(function ContactShadow({ halfLength, halfWidth, height }: BenchMeasure) {
-  return <ContactShadows scale={[halfLength * 2.5, halfWidth * 3]} far={height} blur={2.2} opacity={0.8} resolution={512} frames={1} />;
-});
+function VehicleShadow({ caster, halfLength, halfWidth, height }: BenchMeasure & { caster: Object3D }) {
+  const gl = useThree((state) => state.gl);
+  const scene = useThree((state) => state.scene);
+  const invalidate = useThree((state) => state.invalidate);
+  const rig = useMemo(() => new VehicleShadowRig(shadowSize({ halfLength, halfWidth, height })), [halfLength, halfWidth, height]);
+  useEffect(() => () => rig.dispose(), [rig]);
+  const pending = useRef(true);
+  useLayoutEffect(() => {
+    pending.current = true;
+    rig.compile(gl);
+    invalidate();
+  }, [gl, rig, caster, invalidate]);
+  useFrame(() => {
+    if (!pending.current) return;
+    pending.current = false;
+    rig.render(gl, caster, scene);
+  });
+  return <primitive object={rig.root} />;
+}
 
 /** Intervalle de l'attente avant le préchauffage de la peinture (véhicule dessiné, programmes prêts). */
 const PAINT_WARM_POLL_MS = 100;
+/** Premier usage des témoins de peinture : tranches de fil principal et pause entre deux (comme la trame). */
+const PAINT_PRIME_SLICE_MS = 6;
+const PAINT_PRIME_GAP_MS = 20;
 
 interface BenchCarProps {
   model: BenchModel;
@@ -285,18 +306,34 @@ export function BenchCar({ model, onMeasured, bodyEnv }: BenchCarProps) {
   // mode photo : autre environnement, autres lumières, donc autres clés de programme).
   const witnesses = useMemo(() => paintWitnesses(prepared.root, prepared.paints), [prepared]);
   useEffect(() => () => witnesses.dispose(), [witnesses]);
+  // Puis premier usage de leurs programmes hors des images, par tranches, une fois compilés en tâche de
+  // fond (requêtes de liaison et d'emplacements) : le premier choix d'une finition n'attend plus rien
+  // dans l'image (revue d, m4), comme la trame du fondu (primeCutDither, src/render/cutDither.ts).
   useEffect(() => {
     let timer = 0;
+    let programs: CutDitherProgram[] | null = null;
+    let primed = 0;
     const drawn = () => prepared.paints.every((paint) => (gl.properties.get(paint) as { currentProgram?: unknown }).currentProgram !== undefined);
     const tick = () => {
-      if (scene.environment === null || !drawn() || !programsReady(gl.info.programs)) {
+      if (programs === null) {
+        if (scene.environment === null || !drawn() || !programsReady(gl.info.programs)) {
+          timer = window.setTimeout(tick, PAINT_WARM_POLL_MS);
+          return;
+        }
+        warmPaintPrograms(gl, witnesses, scene, camera, warmTarget);
+        programs = paintWitnessPrograms(gl, witnesses);
+        primed = 0;
+      }
+      if (!programsReady(programs)) {
         timer = window.setTimeout(tick, PAINT_WARM_POLL_MS);
         return;
       }
-      warmPaintPrograms(gl, witnesses, scene, camera, warmTarget);
+      primed = primeCutDither(programs, primed, PAINT_PRIME_SLICE_MS);
+      if (primed < programs.length) timer = window.setTimeout(tick, PAINT_PRIME_GAP_MS);
     };
     const schedule = () => {
       window.clearTimeout(timer);
+      programs = null;
       timer = window.setTimeout(tick, 0);
     };
     schedule();
@@ -323,7 +360,7 @@ export function BenchCar({ model, onMeasured, bodyEnv }: BenchCarProps) {
           avec le modèle déjà en place. */}
       {/* Hors de la sonde : elle n'y entrerait qu'aux captures faites après le modèle (revue n° 7). */}
       <group userData={{ hideInProbe: true }}>
-        <ContactShadow key={epoch} halfLength={halfLength} halfWidth={halfWidth} height={height} />
+        <VehicleShadow key={epoch} caster={prepared.root} halfLength={halfLength} halfWidth={halfWidth} height={height} />
       </group>
     </>
   );

@@ -24,6 +24,7 @@ import {
   type WebGLRenderTarget,
 } from 'three';
 import { FINISHES, type Finish } from '../data/finishes.ts';
+import type { CutDitherProgram } from './cutDither.ts';
 
 /** Couleur d'un métal nu, vers laquelle tire une finition peu teintée (chrome, fond de candy). */
 const BARE_METAL = new Color('#e4e6ea');
@@ -278,6 +279,20 @@ export function warmPaintPrograms(gl: WebGLRenderer, witnesses: PaintWitnesses, 
   } finally {
     gl.setRenderTarget(previous);
   }
+}
+
+/**
+ * Programmes des témoins, tels que `warmPaintPrograms` vient de les créer (ou de les retrouver) :
+ * ceux qu'une zone peinte prendra au premier choix d'une finition, le programme de three étant
+ * partagé par clé. À attendre (`programsReady`), puis à amorcer hors des images (`primeCutDither`).
+ */
+export function paintWitnessPrograms(gl: WebGLRenderer, witnesses: PaintWitnesses): CutDitherProgram[] {
+  const programs = new Set<CutDitherProgram>();
+  for (const material of witnesses.materials) {
+    const program = (gl.properties.get(material) as { currentProgram?: CutDitherProgram } | undefined)?.currentProgram;
+    if (program) programs.add(program);
+  }
+  return [...programs];
 }
 
 /** Couleur de base effective : la teinte choisie, mêlée au métal nu selon la finition. */

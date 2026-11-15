@@ -67,8 +67,11 @@ describe('registre des œuvres du garage', () => {
       if (item.lighting === 'emissive') expect(item.glow, item.id).toBeGreaterThan(0);
       else expect(item.glow, item.id).toBeUndefined();
       if (item.waiting !== null) expect(item.waiting, item.id).toMatch(/^#[0-9a-f]{6}$/i);
-      // Une œuvre opaque a toujours une teinte d'attente, posée aussi sous le dessin.
+      // Une œuvre opaque a toujours une teinte d'attente, posée aussi sous le dessin. Une œuvre
+      // transparente n'en a pas : elle couvrirait le plan entier, coins compris, et cacherait ce
+      // qui est dessous (le panneau étagé de la cible) tant que le dessin n'est pas arrivé.
       if (!item.transparent) expect(item.waiting, item.id).not.toBeNull();
+      else expect(item.waiting, item.id).toBeNull();
     }
   });
 
@@ -90,6 +93,20 @@ describe('registre des œuvres du garage', () => {
     const objets = new Set<string>(GARAGE.props.map((prop) => prop.name));
     const inconnus = GARAGE_ART.flatMap((item) => item.replaces.filter((name) => !objets.has(name)).map((name) => `${item.id} : ${name}`));
     expect(inconnus).toEqual([]);
+  });
+
+  // Une œuvre posée habille les objets qui la portent : un nom existant mais faux (la cible qui
+  // dirait remplacer l'affiche) se voit. Une œuvre posée nulle part (casques) garde ses noms.
+  it('une œuvre posée ne dit remplacer que des objets qui la portent', () => {
+    const carriers = new Map<string, Set<string>>();
+    for (const prop of GARAGE.props) {
+      for (const slot of prop.art ?? []) carriers.set(slot.art, (carriers.get(slot.art) ?? new Set()).add(prop.name));
+    }
+    const faux = GARAGE_ART.flatMap((item) => {
+      const on = carriers.get(item.id);
+      return on ? item.replaces.filter((name) => !on.has(name)).map((name) => `${item.id} posée sur ${[...on].join(', ')}, pas sur ${name}`) : [];
+    });
+    expect(faux).toEqual([]);
   });
 
   it('œuvres posées par les objets : œuvre et case connues, plan dans la pièce, largeur sensée', () => {

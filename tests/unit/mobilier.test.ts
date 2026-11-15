@@ -3,9 +3,10 @@
 // Les modeleurs le lancent sans le modifier :
 //   npx vitest run tests/unit/mobilier.test.ts
 // Les pièces sont mesurées sur la géométrie réellement construite (propGeometries de
-// src/scene/garage/build.ts : forme, rotation, pose, turn de l'objet) ; les pieds des tubes LED,
-// sur le garage construit (éléments pied_tube_* de la coupe caméra).
-import { Box3, Texture, Vector3, type BufferGeometry } from 'three';
+// src/scene/garage/build.ts : forme, rotation, pose, turn de l'objet) ; les pieds des tubes LED et
+// les tubes néon, sur le garage construit (éléments pied_tube_* de la coupe caméra, maillage
+// garage_neons).
+import { Box3, Mesh, Texture, Vector3, type BufferGeometry } from 'three';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { GARAGE, GARAGE_MATERIALS, type Prop } from '../../src/data/garage.ts';
 import { artRect, GARAGE_ART } from '../../src/data/garageArt.ts';
@@ -17,15 +18,21 @@ import { propGeometries } from '../../src/scene/garage/build.ts';
 import { protectedBoxes } from '../../src/scene/garage/cut.ts';
 import { triangleCount } from '../../src/scene/garage/shapes.ts';
 
-/** Plafonds de triangles par famille (§ 4.1 du cahier). */
+/**
+ * Plafonds de triangles par famille (§ 4.1 du cahier). Même total qu'à l'origine (62 450) : 1 000
+ * triangles pris à l'atelier, qui en avait de reste, partagés entre le salon et les engins, qui
+ * touchaient leur plafond (revue D, constat D7).
+ */
 const FAMILIES: Record<string, { props: readonly Prop[]; budget: number }> = {
-  salon: { props: PROPS_SALON, budget: 16_400 },
-  atelier: { props: PROPS_ATELIER, budget: 14_200 },
-  engins: { props: PROPS_ENGINS, budget: 17_400 },
+  salon: { props: PROPS_SALON, budget: 16_900 },
+  atelier: { props: PROPS_ATELIER, budget: 13_200 },
+  engins: { props: PROPS_ENGINS, budget: 17_900 },
   loisirs: { props: PROPS_LOISIRS, budget: 14_450 },
 };
 /** Plafond du mobilier entier. */
 const TOTAL_BUDGET = 62_500;
+/** Plafond des tubes des enseignes néon (maillage garage_neons, hors mobilier). */
+const NEON_BUDGET = 9_000;
 /** Marge admise au-delà des murs, du sol et du plafond, en mètres. */
 const ROOM_TOLERANCE = 0.01;
 
@@ -45,16 +52,51 @@ const PROTECT_MARGIN = 0.05;
 /** Seuil de recoupement de deux boîtes de pièces, sur chacun des trois axes, en mètres. */
 const OVERLAP = 0.005;
 
+/** Jeu admis entre la borne d'une exception de recoupement et le recouvrement mesuré, en mètres. */
+const OVERLAP_SLACK = 0.005;
+
 /**
  * Recoupements voulus entre deux objets (boîtes de pièces), clé « a | b » dans l'ordre de
- * GARAGE.props. Le test échoue aussi quand un recoupement nommé ici a disparu : le retirer alors.
+ * GARAGE.props. Pour chacun : le nombre de paires de pièces qui se recoupent et le recouvrement
+ * maximal sur chaque axe (x, y, z), en mètres, à 5 mm près (OVERLAP_SLACK). Le test échoue quand
+ * une paire de plus se recoupe, quand un recouvrement dépasse sa borne (pièce enfoncée), quand une
+ * borne est plus large que nécessaire (la resserrer) ou quand le recoupement a disparu (le retirer).
  */
-const OVERLAP_EXCEPTIONS: Record<string, string> = {
-  'placeholder_meubles_atelier | placeholder_evier': 'cuve encastrée dans le plan de travail',
-  'placeholder_colonne_ecran | placeholder_solives': 'solives qui entrent dans le haut de la colonne, jusqu’au plafond',
-  'placeholder_casiers_casques | placeholder_casques': 'casques enfoncés de 1 cm dans le fond de leur case',
-  'placeholder_flipper | placeholder_peluche': 'peluche assise sur la vitre en pente du plateau',
+const OVERLAP_EXCEPTIONS: Record<string, { why: string; pairs: number; max: readonly [number, number, number] }> = {
+  'placeholder_meubles_atelier | placeholder_evier': {
+    why: 'cuve encastrée : le plan de travail est percé pour elle, mais sa boîte traverse les 4 cm du plan',
+    pairs: 1,
+    max: [0.421, 0.041, 0.321],
+  },
+  'placeholder_colonne_ecran | placeholder_solives': {
+    why: 'trois solives entrent dans le haut de la colonne, jusqu’au plafond',
+    pairs: 3,
+    max: [0.081, 0.141, 0.401],
+  },
+  'placeholder_casiers_casques | placeholder_casques': {
+    why: 'casques enfoncés de 1 cm dans le fond de leur case',
+    pairs: 5,
+    max: [0.292, 0.011, 0.273],
+  },
+  'placeholder_flipper | placeholder_peluche': {
+    why: 'peluche assise sur le dessus en pente de la caisse : sa boîte descend sous le haut de celle de la caisse (1,9 cm), pas la peluche',
+    pairs: 3,
+    max: [0.21, 0.019, 0.21],
+  },
 };
+
+/**
+ * Connexité de chaque objet : une pièce tient si sa boîte est à moins de 3 mm d'une autre pièce qui
+ * tient, du sol, d'un mur, du plafond, d'une retombée ou d'une pièce d'un autre objet (le dessus de
+ * son porteur). Une pièce qui flotte, seule ou avec ses voisines (un phare et son cerclage), échoue.
+ */
+const CONNECT_GAP = 0.003;
+
+/**
+ * Pièces qui flottent exprès, clé « objet#rang » (rang dans prop.parts), avec la raison. Le test
+ * échoue aussi quand une pièce nommée ici tient : la retirer alors.
+ */
+const CONNECT_EXCEPTIONS: Record<string, string> = {};
 
 interface Measure {
   name: string;
@@ -100,6 +142,8 @@ const BY_NAME = new Map([...MEASURES.values()].flat().map((m) => [m.name, m]));
 
 /** Recouvrement de deux boîtes sur chaque axe (négatif : écart). */
 const overlapOf = (a: Box3, b: Box3) => [0, 1, 2].map((k) => Math.min(a.max.getComponent(k), b.max.getComponent(k)) - Math.max(a.min.getComponent(k), b.min.getComponent(k)));
+/** Distance entre deux boîtes (nulle si elles se touchent ou se recoupent). */
+const gapOf = (a: Box3, b: Box3) => Math.hypot(...overlapOf(a, b).map((o) => Math.max(0, -o)));
 
 /** Grand volume protégé du véhicule (gabarit du banc d'essai), gonflé de `margin` sur les trois axes. */
 function protectedBox(margin: number): Box3 {
@@ -119,6 +163,8 @@ function stubDocument(): () => void {
 
 /** Pieds des tubes LED tels que le garage construit les déclare à la coupe caméra : boîtes de leurs pièces. */
 const STANDS = new Map<string, Box3[]>();
+/** Triangles des tubes néon du garage construit. */
+let NEON_TRIANGLES = 0;
 let unstub = () => {};
 beforeAll(async () => {
   unstub = stubDocument();
@@ -134,6 +180,9 @@ beforeAll(async () => {
       boxes.push(new Box3(new Vector3(at(0), at(1), at(2)), new Vector3(at(3), at(4), at(5))));
     }
     STANDS.set(name, boxes);
+  });
+  garage.root.traverse((object) => {
+    if (object instanceof Mesh && object.name === 'garage_neons') NEON_TRIANGLES += triangleCount(object.geometry as BufferGeometry);
   });
   garage.dispose();
 });
@@ -201,30 +250,96 @@ describe('mobilier : assemblage', () => {
   });
 
   // Boîtes des pièces, deux objets à la fois : un recoupement de plus de 5 mm sur les trois axes
-  // est soit voulu (OVERLAP_EXCEPTIONS), soit une pièce qui en traverse une autre.
-  it('aucun recoupement entre objets hors de ceux nommés', () => {
+  // est soit voulu et borné (OVERLAP_EXCEPTIONS), soit une pièce qui en traverse une autre.
+  it('aucun recoupement entre objets hors de ceux nommés, et ceux-là dans leurs bornes', () => {
     const all = GARAGE.props.map((prop) => BY_NAME.get(prop.name)).filter((m): m is Measure => m !== undefined);
-    const found = new Map<string, string>();
+    const found = new Map<string, Array<{ i: number; j: number; o: number[] }>>();
     for (let a = 0; a < all.length; a += 1) {
       for (let b = a + 1; b < all.length; b += 1) {
         const ma = all[a] as Measure;
         const mb = all[b] as Measure;
         if (overlapOf(ma.box, mb.box).some((v) => v <= OVERLAP)) continue;
-        for (let i = 0; i < ma.parts.length && !found.has(`${ma.name} | ${mb.name}`); i += 1) {
-          for (let j = 0; j < mb.parts.length; j += 1) {
-            const o = overlapOf(ma.parts[i] as Box3, mb.parts[j] as Box3);
-            if (o.every((v) => v > OVERLAP)) {
-              found.set(`${ma.name} | ${mb.name}`, `pièces ${i} × ${j}, recouvrement ${o.map(fmt).join(' / ')}`);
-              break;
-            }
-          }
-        }
+        const pairs: Array<{ i: number; j: number; o: number[] }> = [];
+        ma.parts.forEach((pa, i) =>
+          mb.parts.forEach((pb, j) => {
+            const o = overlapOf(pa, pb);
+            if (o.every((v) => v > OVERLAP)) pairs.push({ i, j, o });
+          }),
+        );
+        if (pairs.length > 0) found.set(`${ma.name} | ${mb.name}`, pairs);
       }
     }
-    const unexpected = [...found].filter(([key]) => !(key in OVERLAP_EXCEPTIONS)).map(([key, text]) => `${key} : ${text}`);
+    const text = (pairs: Array<{ i: number; j: number; o: number[] }>) => pairs.map(({ i, j, o }) => `pièces ${i} × ${j}, recouvrement ${o.map(fmt).join(' / ')}`).join(' ; ');
+    const unexpected = [...found].filter(([key]) => !(key in OVERLAP_EXCEPTIONS)).map(([key, pairs]) => `${key} : ${text(pairs)}`);
     const stale = Object.keys(OVERLAP_EXCEPTIONS).filter((key) => !found.has(key));
+    const outOfBounds = Object.entries(OVERLAP_EXCEPTIONS).flatMap(([key, { pairs: count, max }]) => {
+      const pairs = found.get(key);
+      if (!pairs) return [];
+      const measured = [0, 1, 2].map((k) => Math.max(...pairs.map(({ o }) => o[k] ?? 0)));
+      const problems: string[] = [];
+      if (pairs.length !== count) problems.push(`${pairs.length} paires de pièces au lieu de ${count}`);
+      measured.forEach((m, k) => {
+        const bound = max[k] ?? 0;
+        if (m > bound) problems.push(`axe ${'xyz'[k]} : ${fmt(m)} m, borne ${fmt(bound)} m`);
+        else if (bound - m > OVERLAP_SLACK) problems.push(`axe ${'xyz'[k]} : borne ${fmt(bound)} m trop large pour ${fmt(m)} m, la resserrer`);
+      });
+      return problems.length > 0 ? [`${key} : ${problems.join(', ')} (${text(pairs)})`] : [];
+    });
     expect(unexpected, 'recoupements nouveaux').toEqual([]);
     expect(stale, 'exceptions plus nécessaires : les retirer de OVERLAP_EXCEPTIONS').toEqual([]);
+    expect(outOfBounds, 'recoupements nommés hors de leurs bornes').toEqual([]);
+  });
+
+  // Chaque pièce tient à l'objet, ou à ce qui le porte : rien ne flotte à plus de 3 mm (boîtes).
+  it(`connexité : chaque pièce tient, à ${CONNECT_GAP * 1000} mm près, au reste de l’objet, au sol, à un mur ou à son porteur`, () => {
+    const anchors = [
+      ...GARAGE.soffits.map(({ size, at }) => new Box3().setFromCenterAndSize(new Vector3(...at), new Vector3(...size))),
+    ];
+    const floating: string[] = [];
+    const held = new Set<string>();
+    for (const prop of GARAGE.props) {
+      const m = BY_NAME.get(prop.name);
+      if (!m) continue;
+      const others = [...BY_NAME.values()].filter((o) => o !== m).flatMap((o) => o.parts);
+      const n = m.parts.length;
+      const parent = Array.from({ length: n + 1 }, (_, i) => i);
+      const find = (i: number): number => {
+        while (parent[i] !== i) i = parent[i] = parent[parent[i] ?? i] ?? i;
+        return i;
+      };
+      const join = (a: number, b: number) => {
+        parent[find(a)] = find(b);
+      };
+      m.parts.forEach((part, i) => {
+        const onShell =
+          part.min.y <= CONNECT_GAP ||
+          part.max.y >= height - CONNECT_GAP ||
+          part.min.x <= -width / 2 + CONNECT_GAP ||
+          part.max.x >= width / 2 - CONNECT_GAP ||
+          part.min.z <= -depth / 2 + CONNECT_GAP ||
+          part.max.z >= depth / 2 - CONNECT_GAP;
+        if (onShell || anchors.some((box) => gapOf(part, box) <= CONNECT_GAP) || others.some((box) => gapOf(part, box) <= CONNECT_GAP)) join(i, n);
+        for (let j = i + 1; j < n; j += 1) if (gapOf(part, m.parts[j] as Box3) <= CONNECT_GAP) join(i, j);
+      });
+      m.parts.forEach((part, i) => {
+        const key = `${prop.name}#${i}`;
+        if (find(i) === find(n)) {
+          held.add(key);
+          return;
+        }
+        if (key in CONNECT_EXCEPTIONS) return;
+        const nearest = Math.min(...m.parts.filter((_, j) => j !== i).map((box) => gapOf(part, box)));
+        floating.push(`${key} (${prop.parts[i]?.material}) ${boxText(part)}, à ${(nearest * 1000).toFixed(1)} mm de la pièce la plus proche de l’objet`);
+      });
+    }
+    expect(floating, 'pièces qui ne tiennent à rien (seules ou en grappe)').toEqual([]);
+    const stale = Object.keys(CONNECT_EXCEPTIONS).filter((key) => held.has(key) || !BY_NAME.has(key.split('#')[0] ?? ''));
+    expect(stale, 'exceptions plus nécessaires : les retirer de CONNECT_EXCEPTIONS').toEqual([]);
+  });
+
+  it(`tubes néon sous ${NEON_BUDGET} triangles`, () => {
+    expect(NEON_TRIANGLES, 'maillage garage_neons absent').toBeGreaterThan(0);
+    expect(NEON_TRIANGLES).toBeLessThanOrEqual(NEON_BUDGET);
   });
 
   it('les exceptions de place désignent un objet qui sort encore de la pièce', () => {

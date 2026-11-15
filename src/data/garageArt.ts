@@ -92,7 +92,9 @@ export const GARAGE_ART: readonly GarageArt[] = [
     size: [1.2, 1.0],
     lighting: 'lit',
     transparent: true,
-    waiting: '#ac8051',
+    // Pas de teinte d'attente : elle couvrirait le plan entier, coins compris, et cacherait le
+    // panneau étagé en volume tant que le dessin n'est pas arrivé (ou s'il manque).
+    waiting: null,
     resolution: 1024,
     replaces: ['placeholder_panneau_cible'],
     // Le panneau étagé du substitut (1,2 × 0,8 et 0,8 × 1,0 m) a la silhouette du dessin : l'œuvre

@@ -730,6 +730,8 @@ export const PROPS_ENGINS: readonly Prop[] = [
     name: 'placeholder_moto_en_pieces',
     at: [-0.85, 0.9, BACK + 0.3],
     small: true,
+    // Sur le plan de travail des meubles d'atelier (dessus à 0,90 m).
+    rest: { on: 'placeholder_meubles_atelier', top: 0.9 },
     parts: LOOSE,
   },
   {
@@ -756,6 +758,8 @@ export const PROPS_ENGINS: readonly Prop[] = [
     name: 'placeholder_bloc_moteur',
     at: [-2.2, 0.48, 1.8025],
     small: true,
+    // Sur le plateau de la table basse (dessus à 0,48 m).
+    rest: { on: 'placeholder_table_basse', top: 0.48 },
     parts: BLOCK,
   },
 ];

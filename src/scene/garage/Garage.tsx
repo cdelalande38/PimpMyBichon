@@ -5,16 +5,17 @@
 // trame du fondu n'est compilée que pendant un fondu, variantes préparées à l'avance
 // (src/render/cutDither.ts) : au repos et en rotation lente, aucun rejet de fragments de la trame
 // (les œuvres découpées, elles, gardent leur alphaTest).
-// La mesure comparée de « Sous le capot » (src/scene/FrameMeter.tsx) y pose deux variantes, le
-// temps de leur mesure : la trame dans tous les matériaux opaques, et le sol sans son reflet.
+// La mesure comparée de « Sous le capot » (src/scene/FrameMeter.tsx) y pose trois variantes, le
+// temps de leur mesure : la trame dans tous les matériaux opaques, le sol sans son reflet, et le
+// garage sans son mobilier.
 
 import { useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { Vector3, WebGLRenderTarget, type Mesh } from 'three';
+import { Vector3, WebGLRenderTarget, type Mesh, type Object3D } from 'three';
 import type { Ambiance } from '../../data/ambiances.ts';
 import { GARAGE } from '../../data/garage.ts';
 import { cutDitherMeshes, cutDitherPrograms, primeCutDither, programsReady, setCutDither, warmCutDither, type CutDitherProgram } from '../../render/cutDither.ts';
-import type { CompareVariant } from '../../render/frameMeter.ts';
+import { COMPARE_FURNITURE, type CompareVariant } from '../../render/frameMeter.ts';
 import { PlanarReflection } from '../../render/planarReflection.ts';
 import type { QualityProfile } from '../../render/quality.ts';
 import { useRenderStats } from '../../render/renderStats.ts';
@@ -180,22 +181,56 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
 
   // Mesure comparée : variante posée ou retirée dès que le magasin change, même sans image
   // (onglet caché, abandon) ; les rappels d'image la lisent dans compareRef.
-  // « Trame partout » : la trame sur tous les porteurs (comportement d'avant 8dc262f), la règle des
-  // fondus suspendue ; à la fin, retirée partout, et la règle reprend à l'image suivante.
+  // « Trame partout » : la trame sur tous les matériaux opaques du décor, la règle des fondus
+  // suspendue, dans l'ordre de dessin actuel (véhicule d'abord, sol en dernier) : ce n'est pas
+  // exactement l'état d'avant 8dc262f (ordre par défaut, voiles transparents tramés aussi). À la
+  // fin, retirée partout, et la règle reprend à l'image suivante.
   // « Sans reflet du sol » : passe de réflexion planaire sautée, define du reflet retiré du sol.
+  // « Sans mobilier » : objets, œuvres et ombres de contact cachés ; la coupe continue de décider
+  // pour eux (elle ne lit pas leur visibilité), et la sonde de réflexion, si elle se refait pendant
+  // la mesure (mode photo), les voit quand même : elle ne garde pas un garage vide après coup.
   useEffect(() => {
     const dither = garage.cut.dither;
+    const hidden: Array<{ object: Object3D; visible: boolean; onProbe: unknown }> = [];
+    const hideFurniture = () => {
+      for (const name of COMPARE_FURNITURE) {
+        const object = garage.root.getObjectByName(name);
+        if (!object) continue;
+        const previous: unknown = object.userData.onProbe;
+        hidden.push({ object, visible: object.visible, onProbe: previous });
+        object.visible = false;
+        object.userData.onProbe = () => {
+          const undo: unknown = typeof previous === 'function' ? (previous as () => unknown)() : null;
+          const visible = object.visible;
+          object.visible = true;
+          return () => {
+            object.visible = visible;
+            if (typeof undo === 'function') (undo as () => void)();
+          };
+        };
+      }
+    };
+    const showFurniture = () => {
+      for (const { object, visible, onProbe } of hidden) {
+        object.visible = visible;
+        if (onProbe === undefined) delete object.userData.onProbe;
+        else object.userData.onProbe = onProbe;
+      }
+      hidden.length = 0;
+    };
     const sync = (variant: CompareVariant | null) => {
       const applied = compareRef.current;
       if (variant === applied) return;
       if (applied === 'trame') for (const carrier of dither.opaque) setCutDither(carrier, false);
       if (applied === 'sans-reflet') garage.setQuality(qualityRef.current);
+      if (applied === 'sans-mobilier') showFurniture();
       compareRef.current = variant;
       if (variant === 'trame') {
         dither.apply(false);
         for (const carrier of dither.opaque) setCutDither(carrier, true);
       }
       if (variant === 'sans-reflet') garage.setQuality({ ...qualityRef.current, reflection: false });
+      if (variant === 'sans-mobilier') hideFurniture();
       invalidate();
     };
     sync(useRenderStats.getState().compare.variant);

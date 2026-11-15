@@ -630,6 +630,21 @@ button {
   min-width: max-content;
   padding: 0 0.5rem;
   letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Libellés empilés : le bouton prend la largeur du plus long (« Comparer », « 10 sur 10… »), et la
+   rangée ne saute pas quand le libellé change pendant la mesure. */
+.btn-cale {
+  display: inline-grid;
+}
+
+.btn-cale > span {
+  grid-area: 1 / 1;
+}
+
+.btn-cale > span[aria-hidden='true'] {
+  visibility: hidden;
 }
 
 @media (min-width: 700px) {

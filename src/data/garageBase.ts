@@ -182,6 +182,17 @@ export interface Prop {
    */
   on?: readonly string[];
   parts: readonly Part[];
+  /**
+   * Appui sur un meuble, écrit ici et non déduit : l'objet qui le porte (`on`) et la hauteur du
+   * dessus sur lequel il repose (`top`, en mètres : plan de travail sous le rebord d'un évier
+   * encastré, plateau d'une table, dessus en pente d'une caisse à l'aplomb de l'objet). build.ts y
+   * pose la tache de contact (bornée au dessus du porteur) et part de là pour l'assombrissement de
+   * pied ; tests/unit/scene-decor.test.ts vérifie que l'objet repose bien sur ce porteur à cette
+   * hauteur (à 3 mm près). `top` se prend à l'aplomb de l'origine de l'objet (`at`) ; `slope` :
+   * pente du dessus en radians, qui monte vers −z (plateau d'un flipper), la tache la suit.
+   * Absent : posé au sol (bas à moins de 3 cm) ou accroché.
+   */
+  rest?: { on: `placeholder_${string}`; top: number; slope?: number };
   /** Œuvres posées sur l'objet (un plan et un appel de dessin chacune). */
   art?: readonly ArtSlot[];
   /**

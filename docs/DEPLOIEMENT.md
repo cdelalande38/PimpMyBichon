@@ -96,7 +96,7 @@ Critère d'acceptation (cahier des charges, § 14) : le rendu cible sur le modè
 4. Tourne autour du véhicule, de près et de loin, d'en haut et au ras du sol : les murs et les objets qui passeraient devant lui quittent l'image en fondu ; le véhicule et son reflet au sol restent entiers.
 5. Mesure la cadence dans « Sous le capot », en qualité Standard puis en Max (« Réglages ») :
    - **« Mesurer »** : la scène tourne cinq secondes, la ligne « Mesure » donne la cadence, le pire centile, les appels de dessin et les triangles ;
-   - **« Comparer »** : quatre mesures d'affilée, une vingtaine de secondes. Pose le téléphone et ne touche à rien : fermer le panneau ou quitter l'app arrête la comparaison.
+   - **« Comparer »** : cinq variantes de la scène, mesurées deux fois chacune (à l'aller puis au retour), 33 secondes environ. Pose le téléphone à plat et ne touche à rien : fermer le panneau ou quitter l'app arrête la comparaison, tourner le téléphone la fausse. Recopie telles quelles la phrase d'état et les cinq lignes.
 
 C'est bon si :
 
@@ -107,16 +107,36 @@ C'est bon si :
 
 ### Lire « Comparer »
 
-Chaque ligne donne la cadence, le temps par image et son écart au réglage en cours, le pire centile, le temps « processeur » (fil principal) et les appels de dessin.
+La phrase d'état, au-dessus des lignes, donne le niveau, le pixel ratio, le bruit de l'essai et le rythme de l'écran :
 
-| Ligne | Ce qu'elle change | Si elle s'écarte nettement du réglage en cours |
+- **« Bruit : 0,4 ms par image, 0,3 ms de carte »** : le plus grand écart entre l'aller et le retour d'une même variante. Un écart au réglage en cours qui ne le dépasse pas est marqué « dans le bruit » : il ne prouve rien.
+- **« Trop de bruit pour conclure »** : le bruit dépasse 10 % de la valeur du réglage en cours (0,5 ms au moins). Relance « Comparer », téléphone posé, écran allumé, rien d'autre d'ouvert, pas en charge.
+- **« Écran : 60 i/s »** (ou 120) : rythme de l'écran, estimé d'après les images. « Rythme de l'écran pas reconnu » : images trop lentes ou trop irrégulières pour le dire.
+- **« Carte pas chronométrée »** : ce navigateur ne donne pas la minuterie de la carte ; seules la cadence et le processeur parlent, et seulement hors du plafond de l'écran (en Max).
+
+Chaque ligne se lit ainsi :
+
+`Variante : 43,1 i/s, 23,2 ms (+0,7 ms, dans le bruit) · carte 18,4 ms (−4,1 ms) · aller-retour à 0,4 et 0,3 ms près · processeur 5,1 ms · 141 appels.`
+
+| Morceau | Ce qu'il dit |
+|---|---|
+| `43,1 i/s, 23,2 ms` | cadence vue à l'écran, et temps moyen entre deux images (moyenne de l'aller et du retour) |
+| `(+0,7 ms, dans le bruit)` | écart au réglage en cours ; « dans le bruit » : pas plus grand que le bruit de l'essai |
+| `au plafond de l'écran` | la variante tient le rythme de l'écran : sa cadence ne dit rien de la carte, lis le temps de carte |
+| `carte 18,4 ms (−4,1 ms)` | temps de la carte graphique par image (minuterie de la carte, indépendante de l'écran), et son écart au réglage en cours |
+| `aller-retour à 0,4 et 0,3 ms près` | écart entre l'aller et le retour de cette variante, pour la cadence puis pour la carte |
+| `processeur 5,1 ms` | temps du fil principal par image |
+| `141 appels` | appels de dessin par image |
+
+| Ligne | Ce qu'elle change | Si elle s'écarte nettement du réglage en cours (hors du bruit) |
 |---|---|---|
 | Réglage en cours | rien | c'est la référence |
-| Trame partout | la trame du fondu compilée dans tous les matériaux opaques du décor, comme avant le commit `8dc262f` | plus lente : le rejet de fragments coûte cher sur cette carte graphique |
-| Sans reflet du sol | la réflexion du sol coupée | plus rapide : le reflet est le poste le plus lourd |
-| Densité 1 | un pixel d'image par pixel CSS | plus rapide : l'image est limitée par le nombre de pixels |
+| Trame partout | la trame du fondu posée sur tous les matériaux opaques du décor, dans l'ordre de dessin actuel (pas exactement l'état d'avant le commit `8dc262f`) | carte plus lente : le rejet de fragments coûte cher sur cette carte graphique |
+| Sans reflet du sol | la réflexion du sol coupée | plus rapide : le reflet est un poste lourd (carte et processeur) |
+| Sans mobilier | objets, œuvres et ombres de contact du garage cachés | plus rapide : le décor remodelé pèse |
+| Densité 1 | un pixel d'image par pixel CSS | carte bien plus rapide : l'image est limitée par le nombre de pixels |
 
-Un temps par image proche du temps « processeur » dit que l'image est limitée par le processeur, pas par la carte graphique. Quand l'écran plafonne la cadence (60 i/s sur toutes les lignes), seul le temps « processeur » distingue les lignes : c'est en Max, sous le plafond, que la comparaison parle. Pour un diagnostic, relève les quatre lignes dans les deux niveaux.
+Un temps de carte proche du temps entre deux images dit que l'image est limitée par la carte graphique ; un temps « processeur » proche, qu'elle l'est par le processeur. Au plafond de l'écran (souvent en Standard), seuls la carte et le processeur départagent les lignes. Relève l'état et les cinq lignes en Standard puis en Max.
 
 ### Ce qui n'est pas fait, ou pas comme le cahier le demande
 
@@ -126,10 +146,14 @@ Un temps par image proche du temps « processeur » dit que l'image est limitée
 - **Niveau Économie** : ni bloom, ni faux reflets au sol.
 - **Qualité « Auto »** : plafonnée au niveau Standard.
 - **Rendu photo** : pas d'ombres adoucies, l'ombre sous le véhicule est celle de l'atelier.
-- **Ombre sous le véhicule** : rendue une seule fois, elle varie un peu d'un chargement à l'autre.
+- **Ombre sous le véhicule** : rendue une seule fois, à la pose du véhicule. Elle ne voit plus que lui (le mobilier n'y laisse plus d'empreinte) et ne change plus d'un chargement à l'autre, mais elle est plus dense qu'avant sous la caisse : à juger à l'œil (réglage unique : `VEHICLE_SHADOW.opacity`, `src/render/vehicleShadow.ts`).
+- **Changements d'image à juger** : cônes de lumière arrêtés à 1,5 m du sol, en fondu (ils ne traversent plus le mobilier, mais ne descendent plus jusqu'au sol) ; cuve de l'évier plus sombre (sa tache de contact est maintenant posée sur le plan de travail).
 - **Taches de contact du mobilier** : rectangulaires, même sous un meuble à pieds ou en L.
+- **Scintillement** : les œuvres, les poignées, les rayons de jante et le rebord de l'évier scintillent en rotation lente. Deux remèdes essayés (chrome moins lisse, filtrage des œuvres), gains dans le bruit : rien changé.
+- **Gels de compilation restants** : la première entrée en photo (passe de moyenne de l'affinage), le premier passage en Économie et le premier passage en Max compilent encore des programmes dans l'image ; sur le poste de mesure, une image peut s'y figer plusieurs secondes. La sonde de réflexion d'une nouvelle taille, elle, attend que ses programmes soient prêts avant d'être posée, si le navigateur compile en tâche de fond. Rien de cela n'est éprouvé sur le téléphone.
+- **« Comparer »** : sur le poste de mesure, 6 essais complets sur 8 ont fini sur « Trop de bruit pour conclure » (carte graphique partagée avec le reste du bureau) : le seuil est à juger sur le téléphone. Le pire centile n'y figure plus (« Mesurer » le donne) ; une comparaison interrompue ne garde aucune ligne ; la minuterie de la carte n'est pas vérifiée sur l'appareil de référence, ni ce qu'elle compte sur une carte qui dessine par tuiles ; un écran à 120 i/s dont toutes les images prennent deux périodes est lu comme un écran à 60 i/s.
 - **Reflet des enseignes au sol** : en pavés de pixels au niveau Standard (réflexion en demi-résolution).
-- **Processeur graphique sans cibles flottantes** : niveau Économie imposé, reflets de la carrosserie écrêtés ; sans flottants 32 bits, le Max se rend au Standard. Essayé en rendu logiciel seulement.
+- **Processeur graphique sans cibles flottantes** : niveau Économie imposé, reflets de la carrosserie écrêtés, image nettement plus sombre que le chemin normal (sonde de réflexion en 8 bits linéaires) ; sans flottants 32 bits, le Max se rend au Standard. Essayé en rendu logiciel et sur le poste de mesure, extensions masquées.
 - **Parcours automatiques** : le fondu de la coupe n'est éprouvé qu'au niveau Standard ; la perte du contexte WebGL n'a pas de parcours.
 
 ## 6. Mise à jour de l'app installée

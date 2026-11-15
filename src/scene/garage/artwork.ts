@@ -2,8 +2,8 @@
 // (Référence explicite : tests/unit/oeuvres.test.ts importe ce module sous tsconfig.node.json.)
 // Textures des œuvres du garage (src/data/garageArt.ts) : SVG servi par l'app → image → canvas à
 // la résolution demandée → CanvasTexture sRGB avec mipmaps. Le canvas a sa taille finale dès le
-// départ : il porte d'abord une teinte unie d'attente, puis le dessin, sans réallouer la texture
-// sur le GPU. Le rendu étant à la demande, chaque appelant passe un rappel pour redemander une
+// départ : il porte d'abord une teinte unie d'attente (rien pour une œuvre transparente, qui
+// laisse voir l'objet dessous), puis le dessin, sans réallouer la texture sur le GPU. Le rendu étant à la demande, chaque appelant passe un rappel pour redemander une
 // image quand le dessin arrive. Aucune requête vers un tiers : le fichier vient de la base de
 // l'app, le dessin passe par une URL blob locale.
 
@@ -79,7 +79,8 @@ function report(item: GarageArt, reason: unknown): void {
   if (reported.has(item.file)) return;
   reported.add(item.file);
   const detail = reason instanceof Error ? reason.message : String(reason);
-  console.warn(`Œuvre du garage « ${item.id} » non chargée (${artworkUrl(item)} : ${detail}) : la teinte d’attente reste.`);
+  const shown = item.waiting === null ? 'rien n’est peint, l’objet reste sans son dessin' : 'la teinte d’attente reste';
+  console.warn(`Œuvre du garage « ${item.id} » non chargée (${artworkUrl(item)} : ${detail}) : ${shown}.`);
 }
 
 function paintWaiting(context: CanvasRenderingContext2D | null, item: GarageArt, width: number, height: number): void {

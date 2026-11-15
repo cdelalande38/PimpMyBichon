@@ -66,15 +66,18 @@ export interface RenderStatsState {
 
 export interface CompareState {
   running: boolean;
-  /** Rang de la mesure en cours (COMPARE_STEPS). */
+  /** Rang de la fenêtre en cours (COMPARE_ORDER : aller, puis retour). */
+  slot: number;
+  /** Variante de cette fenêtre (rang dans COMPARE_STEPS). */
   step: number;
   /** Variante posée sur la scène en ce moment (`null` : la scène telle quelle) : la scène la suit. */
   variant: CompareVariant | null;
   /**
    * Résultats, au fil des mesures, gardés jusqu'à la comparaison suivante : niveau et pixel ratio
-   * du départ, une ligne par variante mesurée (ou non mesurée, avec sa raison).
+   * du départ, une ligne par variante finie (moyenne de ses deux passages, ou raison de ne pas
+   * l'avoir mesurée), et intervalle estimé de l'écran une fois l'essai fini (`null` : pas reconnu).
    */
-  result: { level: QualityLevel; dpr: number; outcomes: readonly CompareOutcome[] } | null;
+  result: { level: QualityLevel; dpr: number; outcomes: readonly CompareOutcome[]; screenMs: number | null } | null;
   /** Raison de l'abandon de la dernière comparaison ; `null` si elle est allée au bout. */
   aborted: string | null;
 }
@@ -88,7 +91,7 @@ export const useRenderStats = create<RenderStatsState>()(() => ({
   reflection: null,
   auto: { ...createAutoQuality(), fps: null },
   meter: { running: false, result: null },
-  compare: { running: false, step: 0, variant: null, result: null, aborted: null },
+  compare: { running: false, slot: 0, step: 0, variant: null, result: null, aborted: null },
   floatTargets: null,
   fullFloatTargets: null,
   gpuEpoch: 0,
@@ -109,12 +112,12 @@ export function startMeter(): void {
   );
 }
 
-/** Lance la mesure comparée (quatre mesures d'affilée, une vingtaine de secondes). */
+/** Lance la mesure comparée (cinq variantes, deux passages chacune, une demi-minute). */
 export function startCompare(): void {
   useRenderStats.setState((state) =>
     state.meter.running || state.compare.running
       ? state
-      : { compare: { running: true, step: 0, variant: null, result: null, aborted: null } },
+      : { compare: { running: true, slot: 0, step: 0, variant: null, result: null, aborted: null } },
   );
 }
 

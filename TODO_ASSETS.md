@@ -52,16 +52,17 @@ Format : `placeholder_<nom>` · ce qu'il remplace · depuis quel jalon.
   - `placeholder_bloc_moteur` · bloc 4 cylindres à cornets rouges, posé sur la table · depuis le jalon 1
   - `placeholder_tabouret_frein` · tabouret à pied en disque noir ajouré, assise en bois clair · depuis le jalon 1
   - `placeholder_pouf_pneu` · pouf pneu, dessus capitonné, sans marque · depuis le jalon 1
-  - `placeholder_frigo` · petit frigo noir rétro sur socle de palette, sans marque · depuis le jalon 1
+  - `placeholder_frigo` · petit frigo noir rétro sur deux palettes empilées (dés, traverses, planches), sans marque · depuis le jalon 1
   - `placeholder_enseigne_ronde` · enseigne ronde à anneau vert lumineux, sans texte · depuis le jalon 1
   - `placeholder_fut` · fût métallique rouge, sans marque · depuis le jalon 1
   - `placeholder_caisse_colonne` · caisse-colonne en bois de palette au bout du canapé · depuis le jalon 1
   - `placeholder_casiers_casques` · casier ouvert à quatre cases, un point LED bleu en haut de chacune · depuis le jalon 1
   - `placeholder_casques` · un casque par case du casier et un sur la patère, en couleurs unies · depuis le jalon 1
-  - `placeholder_moto_murale` · petite sportive rouge accrochée sous le casier · depuis le jalon 1
+  - `placeholder_moto_murale` · petite sportive rouge accrochée sous le casier, silencieux relié au moteur par son collecteur · depuis le jalon 1
   - `placeholder_solives` · solives sombres du plafond (lames de pin dessinées entre elles) · depuis le jalon 1
   - `placeholder_pieds_tubes` · pieds des tubes LED de l'ambiance « Néon » · depuis le jalon 1
 - `placeholder_banc` · les véhicules du catalogue : un modèle de banc d'essai sous licence CC-BY 4.0 (`public/assets/bench/carconcept/`, crédit dans `CREDITS.md`), sans rapport avec un véhicule du catalogue ; sa plaque à logos est remplacée par une plaque unie · depuis le jalon 1
+  - `placeholder_banc_plaque` · plaque unie à la place de la plaque à logos du modèle de banc d'essai (`src/scene/bench/BenchCar.tsx`) · depuis le jalon 1
 
 Le garage est généré par le code (`src/scene/garage/`, d'après `src/data/garage.ts`), le banc d'essai est décrit dans `src/data/bench.ts`. Les deux sont annoncés à l'écran (« Substitut · modèle de banc d'essai », et dans « Sous le capot »).
 

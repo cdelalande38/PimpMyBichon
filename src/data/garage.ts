@@ -155,8 +155,13 @@ export interface GarageLayout {
   outside: { extent: number; falloff: number };
   /** Brouillard léger (atmosphère) : distances de début et de fin, depuis la caméra. */
   fog: { near: number; far: number };
-  /** Cônes de lumière sous les spots : hauteur et rayon au sol. */
-  beam: { height: number; radius: number };
+  /**
+   * Cônes de lumière sous les spots (deux plans croisés additifs) : hauteur et rayon du cône
+   * entier, hauteur `stop` où il s'arrête (au-dessus de tout ce qui est dessous : un plan qui
+   * traverse un objet s'y lit comme une vitre à bord net) et longueur `fade` du fondu qui l'éteint
+   * avant cette hauteur.
+   */
+  beam: { height: number; radius: number; stop: number; fade: number };
   lightBars: readonly LightBar[];
   mists: readonly Mist[];
   /** Retombées de plafond blanches : taille et centre de chaque boîte. */
@@ -204,7 +209,9 @@ export const GARAGE: GarageLayout = {
   mirrorIbl: 0.2,
   outside: { extent: 70, falloff: 4 },
   fog: { near: 12, far: 46 },
-  beam: { height: 2.2, radius: 0.5 },
+  // Les cônes s'éteignent à 1,5 m : au-dessus du plan de travail et de ce qu'il porte (moto en
+  // pièces, 1,46 m), de la servante et de la sportive, qu'ils traversaient d'un bord net.
+  beam: { height: 2.2, radius: 0.5, stop: 1.5, fade: 0.35 },
   // Rampes au-dessus du véhicule, dans le sens de sa longueur : elles dessinent de longs reflets
   // sur le toit, les épaules et les flancs, et éclairent la caisse par la sonde de réflexion.
   // Vues de la sonde seule (src/render/layers.ts) : le haut de l'image reste calme.

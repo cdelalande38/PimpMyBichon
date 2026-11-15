@@ -1,10 +1,23 @@
-// Construction du décor du garage (src/scene/garage/build.ts, artwork.ts) : ombres de contact et
-// assombrissement de pied des objets portés, tache bornée au dessus du porteur, transparence des
-// œuvres au dessin (canvas simulé), matière des œuvres, recoloration des tubes néon, chemin commun
-// avec propGeometries, et libération des géométries (après la fusion, à la mise à jour, au dispose).
+// Construction du décor du garage (src/scene/garage/build.ts, artwork.ts) : appui des objets
+// posés (déclaré dans leurs données, Prop.rest, et vérifié sur la géométrie), ombres de contact et
+// assombrissement de pied, tache bornée au dessus du porteur, transparence des œuvres au dessin
+// (canvas simulé), matière des œuvres, recoloration des tubes néon, chemin commun avec
+// propGeometries, triangles du décor entier, et libération des géométries (après la fusion, à la
+// mise à jour, au dispose).
 import { setFlagsFromString } from 'node:v8';
 import { runInNewContext } from 'node:vm';
-import { BufferGeometry, Mesh, MeshBasicMaterial, MeshStandardMaterial, Texture, Vector3, type BufferAttribute, type Material } from 'three';
+import {
+  BufferGeometry,
+  DoubleSide,
+  Mesh,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  Raycaster,
+  Texture,
+  Vector3,
+  type BufferAttribute,
+  type Material,
+} from 'three';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { AMBIANCES } from '../../src/data/ambiances.ts';
 import { GARAGE } from '../../src/data/garage.ts';
@@ -14,9 +27,30 @@ import { acquireArtwork, artworkMaterial } from '../../src/scene/garage/artwork.
 import type { GarageScene } from '../../src/scene/garage/build.ts';
 import { CONTACT, propGeometries } from '../../src/scene/garage/build.ts';
 import { supportsOf, type Box } from '../../src/scene/garage/cut.ts';
+import { triangleCount } from '../../src/scene/garage/shapes.ts';
 
-/** Les objets portés par un meuble (tests/unit/coupe.test.ts, « supports attendus »). */
+/** Les objets posés sur un meuble (tests/unit/coupe.test.ts, « supports attendus ») : ils déclarent leur appui (Prop.rest). */
 const CARRIED = ['placeholder_peluche', 'placeholder_bloc_moteur', 'placeholder_moto_en_pieces', 'placeholder_evier'] as const;
+
+/** Écart admis entre un objet posé et le dessus de son porteur, en mètres. */
+const SEAT_GAP = 0.003;
+
+/** Plafond de triangles du décor entier, sources et atmosphère comprises (§ 8, src/scene/garage/shapes.ts). */
+const DECOR_BUDGET = 80_000;
+
+/** Octets d'attributs que le garage peut retenir hors de ses maillages après la fusion. */
+const RETAINED_BYTES = 16 * 1024;
+
+const propOf = (name: string) => {
+  const prop = GARAGE.props.find((p) => p.name === name);
+  if (!prop) throw new Error(`objet introuvable : ${name}`);
+  return prop;
+};
+const restOf = (name: string) => {
+  const rest = propOf(name).rest;
+  if (!rest) throw new Error(`${name} : appui non déclaré (Prop.rest)`);
+  return rest;
+};
 
 /** Les textures du garage se dessinent au canvas : sans DOM, elles restent vides. Rend de quoi revenir. */
 function stubDocument(): () => void {
@@ -154,34 +188,84 @@ function patchVertices(id: number): Vector3[] {
   return out;
 }
 
-/** Dessus du porteur : pièces d'un porteur dont le dessus est à CONTACT.seat du bas de l'objet et qui le recouvrent. */
-function seatOf(name: string): { bottom: number; footprint: Box } {
-  const prop = GARAGE.props.find((p) => p.name === name);
-  if (!prop) throw new Error(name);
-  const own = unionOf(propGeometries(prop).map(boxOf));
-  const bottom = own.min[1];
-  const seats: Box[] = [];
-  for (const carrierName of supportsOf(garage.cut.structure, name)) {
-    const carrier = GARAGE.props.find((p) => p.name === carrierName);
-    if (!carrier) continue;
-    for (const part of propGeometries(carrier).map(boxOf)) {
-      const over = (k: number) => Math.min(part.max[k] ?? 0, own.max[k] ?? 0) > Math.max(part.min[k] ?? 0, own.min[k] ?? 0);
-      if (Math.abs(part.max[1] - bottom) <= CONTACT.seat && over(0) && over(2)) seats.push(part);
+/**
+ * Dessus du porteur déclaré : pièces du porteur dont le dessus est à 5 mm de la hauteur d'appui et
+ * qui recouvrent l'objet en x et en z.
+ */
+function seatOf(name: string): { top: number; footprint: Box | null } {
+  const { on, top, slope = 0 } = restOf(name);
+  const own = unionOf(propGeometries(propOf(name)).map(boxOf));
+  const over = (part: Box, k: number) => Math.min(part.max[k] ?? 0, own.max[k] ?? 0) > Math.max(part.min[k] ?? 0, own.min[k] ?? 0);
+  // En pente, la boîte de la pièce porteuse monte plus haut que l'aplomb de l'objet : elle contient la hauteur d'appui.
+  const level = (part: Box) => (slope === 0 ? Math.abs(part.max[1] - top) <= 0.005 : part.min[1] <= top && top <= part.max[1] + 0.005);
+  const seats = propGeometries(propOf(on))
+    .map(boxOf)
+    .filter((part) => level(part) && over(part, 0) && over(part, 2));
+  return { top, footprint: seats.length > 0 ? unionOf(seats) : null };
+}
+
+/** Hauteur du dessus déclaré à l'aplomb d'un point (pente comprise, comptée depuis l'origine de l'objet). */
+function surfaceAt(name: string, z: number): number {
+  const { top, slope = 0 } = restOf(name);
+  return top + (propOf(name).at[2] - z) * Math.tan(slope);
+}
+
+/**
+ * Points d'appui d'un objet posé : sommets de l'objet à 3 mm de la hauteur déclarée sous lesquels
+ * le porteur a sa surface, à 3 mm près (rayon vers le bas sur la vraie géométrie du porteur).
+ * Rend aussi la hauteur de la surface touchée.
+ */
+function contactsOf(name: string): Array<{ vertex: Vector3; surface: number }> {
+  const { on } = restOf(name);
+  const material = new MeshBasicMaterial({ side: DoubleSide });
+  const carrier = propGeometries(propOf(on)).map((geometry) => new Mesh(geometry, material));
+  const raycaster = new Raycaster();
+  const down = new Vector3(0, -1, 0);
+  const found: Array<{ vertex: Vector3; surface: number }> = [];
+  for (const geometry of propGeometries(propOf(name))) {
+    const position = geometry.getAttribute('position');
+    for (let i = 0; i < position.count; i += 1) {
+      const vertex = new Vector3().fromBufferAttribute(position, i);
+      if (Math.abs(vertex.y - surfaceAt(name, vertex.z)) > SEAT_GAP) continue;
+      raycaster.set(new Vector3(vertex.x, vertex.y + 2 * SEAT_GAP, vertex.z), down);
+      raycaster.far = 4 * SEAT_GAP;
+      const hit = raycaster.intersectObjects(carrier, false)[0];
+      if (hit && Math.abs(hit.point.y - vertex.y) <= SEAT_GAP + 1e-6) found.push({ vertex, surface: hit.point.y });
     }
+    geometry.dispose();
   }
-  const top = Math.max(...seats.map((s) => s.max[1]));
-  return { bottom, footprint: unionOf(seats.filter((s) => s.max[1] >= top - 0.01)) };
+  for (const mesh of carrier) mesh.geometry.dispose();
+  material.dispose();
+  return found;
 }
 
 describe('décor : objets posés sur un meuble', () => {
-  it.each(CARRIED)('%s : tache horizontale sur le meuble, à son bas, sans déborder du dessus qui le porte', (name) => {
+  it('les objets posés déclarent leur appui (Prop.rest), sur un porteur que la coupe caméra leur donne aussi', () => {
+    const declared = GARAGE.props.filter((prop) => prop.rest !== undefined).map((prop) => prop.name);
+    expect(declared.sort()).toEqual([...CARRIED].sort());
+    for (const name of CARRIED) expect(supportsOf(garage.cut.structure, name), name).toContain(restOf(name).on);
+  });
+
+  // Les données disent où l'objet repose ; la géométrie doit le confirmer : un objet enfoncé, levé,
+  // déplacé ou un porteur modifié fait échouer ce test (et non la règle de build.ts recopiée).
+  it.each(CARRIED)('%s : repose sur son porteur à la hauteur déclarée, à 3 mm près (au moins 3 points d’appui)', (name) => {
+    const { top } = restOf(name);
+    const contacts = contactsOf(name);
+    expect(contacts.length, `${name} : points d'appui sur ${restOf(name).on} à ${top} m`).toBeGreaterThanOrEqual(3);
+    for (const { vertex, surface } of contacts) {
+      expect(Math.abs(surface - surfaceAt(name, vertex.z)), `${name} : surface touchée à ${surface.toFixed(4)} m`).toBeLessThanOrEqual(SEAT_GAP + 1e-6);
+    }
+  });
+
+  it.each(CARRIED)('%s : tache dans le plan du dessus qui le porte, à la hauteur d’appui, sans en déborder', (name) => {
     const id = idOf(name);
     expect(id, name).toBeGreaterThan(0);
-    const { bottom, footprint } = seatOf(name);
     const vertices = patchVertices(id);
+    const { top, footprint } = seatOf(name);
+    expect(footprint, `${name} : aucun dessus plat à ${top} m sur son porteur`).not.toBeNull();
+    if (!footprint) return;
     expect(vertices.length, `${name} : aucune tache`).toBeGreaterThan(0);
-    for (const v of vertices) expect(v.y, `${name} : tache horizontale à son bas`).toBeCloseTo(bottom + CONTACT.rest.lift, 6);
-    expect(bottom).toBeGreaterThan(CONTACT.ground);
+    for (const v of vertices) expect(v.y, `${name} : tache dans le plan du dessus, à la hauteur d'appui`).toBeCloseTo(surfaceAt(name, v.z) + CONTACT.rest.lift, 6);
     const points = visiblePatchPoints(contactMesh(), id);
     expect(points.length).toBeGreaterThan(20);
     const outside = points.filter(
@@ -190,18 +274,41 @@ describe('décor : objets posés sur un meuble', () => {
     expect(outside.length, `${name} : ${outside.length} point(s) visibles de la tache hors du dessus du porteur`).toBe(0);
   });
 
-  it.each(CARRIED)('%s : pied assombri près de son appui, éclairé en haut', (name) => {
+  it.each(CARRIED)('%s : pied assombri à son appui (tout ce qui est à 5 cm de la hauteur d’appui), éclairé en haut', (name) => {
+    const { top } = restOf(name);
     const vertices = propVertices(idOf(name));
     expect(vertices.length).toBeGreaterThan(0);
-    const bottom = Math.min(...vertices.map((v) => v.p.y));
-    const top = Math.max(...vertices.map((v) => v.p.y));
-    // Faces qui ne regardent ni le bas ni un mur : seul l'appui les assombrit.
+    const highest = Math.max(...vertices.map((v) => v.p.y));
+    // Faces qui ne regardent pas le bas : seul l'appui (et un mur tout proche) les assombrit.
     const facing = vertices.filter((v) => v.n.y > -0.5);
-    const low = facing.filter((v) => v.p.y < bottom + 0.05);
-    const high = facing.filter((v) => v.p.y > top - 0.02);
-    expect(low.length).toBeGreaterThan(0);
-    expect(Math.min(...low.map((v) => v.shade)), `${name} : pied`).toBeLessThan(0.75);
+    const low = facing.filter((v) => Math.abs(v.p.y - surfaceAt(name, v.p.z)) <= 0.05);
+    const high = facing.filter((v) => v.p.y > highest - 0.02);
+    expect(low.length, `${name} : aucun sommet à 5 cm de son appui (${top} m)`).toBeGreaterThan(0);
+    // 0,75 : assombrissement de pied à 5 cm au-dessus de l'appui (0,71), avec un peu de jeu ; un
+    // pied compté depuis un appui 15 cm plus bas (l'évier sur son caisson) donnerait 0,86.
+    expect(Math.max(...low.map((v) => v.shade)), `${name} : pied`).toBeLessThan(0.75);
     expect(Math.max(...high.map((v) => v.shade)), `${name} : haut`).toBeGreaterThan(0.95);
+  });
+
+  // Garde-fou : un objet nouveau posé sur un meuble sans appui déclaré serait traité comme accroché
+  // (ni tache sur le meuble, ni pied assombri).
+  it('aucun objet hors du sol ne repose sur le dessus d’un porteur sans le déclarer', () => {
+    const undeclared: string[] = [];
+    for (const prop of GARAGE.props) {
+      if (prop.rest) continue;
+      const own = unionOf(propGeometries(prop).map(boxOf));
+      if (own.min[1] < CONTACT.ground || Math.min(own.max[0] - own.min[0], own.max[2] - own.min[2]) < CONTACT.flat) continue;
+      const over = (part: Box, k: number) => Math.min(part.max[k] ?? 0, own.max[k] ?? 0) > Math.max(part.min[k] ?? 0, own.min[k] ?? 0);
+      for (const carrierName of supportsOf(garage.cut.structure, prop.name)) {
+        const carrier = GARAGE.props.find((p) => p.name === carrierName);
+        if (!carrier) continue;
+        const seat = propGeometries(carrier)
+          .map(boxOf)
+          .find((part) => Math.abs(part.max[1] - own.min[1]) <= 0.05 && over(part, 0) && over(part, 2));
+        if (seat) undeclared.push(`${prop.name} sur ${carrierName} (dessus à ${seat.max[1].toFixed(3)} m, bas de l'objet à ${own.min[1].toFixed(3)} m)`);
+      }
+    }
+    expect(undeclared).toEqual([]);
   });
 
   it('un plat collé au mur au-dessus du plan (crédence) n’est pas « posé » : ni tache, ni pied assombri par la hauteur', () => {
@@ -314,8 +421,17 @@ describe('décor : chemin commun et libération', () => {
     gc();
     const alive = new Set(meshes(scene).map((mesh) => mesh.geometry as BufferGeometry));
     const retained = refs.map((ref) => ref.deref()).filter((geometry): geometry is BufferGeometry => geometry !== undefined && !alive.has(geometry));
-    // Les pièces (près de 600) ne doivent plus être tenues par le garage.
-    expect(retained.length, `${retained.length} géométries retenues hors des maillages`).toBeLessThan(20);
+    // Ce qui compte est la mémoire : quelques grosses géométries (les tubes néon, 318 Kio) pèsent
+    // plus que cent petites. Les pièces fusionnées ne doivent plus être tenues par le garage.
+    const bytesOf = (geometry: BufferGeometry) =>
+      Object.values(geometry.attributes).reduce((sum, attribute) => sum + (attribute.array as Float32Array).byteLength, geometry.index ? geometry.index.array.byteLength : 0);
+    const bytes = retained.reduce((sum, geometry) => sum + bytesOf(geometry), 0);
+    const heaviest = retained
+      .map((geometry) => ({ geometry, bytes: bytesOf(geometry) }))
+      .sort((a, b) => b.bytes - a.bytes)
+      .slice(0, 5)
+      .map(({ geometry, bytes: b }) => `${geometry.name || geometry.type} ${(b / 1024).toFixed(1)} Kio (${geometry.getAttribute('position').count} sommets)`);
+    expect(bytes, `${retained.length} géométries retenues hors des maillages, ${(bytes / 1024).toFixed(1)} Kio : ${heaviest.join(', ')}`).toBeLessThanOrEqual(RETAINED_BYTES);
     scene.dispose();
   });
 });
@@ -343,6 +459,48 @@ describe('décor : tubes néon', () => {
       if (ca > 0) lit += 1;
     }
     expect(lit / colorsA.length).toBeGreaterThan(0.9);
+  });
+});
+
+describe('décor : cônes de lumière', () => {
+  // Un plan additif qui traverse un objet s'y lit comme une vitre à bord net (revue D, constat D6) :
+  // les cônes s'arrêtent au-dessus de tout ce qui est dessous.
+  it('aucun plan des cônes ne traverse une pièce du mobilier', () => {
+    const { names, parts, partStart } = garage.cut.structure;
+    const crossings: string[] = [];
+    const furniture = GARAGE.props.flatMap((prop) => propGeometries(prop).map((geometry, index) => ({ name: `${prop.name}#${index}`, box: boxOf(geometry) })));
+    let planes = 0;
+    names.forEach((name, element) => {
+      if (!name.startsWith('cone_')) return;
+      for (let j = partStart[element] ?? 0; j < (partStart[element + 1] ?? 0); j += 1) {
+        planes += 1;
+        // Boîte du plan, épaissie de 2 mm : un plan n'a pas d'épaisseur, il traverse une pièce qui l'entoure.
+        const at = (k: number) => parts[j * 6 + k] ?? 0;
+        const plane: Box = { min: [at(0) - 0.002, at(1) - 0.002, at(2) - 0.002], max: [at(3) + 0.002, at(4) + 0.002, at(5) + 0.002] };
+        for (const { name: part, box } of furniture) {
+          const o = [0, 1, 2].map((k) => Math.min(plane.max[k] ?? 0, box.max[k] ?? 0) - Math.max(plane.min[k] ?? 0, box.min[k] ?? 0));
+          if (o.every((v) => v > 0.003)) crossings.push(`${name} (plan ${j - (partStart[element] ?? 0)}, bas à ${(plane.min[1] + 0.002).toFixed(3)} m) × ${part}`);
+        }
+      }
+    });
+    expect(planes, 'plans des cônes').toBe(2 * GARAGE.spots.filter((spot) => spot.beam).length);
+    expect(crossings).toEqual([]);
+  });
+});
+
+describe('décor : triangles', () => {
+  it(`le décor entier, sources et atmosphère comprises, sous ${DECOR_BUDGET} triangles`, () => {
+    const ambiance = AMBIANCES[0];
+    if (!ambiance) throw new Error('ambiance absente');
+    garage.update(ambiance);
+    const rows = meshes(garage).map((mesh) => ({ name: mesh.name, triangles: triangleCount(mesh.geometry as BufferGeometry) }));
+    const total = rows.reduce((sum, row) => sum + row.triangles, 0);
+    const detail = rows
+      .sort((a, b) => b.triangles - a.triangles)
+      .slice(0, 8)
+      .map((row) => `${row.name} ${row.triangles}`)
+      .join(', ');
+    expect(total, `décor : ${total} triangles (${detail})`).toBeLessThanOrEqual(DECOR_BUDGET);
   });
 });
 
@@ -443,12 +601,14 @@ describe('œuvres : teinte d’attente et transparence au dessin', () => {
     return { canvas, waiting };
   }
 
-  it('œuvre transparente (cible) : teinte d’attente au départ, puis alpha nul hors du dessin', async () => {
+  // Une teinte d'attente couvrirait tout le plan, coins compris, tant que le dessin n'est pas
+  // arrivé (ou s'il manque) : le panneau en volume, dessous, doit rester visible.
+  it('œuvre transparente (cible) : rien avant le dessin, puis alpha nul hors du dessin', async () => {
     const item = garageArt('cible');
     expect(item.transparent).toBe(true);
-    expect(item.waiting).not.toBeNull();
+    expect(item.waiting).toBeNull();
     const { canvas, waiting } = await drawn('cible');
-    expect(waiting).toEqual({ style: item.waiting, alpha: 1 });
+    expect(waiting.alpha).toBe(0);
     for (const [fx, fy] of [
       [0.02, 0.02],
       [0.98, 0.02],

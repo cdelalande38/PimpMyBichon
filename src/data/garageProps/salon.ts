@@ -104,22 +104,29 @@ const TIRE_DETAIL = 1.1;
 // ——— Frigo : deux palettes (h 0,174 chacune), caisse laquée, porte vers +x ———
 const PALLET_H = 0.174;
 const PALLET_BOARD_T = 0.022;
-const PALLET_BLOCK = 0.13;
 const PALLET_GRID = [-0.25, 0, 0.25] as const;
 const PALLET_SECTION = plankSection(0.1, PALLET_BOARD_T, 0.006);
 
-/** Une palette posée en y0 : planches de dessus selon z, neuf dés, planches de dessous selon x (option). */
-const pallet = (y0: number, withBottom: boolean): Part[] => [
-  ...(withBottom
-    ? PALLET_GRID.map((z): Part => ({ extrude: PALLET_SECTION, depth: 0.6, axis: 'x', at: [0, y0 + PALLET_BOARD_T / 2, z], material: 'caisse' }))
-    : []),
-  ...PALLET_GRID.flatMap((x) =>
-    PALLET_GRID.map((z): Part => ({ box: [0.1, PALLET_BLOCK, 0.1], at: [x, y0 + PALLET_BOARD_T + PALLET_BLOCK / 2, z], material: 'caisse' })),
-  ),
-  ...[-0.25, -0.125, 0, 0.125, 0.25].map(
-    (x): Part => ({ extrude: PALLET_SECTION, depth: 0.6, at: [x, y0 + PALLET_H - PALLET_BOARD_T / 2, 0], material: 'caisse' }),
-  ),
-];
+/**
+ * Une palette posée en y0, haute de PALLET_H : planches de dessous selon x (option), neuf dés,
+ * trois traverses selon x sur les rangées de dés, cinq planches de dessus selon z clouées sur les
+ * traverses (celles du milieu tombent entre deux dés). Sans planches de dessous, les dés partent
+ * de y0 et sont plus hauts : la palette garde sa hauteur et la suivante repose sur elle.
+ */
+const pallet = (y0: number, withBottom: boolean): Part[] => {
+  const blockBottom = y0 + (withBottom ? PALLET_BOARD_T : 0);
+  const blockH = y0 + PALLET_H - 2 * PALLET_BOARD_T - blockBottom;
+  return [
+    ...(withBottom
+      ? PALLET_GRID.map((z): Part => ({ extrude: PALLET_SECTION, depth: 0.6, axis: 'x', at: [0, y0 + PALLET_BOARD_T / 2, z], material: 'caisse' }))
+      : []),
+    ...PALLET_GRID.flatMap((x) => PALLET_GRID.map((z): Part => ({ box: [0.1, blockH, 0.1], at: [x, blockBottom + blockH / 2, z], material: 'caisse' }))),
+    ...PALLET_GRID.map((z): Part => ({ extrude: PALLET_SECTION, depth: 0.6, axis: 'x', at: [0, y0 + PALLET_H - 1.5 * PALLET_BOARD_T, z], material: 'caisse' })),
+    ...[-0.25, -0.125, 0, 0.125, 0.25].map(
+      (x): Part => ({ extrude: PALLET_SECTION, depth: 0.6, at: [x, y0 + PALLET_H - PALLET_BOARD_T / 2, 0], material: 'caisse' }),
+    ),
+  ];
+};
 
 const FRIDGE_BASE = 2 * PALLET_H;
 /** Caisse reculée de 2 cm : porte et poignée ne dépassent pas l'emprise d'origine vers la pièce. */

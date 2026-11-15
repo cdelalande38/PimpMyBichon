@@ -191,6 +191,8 @@ const evier: Prop = {
   name: 'placeholder_evier',
   at: [SINK.x, 0, BACK],
   small: true,
+  // Le rebord repose sur le plan de travail ; la cuve descend dans son trou, au-dessus du caisson abaissé.
+  rest: { on: 'placeholder_meubles_atelier', top: WORKTOP_Y },
   parts: [
     // Rebord à coins arrondis posé sur le plan de travail, cuve creuse, fond et bonde.
     {
@@ -233,13 +235,14 @@ const evier: Prop = {
       material: 'chrome',
     },
     { cylinder: [0.012, 0.022], top: 0.013, at: [0, 1.185, 0.22], material: 'chrome' },
+    // Manette : elle part du col (rayon 1,1 cm), bout au même endroit qu'avant.
     {
       tube: [
         [0, 0, 0],
-        [0.05, 0.03, 0],
+        [0.064, 0.038, 0],
       ],
       radius: 0.006,
-      at: [0.02, 0.955, 0.07],
+      at: [0.006, 0.947, 0.07],
       material: 'chrome',
     },
     // Flacons derrière la cuve, pulvérisateur à gauche.

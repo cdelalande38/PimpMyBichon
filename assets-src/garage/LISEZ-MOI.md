@@ -78,7 +78,9 @@ Aperçu de cette recette (flou proche 3,5 px, flou large 11 px, cœur blanc de 5
   `src/data/garageBase.ts` : œuvre, case éventuelle, place, rotation, largeur), et `src/scene/garage/build.ts` y
   pose un plan à 2 mm de la face (place `at` prise 1 mm devant la face, plus 1 mm ajouté par `build.ts` ; seul le bord
   roulé des plaques, en relief, monte à 0,8 mm du plan), texturé par `acquireArtwork` (`src/scene/garage/artwork.ts`) depuis la copie
-  servie `public/assets/garage/art/<id>.svg`. La teinte d'attente s'affiche tant que le dessin n'est pas arrivé.
+  servie `public/assets/garage/art/<id>.svg`. La teinte d'attente s'affiche tant que le dessin n'est pas arrivé ;
+  une œuvre transparente (la cible, les plaques, les casques) n'en a pas : rien n'est peint avant son dessin, et
+  l'objet dessous reste visible (le panneau étagé de la cible, en volume).
   Le registre (`src/data/garageArt.ts`) donne la matière : émissive pour le fronton, éclairée pour le reste.
 - Posées aujourd'hui : `toile-pop-art` (toile sur châssis au-dessus de l'écran, en portrait 0,54 × 0,72 m),
   `cible` (panneau de la cible, mur rouge), `flipper-plateau` et `flipper-fronton` (flipper de l'angle fond-droit),

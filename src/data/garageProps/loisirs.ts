@@ -395,6 +395,8 @@ function wallBike(): Part[] {
     { box: [0.4 * k, 0.3 * k, 0.28 * k], bevel: 0.01, at: p(0.12, 0.45), material: 'noir' },
     { cylinder: [0.1 * k, 0.3 * k], axis: 'z', at: p(0, 0.36), material: 'alu' },
     { capsule: [0.05 * k, 0.36 * k], axis: 'x', at: p(-0.42, 0.58, 0.15), rot: [0, 0, 0.25], material: 'alu' },
+    // Collecteur : du bas du moteur au nez du silencieux, qui sinon flotterait derrière lui.
+    { tube: [p(-0.04, 0.33, 0.12), p(-0.26, 0.62, 0.15)], radius: 0.009, material: 'chrome', at: [0, 0, 0] },
     // Supports muraux.
     ...SIDES.map((sx): Part => ({ box: [0.03, 0.03, 0.16], at: [sx * 0.2, BIKE_Y + 0.15, -0.08], material: 'noir' })),
   ];
@@ -414,10 +416,13 @@ export const PROPS_LOISIRS: readonly Prop[] = [
   {
     // Peluche assise sur le plateau, près du fronton, tournée vers la pièce.
     name: 'placeholder_peluche',
-    at: add(FLIPPER_AT, [PELUCHE_ON_FLIPPER[0], flTop(PELUCHE_ON_FLIPPER[2]) + 0.012, PELUCHE_ON_FLIPPER[2]]),
+    // Assise sur l'œuvre du plateau (2 mm au-dessus du bois de la caisse), dont elle suit la pente
+    // de 4,7° : sa tache est posée dans ce plan, et non à plat (à moitié enfouie, à moitié en l'air).
+    at: add(FLIPPER_AT, [PELUCHE_ON_FLIPPER[0], flTop(PELUCHE_ON_FLIPPER[2]) + 0.014, PELUCHE_ON_FLIPPER[2]]),
     turn: -Math.PI / 4,
     small: true,
     on: ['placeholder_flipper'],
+    rest: { on: 'placeholder_flipper', top: flTop(PELUCHE_ON_FLIPPER[2]) + 0.002, slope: FL_SLOPE },
     parts: plush,
   },
   {
