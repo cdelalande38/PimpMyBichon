@@ -12,6 +12,8 @@ export interface Settings {
   quality: QualitySetting;
   /** Rotation lente du véhicule au repos (toujours coupée si le système demande moins de mouvement). */
   autoRotate: boolean;
+  /** La radio démarre toute seule (ouverture de l'app, fin d'un import, lien de pack). */
+  autoPlay: boolean;
   /** Taille du texte de l'interface. */
   textSize: TextSize;
 }
@@ -19,6 +21,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Readonly<Settings> = Object.freeze({
   quality: 'auto',
   autoRotate: true,
+  autoPlay: true,
   textSize: 'normal',
 });
 
@@ -38,6 +41,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     quality: oneOf(QUALITY_SETTINGS, source.quality, DEFAULT_SETTINGS.quality),
     autoRotate:
       typeof source.autoRotate === 'boolean' ? source.autoRotate : DEFAULT_SETTINGS.autoRotate,
+    autoPlay: typeof source.autoPlay === 'boolean' ? source.autoPlay : DEFAULT_SETTINGS.autoPlay,
     textSize: oneOf(TEXT_SIZES, source.textSize, DEFAULT_SETTINGS.textSize),
   };
 }

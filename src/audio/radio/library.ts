@@ -3,6 +3,7 @@
 // Un pack sans compression reste tel quel : chaque morceau est lu comme une tranche du ZIP.
 
 import { askPersistentStorage } from '../../state/persistence.ts';
+import { useSettings } from '../../state/store.ts';
 import { commitCatalog, loadPrefs, useRadio, type FailCode, type FailInfo, type Job } from '../../state/radio.ts';
 import { loadCatalog, newId, PLAYLIST_ID, type Catalog, type Pack, type PackOrigin, type Station, type Track } from './catalog.ts';
 import { id3Size, parseId3, tagsFromFilename } from './id3.ts';
@@ -18,8 +19,8 @@ import {
   trackBlob,
   writeStream,
 } from './opfs.ts';
-import { extensionOf, isAudioPath, mimeOf, planStations } from './pack.ts';
-import { stopPlayback } from './player.ts';
+import { extensionOf, isAudioPath, mimeOf, parseManifest, pickStart, planStations } from './pack.ts';
+import { playStation, stopPlayback } from './player.ts';
 import { entryBytes, entryRange, entryStream, readZipEntries, ZipError } from './zip.ts';
 
 const FAILS: Record<FailCode, Omit<FailInfo, 'code'>> = {
@@ -263,7 +264,10 @@ async function indexZip(meta: PackMeta): Promise<string> {
       importedAt: Date.now(),
     };
     if (meta.url) pack.url = meta.url;
+    const depart = parseManifest(manifest)?.depart;
+    if (depart) pack.depart = depart;
     await addPack(pack, stations);
+    autoStart(stations, depart);
     const names = stations.map((station) => `«\u00a0${station.name}\u00a0»`).join(', ');
     return stations.length > 1 ? `Stations ajoutées : ${names}.` : `Station ajoutée : ${names}.`;
   } catch (error) {
@@ -394,7 +398,64 @@ async function addSongs(songs: File[]): Promise<string> {
   });
   void askPersistentStorage();
   void refreshStorage();
+  if (added > 0) autoStart([station]);
   return added === 1 ? '1 morceau ajouté à «\u00a0Ma playlist\u00a0».' : `${added} morceaux ajoutés à «\u00a0Ma playlist\u00a0».`;
+}
+
+// ——— Lecture automatique ———
+
+/** Réglage « Lecture automatique » relu ; avant la relecture de la sauvegarde, on attend. */
+export function settingsReady(): Promise<void> {
+  if (useSettings.getState().hydrated) return Promise.resolve();
+  return new Promise((resolve) => {
+    const stop = useSettings.subscribe((state) => {
+      if (!state.hydrated) return;
+      stop();
+      resolve();
+    });
+  });
+}
+
+function autoPlayAllowed(): boolean {
+  return useSettings.getState().autoPlay && !useRadio.getState().now?.playing;
+}
+
+/** Après un import réussi : la station de départ joue, si le réglage le permet et si rien ne joue. */
+function autoStart(stations: Station[], depart?: string): void {
+  if (!autoPlayAllowed()) return;
+  const index = pickStart(stations.map((station) => ({ folder: station.folder, count: station.tracks.length })), depart);
+  const first = stations[index];
+  if (first) void playStation(first.id);
+}
+
+/** Lien vers un pack déjà là : ses stations jouent, comme après un import. */
+export function startPack(packId: string): void {
+  const { catalog } = useRadio.getState();
+  const pack = catalog.packs.find((item) => item.id === packId);
+  autoStart(catalog.stations.filter((station) => station.packId === packId), pack?.depart);
+}
+
+/** Ouverture de l'app : reprise de la dernière station (et de son morceau), sinon la station de départ. */
+export async function autoStartOnOpen(): Promise<void> {
+  await Promise.all([initRadio(), settingsReady()]);
+  if (!autoPlayAllowed()) return;
+  const { catalog, lastStationId, lastTrackId } = useRadio.getState();
+  if (catalog.stations.length === 0) return;
+  const last = catalog.stations.find((station) => station.id === lastStationId);
+  if (last) {
+    const track = last.tracks.some((item) => item.id === lastTrackId) ? (lastTrackId ?? undefined) : undefined;
+    void playStation(last.id, track);
+    return;
+  }
+  // Pack le plus récent d'abord : sa station de départ, sinon la plus fournie de toute la radio.
+  for (const pack of [...catalog.packs].reverse()) {
+    const wanted = pack.depart && catalog.stations.find((s) => s.packId === pack.id && s.folder === pack.depart);
+    if (wanted) {
+      void playStation(wanted.id);
+      return;
+    }
+  }
+  autoStart(catalog.stations);
 }
 
 // ——— Téléchargement depuis une adresse ———

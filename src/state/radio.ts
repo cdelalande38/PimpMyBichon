@@ -44,12 +44,10 @@ export interface Job {
   message?: string;
 }
 
-/** Pack reçu par lien : rien ne part vers son hébergement avant l'appui de l'utilisateur. */
+/** Pack reçu par lien quand le navigateur demande d'économiser les données : il attend un appui. */
 export interface Offer {
   url: string;
   host: string;
-  /** Un pack importé depuis la même adresse est déjà là (le poids se compare au téléchargement). */
-  already: boolean;
 }
 
 export interface NowPlaying {
@@ -80,6 +78,8 @@ export interface RadioState extends RadioPrefs {
   job: Job | null;
   offer: Offer | null;
   now: NowPlaying | null;
+  /** Le navigateur a refusé de jouer sans geste : la musique part au premier appui. */
+  waitingTap: boolean;
   /** Position et durée du morceau en cours, en secondes entières. */
   clock: { position: number; duration: number | null };
   /** Place occupée par l'app et quota du navigateur, en octets. */
@@ -93,6 +93,7 @@ export const useRadio = create<RadioState>(() => ({
   job: null,
   offer: null,
   now: null,
+  waitingTap: false,
   clock: { position: 0, duration: null },
   storage: { usage: null, quota: null },
 }));

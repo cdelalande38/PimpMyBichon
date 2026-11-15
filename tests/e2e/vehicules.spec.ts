@@ -28,10 +28,10 @@ const MISSING = CATALOG.find((entry) => !hasModel(entry));
 
 const dock = (page: Page) => page.locator('footer.dock');
 
-/** Le lien ?pack= ouvre la radio sur l'offre du pack (aucune requête avant un appui) : on la referme. */
+/** Le lien ?pack= lance le téléchargement de lui-même ; vers une adresse en .invalid, il échoue : on referme le message. */
 async function dismissPackOffer(page: Page): Promise<void> {
   const sheet = page.getByRole('dialog');
-  await expect(sheet.getByText('Un pack de musique t’attend')).toBeVisible({ timeout: 30_000 });
+  await expect(sheet.getByRole('alert')).toBeVisible({ timeout: 30_000 });
   await sheet.getByRole('button', { name: 'Retour à l’atelier' }).click();
   await expect(sheet).toBeHidden();
 }

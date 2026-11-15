@@ -43,6 +43,8 @@ export interface Pack {
   /** Place occupée sur le téléphone, en octets. */
   bytes: number;
   importedAt: number;
+  /** Dossier de la station de départ (champ « depart » de pack.json). */
+  depart?: string;
 }
 
 export interface Catalog {
@@ -103,6 +105,7 @@ export function sanitizeCatalog(raw: unknown): Catalog {
       importedAt: num(p.importedAt) ? p.importedAt : 0,
     };
     if (str(p.url)) pack.url = p.url;
+    if (str(p.depart)) pack.depart = p.depart;
     packs.push(pack);
   }
   const known = new Set(packs.map((pack) => pack.id));

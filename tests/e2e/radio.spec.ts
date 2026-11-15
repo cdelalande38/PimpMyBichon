@@ -118,29 +118,122 @@ test('import par adresse : avec CORS, puis sans CORS', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('Adresse introuvable');
 });
 
-test('arrivée par un lien ?pack= : un appui, les stations arrivent, l’adresse est nettoyée', async ({ page }) => {
+test('arrivée par un lien ?pack= : le téléchargement part tout seul, puis la musique', async ({ page }) => {
   requests.length = 0;
   await page.goto(`./?pack=${encodeURIComponent(`http://${HOST}/cors/autre.zip`)}`);
-  await expect(page.getByText('Un pack de musique t’attend')).toBeVisible();
-  await expect(page.locator('.radio-offer')).toContainText(`Hébergé chez ${HOST}`);
+  await expect(page.getByRole('heading', { name: /radio/i, level: 2 })).toBeVisible();
   expect(page.url()).not.toContain('pack=');
-  // Rien ne part vers l'hébergement avant l'appui.
-  await page.waitForTimeout(1500);
-  expect(requests).toEqual([]);
-  await page.screenshot({ path: 'test-results/radio-offre.png' });
-  await page.locator('.radio-offer').getByRole('button', { name: /^Télécharger/ }).click();
   await expect(station(page, 'Hip-hop & R&B')).toBeVisible({ timeout: 45_000 });
-  expect(page.url()).not.toContain('pack=');
+  expect(requests).toContain('GET /cors/autre.zip');
+  // Selon le navigateur, la musique part d'elle-même ou attend le premier appui.
+  await expect(page.locator('.radio-player .radio-tap').or(page.locator('.radio-player').getByRole('button', { name: 'Pause' }))).toBeVisible();
+  await page.screenshot({ path: 'test-results/radio-lien.png' });
 
-  // Le même lien une seconde fois : le pack est reconnu, rien n'est retéléchargé.
+  // Le même lien une seconde fois : le pack est reconnu, rien ne part vers l'hébergement.
+  requests.length = 0;
   await page.goto('about:blank');
   await page.goto(`./#pack=http://${HOST}/cors/autre.zip`);
-  await expect(page.getByText('Un pack de cette adresse est déjà dans ta radio')).toBeVisible();
-  // L'adresse seule ne bloque pas : « Retélécharger » interroge l'hébergement, et le poids identique arrête là.
-  await page.locator('.radio-offer').getByRole('button', { name: 'Retélécharger' }).click();
-  await expect(page.getByText('Ce pack est déjà dans ta radio : rien à télécharger.')).toBeVisible({ timeout: 45_000 });
-  expect(requests.filter((line) => line.startsWith('HEAD'))).toEqual([]);
+  await expect(page.getByText('Ce pack est déjà dans ta radio : rien à télécharger.')).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(requests).toEqual([]);
 });
+
+test('économie de données : le pack reçu par lien attend un appui', async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'connection', { value: { saveData: true }, configurable: true });
+  });
+  requests.length = 0;
+  await page.goto(`./?pack=http://${HOST}/cors/autre.zip`);
+  await expect(page.getByText('Un pack de musique t’attend')).toBeVisible();
+  await expect(page.locator('.radio-offer')).toContainText(`Hébergé chez ${HOST}`);
+  await page.waitForTimeout(1500);
+  expect(requests).toEqual([]);
+  await page.locator('.radio-offer').getByRole('button', { name: 'Télécharger' }).click();
+  await expect(station(page, 'Hip-hop & R&B')).toBeVisible({ timeout: 45_000 });
+});
+
+test('réglage « Lecture automatique » coupé : rien ne démarre après un import ni à l’ouverture', async ({ page }) => {
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Réglages' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Lecture automatique' }).click();
+  await dialog.getByRole('button', { name: /^Coupée/ }).click();
+  await expect(dialog.getByRole('button', { name: /^Coupée/ })).toHaveAttribute('aria-pressed', 'true');
+  await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
+  await page.getByRole('button', { name: /^Radio/ }).first().click();
+  await page.getByTestId('radio-fichier-pack').setInputFiles({ name: 'p.zip', mimeType: 'application/zip', buffer: Buffer.from(smallPack()) });
+  await expect(page.getByText('Stations ajoutées')).toBeVisible({ timeout: 45_000 });
+  await page.waitForTimeout(1500);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Choisis une station.');
+  await page.goto('about:blank');
+  await page.goto('./');
+  await expect(page.getByRole('button', { name: /^Radio/ }).first()).toBeVisible();
+  await page.waitForTimeout(2000);
+  await expect(page.locator('.radio-mini')).toHaveCount(0);
+});
+
+type Policy = 'geste exigé' | 'lecture libre';
+
+/**
+ * Le Chromium piloté par Playwright laisse toujours jouer sans geste (ses propres scripts comptent
+ * comme des gestes, et le drapeau --autoplay-policy n'y change rien) : on reproduit la règle du
+ * téléphone en refusant play() tant que la page n'a reçu aucun vrai appui ni aucune touche.
+ */
+async function applyPolicy(page: Page, policy: Policy): Promise<void> {
+  if (policy === 'lecture libre') return;
+  await page.addInitScript(() => {
+    let gesture = false;
+    for (const type of ['pointerup', 'keydown']) {
+      window.addEventListener(type, (event) => {
+        if (event.isTrusted) gesture = true;
+      }, true);
+    }
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (this: HTMLMediaElement) {
+      if (!gesture) return Promise.reject(new DOMException('geste requis', 'NotAllowedError'));
+      return play.call(this);
+    };
+  });
+}
+
+for (const policy of ['geste exigé', 'lecture libre'] as const) {
+  test(`politique « ${policy} » : à l’ouverture de l’app, la dernière station reprend (ou attend le premier appui)`, async ({ page }) => {
+    await applyPolicy(page, policy);
+    {
+      await openRadio(page);
+      await page.getByTestId('radio-fichier-pack').setInputFiles({ name: 'p.zip', mimeType: 'application/zip', buffer: Buffer.from(smallPack()) });
+      await expect(page.getByText('Stations ajoutées')).toBeVisible({ timeout: 45_000 });
+      await page.getByRole('button', { name: 'Écouter Rock' }).click();
+      await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 2a');
+      // Réouverture de l'app, panneau fermé.
+      await page.goto('about:blank');
+      await page.goto('./');
+      const mini = page.locator('.radio-mini');
+      await expect(mini).toContainText('Bruit d’essai 2a', { timeout: 30_000 });
+      if (policy === 'geste exigé') {
+        await expect(mini).toContainText('Touche pour lancer la musique');
+        await page.mouse.click(195, 300); // un appui n'importe où (la scène)
+      }
+      await expect(mini.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 30_000 });
+      await expect(mini).not.toContainText('Touche pour lancer la musique');
+    }
+  });
+
+  test(`politique « ${policy} » : lien de pack, téléchargement sans appui, puis musique (ou premier appui)`, async ({ page }) => {
+    await applyPolicy(page, policy);
+    {
+      await page.goto(`./?pack=http://${HOST}/cors/autre.zip`);
+      await expect(station(page, 'Hip-hop & R&B')).toBeVisible({ timeout: 45_000 });
+      const player = page.locator('.radio-player');
+      if (policy === 'geste exigé') {
+        await expect(player.locator('.radio-tap')).toHaveText('Touche pour lancer la musique');
+        await page.getByRole('heading', { name: /radio/i, level: 2 }).click();
+      }
+      await expect(player.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 30_000 });
+      await expect(player.locator('.radio-tap')).toHaveCount(0);
+    }
+  });
+}
 
 test('coupure pendant le téléchargement, puis reprise par une requête Range', async ({ page }) => {
   await openRadio(page);

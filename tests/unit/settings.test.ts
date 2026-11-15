@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS, sanitizeSettings } from '../../src/state/settings.ts'
 
 describe('sanitizeSettings', () => {
   it('garde une sauvegarde valide telle quelle', () => {
-    const saved = { quality: 'max', autoRotate: false, textSize: 'tres-grand' } as const;
+    const saved = { quality: 'max', autoRotate: false, textSize: 'tres-grand', autoPlay: false } as const;
     expect(sanitizeSettings(saved)).toEqual(saved);
   });
 
@@ -15,17 +15,17 @@ describe('sanitizeSettings', () => {
 
   it('remplace une valeur inconnue par l’origine, champ par champ', () => {
     expect(
-      sanitizeSettings({ quality: 'ultra', autoRotate: 'oui', textSize: 'grand' }),
+      sanitizeSettings({ quality: 'ultra', autoRotate: 'oui', textSize: 'grand', autoPlay: 'oui' }),
     ).toEqual({ ...DEFAULT_SETTINGS, textSize: 'grand' });
   });
 
   it('ignore les champs en trop', () => {
     const result = sanitizeSettings({ quality: 'eco', hydrated: true, __proto__: { x: 1 } });
     expect(result).toEqual({ ...DEFAULT_SETTINGS, quality: 'eco' });
-    expect(Object.keys(result).sort()).toEqual(['autoRotate', 'quality', 'textSize']);
+    expect(Object.keys(result).sort()).toEqual(['autoPlay', 'autoRotate', 'quality', 'textSize']);
   });
 
-  it('démarre en qualité automatique, rotation activée, texte normal', () => {
-    expect(DEFAULT_SETTINGS).toEqual({ quality: 'auto', autoRotate: true, textSize: 'normal' });
+  it('démarre en qualité automatique, rotation activée, texte normal, lecture automatique activée', () => {
+    expect(DEFAULT_SETTINGS).toEqual({ quality: 'auto', autoRotate: true, textSize: 'normal', autoPlay: true });
   });
 });

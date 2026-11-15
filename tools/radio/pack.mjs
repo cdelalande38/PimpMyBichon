@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // @ts-check
-// npm run radio:pack -- <dossier source> <fichier ou dossier de sortie> [--par-station]
+// npm run radio:pack -- <dossier source> <fichier ou dossier de sortie> [--par-station] [--depart <dossier>]
 //
 // Fabrique un pack de musique pour la radio de l'atelier : un ZIP sans compression (les MP3 ne
 // se compressent pas, et l'app lit chaque morceau comme une tranche du ZIP, sans copie), noms en
 // UTF-8 (drapeau 11). Node seul, aucune dépendance. Les packs ne passent jamais par le dépôt.
 //
 //   par défaut      un seul ZIP « version 2 » : un dossier par station, pack.json à la racine ;
-//   --par-station   un ZIP « version 1 » par sous-dossier, rangés dans le dossier de sortie.
+//   --par-station   un ZIP « version 1 » par sous-dossier, rangés dans le dossier de sortie ;
+//   --depart <d>    station qui démarre après l'import (champ « depart » de pack.json), sinon la plus fournie.
 //
 // Un sous-dossier du dossier source = une station (son nom donne celui de la station). Des morceaux
 // posés directement dans le dossier source forment une station au nom de ce dossier.
@@ -196,12 +197,15 @@ function mo(bytes) {
 
 function main() {
   const args = process.argv.slice(2);
+  const at = args.indexOf('--depart');
+  const depart = at >= 0 ? args.splice(at, 2)[1] : undefined;
   const perStation = args.includes('--par-station');
   const positional = args.filter((arg) => !arg.startsWith('--'));
   if (args.includes('--help') || positional.length < 2) {
     console.log('Usage : npm run radio:pack -- <dossier source> <fichier ou dossier de sortie> [--par-station]');
     console.log('  par défaut : un ZIP version 2 pour tous les sous-dossiers (une station par sous-dossier)');
     console.log('  --par-station : un ZIP version 1 par sous-dossier, dans le dossier de sortie');
+    console.log('  --depart <dossier> : station qui démarre après l’import (sinon la plus fournie)');
     process.exit(positional.length < 2 && !args.includes('--help') ? 2 : 0);
   }
   const source = resolve(/** @type {string} */ (positional[0]));
@@ -239,7 +243,9 @@ function main() {
     format: 'pmb-pack',
     version: 2,
     stations: stations.map((station) => ({ dossier: station.folder, pistes: station.files.length })),
+    ...(depart && stations.some((station) => station.folder === depart) ? { depart } : {}),
   };
+  if (depart && !('depart' in manifest)) console.warn(`--depart ${depart} : aucune station de ce nom, ignoré.`);
   const bytes = writeZip(output, [
     { name: 'pack.json', data: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`) },
     ...stations.flatMap(entriesOf),

@@ -22,7 +22,6 @@ import './radio.css';
 function OfferCard() {
   const offer = useRadio((state) => state.offer);
   const job = useRadio((state) => state.job);
-  const stations = useRadio((state) => state.catalog.stations);
   if (!offer) return null;
   const close = () => useRadio.setState({ offer: null });
   const start = () => {
@@ -34,35 +33,18 @@ function OfferCard() {
     <section className="radio-card radio-offer" aria-labelledby="radio-offer-title">
       <h3 id="radio-offer-title">Un pack de musique t’attend</h3>
       <p>
-        Hébergé chez <strong>{offer.host}</strong>. Le poids s’affiche dès que le téléchargement démarre.
+        Hébergé chez <strong>{offer.host}</strong>. Ton téléphone demande d’économiser les données : le
+        téléchargement attend ton feu vert.
       </p>
-      {offer.already ? (
-        <>
-          <p>Un pack de cette adresse est déjà dans ta radio. Si rien n’a changé, il ne sera pas retéléchargé.</p>
-          <div className="radio-row">
-            <button type="button" className="btn cta" onClick={start} disabled={running}>
-              Retélécharger
-            </button>
-            {stations[0] && (
-              <button type="button" className="btn" onClick={() => { close(); void playStation(stations[0]!.id); }}>
-                Écouter
-              </button>
-            )}
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="radio-note">Un pack pèse souvent plusieurs centaines de Mo : passe en Wi-Fi si tu peux, et garde l’atelier ouvert pendant le téléchargement.</p>
-          <div className="radio-row">
-            <button type="button" className="btn cta" onClick={start} disabled={running}>
-              Télécharger
-            </button>
-            <button type="button" className="btn" onClick={close}>
-              Pas maintenant
-            </button>
-          </div>
-        </>
-      )}
+      <p className="radio-note">Un pack pèse souvent plusieurs centaines de Mo : passe en Wi-Fi si tu peux, et garde l’atelier ouvert pendant le téléchargement.</p>
+      <div className="radio-row">
+        <button type="button" className="btn cta" onClick={start} disabled={running}>
+          Télécharger
+        </button>
+        <button type="button" className="btn" onClick={close}>
+          Pas maintenant
+        </button>
+      </div>
     </section>
   );
 }
@@ -151,6 +133,7 @@ function Player() {
   const volume = useRadio((state) => state.volume);
   const stations = useRadio((state) => state.catalog.stations);
   const lastStationId = useRadio((state) => state.lastStationId);
+  const waitingTap = useRadio((state) => state.waitingTap);
   if (stations.length === 0) return null;
   const station = stations.find((item) => item.id === (now?.stationId ?? lastStationId));
   return (
@@ -162,6 +145,7 @@ function Player() {
         </p>
         {now?.artist && <p className="radio-now-artist">{now.artist}</p>}
         {now && <Clock />}
+        {waitingTap && <p className="radio-tap">Touche pour lancer la musique</p>}
       </div>
       <div className="radio-controls">
         <button type="button" className="btn radio-icon" aria-label="Morceau précédent" onClick={() => void previous()} disabled={!now}>

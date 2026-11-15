@@ -28,7 +28,7 @@ export const useSettings = create<SettingsState>()(
       name: SETTINGS_KEY,
       version: SETTINGS_VERSION,
       storage: createJSONStorage(() => idbStorage),
-      partialize: ({ quality, autoRotate, textSize }) => ({ quality, autoRotate, textSize }),
+      partialize: ({ quality, autoRotate, textSize, autoPlay }) => ({ quality, autoRotate, textSize, autoPlay }),
       // Lecture tolérante : une sauvegarde abîmée ou venue d'une autre version retombe sur l'origine.
       migrate: (persisted) => sanitizeSettings(persisted),
       merge: (persisted, current) => ({ ...current, ...sanitizeSettings(persisted) }),

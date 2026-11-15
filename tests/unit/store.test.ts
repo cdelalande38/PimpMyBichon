@@ -31,11 +31,12 @@ beforeEach(() => {
 describe('store des réglages', () => {
   it('démarre sur les valeurs d’origine', async () => {
     const useSettings = await launch();
-    const { quality, autoRotate, textSize } = useSettings.getState();
-    expect({ quality, autoRotate, textSize }).toEqual({
+    const { quality, autoRotate, textSize, autoPlay } = useSettings.getState();
+    expect({ quality, autoRotate, textSize, autoPlay }).toEqual({
       quality: 'auto',
       autoRotate: true,
       textSize: 'normal',
+      autoPlay: true,
     });
   });
 
@@ -44,20 +45,23 @@ describe('store des réglages', () => {
     first.getState().change('textSize', 'tres-grand');
     first.getState().change('quality', 'eco');
     first.getState().change('autoRotate', false);
+    first.getState().change('autoPlay', false);
     await vi.waitFor(async () =>
       expect(await savedSettings()).toEqual({
         quality: 'eco',
         autoRotate: false,
         textSize: 'tres-grand',
+        autoPlay: false,
       }),
     );
 
     const second = await launch();
-    const { quality, autoRotate, textSize } = second.getState();
-    expect({ quality, autoRotate, textSize }).toEqual({
+    const { quality, autoRotate, textSize, autoPlay } = second.getState();
+    expect({ quality, autoRotate, textSize, autoPlay }).toEqual({
       quality: 'eco',
       autoRotate: false,
       textSize: 'tres-grand',
+      autoPlay: false,
     });
   });
 
@@ -66,6 +70,7 @@ describe('store des réglages', () => {
     useSettings.getState().change('quality', 'max');
     await vi.waitFor(async () => expect(await savedSettings()).toMatchObject({ quality: 'max' }));
     expect(Object.keys((await savedSettings()) as object).sort()).toEqual([
+      'autoPlay',
       'autoRotate',
       'quality',
       'textSize',
@@ -99,6 +104,7 @@ describe('store des réglages', () => {
     const useSettings = await launch();
     expect(useSettings.getState().quality).toBe('max');
     expect(useSettings.getState().autoRotate).toBe(true);
+    expect(useSettings.getState().autoPlay).toBe(true);
   });
 
   it('revient à l’origine sur demande', async () => {

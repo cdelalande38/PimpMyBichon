@@ -6,7 +6,7 @@ import { sanitizeCatalog } from '../../src/audio/radio/catalog.ts';
 import { id3Size, parseId3, tagsFromFilename } from '../../src/audio/radio/id3.ts';
 import { checkPackUrl, readPackLink, stripPackLink } from '../../src/audio/radio/link.ts';
 import { makeOrder, PlayQueue } from '../../src/audio/radio/order.ts';
-import { planStations, prettyStationName } from '../../src/audio/radio/pack.ts';
+import { parseManifest, pickStart, planStations, prettyStationName } from '../../src/audio/radio/pack.ts';
 import { entryBytes, entryRange, readZipEntries, ZipError, type ZipEntry } from '../../src/audio/radio/zip.ts';
 import { findPackByUrl, findSamePack } from '../../src/audio/radio/library.ts';
 import { sanitizePrefs, useRadio } from '../../src/state/radio.ts';
@@ -96,6 +96,24 @@ describe('stations d’un pack', () => {
     expect(planStations(nested, null, 'p').map((p) => p.folder)).toEqual(['electro', 'rock']);
   });
 
+  it('station de départ : le champ « depart », sinon la plus fournie, à égalité la première', () => {
+    expect(parseManifest(JSON.stringify({ format: 'pmb-pack', version: 2, stations: [{ dossier: 'rock' }], depart: 'rock/' }))).toEqual({
+      version: 2,
+      stations: ['rock'],
+      depart: 'rock',
+    });
+    expect(parseManifest(JSON.stringify({ format: 'pmb-pack', version: 1, station: 'rock', depart: 4 }))).toEqual({ version: 1, station: 'rock' });
+    const stations = [
+      { folder: 'electro', count: 3 },
+      { folder: 'rock', count: 5 },
+      { folder: 'chill', count: 5 },
+    ];
+    expect(pickStart(stations, 'chill')).toBe(2);
+    expect(pickStart(stations, 'absente')).toBe(1);
+    expect(pickStart(stations)).toBe(1);
+    expect(pickStart([])).toBe(-1);
+  });
+
   it('nomme joliment les stations', () => {
     expect(prettyStationName('hiphop-rnb')).toBe('Hip-hop & R&B');
     expect(prettyStationName('electro')).toBe('Électro');
@@ -144,7 +162,7 @@ describe('ordre de lecture', () => {
 describe('index des stations', () => {
   it('lecture tolérante : écarte ce qui est abîmé, garde le reste', () => {
     const catalog = sanitizeCatalog({
-      packs: [{ id: 'p1', origin: 'adresse', label: 'hote', files: ['p1.zip', 3], sourceBytes: 10, bytes: 10, url: 'x' }, null, { nope: 1 }],
+      packs: [{ id: 'p1', origin: 'adresse', label: 'hote', files: ['p1.zip', 3], sourceBytes: 10, bytes: 10, url: 'x', depart: 'rock' }, null, { nope: 1 }],
       stations: [
         { id: 's1', packId: 'p1', folder: 'rock', name: 'Rock', tracks: [{ id: 't1', path: 'rock/a.mp3', file: 'p1.zip', start: 5, end: 9, title: 'A' }, { id: 7 }] },
         { id: 's2', packId: 'inconnu', tracks: [{ id: 't', path: 'p', file: 'f' }] },
@@ -153,6 +171,7 @@ describe('index des stations', () => {
     });
     expect(catalog.packs).toHaveLength(1);
     expect(catalog.packs[0]?.files).toEqual(['p1.zip']);
+    expect(catalog.packs[0]?.depart).toBe('rock');
     expect(catalog.stations.map((s) => s.id)).toEqual(['s1']);
     expect(catalog.stations[0]?.tracks).toEqual([{ id: 't1', path: 'rock/a.mp3', file: 'p1.zip', start: 5, end: 9, title: 'A', mime: 'audio/mpeg' }]);
     expect(sanitizeCatalog('nimporte quoi')).toEqual({ packs: [], stations: [] });

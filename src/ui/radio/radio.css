@@ -317,3 +317,8 @@
   font-size: 0.8125rem;
   font-variant-numeric: tabular-nums;
 }
+
+.radio-tap {
+  color: var(--ambre);
+  font-weight: 700;
+}

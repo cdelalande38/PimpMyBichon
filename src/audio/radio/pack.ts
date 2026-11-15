@@ -58,9 +58,10 @@ export interface StationPlan {
   entries: ZipEntry[];
 }
 
+/** `depart` : dossier de la station qui démarre après l'import (champ facultatif). */
 type Manifest =
-  | { version: 1; station: string }
-  | { version: 2; stations: string[] };
+  | { version: 1; station: string; depart?: string }
+  | { version: 2; stations: string[]; depart?: string };
 
 /** Lecture tolérante de pack.json : tout ce qui n'est pas reconnu vaut « pas de manifeste ». */
 export function parseManifest(text: string | null): Manifest | null {
@@ -74,8 +75,9 @@ export function parseManifest(text: string | null): Manifest | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const data = raw as Record<string, unknown>;
   if (data.format !== 'pmb-pack') return null;
+  const depart = typeof data.depart === 'string' && data.depart.trim() ? { depart: data.depart.trim().replace(/\/+$/, '') } : {};
   if (data.version === 1 && typeof data.station === 'string' && data.station.trim()) {
-    return { version: 1, station: data.station.trim().replace(/\/+$/, '') };
+    return { version: 1, station: data.station.trim().replace(/\/+$/, ''), ...depart };
   }
   if (data.version === 2 && Array.isArray(data.stations)) {
     const stations = data.stations
@@ -85,9 +87,25 @@ export function parseManifest(text: string | null): Manifest | null {
           : '',
       )
       .filter((folder) => folder !== '');
-    if (stations.length > 0) return { version: 2, stations };
+    if (stations.length > 0) return { version: 2, stations, ...depart };
   }
   return null;
+}
+
+/**
+ * Station qui démarre après un import : celle du champ « depart » si elle existe, sinon la plus
+ * fournie (à égalité, la première du pack). Rend -1 pour une liste vide.
+ */
+export function pickStart(stations: ReadonlyArray<{ folder: string; count: number }>, depart?: string): number {
+  if (depart) {
+    const wanted = stations.findIndex((station) => station.folder === depart);
+    if (wanted >= 0) return wanted;
+  }
+  let best = -1;
+  stations.forEach((station, index) => {
+    if (best < 0 || station.count > stations[best]!.count) best = index;
+  });
+  return best;
 }
 
 const collator = new Intl.Collator('fr', { numeric: true, sensitivity: 'base' });

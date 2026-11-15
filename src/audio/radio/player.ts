@@ -1,6 +1,7 @@
 // Lecteur de la radio : deux éléments audio pour un fondu enchaîné court entre deux morceaux,
-// commandes de l'écran verrouillé (Media Session). Rien ne joue sans un geste : chaque
-// démarrage part d'un appel venu d'un bouton. La musique continue panneau fermé.
+// commandes de l'écran verrouillé (Media Session). La lecture peut démarrer toute seule (ouverture,
+// fin d'import) ; si le navigateur refuse de jouer sans geste, la station reste prête et part au
+// premier appui n'importe où dans l'app. La musique continue panneau fermé.
 
 import { recordDuration, setPrefs, useRadio } from '../../state/radio.ts';
 import type { Station, Track } from './catalog.ts';
@@ -26,6 +27,36 @@ let fadingOut: Deck | null = null;
 /** Jeton du dernier démarrage demandé : un chargement dépassé ne prend pas la main. */
 let token = 0;
 let errors = 0;
+/** Retire l'écoute « premier appui » (posée une seule fois). */
+let disarmTap: (() => void) | null = null;
+
+/** Commandes de la radio : elles lancent la musique elles-mêmes, l'écoute globale les laisse faire. */
+const RADIO_CONTROLS = '.radio-mini button, .radio-player button, .radio-station-head button, .radio-tracks button';
+
+function clearTap(): void {
+  disarmTap?.();
+  disarmTap = null;
+  if (useRadio.getState().waitingTap) useRadio.setState({ waitingTap: false });
+}
+
+/** Lecture refusée sans geste : « Touche pour lancer la musique », départ au premier appui. */
+function armTapToPlay(): void {
+  useRadio.setState({ waitingTap: true });
+  if (disarmTap || typeof document === 'undefined') return;
+  const onTap = (event: Event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest(RADIO_CONTROLS)) return;
+    clearTap();
+    void resume();
+  };
+  // pointerup : geste reconnu au toucher comme à la souris ; keydown pour le clavier.
+  document.addEventListener('pointerup', onTap, true);
+  document.addEventListener('keydown', onTap, true);
+  disarmTap = () => {
+    document.removeEventListener('pointerup', onTap, true);
+    document.removeEventListener('keydown', onTap, true);
+  };
+}
 
 function master(): number {
   return useRadio.getState().volume;
@@ -95,7 +126,9 @@ function ensureDecks(): [Deck, Deck] {
       if (deck.track && deck.track.duration === undefined) recordDuration(deck.track.id, el.duration);
     });
     el.addEventListener('playing', () => {
-      if (isActive(deck)) errors = 0;
+      if (!isActive(deck)) return;
+      errors = 0;
+      clearTap();
     });
     el.addEventListener('play', () => isActive(deck) && publish());
     el.addEventListener('pause', () => isActive(deck) && publish());
@@ -193,7 +226,8 @@ async function startTrack(index: number, fade: boolean): Promise<void> {
   publish();
   try {
     await incoming.el.play();
-  } catch {
+  } catch (error) {
+    if (my === token && error instanceof DOMException && error.name === 'NotAllowedError') armTapToPlay();
     publish();
     return;
   }
@@ -224,8 +258,9 @@ export async function resume(): Promise<void> {
   if (deck?.track && station) {
     try {
       await deck.el.play();
-    } catch {
-      // Lecture refusée : l'interface reste sur « pause ».
+    } catch (error) {
+      // Lecture refusée : l'interface reste sur « pause », la musique attend le premier appui.
+      if (error instanceof DOMException && error.name === 'NotAllowedError') armTapToPlay();
     }
     publish();
     return;
@@ -274,6 +309,7 @@ export function setShuffle(shuffle: boolean): void {
 export function stopPlayback(stationIds?: readonly string[]): void {
   if (stationIds && (!station || !stationIds.includes(station.id))) return;
   token += 1;
+  clearTap();
   finishFade();
   if (decks) for (const deck of decks) unload(deck);
   station = null;

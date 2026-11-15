@@ -48,7 +48,16 @@ const TEXT: SettingTab<'textSize'> = {
   ],
 };
 
-const TABS = [QUALITY, ROTATION, TEXT] as const;
+const AUTOPLAY: SettingTab<'autoPlay'> = {
+  key: 'autoPlay',
+  label: 'Lecture automatique',
+  choices: [
+    { value: true, label: 'Activée', hint: 'La radio part toute seule' },
+    { value: false, label: 'Coupée', hint: 'Elle attend ton signal' },
+  ],
+};
+
+const TABS = [QUALITY, ROTATION, TEXT, AUTOPLAY] as const;
 type TabKey = (typeof TABS)[number]['key'];
 
 function Choices<K extends keyof Settings>({ tab }: { tab: SettingTab<K> }) {
@@ -113,6 +122,7 @@ export function SettingsPanel() {
       {active === 'quality' && <Choices tab={QUALITY} />}
       {active === 'autoRotate' && <Choices tab={ROTATION} />}
       {active === 'textSize' && <Choices tab={TEXT} />}
+      {active === 'autoPlay' && <Choices tab={AUTOPLAY} />}
     </>
   );
 }

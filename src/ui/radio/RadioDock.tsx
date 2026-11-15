@@ -12,6 +12,7 @@ import './radio.css';
 export function RadioDock() {
   useEffect(() => bootRadio(), []);
   const now = useRadio((state) => state.now);
+  const waitingTap = useRadio((state) => state.waitingTap);
   const job = useRadio((state) => state.job);
   const running = job?.phase === 'telechargement' || job?.phase === 'copie' || job?.phase === 'lecture';
   const progress = running && job.phase !== 'lecture' ? percent(job.done, job.total) : null;
@@ -30,7 +31,11 @@ export function RadioDock() {
         <div className="radio-mini" role="group" aria-label="Radio en cours">
           <span className="radio-mini-title">
             <span className="radio-mini-song">{now.title}</span>
-            {now.artist && <span className="radio-mini-artist">{now.artist}</span>}
+            {waitingTap ? (
+              <span className="radio-mini-artist radio-tap">Touche pour lancer la musique</span>
+            ) : (
+              now.artist && <span className="radio-mini-artist">{now.artist}</span>
+            )}
           </span>
           <button
             type="button"
