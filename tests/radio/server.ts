@@ -1,10 +1,11 @@
 // Petit hébergement d'essai pour les parcours de la radio, sur une autre origine que l'app.
 // /cors/… envoie l'en-tête CORS (et accepte HEAD et Range), /nocors/… ne l'envoie pas,
-// /coupe/… coupe la connexion à mi-chemin d'une requête sans Range (la reprise passe).
+// /coupe/… coupe la connexion à mi-chemin d'une requête sans Range (la reprise passe),
+// /sansfin/… envoie un début de ZIP puis des octets sans fin, sans Content-Length (épreuve du plafond).
 // Les packs viennent d'un tampon en mémoire ou d'un fichier sur le disque (épreuve de taille).
 
 import { createReadStream, statSync } from 'node:fs';
-import { createServer, type Server } from 'node:http';
+import { createServer, type Server, type ServerResponse } from 'node:http';
 import { buildZip, type FixtureEntry } from './fixtures.ts';
 
 export type PackSource = { buffer: Uint8Array } | { file: string };
@@ -22,6 +23,10 @@ export function startPackServer(port: number, packs: Map<string, PackSource>, lo
     }
     if (req.method === 'OPTIONS') {
       res.writeHead(204).end();
+      return;
+    }
+    if (mode === 'sansfin') {
+      endless(res, log);
       return;
     }
     if (!source || (mode !== 'cors' && mode !== 'nocors' && mode !== 'coupe')) {
@@ -49,6 +54,28 @@ export function startPackServer(port: number, packs: Map<string, PackSource>, lo
     else createReadStream(source.file, { start }).pipe(res);
   });
   return new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(server)));
+}
+
+/** Flux sans fin : en-tête local de ZIP, puis 256 Kio après 256 Kio jusqu'à ce que le client coupe. */
+function endless(res: ServerResponse, log: string[]): void {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.writeHead(200, { 'Content-Type': 'application/zip' });
+  const chunk = Buffer.alloc(256 * 1024, 0x55);
+  const first = Buffer.from(chunk);
+  first.writeUInt32LE(0x04034b50, 0);
+  let sent = 0;
+  res.on('close', () => log.push(`sansfin coupé après ${sent} octets`));
+  const pump = () => {
+    while (!res.destroyed && sent < 4 * 1024 ** 3) {
+      const ok = res.write(sent === 0 ? first : chunk);
+      sent += chunk.length;
+      if (!ok) {
+        res.once('drain', pump);
+        return;
+      }
+    }
+  };
+  pump();
 }
 
 /** Morceau WAV d'essai : bruit faible produit par le test (8 kHz, mono, 8 bits). Jamais livré. */

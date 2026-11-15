@@ -1,11 +1,28 @@
 // Entrée de la musique : pack choisi dans les fichiers du téléphone, pack téléchargé depuis une
 // adresse (écrit en flux dans le stockage privé, avec reprise), morceaux isolés (« Ma playlist »).
 // Un pack sans compression reste tel quel : chaque morceau est lu comme une tranche du ZIP.
+// Garde-fous : plafond de 2 Gio (téléchargement, ZIP, morceaux décompressés), place vérifiée avant
+// d'écrire, CRC contrôlé en flux ; après un refus, rien ne reste dans le stockage privé. Chaque import
+// tient un verrou « pmb-radio-ecrit:<pack> » : le ménage d'un autre onglet ne touche pas à ses fichiers.
 
 import { askPersistentStorage } from '../../state/persistence.ts';
 import { useSettings } from '../../state/store.ts';
-import { commitCatalog, loadPrefs, useRadio, type FailCode, type FailInfo, type Job } from '../../state/radio.ts';
-import { loadCatalog, newId, PLAYLIST_ID, type Catalog, type Pack, type PackOrigin, type Station, type Track } from './catalog.ts';
+import { adoptCatalog, commitCatalog, loadPrefs, useRadio, type FailCode, type FailInfo, type Job } from '../../state/radio.ts';
+import {
+  loadCatalog,
+  newId,
+  onCatalogChange,
+  pickOrphans,
+  PLAYLIST_ID,
+  withIndexLock,
+  withoutStations,
+  withPack,
+  withSongs,
+  type Pack,
+  type PackOrigin,
+  type Station,
+  type Track,
+} from './catalog.ts';
 import { id3Size, parseId3, tagsFromFilename } from './id3.ts';
 import { checkPackUrl } from './link.ts';
 import {
@@ -21,7 +38,7 @@ import {
 } from './opfs.ts';
 import { extensionOf, isAudioPath, mimeOf, parseManifest, pickStart, planStations } from './pack.ts';
 import { playStation, stopPlayback } from './player.ts';
-import { entryBytes, entryRange, entryStream, readZipEntries, ZipError } from './zip.ts';
+import { declaredSizes, entryBytes, entryRange, entryStream, PACK_MAX_BYTES, readZipEntries, ZipError } from './zip.ts';
 
 const FAILS: Record<FailCode, Omit<FailInfo, 'code'>> = {
   reseau: {
@@ -71,6 +88,10 @@ const FAILS: Record<FailCode, Omit<FailInfo, 'code'>> = {
   chiffre: {
     title: 'Ce ZIP est protégé par un mot de passe.',
     hint: 'Refais-le sans mot de passe, avec npm run radio:pack.',
+  },
+  'trop-gros': {
+    title: 'Ce pack est trop gros une fois décompressé.',
+    hint: 'Une radio tient sous 2 Go et la musique ne se compresse presque pas : refais le pack avec npm run radio:pack (sans compression), ou coupe-le en plusieurs (option --par-station).',
   },
   inconnu: {
     title: 'Quelque chose a coincé.',
@@ -131,6 +152,15 @@ export async function refreshStorage(): Promise<void> {
   }
 }
 
+/**
+ * Plafond d'un pack. Les parcours d'essai peuvent l'abaisser (window.__pmbRadioPlafond, posé avant
+ * le chargement), jamais le relever.
+ */
+function packCap(): number {
+  const wanted = (globalThis as { __pmbRadioPlafond?: unknown }).__pmbRadioPlafond;
+  return typeof wanted === 'number' && wanted > 0 ? Math.min(PACK_MAX_BYTES, wanted) : PACK_MAX_BYTES;
+}
+
 async function hasRoom(bytes: number): Promise<boolean> {
   try {
     const estimate = await navigator.storage.estimate();
@@ -156,20 +186,79 @@ async function start(): Promise<void> {
   }
   try {
     const [catalog, prefs] = await Promise.all([loadCatalog(), loadPrefs()]);
-    useRadio.setState({ ...prefs, catalog, status: 'pret' });
-    void cleanOrphans(catalog);
+    useRadio.setState({ ...prefs, status: 'pret' });
+    adoptCatalog(catalog);
+    onCatalogChange(() => void reloadCatalog());
+    void cleanOrphans();
     void refreshStorage();
   } catch {
     useRadio.setState({ status: 'indisponible' });
   }
 }
 
-async function cleanOrphans(catalog: Catalog): Promise<void> {
+/** Un autre onglet a changé l'index : on le relit ; une station disparue s'arrête ici aussi. */
+async function reloadCatalog(): Promise<void> {
   try {
-    const owned = new Set(catalog.packs.flatMap((pack) => pack.files));
-    for (const name of await listFiles()) {
-      if (!owned.has(name) && name !== partial?.file) await removeFile(name);
+    await withIndexLock(async () => {
+      const fresh = await loadCatalog();
+      const ids = new Set(fresh.stations.map((station) => station.id));
+      const gone = useRadio.getState().catalog.stations.filter((station) => !ids.has(station.id));
+      if (gone.length > 0) stopPlayback(gone.map((station) => station.id));
+      adoptCatalog(fresh);
+    });
+    void refreshStorage();
+  } catch {
+    // Index illisible pour l'instant : la copie en mémoire reste.
+  }
+}
+
+// ——— Imports en cours, vus de tous les onglets ———
+
+const WRITE_LOCK = 'pmb-radio-ecrit:';
+
+/** Signale un import en cours (verrou partagé, jamais en attente) ; la fonction rendue le lève. */
+function holdWrite(owner: string): Promise<() => void> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (!locks) return Promise.resolve(() => undefined);
+  return new Promise((resolve) => {
+    locks
+      .request(WRITE_LOCK + owner, { mode: 'shared' }, () => new Promise<void>((release) => resolve(() => release())))
+      .catch(() => resolve(() => undefined));
+  });
+}
+
+async function busyOwners(): Promise<Set<string>> {
+  const owners = new Set<string>();
+  try {
+    const state = await navigator.locks?.query();
+    for (const lock of [...(state?.held ?? []), ...(state?.pending ?? [])]) {
+      if (lock.name?.startsWith(WRITE_LOCK)) owners.add(lock.name.slice(WRITE_LOCK.length));
     }
+  } catch {
+    // Pas de verrous : l'âge des fichiers protège seul les imports des autres onglets.
+  }
+  return owners;
+}
+
+/**
+ * Ménage des fichiers que l'index ne connaît pas, sous le verrou de l'index : jamais ceux d'un import
+ * en cours (dans n'importe quel onglet), jamais un fichier récent.
+ */
+async function cleanOrphans(): Promise<void> {
+  try {
+    await withIndexLock(async () => {
+      const catalog = await loadCatalog();
+      const owners = await busyOwners();
+      const files: { name: string; lastModified: number }[] = [];
+      for (const name of await listFiles()) {
+        try {
+          files.push({ name, lastModified: (await openFile(name)).lastModified });
+        } catch {
+          // Fichier parti entre-temps.
+        }
+      }
+      for (const name of pickOrphans(files, catalog, owners, Date.now())) await removeFile(name);
+    });
   } catch {
     // Ménage remis au prochain lancement.
   }
@@ -222,6 +311,13 @@ async function indexZip(meta: PackMeta): Promise<string> {
     const plans = planStations(entries, manifest, meta.fallbackName);
     if (plans.length === 0) throw new RadioFailure('pas-un-pack');
     const count = plans.reduce((sum, plan) => sum + plan.entries.length, 0);
+    // Avant de décompresser quoi que ce soit : plafond, bombe, place libre.
+    const sizes = declaredSizes(
+      plans.flatMap((plan) => plan.entries),
+      packCap(),
+    );
+    if (sizes.tooBig) throw new RadioFailure('trop-gros');
+    if (sizes.inflated > 0 && !(await hasRoom(sizes.inflated))) throw new RadioFailure('place');
     patchJob({ phase: 'lecture', done: 0, total: count });
 
     let bytes = zip.size;
@@ -242,7 +338,12 @@ async function indexZip(meta: PackMeta): Promise<string> {
           // Entrée compressée : décompressée une fois pour toutes dans le stockage privé.
           const name = `${meta.packId}-${id}.${extensionOf(entry.name) || 'audio'}`;
           files.push(name);
-          await writeStream(name, await entryStream(zip, entry));
+          try {
+            await writeStream(name, await entryStream(zip, entry));
+          } catch (error) {
+            // Deflate illisible (TypeError du navigateur) : le ZIP est abîmé.
+            throw error instanceof TypeError ? new ZipError('abime', `décompression impossible (${entry.name})`) : error;
+          }
           bytes += entry.size;
           track = { id, path: entry.name, file: name, mime: mimeOf(entry.name), title: '' };
         } else {
@@ -278,17 +379,15 @@ async function indexZip(meta: PackMeta): Promise<string> {
 
 /** Range un pack : ses stations remplacent celles de même dossier (réimport sans doublon). */
 async function addPack(pack: Pack, stations: Station[]): Promise<void> {
-  const { catalog } = useRadio.getState();
-  const folders = new Set(stations.map((station) => station.folder));
-  const replaced = catalog.stations.filter((station) => station.packId !== PLAYLIST_ID && folders.has(station.folder));
-  stopPlayback(replaced.map((station) => station.id));
-  const kept = catalog.stations.filter((station) => !replaced.includes(station));
-  const inUse = new Set(kept.map((station) => station.packId));
-  const orphans = catalog.packs.filter((item) => !inUse.has(item.id));
-  await commitCatalog({
-    packs: [...catalog.packs.filter((item) => !orphans.includes(item)), pack],
-    stations: [...kept, ...stations],
+  let replaced: Station[] = [];
+  let orphans: Pack[] = [];
+  await commitCatalog((current) => {
+    const change = withPack(current, pack, stations);
+    replaced = change.replaced;
+    orphans = change.orphans;
+    return change.catalog;
   });
+  stopPlayback(replaced.map((station) => station.id));
   for (const orphan of orphans) for (const name of orphan.files) await removeFile(name);
   void askPersistentStorage();
   void refreshStorage();
@@ -316,7 +415,9 @@ export async function importFiles(list: FileList | File[]): Promise<void> {
     const packId = newId('pack');
     const file = `${packId}.zip`;
     setJob({ kind: 'fichier', label: zip.name, phase: 'copie', done: 0, total: zip.size });
+    const release = await holdWrite(packId);
     try {
+      if (zip.size > packCap()) throw new RadioFailure('trop-gros');
       if (!(await hasRoom(zip.size))) throw new RadioFailure('place');
       let last = 0;
       await writeStream(file, zip.stream(), (written) => {
@@ -338,6 +439,8 @@ export async function importFiles(list: FileList | File[]): Promise<void> {
       await removeFile(file);
       failJob(toFailure(error));
       return;
+    } finally {
+      release();
     }
   }
   if (songs.length > 0) {
@@ -357,49 +460,48 @@ export async function importFiles(list: FileList | File[]): Promise<void> {
 
 async function addSongs(songs: File[]): Promise<string> {
   setJob({ kind: 'morceaux', label: 'Ma playlist', phase: 'copie', done: 0, total: songs.length });
-  const { catalog } = useRadio.getState();
-  const current = catalog.stations.find((station) => station.id === PLAYLIST_ID);
-  const known = new Set(current?.tracks.map((track) => track.path));
-  const pack: Pack = catalog.packs.find((item) => item.id === PLAYLIST_ID) ?? {
-    id: PLAYLIST_ID,
-    origin: 'morceaux',
-    label: 'Ma playlist',
-    files: [],
-    sourceBytes: 0,
-    bytes: 0,
-    importedAt: Date.now(),
-  };
-  const tracks = [...(current?.tracks ?? [])];
-  const files = [...pack.files];
-  let bytes = pack.bytes;
-  let added = 0;
-  for (const song of songs) {
-    if (known.has(song.name)) continue;
-    const id = newId('t');
-    const name = `piste-${id}.${extensionOf(song.name) || 'audio'}`;
-    try {
+  const release = await holdWrite('piste');
+  const written: string[] = [];
+  try {
+    const current = useRadio.getState().catalog.stations.find((station) => station.id === PLAYLIST_ID);
+    const known = new Set(current?.tracks.map((track) => track.path));
+    const fresh: { track: Track; bytes: number }[] = [];
+    for (const song of songs) {
+      if (known.has(song.name)) continue;
+      known.add(song.name);
+      const id = newId('t');
+      const name = `piste-${id}.${extensionOf(song.name) || 'audio'}`;
+      written.push(name);
       await writeStream(name, song.stream());
-    } catch (error) {
-      await removeFile(name);
-      throw error;
+      const track: Track = { id, path: song.name, file: name, mime: song.type || mimeOf(song.name), title: '' };
+      fresh.push({ track: withTags(track, await readTags(track)), bytes: song.size });
+      patchJob({ done: fresh.length });
     }
-    files.push(name);
-    bytes += song.size;
-    const track: Track = { id, path: song.name, file: name, mime: song.type || mimeOf(song.name), title: '' };
-    tracks.push(withTags(track, await readTags(track)));
-    added += 1;
-    patchJob({ done: added });
+    let added: Track[] = [];
+    let station: Station | null = null;
+    let dropped: string[] = [];
+    if (fresh.length > 0) {
+      await commitCatalog((latest) => {
+        const change = withSongs(latest, fresh);
+        added = change.added;
+        station = change.station;
+        dropped = change.dropped;
+        return change.catalog;
+      });
+    }
+    // Morceau ajouté entre-temps par un autre onglet : la copie faite ici part.
+    for (const name of dropped) await removeFile(name);
+    void askPersistentStorage();
+    void refreshStorage();
+    if (added.length > 0 && station) autoStart([station]);
+    return added.length === 1 ? '1 morceau ajouté à «\u00a0Ma playlist\u00a0».' : `${added.length} morceaux ajoutés à «\u00a0Ma playlist\u00a0».`;
+  } catch (error) {
+    const owned = new Set(useRadio.getState().catalog.packs.flatMap((pack) => pack.files));
+    for (const name of written) if (!owned.has(name)) await removeFile(name);
+    throw error;
+  } finally {
+    release();
   }
-  const station: Station = { id: PLAYLIST_ID, packId: PLAYLIST_ID, folder: PLAYLIST_ID, name: 'Ma playlist', tracks };
-  const latest = useRadio.getState().catalog;
-  await commitCatalog({
-    packs: [...latest.packs.filter((item) => item.id !== PLAYLIST_ID), { ...pack, files, bytes, sourceBytes: bytes }],
-    stations: [...latest.stations.filter((item) => item.id !== PLAYLIST_ID), station],
-  });
-  void askPersistentStorage();
-  void refreshStorage();
-  if (added > 0) autoStart([station]);
-  return added === 1 ? '1 morceau ajouté à «\u00a0Ma playlist\u00a0».' : `${added} morceaux ajoutés à «\u00a0Ma playlist\u00a0».`;
 }
 
 // ——— Lecture automatique ———
@@ -467,6 +569,8 @@ interface PartialDownload {
   file: string;
   received: number;
   total: number | null;
+  /** Lève le verrou d'import (téléchargement fini, abandonné ou indexé). */
+  release: () => void;
 }
 
 let partial: PartialDownload | null = null;
@@ -523,6 +627,17 @@ export function findPackByUrl(url: string): Pack | undefined {
   return useRadio.getState().catalog.packs.find((pack) => pack.url === url);
 }
 
+/** Poids annoncé par l'hébergement (requête HEAD, rien n'est téléchargé), ou `null` sans réponse claire. */
+export async function remoteSize(url: string): Promise<number | null> {
+  try {
+    const response = await fetch(url, { method: 'HEAD', mode: 'cors', cache: 'no-store' });
+    const length = Number(response.headers.get('Content-Length'));
+    return response.ok && length > 0 && !response.headers.get('Content-Encoding') ? length : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Même adresse et même poids (connu une fois la réponse reçue) : inutile de télécharger. */
 export function findSamePack(url: string, bytes: number | null): Pack | undefined {
   return useRadio.getState().catalog.packs.find((pack) => pack.url === url && bytes !== null && pack.sourceBytes === bytes);
@@ -543,9 +658,9 @@ export async function downloadPack(rawUrl: string, mode: 'neuf' | 'reprise' = 'n
   const { url, host } = check;
   let p = mode === 'reprise' && partial?.url === url ? partial : null;
   if (!p) {
-    if (partial) await removeFile(partial.file);
+    await dropPartial();
     const packId = newId('pack');
-    p = { url, host, packId, file: `${packId}.zip`, received: 0, total: null };
+    p = { url, host, packId, file: `${packId}.zip`, received: 0, total: null, release: await holdWrite(packId) };
     partial = p;
   }
   const job: Job = { kind: 'adresse', label: host, url, phase: 'telechargement', done: p.received, total: p.total };
@@ -562,8 +677,11 @@ export async function downloadPack(rawUrl: string, mode: 'neuf' | 'reprise' = 'n
 }
 
 async function dropPartial(): Promise<void> {
-  if (partial) await removeFile(partial.file);
+  const p = partial;
   partial = null;
+  if (!p) return;
+  await removeFile(p.file);
+  p.release();
 }
 
 async function runDownload(p: PartialDownload, signal: AbortSignal): Promise<void> {
@@ -601,6 +719,12 @@ async function runDownload(p: PartialDownload, signal: AbortSignal): Promise<voi
     }
     offset = p.received;
     p.total = range.total ?? p.total;
+    if (p.total !== null && p.total > packCap()) {
+      void response.body.cancel();
+      await dropPartial();
+      failJob('trop-gros');
+      return;
+    }
   } else {
     const length = Number(response.headers.get('Content-Length'));
     p.total = length > 0 && !response.headers.get('Content-Encoding') ? length : null;
@@ -609,6 +733,12 @@ async function runDownload(p: PartialDownload, signal: AbortSignal): Promise<voi
       void response.body.cancel();
       await dropPartial();
       setJob({ kind: 'adresse', label: p.host, phase: 'fini', done: 0, total: null, message: 'Ce pack est déjà dans ta radio : rien à télécharger.' });
+      return;
+    }
+    if (p.total !== null && p.total > packCap()) {
+      void response.body.cancel();
+      await dropPartial();
+      failJob('trop-gros');
       return;
     }
     if (p.total !== null && !(await hasRoom(p.total))) {
@@ -625,11 +755,15 @@ async function runDownload(p: PartialDownload, signal: AbortSignal): Promise<voi
   const reader = response.body.getReader();
   let received = offset;
   let last = 0;
+  const cap = packCap();
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
       if (received === 0 && !looksLikeZip(value)) throw new RadioFailure('pas-un-pack');
+      // Coupé au-delà de la taille annoncée (l'hébergement répond de travers) ou du plafond (flux sans fin).
+      if (p.total !== null && received + value.length > p.total) throw new RadioFailure('serveur');
+      if (received + value.length > cap) throw new RadioFailure('trop-gros');
       await writable.write(value as Uint8Array<ArrayBuffer>);
       received += value.length;
       p.received = received;
@@ -673,6 +807,8 @@ async function runDownload(p: PartialDownload, signal: AbortSignal): Promise<voi
     setJob({ kind: 'adresse', label: p.host, phase: 'fini', done: 0, total: null, message });
   } catch (error) {
     failJob(toFailure(error));
+  } finally {
+    p.release();
   }
 }
 
@@ -694,24 +830,26 @@ export function dismissJob(): void {
 
 // ——— Suppression ———
 
-async function dropStations(ids: Set<string>): Promise<void> {
-  const { catalog } = useRadio.getState();
-  stopPlayback([...ids]);
-  const stations = catalog.stations.filter((station) => !ids.has(station.id));
-  const inUse = new Set(stations.map((station) => station.packId));
-  const orphans = catalog.packs.filter((pack) => !inUse.has(pack.id));
-  await commitCatalog({ packs: catalog.packs.filter((pack) => inUse.has(pack.id)), stations });
+async function dropStations(drop: (station: Station) => boolean): Promise<void> {
+  let removed: Station[] = [];
+  let orphans: Pack[] = [];
+  await commitCatalog((current) => {
+    const change = withoutStations(current, drop);
+    removed = change.removed;
+    orphans = change.orphans;
+    return change.catalog;
+  });
+  stopPlayback(removed.map((station) => station.id));
   for (const orphan of orphans) for (const name of orphan.files) await removeFile(name);
   void refreshStorage();
 }
 
 /** Supprime une station ; le pack part avec sa dernière station, et sa place est libérée. */
 export async function deleteStation(stationId: string): Promise<void> {
-  await dropStations(new Set([stationId]));
+  await dropStations((station) => station.id === stationId);
 }
 
 /** Supprime un pack entier (toutes ses stations) et libère sa place. */
 export async function deletePack(packId: string): Promise<void> {
-  const { catalog } = useRadio.getState();
-  await dropStations(new Set(catalog.stations.filter((s) => s.packId === packId).map((s) => s.id)));
+  await dropStations((station) => station.packId === packId);
 }

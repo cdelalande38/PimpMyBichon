@@ -23,6 +23,9 @@ export interface FixtureEntry {
   naming?: 'utf8' | 'unicode-extra' | 'cp437';
   cp437Bytes?: Uint8Array;
   encrypted?: boolean;
+  /** Taille décompressée et CRC écrits dans les en-têtes, s'ils doivent mentir (bombe, pack abîmé). */
+  declaredSize?: number;
+  declaredCrc?: number;
 }
 
 export function buildZip(entries: FixtureEntry[]): Uint8Array {
@@ -44,7 +47,8 @@ export function buildZip(entries: FixtureEntry[]): Uint8Array {
     }
     const body = entry.deflate ? deflateRawSync(Buffer.from(entry.data)) : Buffer.from(entry.data);
     const flags = (naming === 'utf8' ? 0x0800 : 0) | (entry.encrypted ? 1 : 0);
-    const sum = crc(entry.data);
+    const sum = entry.declaredCrc ?? crc(entry.data);
+    const declared = entry.declaredSize ?? entry.data.length;
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0);
     local.writeUInt16LE(20, 4);
@@ -52,7 +56,7 @@ export function buildZip(entries: FixtureEntry[]): Uint8Array {
     local.writeUInt16LE(entry.deflate ? 8 : 0, 8);
     local.writeUInt32LE(sum, 14);
     local.writeUInt32LE(body.length, 18);
-    local.writeUInt32LE(entry.data.length, 22);
+    local.writeUInt32LE(declared, 22);
     local.writeUInt16LE(raw.length, 26);
     local.writeUInt16LE(extra.length, 28);
     parts.push(local, raw, extra, body);
@@ -64,7 +68,7 @@ export function buildZip(entries: FixtureEntry[]): Uint8Array {
     head.writeUInt16LE(entry.deflate ? 8 : 0, 10);
     head.writeUInt32LE(sum, 16);
     head.writeUInt32LE(body.length, 20);
-    head.writeUInt32LE(entry.data.length, 24);
+    head.writeUInt32LE(declared, 24);
     head.writeUInt16LE(raw.length, 28);
     head.writeUInt16LE(extra.length, 30);
     head.writeUInt32LE(offset, 42);

@@ -2,10 +2,11 @@
 // lien de pack reçu (« ?pack=… » ou « #pack=… »). Le lien est retiré de l'adresse aussitôt lu, pour
 // qu'un rechargement ne recommence pas ; le panneau Radio s'ouvre et le téléchargement part tout
 // seul. Exceptions : économie de données demandée par le navigateur (le pack attend un appui) et
-// pack déjà là (rien n'est retéléchargé, il joue). Une adresse refusée ne déclenche aucune requête.
+// pack déjà là au même poids (une requête HEAD, rien n'est retéléchargé, il joue). Une adresse
+// refusée (illisible, pas en https, machine locale ou réseau privé) ne déclenche aucune requête.
 
 import { openSheet } from '../../app/useRoute.ts';
-import { autoStartOnOpen, downloadPack, findPackByUrl, initRadio, settingsReady, startPack } from '../../audio/radio/library.ts';
+import { autoStartOnOpen, downloadPack, findPackByUrl, initRadio, remoteSize, settingsReady, startPack } from '../../audio/radio/library.ts';
 import { readPackLink, stripPackLink } from '../../audio/radio/link.ts';
 import { useRadio } from '../../state/radio.ts';
 
@@ -36,19 +37,28 @@ export function bootRadio(): void {
         phase: 'erreur',
         done: 0,
         total: null,
-        fail: {
-          code: 'adresse',
-          title: 'Le lien de pack est illisible.',
-          hint: 'Il faut une adresse complète en https. Redemande le lien, ou colle l’adresse ci-dessous.',
-        },
+        fail:
+          link.reason === 'local'
+            ? {
+                code: 'adresse',
+                title: 'Ce lien vise une machine de ton réseau local.',
+                hint: 'Par prudence, un lien reçu ne part pas tout seul vers le téléphone ou ta box. Si tu sais d’où il vient, colle l’adresse ci-dessous.',
+              }
+            : {
+                code: 'adresse',
+                title: 'Le lien de pack est illisible.',
+                hint: 'Il faut une adresse complète en https. Redemande le lien, ou colle l’adresse ci-dessous.',
+              },
       },
     });
     return;
   }
-  void Promise.all([ready, settingsReady()]).then(() => {
+  void Promise.all([ready, settingsReady()]).then(async () => {
     if (useRadio.getState().status !== 'pret') return;
     const existing = findPackByUrl(link.url);
-    if (existing) {
+    // Même adresse : on ne retélécharge que si le poids annoncé a changé (sans réponse : on garde).
+    const size = existing ? await remoteSize(link.url) : null;
+    if (existing && (size === null || size === existing.sourceBytes)) {
       useRadio.setState({
         job: { kind: 'adresse', label: link.host, phase: 'fini', done: 0, total: null, message: 'Ce pack est déjà dans ta radio : rien à télécharger.' },
       });

@@ -2,13 +2,25 @@
 // lien de pack. Les packs sont fabriqués par le test (tests/radio/fixtures.ts).
 
 import { describe, expect, it } from 'vitest';
-import { sanitizeCatalog } from '../../src/audio/radio/catalog.ts';
+import {
+  fileOwner,
+  ORPHAN_GRACE_MS,
+  pickOrphans,
+  sanitizeCatalog,
+  withDurations,
+  withoutStations,
+  withPack,
+  withSongs,
+  type Catalog,
+  type Pack,
+  type Station,
+} from '../../src/audio/radio/catalog.ts';
 import { id3Size, parseId3, tagsFromFilename } from '../../src/audio/radio/id3.ts';
-import { checkPackUrl, readPackLink, stripPackLink } from '../../src/audio/radio/link.ts';
+import { checkPackUrl, isPrivateHost, readPackLink, stripPackLink } from '../../src/audio/radio/link.ts';
 import { makeOrder, PlayQueue } from '../../src/audio/radio/order.ts';
 import { parseManifest, pickStart, planStations, prettyStationName } from '../../src/audio/radio/pack.ts';
 import { clampPosition, spokenTime } from '../../src/audio/radio/position.ts';
-import { entryBytes, entryRange, readZipEntries, ZipError, type ZipEntry } from '../../src/audio/radio/zip.ts';
+import { declaredSizes, entryBytes, entryRange, entryStream, PACK_MAX_BYTES, readZipEntries, ZipError, type ZipEntry } from '../../src/audio/radio/zip.ts';
 import { findPackByUrl, findSamePack } from '../../src/audio/radio/library.ts';
 import { sanitizePrefs, useRadio } from '../../src/state/radio.ts';
 import { buildZip, id3Tagged, packJson, type FixtureEntry } from '../radio/fixtures.ts';
@@ -264,5 +276,142 @@ describe('pack d’essai complet', () => {
     const entries = await readZipEntries(blob);
     const manifest = new TextDecoder().decode(await entryBytes(blob, entries[0]!));
     expect(planStations(entries, manifest, 'x').map((p) => p.name)).toEqual(['Électro']);
+  });
+});
+
+async function drain(stream: ReadableStream<Uint8Array>): Promise<number> {
+  const reader = stream.getReader();
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return total;
+    total += value.length;
+  }
+}
+
+describe('garde-fous du ZIP', () => {
+  const MIO = 1024 * 1024;
+  const declared = (size: number, compressedSize: number, method = 8): ZipEntry => ({ ...entry('electro/a.mp3'), method, size, compressedSize });
+
+  it('plafond : le vrai pack (423 Mo, 70 morceaux stockés) passe largement, au-delà de 2 Gio non', () => {
+    const real = Array.from({ length: 70 }, () => declared(Math.round(423e6 / 70), Math.round(423e6 / 70), 0));
+    expect(declaredSizes(real)).toMatchObject({ tooBig: false, inflated: 0 });
+    expect(declaredSizes(real).total).toBeLessThan(PACK_MAX_BYTES / 4);
+    const huge = Array.from({ length: 3 }, () => declared(800 * MIO, 800 * MIO, 0));
+    expect(declaredSizes(huge).tooBig).toBe(true);
+    // Plafond abaissé (essais) : appliqué aussi.
+    expect(declaredSizes([declared(10 * MIO, 10 * MIO)], 8 * MIO).tooBig).toBe(true);
+  });
+
+  it('bombe : une entrée qui gonfle anormalement est refusée avant toute écriture', () => {
+    expect(declaredSizes([declared(256 * MIO, 255 * 1024)]).tooBig).toBe(true);
+    // Un MP3 compressé en deflate gagne quelques pour cent : il passe, et sa place est comptée.
+    expect(declaredSizes([declared(6 * MIO, 5.8 * MIO)])).toEqual({ total: 6 * MIO, inflated: 6 * MIO, tooBig: false });
+    // Un petit fichier très compressible (pack.json, texte) n'est pas une bombe.
+    expect(declaredSizes([declared(200 * 1024, 2 * 1024)]).tooBig).toBe(false);
+  });
+
+  it('CRC et taille contrôlés en flux : un pack abîmé ou menteur est refusé', async () => {
+    const song = bytes('la '.repeat(4000));
+    const good = blobOf(buildZip([{ name: 'rock/b.mp3', data: song, deflate: true }]));
+    const [ok] = await readZipEntries(good);
+    expect(await drain(await entryStream(good, ok!))).toBe(song.length);
+
+    const badCrc = blobOf(buildZip([{ name: 'rock/b.mp3', data: song, deflate: true, declaredCrc: 1234 }]));
+    const [crcEntry] = await readZipEntries(badCrc);
+    await expect(drain(await entryStream(badCrc, crcEntry!))).rejects.toMatchObject({ code: 'abime' });
+
+    // Déclare 100 octets, en produit 12 000 : coupé dès le dépassement.
+    const liar = blobOf(buildZip([{ name: 'rock/b.mp3', data: song, deflate: true, declaredSize: 100 }]));
+    const [liarEntry] = await readZipEntries(liar);
+    await expect(drain(await entryStream(liar, liarEntry!))).rejects.toMatchObject({ code: 'abime' });
+
+    // Entrée stockée au CRC faux : refusée aussi par entryStream.
+    const stored = blobOf(buildZip([{ name: 'rock/c.mp3', data: song, declaredCrc: 1 }]));
+    const [storedEntry] = await readZipEntries(stored);
+    await expect(drain(await entryStream(stored, storedEntry!))).rejects.toBeInstanceOf(ZipError);
+  });
+});
+
+describe('lien reçu : ni la machine locale ni le réseau privé', () => {
+  it('refuse les hôtes locaux et privés, accepte un hébergement public', () => {
+    for (const host of ['localhost', 'app.localhost', '127.0.0.1', '10.0.0.2', '172.20.1.1', '192.168.1.10', '169.254.1.1', '100.64.0.1', '0.0.0.0', '[::1]', '[fd00::1]', '[fe80::1]', '[::ffff:7f00:1]', 'nas', 'nas.local', 'box.lan', 'imprimante.home.arpa']) {
+      expect(isPrivateHost(host), host).toBe(true);
+    }
+    for (const host of ['hebergement.example', '8.8.8.8', '172.32.0.1', '[2001:db8::1]', 'packs.example']) {
+      expect(isPrivateHost(host), host).toBe(false);
+    }
+    expect(readPackLink('?pack=http://localhost:4521/p.zip', '')).toEqual({ ok: false, reason: 'local' });
+    expect(readPackLink('?pack=https://192.168.1.10/p.zip', '')).toEqual({ ok: false, reason: 'local' });
+    expect(readPackLink('', '#pack=https://2130706433/p.zip')).toEqual({ ok: false, reason: 'local' });
+    expect(readPackLink('?pack=https://[::ffff:127.0.0.1]/p.zip', '')).toEqual({ ok: false, reason: 'local' });
+    expect(readPackLink('?pack=https://hebergement.example/p.zip', '')).toMatchObject({ ok: true });
+    // Le champ d'adresse du panneau les accepte toujours.
+    expect(checkPackUrl('http://localhost:4521/p.zip')).toMatchObject({ ok: true });
+    expect(checkPackUrl('https://192.168.1.10/p.zip')).toMatchObject({ ok: true });
+  });
+});
+
+describe('index à plusieurs onglets : chaque écriture part de l’index relu sur le disque', () => {
+  const track = (id: string, file: string) => ({ id, path: `${id}.mp3`, title: id, file, mime: 'audio/mpeg' });
+  const pack = (id: string, files: string[] = [`${id}.zip`]): Pack => ({ id, origin: 'fichier', label: id, files, sourceBytes: 10, bytes: 10, importedAt: 0 });
+  const station = (id: string, packId: string, folder: string): Station => ({ id, packId, folder, name: folder, tracks: [track(`t-${id}`, `${packId}.zip`)] });
+  const empty: Catalog = { packs: [], stations: [] };
+
+  it('deux stations dans A, une troisième dans B : les trois restent', () => {
+    // A écrit deux fois ; B, ouvert avant, écrit ensuite : il part du disque, pas de sa copie vide.
+    let disk = withPack(empty, pack('pack-a1'), [station('s1', 'pack-a1', 'electro')]).catalog;
+    disk = withPack(disk, pack('pack-a2'), [station('s2', 'pack-a2', 'rock')]).catalog;
+    const fromB = withPack(disk, pack('pack-b1'), [station('s3', 'pack-b1', 'jazz')]);
+    expect(fromB.catalog.stations.map((s) => s.folder)).toEqual(['electro', 'rock', 'jazz']);
+    expect(fromB.orphans).toEqual([]);
+    // Réimport du même dossier : la station est remplacée, son ancien pack part.
+    const again = withPack(fromB.catalog, pack('pack-a3'), [station('s4', 'pack-a3', 'electro')]);
+    expect(again.replaced.map((s) => s.id)).toEqual(['s1']);
+    expect(again.orphans.map((p) => p.id)).toEqual(['pack-a1']);
+    expect(again.catalog.packs.map((p) => p.id)).toEqual(['pack-a2', 'pack-b1', 'pack-a3']);
+  });
+
+  it('durées, suppression, Ma playlist : seul le changement voulu est appliqué', () => {
+    let disk = withPack(empty, pack('pack-a1'), [station('s1', 'pack-a1', 'electro')]).catalog;
+    disk = withPack(disk, pack('pack-b1'), [station('s2', 'pack-b1', 'rock')]).catalog;
+    // Durée retenue par un onglet qui ne connaissait que s1 : s2 survit.
+    const timed = withDurations(disk, new Map([['t-s1', 42]]));
+    expect(timed.stations).toHaveLength(2);
+    expect(timed.stations[0]?.tracks[0]?.duration).toBe(42);
+    expect(withDurations(timed, new Map([['inconnu', 3]]))).toBe(timed);
+    // Suppression : seule la station visée part, avec son pack.
+    const dropped = withoutStations(timed, (s) => s.id === 's1');
+    expect(dropped.catalog.stations.map((s) => s.id)).toEqual(['s2']);
+    expect(dropped.orphans.map((p) => p.id)).toEqual(['pack-a1']);
+    expect(withoutStations(timed, (s) => s.id === 'absente').catalog).toBe(timed);
+    // Ma playlist : un morceau ajouté entre-temps par l'autre onglet n'est pas doublé.
+    const first = withSongs(disk, [{ track: track('t-x', 'piste-t-x.mp3'), bytes: 5 }], 1);
+    const second = withSongs(first.catalog, [
+      { track: track('t-x', 'piste-t-x2.mp3'), bytes: 5 },
+      { track: track('t-y', 'piste-t-y.mp3'), bytes: 7 },
+    ]);
+    expect(second.dropped).toEqual(['piste-t-x2.mp3']);
+    expect(second.station?.tracks.map((t) => t.file)).toEqual(['piste-t-x.mp3', 'piste-t-y.mp3']);
+    expect(second.catalog.packs.find((p) => p.id === 'ma-playlist')).toMatchObject({ files: ['piste-t-x.mp3', 'piste-t-y.mp3'], bytes: 12 });
+    expect(second.catalog.stations).toHaveLength(3);
+  });
+
+  it('ménage : jamais un fichier d’un import en cours ni un fichier récent', () => {
+    const now = 10 * ORPHAN_GRACE_MS;
+    const old = now - ORPHAN_GRACE_MS - 1;
+    const disk = withPack(empty, pack('pack-aaaaaaaaaaaa'), [station('s1', 'pack-aaaaaaaaaaaa', 'electro')]).catalog;
+    const files = [
+      { name: 'pack-aaaaaaaaaaaa.zip', lastModified: old },
+      { name: 'pack-bbbbbbbbbbbb.zip', lastModified: old },
+      { name: 'pack-bbbbbbbbbbbb-t-0123456789ab.mp3', lastModified: old },
+      { name: 'pack-cccccccccccc-t-0123456789ab.mp3', lastModified: now - 1000 },
+      { name: 'pack-dddddddddddd.zip', lastModified: old },
+      { name: 'piste-t-0123456789ab.mp3', lastModified: old },
+    ];
+    expect(fileOwner('pack-bbbbbbbbbbbb-t-0123456789ab.mp3')).toBe('pack-bbbbbbbbbbbb');
+    expect(fileOwner('piste-t-0123456789ab.mp3')).toBe('piste');
+    expect(pickOrphans(files, disk, new Set(['pack-bbbbbbbbbbbb']), now)).toEqual(['pack-dddddddddddd.zip', 'piste-t-0123456789ab.mp3']);
+    expect(pickOrphans(files, disk, new Set(['piste']), now)).toEqual(['pack-bbbbbbbbbbbb.zip', 'pack-bbbbbbbbbbbb-t-0123456789ab.mp3', 'pack-dddddddddddd.zip']);
   });
 });

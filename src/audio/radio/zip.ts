@@ -55,9 +55,54 @@ export function crc32(bytes: Uint8Array, seed = 0): number {
       crcTable[n] = c >>> 0;
     }
   }
+  const table = crcTable;
   let crc = (seed ^ MAX32) >>> 0;
-  for (const byte of bytes) crc = (crcTable[(crc ^ byte) & 0xff] ?? 0) ^ (crc >>> 8);
+  for (let i = 0; i < bytes.length; i += 1) crc = table[(crc ^ bytes[i]!) & 0xff]! ^ (crc >>> 8);
   return (crc ^ MAX32) >>> 0;
+}
+
+/** Plafond d'un pack : le ZIP lui-même, et la somme de ses morceaux une fois décompressés (2 Gio). */
+export const PACK_MAX_BYTES = 2 * 1024 ** 3;
+/** Une entrée de plus de 4 Mio qui gonfle plus de 20 fois n'est pas de la musique : c'est une bombe. */
+const BOMB_MIN_BYTES = 4 * 1024 * 1024;
+const BOMB_RATIO = 20;
+
+/**
+ * Tailles déclarées des entrées à lire, avant toute décompression : `inflated` est la place que
+ * prendront les entrées deflate ; `tooBig` signale un total au-delà du plafond ou un gonflement anormal.
+ */
+export function declaredSizes(entries: readonly ZipEntry[], cap = PACK_MAX_BYTES): { total: number; inflated: number; tooBig: boolean } {
+  let total = 0;
+  let inflated = 0;
+  let bomb = false;
+  for (const entry of entries) {
+    total += entry.size;
+    if (entry.method === 0) continue;
+    inflated += entry.size;
+    if (entry.size > BOMB_MIN_BYTES && entry.size > BOMB_RATIO * Math.max(1, entry.compressedSize)) bomb = true;
+  }
+  return { total, inflated, tooBig: bomb || total > cap };
+}
+
+/**
+ * Contrôle en flux des données d'une entrée : coupe dès qu'elles dépassent la taille déclarée,
+ * puis vérifie la taille exacte et le CRC à la fin.
+ */
+export function verifyEntry(entry: Pick<ZipEntry, 'name' | 'size' | 'crc'>): TransformStream<Uint8Array, Uint8Array> {
+  let size = 0;
+  let crc = 0;
+  return new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      size += chunk.length;
+      if (size > entry.size) throw new ZipError('abime', `plus long que déclaré (${entry.name})`);
+      crc = crc32(chunk, crc);
+      controller.enqueue(chunk);
+    },
+    flush() {
+      if (size !== entry.size) throw new ZipError('abime', `plus court que déclaré (${entry.name})`);
+      if (crc !== entry.crc) throw new ZipError('abime', `CRC faux (${entry.name})`);
+    },
+  });
 }
 
 // Page de code 437 (noms des vieux ZIP sans drapeau UTF-8), octets 128 à 255.
@@ -222,16 +267,20 @@ export async function entryRange(blob: Blob, entry: ZipEntry): Promise<{ start: 
   return { start, end };
 }
 
-/** Flux des données décompressées d'une entrée (stockée ou deflate). */
+/**
+ * Flux des données décompressées d'une entrée (stockée ou deflate), contrôlé en route : coupé au-delà
+ * de la taille déclarée, en erreur « abime » si la taille ou le CRC sont faux (un deflate illisible
+ * lève une TypeError, que l'appelant rend aussi en « abime »).
+ */
 export async function entryStream(blob: Blob, entry: ZipEntry): Promise<ReadableStream<Uint8Array>> {
   if (entry.encrypted) throw new ZipError('chiffre', `entrée chiffrée (${entry.name})`);
   const { start, end } = await entryRange(blob, entry);
   const raw = blob.slice(start, end).stream();
-  if (entry.method === 0) return raw;
-  if (entry.method === 8) {
-    return raw.pipeThrough(new DecompressionStream('deflate-raw') as unknown as TransformStream<Uint8Array, Uint8Array>);
-  }
-  throw new ZipError('methode', `compression non prise en charge (${entry.name})`);
+  let data: ReadableStream<Uint8Array>;
+  if (entry.method === 0) data = raw;
+  else if (entry.method === 8) data = raw.pipeThrough(new DecompressionStream('deflate-raw') as unknown as TransformStream<Uint8Array, Uint8Array>);
+  else throw new ZipError('methode', `compression non prise en charge (${entry.name})`);
+  return data.pipeThrough(verifyEntry(entry));
 }
 
 /** Contenu complet d'une petite entrée (pack.json, début d'un morceau). */

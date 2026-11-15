@@ -5,11 +5,15 @@
 import type { Server } from 'node:http';
 import { expect, test, type Page } from '@playwright/test';
 import { openAtelier } from './helpers.ts';
+import { buildZip } from '../radio/fixtures.ts';
 import { noiseWav, smallPack, startPackServer, type PackSource } from '../radio/server.ts';
 
 // Port de l'hébergement d'essai, réglable quand plusieurs suites tournent en même temps sur la machine.
 const PACK_PORT = Number(process.env.PMB_RADIO_PORT ?? 4521);
 const HOST = `localhost:${PACK_PORT}`;
+// Un lien reçu (?pack=) refuse la machine locale et le réseau privé : les parcours de lien visent
+// donc un hôte public fictif, que Playwright aiguille vers l'hébergement d'essai (routeLinks).
+const LINK_HOST = 'packs.example';
 const packs = new Map<string, PackSource>([
   ['pack.zip', { buffer: smallPack() }],
   ['autre.zip', { buffer: smallPack(['hiphop-rnb']) }],
@@ -35,6 +39,35 @@ async function openRadio(page: Page): Promise<void> {
 
 /** Bouton rond « Radio » de la colonne des raccourcis. */
 const radioButton = (page: Page) => page.getByRole('navigation', { name: 'Raccourcis' }).getByRole('button', { name: /^Radio/ });
+
+/** Aiguille https://packs.example/… vers l'hébergement d'essai local (même journal de requêtes). */
+async function routeLinks(page: Page): Promise<void> {
+  await page.context().route(`https://${LINK_HOST}/**`, async (route) => {
+    const request = route.request();
+    const range = request.headers()['range'];
+    const response = await fetch(`http://127.0.0.1:${PACK_PORT}${new URL(request.url()).pathname}`, {
+      method: request.method(),
+      headers: range ? { range } : {},
+    });
+    const headers: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      if (!['connection', 'keep-alive', 'transfer-encoding', 'date'].includes(key)) headers[key] = value;
+    });
+    const body = request.method() === 'HEAD' ? undefined : Buffer.from(await response.arrayBuffer());
+    await route.fulfill({ status: response.status, headers, body });
+  });
+}
+
+/** Fichiers du stockage privé de la radio. */
+async function radioFiles(page: Page): Promise<string[]> {
+  return page.evaluate(async () => {
+    const root = await navigator.storage.getDirectory();
+    const dir = await root.getDirectoryHandle('radio', { create: true });
+    const names: string[] = [];
+    for await (const name of (dir as unknown as { keys(): AsyncIterable<string> }).keys()) names.push(name);
+    return names.sort();
+  });
+}
 
 const station = (page: Page, name: string) => page.locator('.radio-station', { has: page.getByText(name, { exact: true }) });
 
@@ -128,8 +161,9 @@ test('import par adresse : avec CORS, puis sans CORS', async ({ page }) => {
 });
 
 test('arrivée par un lien ?pack= : le téléchargement part tout seul, puis la musique', async ({ page }) => {
+  await routeLinks(page);
   requests.length = 0;
-  await page.goto(`./?pack=${encodeURIComponent(`http://${HOST}/cors/autre.zip`)}`);
+  await page.goto(`./?pack=${encodeURIComponent(`https://${LINK_HOST}/cors/autre.zip`)}`);
   await expect(page.getByRole('heading', { name: /radio/i, level: 2 })).toBeVisible();
   expect(page.url()).not.toContain('pack=');
   await expect(station(page, 'Hip-hop & R&B')).toBeVisible({ timeout: 45_000 });
@@ -138,23 +172,25 @@ test('arrivée par un lien ?pack= : le téléchargement part tout seul, puis la 
   await expect(page.locator('.radio-player .radio-tap').or(page.locator('.radio-player').getByRole('button', { name: 'Pause' }))).toBeVisible();
   await page.screenshot({ path: 'test-results/radio-lien.png' });
 
-  // Le même lien une seconde fois : le pack est reconnu, rien ne part vers l'hébergement.
+  // Le même lien une seconde fois : le pack est reconnu à son adresse et à son poids (une requête
+  // HEAD), rien n'est retéléchargé.
   requests.length = 0;
   await page.goto('about:blank');
-  await page.goto(`./#pack=http://${HOST}/cors/autre.zip`);
+  await page.goto(`./#pack=https://${LINK_HOST}/cors/autre.zip`);
   await expect(page.getByText('Ce pack est déjà dans ta radio : rien à télécharger.')).toBeVisible();
   await page.waitForTimeout(1000);
-  expect(requests).toEqual([]);
+  expect(requests).toEqual(['HEAD /cors/autre.zip']);
 });
 
 test('économie de données : le pack reçu par lien attend un appui', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'connection', { value: { saveData: true }, configurable: true });
   });
+  await routeLinks(page);
   requests.length = 0;
-  await page.goto(`./?pack=http://${HOST}/cors/autre.zip`);
+  await page.goto(`./?pack=https://${LINK_HOST}/cors/autre.zip`);
   await expect(page.getByText('Un pack de musique t’attend')).toBeVisible();
-  await expect(page.locator('.radio-offer')).toContainText(`Hébergé chez ${HOST}`);
+  await expect(page.locator('.radio-offer')).toContainText(`Hébergé chez ${LINK_HOST}`);
   await page.waitForTimeout(1500);
   expect(requests).toEqual([]);
   await page.locator('.radio-offer').getByRole('button', { name: 'Télécharger' }).click();
@@ -236,8 +272,9 @@ for (const policy of ['geste exigé', 'lecture libre'] as const) {
 
   test(`politique « ${policy} » : lien de pack, téléchargement sans appui, puis musique (ou premier appui)`, async ({ page }) => {
     await applyPolicy(page, policy);
+    await routeLinks(page);
     {
-      await page.goto(`./?pack=http://${HOST}/cors/autre.zip`);
+      await page.goto(`./?pack=https://${LINK_HOST}/cors/autre.zip`);
       await expect(station(page, 'Hip-hop & R&B')).toBeVisible({ timeout: 45_000 });
       const player = page.locator('.radio-player');
       if (policy === 'geste exigé') {
@@ -738,4 +775,140 @@ test('épreuve de taille : un pack de 400 Mo par adresse', async ({ page }) => {
       `place occupée ${(usage / 1e6).toFixed(1)} Mo, ${stations} stations`,
   );
   expect(heapMax - heapStart).toBeLessThan(100e6);
+});
+
+// ——— Garde-fous de la bibliothèque : deux onglets, bombes, flux sans fin, liens reçus ———
+
+async function importZip(page: Page, name: string, buffer: Uint8Array): Promise<void> {
+  await page.getByTestId('radio-fichier-pack').setInputFiles({ name, mimeType: 'application/zip', buffer: Buffer.from(buffer) });
+}
+
+test('deux onglets : deux stations dans A, une troisième dans B, les trois survivent à la relance, aucun fichier effacé', async ({ context }) => {
+  test.setTimeout(150_000);
+  const a = await context.newPage();
+  const b = await context.newPage();
+  await openRadio(a);
+  // B s'ouvre avant les imports de A : il a l'index vide en mémoire.
+  await openRadio(b);
+  await importZip(a, 'electro.zip', smallPack(['electro']));
+  await expect(a.getByText(/Station ajoutée.*Électro/)).toBeVisible({ timeout: 45_000 });
+  await a.getByRole('button', { name: 'OK' }).click();
+  await importZip(a, 'rock.zip', smallPack(['rock']));
+  await expect(a.getByText(/Station ajoutée.*Rock/)).toBeVisible({ timeout: 45_000 });
+  // B recharge l'index de lui-même quand A l'a changé.
+  await expect(station(b, 'Électro')).toBeVisible();
+  await expect(station(b, 'Rock')).toBeVisible();
+  await importZip(b, 'hiphop.zip', smallPack(['hiphop-rnb']));
+  await expect(b.getByText(/Station ajoutée.*Hip-hop/)).toBeVisible({ timeout: 45_000 });
+  await expect(station(a, 'Hip-hop & R&B')).toBeVisible();
+  const files = await radioFiles(a);
+  expect(files.filter((name) => name.endsWith('.zip'))).toHaveLength(3);
+
+  // Un morceau qu'un autre onglet viendrait de décompresser (pas encore dans l'index) : le ménage
+  // du démarrage n'y touche pas, pas plus qu'aux fichiers des trois stations.
+  await a.evaluate(async () => {
+    const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle('radio');
+    const writable = await (await dir.getFileHandle('pack-0123456789ab-t-0123456789ab.wav', { create: true })).createWritable();
+    await writable.write(new Uint8Array(1024));
+    await writable.close();
+  });
+  for (const page of [a, b]) {
+    await page.goto('about:blank');
+    await page.goto('./');
+    // La musique reprend à l'ouverture : le bouton rond déploie le mini-lecteur, dont le titre ouvre le panneau.
+    await expect(radioButton(page)).toHaveAccessibleName('Radio, en lecture', { timeout: 30_000 });
+    const title = page.locator('.radio-mini-title');
+    if (!(await title.isVisible())) await radioButton(page).click();
+    await title.click();
+    await expect(page.getByRole('heading', { name: 'Radio', level: 2 })).toBeVisible();
+    for (const name of ['Électro', 'Rock', 'Hip-hop & R&B']) await expect(station(page, name)).toBeVisible();
+  }
+  await a.waitForTimeout(2000);
+  expect(await radioFiles(a)).toEqual([...files, 'pack-0123456789ab-t-0123456789ab.wav'].sort());
+});
+
+const MIO = 1024 * 1024;
+const fullOfStorage = /trop gros une fois décompressé/;
+
+test('bombe : un petit ZIP qui déclare ou produit des centaines de Mo est refusé, le stockage reste vide', async ({ page }) => {
+  test.setTimeout(120_000);
+  await openRadio(page);
+  const zeros = new Uint8Array(256 * MIO);
+  // Déclarée honnêtement : 256 Mio pour 255 Kio compressés, refusée avant toute écriture.
+  await importZip(page, 'bombe.zip', buildZip([{ name: 'electro/bombe.wav', data: zeros, deflate: true, declaredCrc: 0 }]));
+  await expect(page.getByRole('alert')).toContainText(fullOfStorage, { timeout: 30_000 });
+  await expect(page.getByRole('alert')).toContainText('npm run radio:pack');
+  expect(await radioFiles(page)).toEqual([]);
+  await page.screenshot({ path: 'test-results/radio-bombe.png' });
+  await page.getByRole('button', { name: 'Fermer', exact: true }).click();
+
+  // Menteuse : elle déclare 1 Mio et en produit 256 ; l'écriture est coupée à la taille déclarée.
+  await importZip(page, 'menteuse.zip', buildZip([{ name: 'electro/bombe.wav', data: zeros, deflate: true, declaredSize: MIO, declaredCrc: 0 }]));
+  await expect(page.getByRole('alert')).toContainText('Le ZIP est abîmé', { timeout: 30_000 });
+  expect(await radioFiles(page)).toEqual([]);
+  await page.getByRole('button', { name: 'Fermer', exact: true }).click();
+
+  // Abîmée : taille juste, CRC faux.
+  const wav = noiseWav(2, 5);
+  await importZip(page, 'abime.zip', buildZip([{ name: 'electro/abime.wav', data: wav, deflate: true, declaredCrc: 1234 }]));
+  await expect(page.getByRole('alert')).toContainText('Le ZIP est abîmé', { timeout: 30_000 });
+  expect(await radioFiles(page)).toEqual([]);
+  await expect(page.getByText('Ta radio est vide.')).toBeVisible();
+});
+
+test('flux sans fin : le téléchargement est coupé au plafond, le stockage reste vide', async ({ page }) => {
+  // Plafond abaissé pour l'essai (8 Mio au lieu de 2 Gio) : l'app n'accepte qu'un plafond plus bas.
+  await page.addInitScript(() => {
+    (window as unknown as { __pmbRadioPlafond: number }).__pmbRadioPlafond = 8 * 1024 * 1024;
+  });
+  requests.length = 0;
+  await openRadio(page);
+  await page.getByRole('button', { name: 'Depuis une adresse' }).click();
+  await page.getByLabel('Adresse du pack (ZIP)').fill(`http://${HOST}/sansfin/flux.zip`);
+  await page.getByRole('button', { name: 'Télécharger' }).click();
+  await expect(page.getByRole('alert')).toContainText(fullOfStorage, { timeout: 30_000 });
+  expect(await radioFiles(page)).toEqual([]);
+  await expect.poll(() => requests.find((line) => line.startsWith('sansfin coupé'))).toBeTruthy();
+  const sent = Number(/(\d+) octets/.exec(requests.find((line) => line.startsWith('sansfin coupé')) ?? '')?.[1]);
+  expect(sent).toBeLessThan(64 * MIO);
+});
+
+test('lien reçu vers la machine locale : refusé sans requête ; le champ d’adresse l’accepte toujours', async ({ page }) => {
+  requests.length = 0;
+  await page.goto(`./?pack=http://${HOST}/cors/autre.zip`);
+  await expect(page.getByRole('alert')).toContainText('réseau local');
+  await page.waitForTimeout(1500);
+  expect(requests).toEqual([]);
+  await page.screenshot({ path: 'test-results/radio-lien-local.png' });
+  await page.getByRole('button', { name: 'Fermer', exact: true }).click();
+  await page.getByRole('button', { name: 'Depuis une adresse' }).click();
+  await page.getByLabel('Adresse du pack (ZIP)').fill(`http://${HOST}/cors/autre.zip`);
+  await page.getByRole('button', { name: 'Télécharger' }).click();
+  await expect(station(page, 'Hip-hop & R&B')).toBeVisible({ timeout: 45_000 });
+});
+
+test('lien vers un pack déjà importé : retéléchargé si son poids a changé, sinon rien', async ({ page }) => {
+  test.setTimeout(120_000);
+  await routeLinks(page);
+  packs.set('maj.zip', { buffer: smallPack(['electro']) });
+  await page.goto(`./?pack=https://${LINK_HOST}/cors/maj.zip`);
+  await expect(station(page, 'Électro')).toBeVisible({ timeout: 45_000 });
+  await expect(station(page, 'Rock')).toHaveCount(0);
+
+  // Le pack a grossi chez l'hébergeur : le même lien le retélécharge.
+  packs.set('maj.zip', { buffer: smallPack(['electro', 'rock']) });
+  requests.length = 0;
+  await page.goto('about:blank');
+  await page.goto(`./?pack=https://${LINK_HOST}/cors/maj.zip`);
+  await expect(station(page, 'Rock')).toBeVisible({ timeout: 45_000 });
+  expect(requests).toContain('GET /cors/maj.zip');
+
+  // Inchangé : une requête HEAD, rien de téléchargé.
+  requests.length = 0;
+  await page.goto('about:blank');
+  await page.goto(`./?pack=https://${LINK_HOST}/cors/maj.zip`);
+  await expect(page.getByText('Ce pack est déjà dans ta radio : rien à télécharger.')).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(requests).toEqual(['HEAD /cors/maj.zip']);
+  expect(await radioFiles(page)).toHaveLength(2);
 });

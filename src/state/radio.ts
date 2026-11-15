@@ -3,7 +3,7 @@
 
 import { create } from 'zustand';
 import { createStore, get, set, type UseStore } from 'idb-keyval';
-import { EMPTY_CATALOG, saveCatalog, type Catalog } from '../audio/radio/catalog.ts';
+import { EMPTY_CATALOG, updateCatalog, withDurations, type Catalog } from '../audio/radio/catalog.ts';
 
 export type RadioStatus = 'chargement' | 'pret' | 'indisponible';
 
@@ -20,6 +20,7 @@ export type FailCode =
   | 'abime'
   | 'zip64'
   | 'chiffre'
+  | 'trop-gros'
   | 'inconnu';
 
 export interface FailInfo {
@@ -137,31 +138,39 @@ export function setPrefs(patch: Partial<RadioPrefs>): void {
   void set('reglages', { shuffle, volume, lastStationId, lastTrackId, miniOpen }, db()).catch(() => undefined);
 }
 
-/** Remplace l'index et l'enregistre. */
-export async function commitCatalog(catalog: Catalog): Promise<void> {
-  useRadio.setState({ catalog });
-  await saveCatalog(catalog);
+// Durées lues mais pas encore enregistrées : reportées sur tout index relu entre-temps.
+const pendingDurations = new Map<string, number>();
+
+/** Prend un index relu sur le disque (après une écriture, ou quand un autre onglet l'a changé). */
+export function adoptCatalog(catalog: Catalog): void {
+  useRadio.setState({ catalog: pendingDurations.size > 0 ? withDurations(catalog, pendingDurations) : catalog });
+}
+
+/**
+ * Applique un changement à l'index relu sur le disque (jamais la copie en mémoire, qu'un autre
+ * onglet a pu dépasser), l'enregistre sous le verrou commun et le prend.
+ */
+export function commitCatalog(change: (current: Catalog) => Catalog): Promise<Catalog> {
+  return updateCatalog(change, adoptCatalog);
 }
 
 let durationTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Durée lue à la première écoute : retenue dans l'index, enregistrée sans hâte. */
+/** Durée lue à la première écoute : retenue dans l'index, enregistrée sans hâte (seule, sans le reste). */
 export function recordDuration(trackId: string, seconds: number): void {
   if (!Number.isFinite(seconds) || seconds <= 0) return;
   const { catalog } = useRadio.getState();
-  let changed = false;
-  const stations = catalog.stations.map((station) => {
-    if (!station.tracks.some((track) => track.id === trackId && track.duration === undefined)) return station;
-    changed = true;
-    return {
-      ...station,
-      tracks: station.tracks.map((track) => (track.id === trackId ? { ...track, duration: seconds } : track)),
-    };
-  });
-  if (!changed) return;
-  useRadio.setState({ catalog: { ...catalog, stations } });
+  const next = withDurations(catalog, new Map([[trackId, seconds]]));
+  if (next === catalog) return;
+  pendingDurations.set(trackId, seconds);
+  useRadio.setState({ catalog: next });
   if (durationTimer) clearTimeout(durationTimer);
   durationTimer = setTimeout(() => {
-    void saveCatalog(useRadio.getState().catalog).catch(() => undefined);
+    const batch = new Map(pendingDurations);
+    void updateCatalog((current) => withDurations(current, batch))
+      .then(() => {
+        for (const [id, value] of batch) if (pendingDurations.get(id) === value) pendingDurations.delete(id);
+      })
+      .catch(() => undefined);
   }, 2000);
 }
