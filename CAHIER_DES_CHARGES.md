@@ -209,6 +209,8 @@ Principe : **la profondeur vient d'abord du paramétrique** (couleurs, finitions
 **Postes communs à toutes les motos** : guidon, selle, réservoir ou carénage, garde-boue, échappement, roues, moteur, phare, accessoires, pilote, néons.
 Les pièces partagées (jantes, pneus, sièges, volants, sono) sont modélisées une fois et servent à tous les véhicules compatibles.
 
+**Intérieur, sur tout véhicule à habitacle** (demande du 15 novembre 2026) : volant, pommeau de levier, type de sièges et sellerie se choisissent comme les autres pièces, et le **ciel de toit** peut être uni ou **étoilé en LED** (couleur libre, densité, médaillon central à motif original, allumé ou éteint), pas seulement sur le van (§ 5.10). Ces choix se font aussi depuis la vue intérieure.
+
 **Postes propres au fastback (P1)** : prise d'air de capot (plate, bossage, compresseur apparent), persiennes de lunette arrière, becquet et aileron, bandes de capot, sorties d'échappement latérales, jantes larges à l'arrière.
 **Postes propres à la sportive (P1)** : carénage complet / tête de fourche seule / nue, bulle (claire, fumée, double courbure), coque arrière monoplace, silencieux (origine, court sous moteur, haut double), couleur des jantes, bracelets, livrées de course à numéro.
 
@@ -779,7 +781,7 @@ Encore ouvertes, et **bloquantes pour les jalons 5, 6, 7 et 9** :
 1. D'où viennent les modèles 3D : freelance (budget ?), modèles libres retravaillés, ou les deux ?
 2. Abonnement à une banque de sons : lequel, et qui télécharge et valide à l'écoute les prises de `docs/SOURCING_AUDIO.md` ?
 3. Musique du dossier de lecture : quelle source, avec quelle licence ?
-4. Une photo de l'intérieur du van, à plafond LED (les photos de l'extérieur sont arrivées le 15 novembre 2026).
+4. ~~Une photo de l'intérieur du van, à plafond LED~~ : reçue (une courte vidéo de nuit, classée à tort comme attendue jusqu'au 15 novembre 2026 ; les photos de l'extérieur sont arrivées le même jour). Elle montre un ciel de toit étoilé rouge avec un médaillon central, à refaire avec un motif à nous.
 5. Quels amis écrivent les premiers briefs ?
 
 ## 19. Consignes pour Claude Code (reprises dans `CLAUDE.md`)
