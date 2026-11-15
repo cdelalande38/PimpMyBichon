@@ -46,9 +46,9 @@ Format : `placeholder_<nom>` · ce qu'il remplace · depuis quel jalon.
   - `placeholder_plaques` · trois tôles décoratives rivetées, œuvre `plaques-deco.svg` posée · depuis le jalon 1
   - `placeholder_affiche` · affiche encadrée sur le mur de gauche, œuvre `affiche-atelier.svg` posée · depuis le jalon 1
   - `placeholder_caisses` · caisses empilées · depuis le jalon 1
-  - `placeholder_quad` · quad noir à phare rond et amortisseurs rouges · depuis le jalon 1
+  - `placeholder_quad` · quad noir à phares ronds et amortisseurs rouges · depuis le jalon 1
   - `placeholder_canape_a`, `placeholder_canape_b` · deux canapés 2 places en cuir noir, en L dans l'angle avant-gauche · depuis le jalon 1
-  - `placeholder_table_basse` · table en planches de sapin sur socle noir fermé · depuis le jalon 1
+  - `placeholder_table_basse` · table en planches de sapin, quatre pieds fuselés, ceinture et entretoise en H, bois clair · depuis le jalon 1
   - `placeholder_bloc_moteur` · bloc 4 cylindres à cornets rouges, posé sur la table · depuis le jalon 1
   - `placeholder_tabouret_frein` · tabouret à pied en disque noir ajouré, assise en bois clair · depuis le jalon 1
   - `placeholder_pouf_pneu` · pouf pneu, dessus capitonné, sans marque · depuis le jalon 1

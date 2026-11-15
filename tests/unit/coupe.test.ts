@@ -1,13 +1,13 @@
 // Coupe caméra du décor : règles du module pur (R1 adossement, R2 dégagement, R3 support,
 // hystérésis, fondu), puis preuves sur le garage réel : garde-fou de structure, rien ne flotte,
 // balayage d'yeux autour du véhicule vérifié par lancer de rayons, et rien de trop masqué.
-import { FrontSide, Mesh, ShaderLib, Texture, Vector3, type BufferGeometry, type Material } from 'three';
+import { BoxGeometry, FrontSide, Group, Mesh, MeshStandardMaterial, PerspectiveCamera, Scene, ShaderLib, Texture, Vector3, type BufferGeometry, type Material, type WebGLRenderer, type WebGLRenderTarget } from 'three';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AMBIANCES } from '../../src/data/ambiances.ts';
 import { FRAMINGS } from '../../src/data/framings.ts';
 import { GARAGE } from '../../src/data/garage.ts';
 import { CUT_ATTRIBUTE, CUT_CAPACITY, CUT_DITHER_DEFINE } from '../../src/render/cut.ts';
-import { hasCutDither } from '../../src/render/cutDither.ts';
+import { cutDitherMeshes, cutDitherPrograms, hasCutDither, primeCutDither, programsReady, setCutDither, warmCutDither, type CutDitherProgram } from '../../src/render/cutDither.ts';
 import { isDitherCarrier, patchGarageShader, patchSurfaceShader } from '../../src/render/floor.ts';
 import { framingPose, frontFromTurn } from '../../src/render/photo/framing.ts';
 import { fitCamera, orbitPosition } from '../../src/scene/fit.ts';
@@ -262,6 +262,104 @@ describe('coupe : nuanceurs', () => {
   });
 });
 
+describe('coupe : préchauffage de la trame (src/render/cutDither.ts)', () => {
+  /** Faux renderer : relève, à chaque compilation, le maillage, les matériaux en trame et la cible liée. */
+  function fakeRenderer(carriers: readonly Material[], options: { throwOn?: string } = {}) {
+    const compiled: string[] = [];
+    const state = { target: 'avant' as unknown };
+    const tables = new Map<Material, Map<string, CutDitherProgram>>();
+    const gl = {
+      getRenderTarget: () => state.target,
+      setRenderTarget: (target: unknown) => {
+        state.target = target;
+      },
+      compile: (mesh: Mesh) => {
+        const dithered = carriers.filter(hasCutDither).map((material) => material.name);
+        compiled.push(`${mesh.name}[${dithered.join(',')}]@${String((state.target as { name?: string } | null)?.name)}`);
+        if (mesh.name === options.throwOn) throw new Error('compilation');
+      },
+      properties: { get: (material: Material) => ({ programs: tables.get(material) }) },
+    };
+    return { gl: gl as unknown as WebGLRenderer, compiled, state, tables };
+  }
+  const material = (name: string) => Object.assign(new MeshStandardMaterial(), { name });
+  const mesh = (name: string, mat: Material) => Object.assign(new Mesh(new BoxGeometry(), mat), { name });
+  const target = { name: 'cible' } as unknown as WebGLRenderTarget;
+
+  it('maillages groupés par matériau, dans l’ordre des porteurs ; les autres matériaux exclus', () => {
+    const [a, b, other] = [material('a'), material('b'), material('autre')];
+    const root = new Group();
+    root.add(mesh('b1', b), mesh('a1', a), mesh('x', other), mesh('b2', b), mesh('a2', a));
+    expect(cutDitherMeshes(root, [a, b]).map((m) => m.name)).toEqual(['a1', 'a2', 'b1', 'b2']);
+  });
+
+  it('une tranche ne met en trame que les matériaux de ses maillages, cible liée, puis remet tout', () => {
+    const [a, b, c] = [material('a'), material('b'), material('c')];
+    const carriers = [a, b, c];
+    const meshes = [mesh('a1', a), mesh('a2', a), mesh('b1', b), mesh('c1', c)];
+    const { gl, compiled, state } = fakeRenderer(carriers);
+    const scene = new Scene();
+    const camera = new PerspectiveCamera();
+    // Budget dépassé dès le premier maillage : une compilation par tranche.
+    let next = 0;
+    const slices: number[] = [];
+    while (next < meshes.length) {
+      next = warmCutDither(gl, meshes, next, scene, camera, carriers, target, -1);
+      slices.push(next);
+      expect(carriers.filter(hasCutDither)).toEqual([]);
+      expect(state.target).toBe('avant');
+    }
+    expect(slices).toEqual([1, 2, 3, 4]);
+    expect(compiled).toEqual(['a1[a]@cible', 'a2[a]@cible', 'b1[b]@cible', 'c1[c]@cible']);
+    // Sans budget : tout d'un coup.
+    compiled.length = 0;
+    expect(warmCutDither(gl, meshes, 0, scene, camera, carriers, target)).toBe(4);
+    expect(compiled).toEqual(['a1[a]@cible', 'a2[a]@cible', 'b1[a,b]@cible', 'c1[a,b,c]@cible']);
+    expect(carriers.filter(hasCutDither)).toEqual([]);
+  });
+
+  it('remise même si la compilation lance ; un matériau déjà en fondu garde sa trame', () => {
+    const [a, b] = [material('a'), material('b')];
+    const carriers = [a, b];
+    setCutDither(b, true);
+    const versionB = b.version;
+    const { gl, state } = fakeRenderer(carriers, { throwOn: 'a1' });
+    expect(() => warmCutDither(gl, [mesh('a1', a), mesh('b1', b)], 0, new Scene(), new PerspectiveCamera(), carriers, target)).toThrow('compilation');
+    expect(hasCutDither(a)).toBe(false);
+    expect(hasCutDither(b)).toBe(true);
+    expect(b.version).toBe(versionB);
+    expect(state.target).toBe('avant');
+  });
+
+  it('variantes relevées par leur clé ; disponibilité ; premier usage par tranches', () => {
+    const [a, b] = [material('a'), material('b')];
+    const { gl, tables } = fakeRenderer([a, b]);
+    const used: string[] = [];
+    const program = (name: string, ready = true): CutDitherProgram => ({
+      isReady: () => ready,
+      getUniforms: () => used.push(name),
+    });
+    const [pa, pb, plain] = [program('a'), program('b', false), program('sans')];
+    tables.set(a, new Map([[`x,${CUT_DITHER_DEFINE},y`, pa], ['x,y', plain]]));
+    tables.set(b, new Map([[CUT_DITHER_DEFINE, pb]]));
+    const programs = cutDitherPrograms(gl, [a, b]);
+    expect(programs).toEqual([pa, pb]);
+    expect(programsReady(programs)).toBe(false);
+    expect(programsReady(new Set([pa]))).toBe(true);
+    expect(programsReady([pa, {}])).toBe(true);
+    expect(programsReady(null)).toBe(true);
+    expect(programsReady([plain, pb])).toBe(false);
+    // Premier usage : un programme par tranche quand le budget est dépassé, rang suivant rendu.
+    expect(primeCutDither(programs, 0, -1)).toBe(1);
+    expect(used).toEqual(['a']);
+    expect(primeCutDither(programs, 1, -1)).toBe(2);
+    expect(primeCutDither(programs, 2, -1)).toBe(2);
+    expect(used).toEqual(['a', 'b']);
+    expect(primeCutDither([pa, pb, plain], 0)).toBe(3);
+    expect(used).toEqual(['a', 'b', 'a', 'b', 'sans']);
+  });
+});
+
 describe('coupe : quel matériau porte la trame', () => {
   it('en fondu : strictement entre 0 (masqué) et 1 (visible)', () => {
     expect([0, 1e-6, 0.5, 0.999, 1].map(inFade)).toEqual([false, true, true, true, false]);
@@ -474,9 +572,20 @@ describe('coupe : garage réel', () => {
     garage.update(ambiance);
     const patched = new Set<Material>();
     for (const mesh of meshesOf(garage)) if ((mesh.material as Material).userData.pmbCut === true) patched.add(mesh.material as Material);
-    // Porteurs : tous les opaques patchés (sol, murs, mobilier, sources, œuvres), ni additifs ni voiles.
-    expect(new Set(dither.carriers)).toEqual(new Set([...patched].filter(isDitherCarrier)));
+    // Opaques : tous les patchés (sol, murs, mobilier, sources, œuvres), ni additifs ni voiles.
+    // Porteurs : ceux d'entre eux qui dessinent au moins un élément de la coupe (le sol, qui ne
+    // s'efface jamais, n'en est pas : sa variante « trame » serait compilée pour rien).
+    expect(new Set(dither.opaque)).toEqual(new Set([...patched].filter(isDitherCarrier)));
+    const drawsElement = new Set<Material>();
+    for (const mesh of meshesOf(garage)) {
+      const ids = (mesh.geometry as BufferGeometry).getAttribute(CUT_ATTRIBUTE);
+      if (ids && Array.from(ids.array as ArrayLike<number>).some((id) => id > 0)) drawsElement.add(mesh.material as Material);
+    }
+    expect(new Set(dither.carriers)).toEqual(new Set(dither.opaque.filter((material) => drawsElement.has(material))));
     expect(dither.carriers.length).toBeGreaterThan(5);
+    expect(dither.opaque).toContain(garage.floor.material);
+    expect(dither.carriers).not.toContain(garage.floor.material);
+    for (let m = 0; m < dither.owners.count; m += 1) expect((dither.owners.start[m + 1] ?? 0) - (dither.owners.start[m] ?? 0), dither.carriers[m]?.name).toBeGreaterThan(0);
     for (const material of patched) {
       if (!isDitherCarrier(material)) expect(material.transparent, material.name).toBe(true);
     }
@@ -505,7 +614,7 @@ describe('coupe : garage réel', () => {
     expect(dither.carriers.filter(hasCutDither)).toEqual(expected);
     // Pendant la capture de la sonde : tout visible, aucune trame ; elle revient ensuite.
     const restore = (garage.root.userData.onProbe as () => () => void)();
-    expect(dither.carriers.filter(hasCutDither)).toEqual([]);
+    expect(dither.opaque.filter(hasCutDither)).toEqual([]);
     expect(fades[id]).toBe(1);
     restore();
     expect(dither.carriers.filter(hasCutDither)).toEqual(expected);
@@ -654,7 +763,7 @@ const { target, minPolar, maxPolar, frameMargin } = GARAGE.orbit;
 
 describe('coupe : balayage autour du véhicule', () => {
   // Preuve par lancer de rayons sur tout le balayage : lente par nature, d'où le délai large.
-  it('aucun élément laissé visible ne coupe la vue vers le véhicule (orbite et cadrages photo)', { timeout: 120_000 }, () => {
+  it('aucun élément laissé visible ne coupe la vue vers le véhicule (orbite et cadrages photo)', { timeout: 45_000 }, () => {
     const points = vehiclePoints(protect.vehicle);
     const failures: string[] = [];
     let eyes = 0;

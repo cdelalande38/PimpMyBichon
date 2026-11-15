@@ -86,11 +86,57 @@ C'est bon si :
 
 Si ça coince, relève ce que dit « Sous le capot » (version, ligne « Hors ligne », ligne « Rendu 3D ») : c'est ce qu'il faut pour diagnostiquer.
 
-## 5. Mise à jour de l'app installée
+## 5. Recette du jalon 1 sur Android
+
+Critère d'acceptation (cahier des charges, § 14) : le rendu cible sur le modèle de banc d'essai, dans le garage, avec les trois ambiances et le rendu photo, validé à l'œil face aux références du § 4, sur l'appareil de référence, à 60 i/s en standard.
+
+1. Ouvre l'app. Si le bandeau « Nouvelle version de l'atelier prête » s'affiche, touche « Recharger ».
+2. « Sous le capot » : vérifie que la version est celle du dernier commit publié.
+3. Regarde les trois ambiances (onglet « Ambiance »), quelques teintes et finitions, puis le rendu photo (« Photo »).
+4. Tourne autour du véhicule, de près et de loin, d'en haut et au ras du sol : les murs et les objets qui passeraient devant lui quittent l'image en fondu ; le véhicule et son reflet au sol restent entiers.
+5. Mesure la cadence dans « Sous le capot », en qualité Standard puis en Max (« Réglages ») :
+   - **« Mesurer »** : la scène tourne cinq secondes, la ligne « Mesure » donne la cadence, le pire centile, les appels de dessin et les triangles ;
+   - **« Comparer »** : quatre mesures d'affilée, une vingtaine de secondes. Pose le téléphone et ne touche à rien : fermer le panneau ou quitter l'app arrête la comparaison.
+
+C'est bon si :
+
+- les néons du décor se lisent dans la carrosserie, dans les trois ambiances ;
+- rien ne passe entre l'œil et le véhicule quand on tourne, et rien ne clignote pendant le fondu ;
+- la rotation lente fait un tour en un peu plus d'une minute, sans à-coup ;
+- « Mesurer » donne une cadence proche de 60 i/s en Standard.
+
+### Lire « Comparer »
+
+Chaque ligne donne la cadence, le temps par image et son écart au réglage en cours, le pire centile, le temps « processeur » (fil principal) et les appels de dessin.
+
+| Ligne | Ce qu'elle change | Si elle s'écarte nettement du réglage en cours |
+|---|---|---|
+| Réglage en cours | rien | c'est la référence |
+| Trame partout | la trame du fondu compilée dans tous les matériaux opaques du décor, comme avant le commit `8dc262f` | plus lente : le rejet de fragments coûte cher sur cette carte graphique |
+| Sans reflet du sol | la réflexion du sol coupée | plus rapide : le reflet est le poste le plus lourd |
+| Densité 1 | un pixel d'image par pixel CSS | plus rapide : l'image est limitée par le nombre de pixels |
+
+Un temps par image proche du temps « processeur » dit que l'image est limitée par le processeur, pas par la carte graphique. Quand l'écran plafonne la cadence (60 i/s sur toutes les lignes), seul le temps « processeur » distingue les lignes : c'est en Max, sous le plafond, que la comparaison parle. Pour un diagnostic, relève les quatre lignes dans les deux niveaux.
+
+### Ce qui n'est pas fait, ou pas comme le cahier le demande
+
+- **Substituts** : le modèle de banc d'essai et tout le mobilier du garage, listés dans [TODO_ASSETS.md](../TODO_ASSETS.md).
+- **Cadence sur l'appareil de référence** : à confirmer. Dernier relevé : 43 i/s en Max pendant la rotation lente (version `5beca09`), cause non établie ; « Comparer » sert à la trouver.
+- **Anticrénelage** : SMAA seul, là où le cahier demande MSAA et SMAA. Sur des cibles en demi-flottants, le MSAA double la mémoire de la chaîne d'image et se résout avant le tone mapping.
+- **Niveau Économie** : ni bloom, ni faux reflets au sol.
+- **Qualité « Auto »** : plafonnée au niveau Standard.
+- **Rendu photo** : pas d'ombres adoucies, l'ombre sous le véhicule est celle de l'atelier.
+- **Ombre sous le véhicule** : rendue une seule fois, elle varie un peu d'un chargement à l'autre.
+- **Taches de contact du mobilier** : rectangulaires, même sous un meuble à pieds ou en L.
+- **Reflet des enseignes au sol** : en pavés de pixels au niveau Standard (réflexion en demi-résolution).
+- **Processeur graphique sans cibles flottantes** : niveau Économie imposé, reflets de la carrosserie écrêtés ; sans flottants 32 bits, le Max se rend au Standard. Essayé en rendu logiciel seulement.
+- **Parcours automatiques** : le fondu de la coupe n'est éprouvé qu'au niveau Standard ; la perte du contexte WebGL n'a pas de parcours.
+
+## 6. Mise à jour de l'app installée
 
 Une nouvelle version se télécharge en arrière-plan. L'app ne se recharge jamais toute seule : un bandeau « Nouvelle version de l'atelier prête » propose « Recharger ». Sans réponse, la nouvelle version s'applique au prochain lancement, une fois l'app complètement fermée.
 
-## 6. Déboguer sur l'appareil
+## 7. Déboguer sur l'appareil
 
 Téléphone branché en USB, débogage USB activé :
 
@@ -100,13 +146,13 @@ adb devices            # le téléphone doit apparaître
 
 Puis ouvre `chrome://inspect` dans Chrome sur le poste : console, réseau, performances et service worker du téléphone sont accessibles.
 
-## 7. Limites de GitHub Pages
+## 8. Limites de GitHub Pages
 
 - Site : 1 Go au maximum. Bande passante indicative : 100 Go par mois. Déploiement : 10 minutes au maximum.
 - Pas d'en-têtes HTTP personnalisés : rien dans l'app ne doit dépendre de `SharedArrayBuffer`.
 - `npm run assets:check` surveille le poids du site construit.
 
-## 8. Revenir en arrière
+## 9. Revenir en arrière
 
 - Le plus simple : `git revert <commit>` puis push. Le workflow republie la version précédente.
 - Sans toucher au code : onglet **Actions**, ouvrir le run vert du dernier commit qui marchait (pas forcément le plus récent), **Re-run all jobs**. Possible tant que GitHub conserve ce run ; au-delà, `git revert`.

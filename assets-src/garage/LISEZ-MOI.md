@@ -41,12 +41,12 @@ Places et tailles prévues au départ, d'après `captures/notes-agents/jalon1-re
 | `toile-pop-art.svg` | 768 × 1024 (3:4, portrait) | `placeholder_toile_pop_art` | colonne noire, au-dessus de l'écran, de 2,0 à 2,9 m. Quatre cases : tête de mort, piston, éclair, flammes. |
 | `neon-pimp-my-bichon.svg` | 1024 × 500 | `neon_pimpmybichon` | mur de gauche, vers 2,05 m, face à +x. |
 | `neon-good-vibes-only.svg` | 1024 × 700 | `neon_good_vibes` | mur face au fond (z = D/2), vers 1,75 m, face à -z. |
-| `cible.svg` | 1200 × 1000 (unité : le mm) | `placeholder_panneau_cible`, `placeholder_cible` | mur rouge de droite, panneau 1,2 × 1,0 m de 1,3 à 2,3 m. Cible Ø 456 centrée en (600, 500) ; cible seule : carré x 372 → 828, y 272 → 728. Hors du panneau, fond transparent. |
+| `cible.svg` | 1200 × 1000 (unité : le mm) | `placeholder_panneau_cible` | mur rouge de droite, panneau 1,2 × 1,0 m de 1,3 à 2,3 m. Cible Ø 456 centrée en (600, 500) ; cible seule : carré x 372 → 828, y 272 → 728. Hors du panneau, fond transparent. |
 | `flipper-fronton.svg` | 720 × 620 (0,72 × 0,62 m) | `placeholder_flipper` (fronton) | glace du fronton, en matière émissive. Thème inventé « PISTONS D'ENFER ». |
 | `flipper-plateau.svg` | 700 × 1250 (0,70 × 1,25 m) | `placeholder_flipper` (plateau) | dessus de la caisse, joueur en bas. Groupes : `couloirs-du-haut`, `bumpers`, `medaillon`, `cibles-de-cote`, `bas-de-plateau`, `couloir-de-lancement`. |
 | `plaques-deco.svg` | 640 × 1000 | (nouveau, « à placer librement ») | trois tôles 600 × 300 (2:1) empilées en x = 20, y = 5, 335, 665 ; groupes `plaque-1` (ATELIER BICHON), `plaque-2` (TOUJOURS PLEIN GAZ), `plaque-3` (TURBO). Mur OSB de gauche ou au-dessus de l'établi, ~0,4 × 0,2 m chacune. |
 | `affiche-atelier.svg` | 640 × 960 (2:3) | (nouveau) | affiche inventée « GRANDE SOIRÉE VIDANGE » : mur OSB de gauche près du panneau d'outils, ou flanc de la colonne, ~0,6 × 0,9 m. |
-| `casque-motifs.svg` | 960 × 840 (cases 480 × 420) | `placeholder_casiers_casques` | un casque par case du casier (1,9 à 2,3 m, au-dessus du canapé B). Groupes `casque-flammes` (noir mat `#1b1826`), `casque-bandes` (blanc), `casque-crane` (rouge), `casque-damier` (sarcelle pailleté). Profils, écran à droite, fond transparent : en carte plane ou comme référence de livrée pour un casque modélisé. |
+| `casque-motifs.svg` | 960 × 840 (cases 480 × 420) | `placeholder_casques` | un casque par case du casier `placeholder_casiers_casques` (1,9 à 2,3 m, au-dessus du canapé B). Groupes `casque-flammes` (noir mat `#1b1826`), `casque-bandes` (blanc), `casque-crane` (rouge), `casque-damier` (sarcelle pailleté). Profils, écran à droite, fond transparent : en carte plane ou comme référence de livrée pour un casque modélisé. |
 
 ## Néons : ce que contient le fichier, ce que l'app ajoute
 
@@ -76,7 +76,8 @@ Aperçu de cette recette (flou proche 3,5 px, flou large 11 px, cœur blanc de 5
 
 - **Œuvres posées** : chaque objet du mobilier déclare ses œuvres par son champ `art` (`ArtSlot` de
   `src/data/garageBase.ts` : œuvre, case éventuelle, place, rotation, largeur), et `src/scene/garage/build.ts` y
-  pose un plan à 2 mm de la face, texturé par `acquireArtwork` (`src/scene/garage/artwork.ts`) depuis la copie
+  pose un plan à 2 mm de la face (place `at` prise 1 mm devant la face, plus 1 mm ajouté par `build.ts` ; seul le bord
+  roulé des plaques, en relief, monte à 0,8 mm du plan), texturé par `acquireArtwork` (`src/scene/garage/artwork.ts`) depuis la copie
   servie `public/assets/garage/art/<id>.svg`. La teinte d'attente s'affiche tant que le dessin n'est pas arrivé.
   Le registre (`src/data/garageArt.ts`) donne la matière : émissive pour le fronton, éclairée pour le reste.
 - Posées aujourd'hui : `toile-pop-art` (toile sur châssis au-dessus de l'écran, en portrait 0,54 × 0,72 m),

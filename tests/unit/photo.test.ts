@@ -52,6 +52,14 @@ describe('cadrages', () => {
     }
   });
 
+  it('cadrage avant : regard incliné vers le sol, sans tourner à la plongée', () => {
+    // En portrait, le champ vertical est grand : presque à l'horizontale (1,38), le quart haut de
+    // l'image n'était que plafond. Au moins 17° sous l'horizon, et moins que la plongée.
+    const avant = framingById('avant');
+    expect(Math.PI / 2 - avant.polar).toBeGreaterThanOrEqual(0.3);
+    expect(avant.polar).toBeGreaterThan(framingById('plongee').polar);
+  });
+
   it('framingPose retrouve orbitPosition quand le cadrage ne décale rien', () => {
     const neutral: Framing = {
       id: 'avant',

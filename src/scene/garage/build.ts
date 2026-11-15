@@ -63,7 +63,7 @@ import {
 import { artSize, garageArt, type GarageArtId } from '../../data/garageArt.ts';
 import type { GarageShape } from '../../data/garageShapes.ts';
 import { NEON_SIGNS } from '../../data/neonAlphabet.ts';
-import { acquireArtwork, type ArtworkOptions } from './artwork.ts';
+import { acquireArtwork, ART_GAP, artworkMaterial, type ArtworkOptions } from './artwork.ts';
 import { analyzeCut, ditherNeeds, ditherOwners, type Box, type CutElement, type CutStructure, type DitherOwners } from './cut.ts';
 import { neonSign } from './neon.ts';
 import { roundedRectContour, shapeGeometry } from './shapes.ts';
@@ -114,11 +114,20 @@ function propPlacement(prop: Prop): Matrix4 {
 
 /**
  * Pièces d'un objet du mobilier, tournées et posées dans le repère de la pièce, dans l'ordre de
- * `prop.parts`. Ce sont elles que build.ts fusionne et dont la coupe caméra prend les boîtes.
+ * `prop.parts`, et la boîte de l'objet dans son propre repère (avant `turn` et `at`, nulle sans
+ * pièce). createGarage passe par ici : ce sont ces géométries qu'il fusionne et dont la coupe
+ * caméra prend les boîtes.
  */
-export function propGeometries(prop: Prop): BufferGeometry[] {
+function placeProp(prop: Prop): { placement: Matrix4; geometries: BufferGeometry[]; localBox: Box | null } {
   const placement = propPlacement(prop);
-  return prop.parts.map((part) => partGeometry(part).applyMatrix4(placement));
+  const local = prop.parts.map((part) => partGeometry(part));
+  const localBox = unionBox(local.map(boxOf));
+  return { placement, geometries: local.map((geometry) => geometry.applyMatrix4(placement)), localBox };
+}
+
+/** Pièces d'un objet du mobilier, posées dans la pièce, comme createGarage les fusionne. */
+export function propGeometries(prop: Prop): BufferGeometry[] {
+  return placeProp(prop).geometries;
 }
 
 /** Coordonnées de texture prises au sol, en mètres depuis le coin du mur du fond et du mur gauche. */
@@ -250,7 +259,7 @@ function footShade(geometry: BufferGeometry, rest: number | null, room: { width:
 }
 
 /** Tache de contact (cahier § 3.1) : réglages par cas. `margin` : débord autour de l'emprise. */
-const CONTACT = {
+export const CONTACT = {
   floor: { margin: 0.12, opacity: 0.45, lift: 0.001 },
   rest: { margin: 0.06, opacity: 0.4, lift: 0.001 },
   wall: { margin: 0.06, opacity: 0.35, lift: 0.002, drop: 0.03, reach: 0.08, minHeight: 0.3 },
@@ -259,18 +268,43 @@ const CONTACT = {
   maxExtent: 3,
   /** Épaisseur sous laquelle un objet est un plat collé au mur (crédence, plaque) : pas de tache. */
   flat: 0.03,
+  /** Écart de hauteur admis entre le bas d'un objet posé et le dessus d'une pièce de son porteur. */
+  seat: 0.05,
 } as const;
+
+/** Distances d'un point aux bords d'une emprise (x, z), le long de directions du plan horizontal. */
+function reachWithin(centre: Vector3, directions: readonly Vector3[], footprint: Box): number[] {
+  return directions.map((d) => {
+    let t = Infinity;
+    if (Math.abs(d.x) > 1e-9) t = Math.min(t, ((d.x > 0 ? footprint.max[0] : footprint.min[0]) - centre.x) / d.x);
+    if (Math.abs(d.z) > 1e-9) t = Math.min(t, ((d.z > 0 ? footprint.max[2] : footprint.min[2]) - centre.z) / d.z);
+    return Math.max(0, t);
+  });
+}
 
 /**
  * Tache en neuf cases : l'intérieur (texture au centre, pleine) couvre l'emprise rentrée d'une
  * part de la marge, le pourtour (bords de la texture) s'éteint jusqu'au bord de la tache. Repère :
- * centre, axes u et v du plan (u × v = normale), demi-côtés de l'emprise.
+ * centre, axes u et v du plan (u × v = normale), demi-côtés de l'emprise. `reach` (−u, +u, −v,
+ * +v) : distance du centre au-delà de laquelle la tache ne va pas (bord du meuble porteur) ; le
+ * pourtour se resserre alors pour s'éteindre avant ce bord.
  */
-function contactPatch(centre: Vector3, u: Vector3, v: Vector3, half: readonly [number, number], margin: number, opacity: number): BufferGeometry {
-  const inner = half.map((h) => Math.max(0, h - Math.min(margin * 0.5, h * 0.4)));
-  const outer = half.map((h) => h + margin);
-  const us = [-(outer[0] ?? 0), -(inner[0] ?? 0), inner[0] ?? 0, outer[0] ?? 0];
-  const vs = [-(outer[1] ?? 0), -(inner[1] ?? 0), inner[1] ?? 0, outer[1] ?? 0];
+function contactPatch(
+  centre: Vector3,
+  u: Vector3,
+  v: Vector3,
+  half: readonly [number, number],
+  margin: number,
+  opacity: number,
+  reach: readonly number[] = [Infinity, Infinity, Infinity, Infinity],
+): BufferGeometry {
+  const side = (h: number, limit: number) => {
+    const outer = Math.min(h + margin, limit);
+    return { outer, inner: Math.max(0, Math.min(h - Math.min(margin * 0.5, h * 0.4), outer - margin * 0.5)) };
+  };
+  const [u0, u1, v0, v1] = [side(half[0], reach[0] ?? Infinity), side(half[0], reach[1] ?? Infinity), side(half[1], reach[2] ?? Infinity), side(half[1], reach[3] ?? Infinity)];
+  const us = [-u0.outer, -u0.inner, u1.inner, u1.outer];
+  const vs = [-v0.outer, -v0.inner, v1.inner, v1.outer];
   const tex = [0, 0.5, 0.5, 1];
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -299,8 +333,44 @@ function contactPatch(centre: Vector3, u: Vector3, v: Vector3, half: readonly [n
   return geometry;
 }
 
-/** Écart entre une œuvre et la surface qui la porte, ajouté au millimètre de son `at` (ArtSlot). */
-const ART_GAP = 0.001;
+/** Appui d'un objet du mobilier (assombrissement de pied, ombre de contact). */
+export interface PropRest {
+  /** Hauteur de l'appui : 0 au sol, le bas de l'objet sur un meuble. */
+  height: number;
+  /** Sur un meuble : emprise (x, z) du dessus qui le porte, que sa tache ne dépasse pas. Nulle au sol. */
+  footprint: Box | null;
+}
+
+/** Objet du mobilier posé dans la pièce : identifiant de coupe, boîte d'ensemble, boîtes des pièces. */
+interface PlacedProp {
+  id: number;
+  box: Box | null;
+  boxes: readonly Box[];
+}
+
+const overlaps = (a: Box, b: Box, axis: number) => Math.min(a.max[axis] ?? 0, b.max[axis] ?? 0) > Math.max(a.min[axis] ?? 0, b.min[axis] ?? 0);
+
+/**
+ * Appui d'un objet : le sol (bas sous CONTACT.ground), le dessus d'un meuble qui le porte, ou rien
+ * (accroché : `null`). Posé : une pièce d'un de ses porteurs (supports de la coupe) a son dessus à
+ * CONTACT.seat près du bas de l'objet et le recouvre en x et en z. Le reste du porteur peut monter
+ * plus haut (fronton du flipper, dérouleur des meubles d'atelier). L'emprise est celle des pièces
+ * de ce dessus (à 1 cm près du plus haut : les planches d'un plateau). Un plat collé au mur
+ * (crédence, plaque) n'est jamais posé.
+ */
+function restOf(item: PlacedProp, furniture: ReadonlyMap<number, PlacedProp>, supports: readonly number[]): PropRest | null {
+  const { box } = item;
+  if (!box) return null;
+  if (box.min[1] < CONTACT.ground) return { height: 0, footprint: null };
+  if (Math.min(box.max[0] - box.min[0], box.max[2] - box.min[2]) < CONTACT.flat) return null;
+  const bottom = box.min[1];
+  const seats = supports.flatMap((k) =>
+    (furniture.get(k)?.boxes ?? []).filter((part) => Math.abs((part.max[1] ?? 0) - bottom) <= CONTACT.seat && overlaps(part, box, 0) && overlaps(part, box, 2)),
+  );
+  if (seats.length === 0) return null;
+  const top = Math.max(...seats.map((part) => part.max[1] ?? 0));
+  return { height: bottom, footprint: unionBox(seats.filter((part) => (part.max[1] ?? 0) >= top - 0.01)) };
+}
 
 /**
  * Enseignes : jour entre le mur et le dos des tubes ; plaque de fond (plexi fumé, débord autour
@@ -385,8 +455,17 @@ function paint(geometry: BufferGeometry, color: Color): BufferGeometry {
  * de fragments que pendant qu'un de leurs éléments est en fondu.
  */
 export interface GarageDither {
-  /** Matériaux opaques du décor qui peuvent porter la trame, et les éléments que chacun dessine. */
+  /**
+   * Matériaux opaques du décor qui peuvent porter la trame (ils dessinent au moins un élément de la
+   * coupe), et les éléments que chacun dessine. Sol, plafond et murs sans élément n'en sont pas :
+   * ils ne s'effacent jamais, leur variante « trame » serait compilée pour rien.
+   */
   readonly carriers: readonly Material[];
+  /**
+   * Tous les matériaux opaques patchés du décor, porteurs ou non : la variante « Trame partout » de
+   * la mesure comparée (comportement d'avant 8dc262f) les met tous en trame.
+   */
+  readonly opaque: readonly Material[];
   readonly owners: DitherOwners;
   /**
    * Applique la règle aux fondus en cours (`ditherNeeds`) ; `allowed` faux : aucune trame (variantes
@@ -445,7 +524,7 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
     strength.value = 0;
     fadesBeforeProbe.set(fades);
     fades.fill(1);
-    const dithered = dither.carriers.filter((carrier) => setCutDither(carrier, false));
+    const dithered = dither.opaque.filter((carrier) => setCutDither(carrier, false));
     return () => {
       strength.value = value;
       fades.set(fadesBeforeProbe);
@@ -457,6 +536,7 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
   // (les sources sont reconstruites). `has` : état posé ; `want` : tampon de la règle.
   const dither = {
     carriers: [] as Material[],
+    opaque: [] as Material[],
     owners: ditherOwners([]),
     has: new Uint8Array(0),
     want: new Uint8Array(0),
@@ -495,9 +575,11 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
         last = id;
       }
     });
-    for (const carrier of dither.carriers) if (!owned.has(carrier)) setCutDither(carrier, false);
-    dither.carriers = [...owned.keys()];
-    dither.owners = ditherOwners([...owned.values()]);
+    for (const carrier of dither.opaque) if (!owned.has(carrier)) setCutDither(carrier, false);
+    dither.opaque = [...owned.keys()];
+    const fading = [...owned].filter(([, ids]) => [...ids].some((id) => id > 0));
+    dither.carriers = fading.map(([material]) => material);
+    dither.owners = ditherOwners(fading.map(([, ids]) => ids));
     dither.has = Uint8Array.from(dither.carriers, (carrier) => (hasCutDither(carrier) ? 1 : 0));
     dither.want = new Uint8Array(dither.carriers.length);
   };
@@ -576,13 +658,10 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
   //    Les volumes sont fusionnés plus bas, une fois la coupe analysée (l'assombrissement de pied
   //    et les ombres de contact demandent de savoir qui porte quoi).
   const furnished = layout.props.map((prop) => {
-    const placement = propPlacement(prop);
-    const local = prop.parts.map((part) => partGeometry(part));
-    const localBox = unionBox(local.map(boxOf));
-    const geometries = local.map((geometry) => geometry.applyMatrix4(placement));
+    const { placement, geometries, localBox } = placeProp(prop);
     const boxes = geometries.map(boxOf);
     const id = register({ name: prop.name, parts: boxes, ...(prop.on ? { on: prop.on } : {}) });
-    return { prop, placement, localBox, box: unionBox(boxes), geometries, id, small: prop.small === true };
+    return { prop, placement, localBox, boxes, box: unionBox(boxes), geometries, id, small: prop.small === true };
   });
   const furniture = new Map<string, { id: GarageMaterialId; small: boolean; geometries: BufferGeometry[] }>();
   const addFurniture = (material: GarageMaterialId, small: boolean, geometry: BufferGeometry) => {
@@ -703,21 +782,13 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
     return Array.from(structure.supportList.subarray(structure.supportStart[i] ?? 0, structure.supportStart[i + 1] ?? 0), (k) => k + 1);
   };
   const furnitureById = new Map(furnished.map((item) => [item.id, item]));
-  /** Hauteur d'appui d'un objet : le sol, le dessus du meuble qui le porte, ou rien (accroché). */
-  const restOf = (item: (typeof furnished)[number]): number | null => {
-    const box = item.box;
-    if (!box) return null;
-    if (box.min[1] < CONTACT.ground) return 0;
-    const carriers = supportOf(item.id).flatMap((k) => {
-      const carrier = furnitureById.get(k)?.box;
-      return carrier && carrier.max[1] <= box.min[1] + 0.05 ? [carrier] : [];
-    });
-    return carriers.length > 0 ? box.min[1] : null;
-  };
+  // Appui de chaque objet (assombrissement de pied, ombre de contact) : le sol, le dessus d'un
+  // meuble qui le porte, ou rien (accroché).
+  const rests = new Map(furnished.map((item) => [item.id, restOf(item, furnitureById, supportOf(item.id))]));
 
   // Mobilier : assombrissement de pied, puis fusion par matériau.
   for (const item of furnished) {
-    const rest = restOf(item);
+    const rest = rests.get(item.id)?.height ?? null;
     item.prop.parts.forEach((part, index) => {
       const geometry = item.geometries[index];
       if (!geometry) return;
@@ -732,6 +803,10 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
     if (small) mesh.layers.set(NO_MIRROR_LAYER);
   }
   root.add(furnitureGroup);
+  // Les géométries des pièces sont fusionnées (et libérées) : plus rien ne doit les tenir, sinon
+  // elles vivent autant que le garage (les fermetures rendues partagent ce contexte).
+  furniture.clear();
+  for (const item of furnished) item.geometries.length = 0;
 
   // Tubes des enseignes : reflétés (leur reflet au sol fait partie du néon).
   const neonMesh = neonTubes.length > 0 ? add(root, merge(neonTubes), emissive, 'garage_neons') : null;
@@ -757,11 +832,7 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
       geometry.applyMatrix4(item.placement);
       const handle = artwork(slot.art, { ...(slot.region ? { region: slot.region } : {}), ...(options.onChange ? { onReady: options.onChange } : {}) });
       releases.push(handle.release);
-      const alphaTest = art.transparent ? 0.5 : 0;
-      const mat =
-        art.lighting === 'emissive'
-          ? new MeshBasicMaterial({ map: handle.texture, color: new Color(1, 1, 1).multiplyScalar(art.glow ?? 1), alphaTest })
-          : new MeshStandardMaterial({ map: handle.texture, roughness: 0.6, metalness: 0, envMapIntensity: 0.2, alphaTest });
+      const mat = artworkMaterial(art, handle.texture);
       mat.name = `oeuvre_${slot.art}`;
       patchGarageMaterial(mat, surfaceUniforms);
       owned.push(mat);
@@ -782,17 +853,24 @@ export function createGarage(layout: GarageLayout, options: GarageOptions = {}):
     if (prop.contact === false || !box || !localBox) continue;
     const size = [box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]] as const;
     if (Math.max(size[0], size[2]) > CONTACT.maxExtent) continue;
-    const rest = restOf(item);
+    const rest = rests.get(item.id) ?? null;
     if (rest !== null) {
-      // Au sol ou sur un meuble : emprise dans le repère de l'objet, tournée avec lui.
-      const kind = rest === 0 ? CONTACT.floor : CONTACT.rest;
-      const turn = new Quaternion().setFromEuler(new Euler(0, prop.turn ?? 0, 0));
+      // Au sol ou sur un meuble : emprise dans le repère de l'objet, tournée avec lui. Sur un
+      // meuble, la tache s'éteint avant le bord du dessus qui le porte ; un objet posé de biais
+      // y prend l'emprise de sa boîte, alignée sur la pièce comme ce bord (la borne reste exacte).
+      const kind = rest.footprint === null ? CONTACT.floor : CONTACT.rest;
+      const quarter = (prop.turn ?? 0) / (Math.PI / 2);
+      const square = rest.footprint === null || Math.abs(quarter - Math.round(quarter)) < 1e-6;
+      const frame = square ? localBox : box;
+      const turn = new Quaternion().setFromEuler(new Euler(0, square ? (prop.turn ?? 0) : 0, 0));
       const u = new Vector3(1, 0, 0).applyQuaternion(turn);
       const v = new Vector3(0, 0, -1).applyQuaternion(turn);
-      const centre = new Vector3((localBox.min[0] + localBox.max[0]) / 2, 0, (localBox.min[2] + localBox.max[2]) / 2).applyMatrix4(item.placement);
-      centre.y = rest + kind.lift;
-      const half = [(localBox.max[0] - localBox.min[0]) / 2, (localBox.max[2] - localBox.min[2]) / 2] as const;
-      patches.push(tagCut(contactPatch(centre, u, v, half, kind.margin, kind.opacity), item.id));
+      const centre = new Vector3((frame.min[0] + frame.max[0]) / 2, 0, (frame.min[2] + frame.max[2]) / 2);
+      if (square) centre.applyMatrix4(item.placement);
+      centre.y = rest.height + kind.lift;
+      const half = [(frame.max[0] - frame.min[0]) / 2, (frame.max[2] - frame.min[2]) / 2] as const;
+      const reach = rest.footprint ? reachWithin(centre, [u.clone().negate(), u, v.clone().negate(), v], rest.footprint) : undefined;
+      patches.push(tagCut(contactPatch(centre, u, v, half, kind.margin, kind.opacity, reach), item.id));
       continue;
     }
     const kind = CONTACT.wall;

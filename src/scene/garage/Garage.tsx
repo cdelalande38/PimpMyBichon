@@ -3,18 +3,22 @@
 // Il porte aussi la réflexion planaire de son sol, son atmosphère, selon le niveau de qualité,
 // et la coupe caméra : ce qui passerait entre l'œil et le véhicule quitte l'image (cut.ts). La
 // trame du fondu n'est compilée que pendant un fondu, variantes préparées à l'avance
-// (src/render/cutDither.ts) : au repos et en rotation lente, aucun rejet de fragments.
+// (src/render/cutDither.ts) : au repos et en rotation lente, aucun rejet de fragments de la trame
+// (les œuvres découpées, elles, gardent leur alphaTest).
+// La mesure comparée de « Sous le capot » (src/scene/FrameMeter.tsx) y pose deux variantes, le
+// temps de leur mesure : la trame dans tous les matériaux opaques, et le sol sans son reflet.
 
 import { useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Vector3, WebGLRenderTarget, type Mesh } from 'three';
 import type { Ambiance } from '../../data/ambiances.ts';
 import { GARAGE } from '../../data/garage.ts';
-import { cutDitherMeshes, cutDitherPrograms, programsReady, warmCutDither, type CutDitherProgram } from '../../render/cutDither.ts';
+import { cutDitherMeshes, cutDitherPrograms, primeCutDither, programsReady, setCutDither, warmCutDither, type CutDitherProgram } from '../../render/cutDither.ts';
+import type { CompareVariant } from '../../render/frameMeter.ts';
 import { PlanarReflection } from '../../render/planarReflection.ts';
 import type { QualityProfile } from '../../render/quality.ts';
 import { useRenderStats } from '../../render/renderStats.ts';
-import { createGarage } from './build.ts';
+import { createGarage, type GarageScene } from './build.ts';
 import { createCutState, decideCut, protectedBoxes, stepFades, type CutState, type VehicleMeasure } from './cut.ts';
 
 /**
@@ -43,6 +47,44 @@ const DITHER_POLL_MS = 100;
  */
 const DITHER_SLICE_MS = 6;
 const DITHER_SLICE_GAP_MS = 20;
+
+// Montage sûr en développement. StrictMode (hérité par la scène) appelle deux fois chaque fabrique
+// de useMemo et démonte puis remonte aussitôt chaque effet : un deuxième garage chargeait ses œuvres
+// pour rien, un deuxième reflet planaire (jeté) reliait les uniformes du sol à ses propres cibles,
+// jamais dessinées (plus de reflet du véhicule au sol), et garage et reflet vivants étaient libérés.
+// Les fabriques rendent donc l'objet déjà fait pour les mêmes entrées, et la libération attend la
+// fin de la tâche, annulée par le remontage. En production : un seul appel, libération immédiate.
+
+/** Garage fait pour une fonction de redemande d'image (une par scène). */
+const garages = new WeakMap<object, GarageScene>();
+/** Reflet planaire fait pour un garage, à une fraction d'image. */
+const reflections = new WeakMap<GarageScene, { scale: number; reflection: PlanarReflection }>();
+/** Libérations en attente (développement seulement). */
+const pendingRelease = new Map<object, number>();
+
+/** Garde `value` : annule sa libération en attente (remontage immédiat de StrictMode). */
+function retain(value: object): void {
+  const timer = pendingRelease.get(value);
+  if (timer === undefined) return;
+  window.clearTimeout(timer);
+  pendingRelease.delete(value);
+}
+
+/** Libère `value` : tout de suite en production, à la fin de la tâche en développement. */
+function release(value: object, dispose: () => void): void {
+  if (!import.meta.env.DEV) {
+    dispose();
+    return;
+  }
+  retain(value);
+  pendingRelease.set(
+    value,
+    window.setTimeout(() => {
+      pendingRelease.delete(value);
+      dispose();
+    }, 0),
+  );
+}
 
 interface DitherControl {
   /** Variantes « trame » prêtes pour l'état en cours (niveau, contexte) : le fondu est permis. */
@@ -88,8 +130,19 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
   const scene = useThree((state) => state.scene);
   const camera = useThree((state) => state.camera);
   // Une œuvre qui arrive redemande une image (rendu à la demande).
-  const garage = useMemo(() => createGarage(GARAGE, { onChange: invalidate }), [invalidate]);
-  useEffect(() => () => garage.dispose(), [garage]);
+  const garage = useMemo(() => {
+    const made = garages.get(invalidate) ?? createGarage(GARAGE, { onChange: invalidate });
+    garages.set(invalidate, made);
+    return made;
+  }, [invalidate]);
+  useEffect(() => {
+    retain(garage);
+    return () =>
+      release(garage, () => {
+        if (garages.get(invalidate) === garage) garages.delete(invalidate);
+        garage.dispose();
+      });
+  }, [garage, invalidate]);
   // Avant les effets ordinaires : la sonde de réflexion se refait sur les nouvelles couleurs.
   useLayoutEffect(() => {
     garage.update(ambiance);
@@ -98,16 +151,64 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
 
   // Réflexion planaire : cible à la fraction d'image du niveau (aucune en économie).
   const scale = profile.reflection;
-  const reflection = useMemo(() => (scale > 0 ? new PlanarReflection(scale, garage.surfaces) : null), [scale, garage]);
+  const reflection = useMemo(() => {
+    if (scale <= 0) return null;
+    const made = reflections.get(garage);
+    if (made?.scale === scale) return made.reflection;
+    const fresh = new PlanarReflection(scale, garage.surfaces);
+    reflections.set(garage, { scale, reflection: fresh });
+    return fresh;
+  }, [scale, garage]);
   useLayoutEffect(() => {
-    garage.setQuality({ reflection: reflection !== null, atmosphere: profile.atmosphere });
+    if (!reflection) return undefined;
+    retain(reflection);
+    return () =>
+      release(reflection, () => {
+        if (reflections.get(garage)?.reflection === reflection) reflections.delete(garage);
+        reflection.dispose();
+      });
+  }, [garage, reflection]);
+  /** Variante de la mesure comparée posée sur le garage (plus bas). */
+  const compareRef = useRef<CompareVariant | null>(null);
+  /** Réglages de qualité posés sur le garage (la mesure comparée les rend après sa variante). */
+  const qualityRef = useRef({ reflection: false, atmosphere: false });
+  useLayoutEffect(() => {
+    qualityRef.current = { reflection: reflection !== null, atmosphere: profile.atmosphere };
+    garage.setQuality(compareRef.current === 'sans-reflet' ? { ...qualityRef.current, reflection: false } : qualityRef.current);
     invalidate();
-    return () => reflection?.dispose();
   }, [garage, reflection, profile.atmosphere, invalidate]);
+
+  // Mesure comparée : variante posée ou retirée dès que le magasin change, même sans image
+  // (onglet caché, abandon) ; les rappels d'image la lisent dans compareRef.
+  // « Trame partout » : la trame sur tous les porteurs (comportement d'avant 8dc262f), la règle des
+  // fondus suspendue ; à la fin, retirée partout, et la règle reprend à l'image suivante.
+  // « Sans reflet du sol » : passe de réflexion planaire sautée, define du reflet retiré du sol.
+  useEffect(() => {
+    const dither = garage.cut.dither;
+    const sync = (variant: CompareVariant | null) => {
+      const applied = compareRef.current;
+      if (variant === applied) return;
+      if (applied === 'trame') for (const carrier of dither.opaque) setCutDither(carrier, false);
+      if (applied === 'sans-reflet') garage.setQuality(qualityRef.current);
+      compareRef.current = variant;
+      if (variant === 'trame') {
+        dither.apply(false);
+        for (const carrier of dither.opaque) setCutDither(carrier, true);
+      }
+      if (variant === 'sans-reflet') garage.setQuality({ ...qualityRef.current, reflection: false });
+      invalidate();
+    };
+    sync(useRenderStats.getState().compare.variant);
+    const unsubscribe = useRenderStats.subscribe((state) => sync(state.compare.variant));
+    return () => {
+      unsubscribe();
+      sync(null);
+    };
+  }, [garage, invalidate]);
 
   // Avant la chaîne d'image (priorité 1) : le reflet est prêt quand la scène est dessinée.
   useFrame(({ gl, scene, camera }) => {
-    if (!reflection) return;
+    if (!reflection || compareRef.current === 'sans-reflet') return;
     reflection.update(gl, scene, camera, garage.floor);
     const { width, height } = reflection.measured;
     const current = useRenderStats.getState().reflection;
@@ -150,8 +251,9 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
 
   // Trame du fondu : variantes préparées sans rien dessiner, une fois la première image faite et
   // ses programmes prêts (le démarrage passe d'abord), puis à chaque niveau de qualité (autre
-  // sonde, autre brume, autre sol) et après un contexte WebGL rendu. Mouvement réduit et mode
-  // photo n'en ont pas besoin : la coupe y bascule toujours sans fondu.
+  // sonde, autre brume, autre sol) et après un contexte WebGL rendu : création par tranches,
+  // compilation en tâche de fond, puis premier usage par tranches, hors des images. Mouvement
+  // réduit et mode photo n'en ont pas besoin : la coupe y bascule toujours sans fondu.
   const ditherRef = useRef<DitherControl>({ ready: false, frames: 0, active: 0, programs: -1, warm: null });
   const vehicleRef = useRef(vehicle);
   useEffect(() => {
@@ -159,7 +261,10 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
   }, [vehicle]);
   // Cible liée pendant le préchauffage : la clé de programme dépend d'une cible non nulle.
   const warmTarget = useMemo(() => new WebGLRenderTarget(1, 1, { depthBuffer: false }), []);
-  useEffect(() => () => warmTarget.dispose(), [warmTarget]);
+  useEffect(() => {
+    retain(warmTarget);
+    return () => release(warmTarget, () => warmTarget.dispose());
+  }, [warmTarget]);
   useEffect(() => {
     const dither = ditherRef.current;
     const carriers = garage.cut.dither.carriers;
@@ -170,6 +275,7 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
     let meshes: Mesh[] | null = null;
     let cursor = 0;
     let programs: CutDitherProgram[] | null = null;
+    let primed = 0;
     let warmStart = 0;
     let warmMs = 0;
     let timer = 0;
@@ -192,6 +298,15 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
         programs = cutDitherPrograms(gl, carriers);
       }
       if (programs !== null && programsReady(programs)) {
+        if (primed < programs.length) {
+          const sliceStart = performance.now();
+          primed = primeCutDither(programs, primed, DITHER_SLICE_MS);
+          warmMs += performance.now() - sliceStart;
+          if (primed < programs.length) {
+            timer = window.setTimeout(tick, DITHER_SLICE_GAP_MS);
+            return;
+          }
+        }
         dither.ready = true;
         dither.warm = { ms: Math.round(warmMs), readyMs: Math.round(performance.now() - warmStart) };
         publishDither(dither, carriers.length);
@@ -227,8 +342,9 @@ export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) 
     const step = cut.snap || !fading ? 1 : (Math.min(delta, MAX_FADE_STEP_S) * 1000) / GARAGE.cut.fadeMs;
     cut.snap = false;
     const moving = stepFades(garage.cut.fades, cut.state.hidden, step);
-    // Trame posée sur les seuls matériaux dont un élément est en fondu, retirée dès sa fin.
-    const active = garage.cut.dither.apply(fading);
+    // Trame posée sur les seuls matériaux dont un élément est en fondu, retirée dès sa fin ; posée
+    // partout pendant la variante « Trame partout » de la mesure comparée.
+    const active = compareRef.current === 'trame' ? garage.cut.dither.opaque.length : garage.cut.dither.apply(fading);
     if (active !== dither.active) {
       dither.active = active;
       publishDither(dither, garage.cut.dither.carriers.length);

@@ -94,7 +94,7 @@ export const GARAGE_ART: readonly GarageArt[] = [
     transparent: true,
     waiting: '#ac8051',
     resolution: 1024,
-    replaces: ['placeholder_cible', 'placeholder_panneau_cible'],
+    replaces: ['placeholder_panneau_cible'],
     // Le panneau étagé du substitut (1,2 × 0,8 et 0,8 × 1,0 m) a la silhouette du dessin : l'œuvre
     // entière se pose sur sa face avant (local x -0,016, face -x), ou la cible seule.
     place: 'face avant de placeholder_panneau_cible, mur rouge de droite',
@@ -181,7 +181,7 @@ export const GARAGE_ART: readonly GarageArt[] = [
     transparent: true,
     waiting: null,
     resolution: 512,
-    replaces: ['placeholder_casiers_casques'],
+    replaces: ['placeholder_casques'],
     // Une case par casque ; motifs non appliqués en V1 (casques de couleur unie, cahier § 7).
     regions: [
       { id: 'casque-flammes', rect: [0, 0, 480, 420], note: 'case 1 : noir mat, flammes' },

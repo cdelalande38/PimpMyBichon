@@ -26,6 +26,35 @@ const WATCH_DITHER = `
     if (value > window.__trameMax) window.__trameMax = value;
   }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-trame'] });`;
 
+/**
+ * Compte les requêtes GL synchrones faites pendant une image (rappel de requestAnimationFrame) :
+ * celles que three fait au premier usage d'un programme (journal de liaison, emplacements des
+ * uniformes et des attributs). Sans KHR_parallel_shader_compile (rendu logiciel), la première
+ * attend toute la liaison. Compter les programmes vivants ne voit pas ce travail.
+ */
+const COUNT_FRAME_QUERIES = `
+  window.__frameQueries = 0;
+  window.__inFrame = false;
+  const raf = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = (callback) =>
+    raf((time) => {
+      window.__inFrame = true;
+      try {
+        callback(time);
+      } finally {
+        window.__inFrame = false;
+      }
+    });
+  for (const name of ['getProgramInfoLog', 'getShaderInfoLog', 'getActiveUniform', 'getUniformLocation', 'getActiveAttrib', 'getAttribLocation']) {
+    const original = WebGL2RenderingContext.prototype[name];
+    WebGL2RenderingContext.prototype[name] = function (...args) {
+      if (window.__inFrame) window.__frameQueries += 1;
+      return original.apply(this, args);
+    };
+  }`;
+
+const frameQueries = (page: Page) => page.evaluate(() => (window as unknown as { __frameQueries: number }).__frameQueries);
+
 const draws = (page: Page) => page.evaluate(() => (window as unknown as { __draws: number }).__draws);
 const ditherMax = (page: Page) => page.evaluate(() => (window as unknown as { __trameMax: number }).__trameMax);
 
@@ -94,7 +123,7 @@ test.describe('coupe caméra', () => {
   });
 
   test('avec le fondu (mouvement non réduit, rotation coupée) : trame le temps du fondu, rien de compilé, puis la scène se tait', async ({ page }) => {
-    await page.addInitScript({ content: COUNT_DRAWS + WATCH_DITHER });
+    await page.addInitScript({ content: COUNT_DRAWS + WATCH_DITHER + COUNT_FRAME_QUERIES });
     const errors = watchShaderErrors(page);
     await openApp(page);
     await waitForScene(page);
@@ -117,6 +146,10 @@ test.describe('coupe caméra', () => {
     const programs = (await stage.getAttribute('data-programmes')) ?? '';
     expect(Number(programs), 'programmes vivants après le préchauffage').toBeGreaterThan(0);
     expect(await ditherMax(page), 'aucune trame avant le premier fondu').toBe(0);
+    // Premier usage des variantes (liaison comprise) fait avant « prêt », hors des images.
+    await page.evaluate(() => {
+      (window as unknown as { __frameQueries: number }).__frameQueries = 0;
+    });
 
     const before = await cut(page);
     await turn(page, 1 / 2);
@@ -124,9 +157,11 @@ test.describe('coupe caméra', () => {
     await waitForStill(page);
     await expect.poll(() => drawsOverTwoSeconds(page), { message: 'fondu terminé, aucun dessin', timeout: 90_000, intervals: [250] }).toBe(0);
     // Pendant le fondu, au moins un matériau a porté la trame ; au repos, plus aucun ; et le
-    // premier fondu n'a compilé aucun programme.
+    // premier fondu n'a compilé aucun programme, ni fait le premier usage d'aucun.
     const peak = await ditherMax(page);
-    test.info().annotations.push({ type: 'trame', description: `au plus ${peak} matériau(x) en trame, ${programs} programmes avant et après` });
+    const queries = await frameQueries(page);
+    test.info().annotations.push({ type: 'trame', description: `au plus ${peak} matériau(x) en trame, ${programs} programmes avant et après, ${queries} requête(s) GL de premier usage dans les images` });
+    expect(queries, 'aucune requête GL de premier usage pendant les images du premier fondu').toBe(0);
     expect(peak, 'trame pendant le fondu').toBeGreaterThan(0);
     await expect(stage).toHaveAttribute('data-trame', '0');
     await expect(stage).toHaveAttribute('data-programmes', programs);

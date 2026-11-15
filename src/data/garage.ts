@@ -1,5 +1,6 @@
-// Le garage (§ 4), décrit en données : enveloppe, mobilier en volumes simples (placeholder_*,
-// listés dans TODO_ASSETS.md), sources lumineuses et halos. Les couleurs des sources viennent
+// Le garage (§ 4), décrit en données : enveloppe, mobilier modelé dans le vocabulaire de formes
+// de src/data/garageShapes.ts (placeholder_*, quatre familles dans src/data/garageProps/, listés
+// dans TODO_ASSETS.md), sources lumineuses et halos. Les couleurs des sources viennent
 // de l'ambiance choisie (src/data/ambiances.ts) ; le composant ne connaît aucun objet.
 // Repère : x vers la droite vue du canapé, z vers le canapé, y vers le haut, en mètres,
 // origine au centre du sol. Cotes relevées sur le lieu (pièce de 7,5 × 6 m, retombée à 2,35 m) ;
@@ -268,9 +269,12 @@ export const GARAGE: GarageLayout = {
     { from: [-1.4, 1.1, D / 2 - 0.03], to: [-0.2, 1.1, D / 2 - 0.03], color: 'violet', facing: '-z' },
     { from: [0.2, 0.95, D / 2 - 0.03], to: [2.4, 0.95, D / 2 - 0.03], color: 'center', facing: '-z' },
   ],
+  // Pieds de tubes : hors du mobilier et à 5 cm au moins du grand volume protégé du véhicule
+  // (tests/unit/mobilier.test.ts). Le premier, entre la caisse-colonne et le nez du véhicule,
+  // a quitté le flanc du quad.
   standTubes: {
     at: [
-      [-3.45, -0.95],
+      [-2.74, -0.35],
       [3.3, -0.3],
       [-0.9, -2.2],
       [1.2, 2.75],

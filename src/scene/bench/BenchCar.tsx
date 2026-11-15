@@ -4,7 +4,7 @@
 
 import { ContactShadows } from '@react-three/drei';
 import { useLoader, useThree } from '@react-three/fiber';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useLayoutEffect, useMemo } from 'react';
 import {
   Box3,
   Group,
@@ -13,19 +13,20 @@ import {
   MeshStandardMaterial,
   Texture,
   Vector3,
-  type Camera,
+  WebGLRenderTarget,
+  type BufferGeometry,
   type Material,
-  type Object3D,
-  type Scene,
   type WebGLRenderer,
 } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BASIS_TRANSCODER_DIR, type BenchModel } from '../../data/bench.ts';
-import { FINISHES, finish as findFinish, type Finish } from '../../data/finishes.ts';
+import { finish as findFinish, type Finish } from '../../data/finishes.ts';
 import { paintColor } from '../../data/paintColors.ts';
-import { applyPaint, createPaintMaterial, programVariants } from '../../render/paint.ts';
+import { programsReady } from '../../render/cutDither.ts';
+import { applyPaint, createPaintMaterial, paintWitnesses, warmPaintPrograms } from '../../render/paint.ts';
+import { precompileSeen } from '../../render/ReflectionProbe.tsx';
 import { useRenderStats } from '../../render/renderStats.ts';
 import { useBench } from '../../state/bench.ts';
 
@@ -56,13 +57,19 @@ export interface BenchMeasure {
 /** Rang de dessin des pièces opaques du véhicule : avant le décor (0) et son sol (1). */
 const VEHICLE_RENDER_ORDER = -2;
 
-interface Prepared extends BenchMeasure {
+export interface Prepared extends BenchMeasure {
   root: Group;
   paints: MeshPhysicalMaterial[];
+  /**
+   * Ce que la préparation a créé, à libérer quand le modèle change ou quitte la scène. Le reste
+   * (géométries d'origine, matériaux, textures, dont les cartes de normales reprises par la
+   * peinture) appartient au cache de chargement, partagé : jamais libéré ici.
+   */
+  owned: { geometries: BufferGeometry[]; materials: Material[] };
 }
 
 /** Copie le modèle, remplace peinture et logos, le pose au sol, centré, longueur sur l'axe X. */
-function prepare(source: Group, model: BenchModel): Prepared {
+export function prepare(source: Group, model: BenchModel): Prepared {
   const scene = source.clone(true);
   const meshes: Mesh[] = [];
   scene.traverse((object) => {
@@ -155,6 +162,7 @@ function prepare(source: Group, model: BenchModel): Prepared {
     groups.set(signature, [...(groups.get(signature) ?? []), mesh]);
   }
   const merged = new Group();
+  const mergedGeometries: BufferGeometry[] = [];
   for (const parts of groups.values()) {
     const first = parts[0];
     if (!first || parts.length < 2) continue;
@@ -162,6 +170,7 @@ function prepare(source: Group, model: BenchModel): Prepared {
     const geometry = mergeGeometries(geometries, false);
     for (const item of geometries) item.dispose();
     if (!geometry) continue;
+    mergedGeometries.push(geometry);
     const mesh = new Mesh(geometry, first.material);
     mesh.name = `fusion_${(first.material as Material).name}`;
     merged.add(mesh);
@@ -193,7 +202,20 @@ function prepare(source: Group, model: BenchModel): Prepared {
   const center = box.getCenter(new Vector3());
   turn.position.set(-center.x, -box.min.y, -center.z);
 
-  return { root, paints, halfLength: size.x / 2, halfWidth: size.z / 2, height: size.y };
+  return {
+    root,
+    paints,
+    halfLength: size.x / 2,
+    halfWidth: size.z / 2,
+    height: size.y,
+    owned: { geometries: mergedGeometries, materials: [plain, ...paints] },
+  };
+}
+
+/** Libère ce que `prepare` a créé (revue n° 12), sans toucher à ce que le cache de chargement partage. */
+export function disposePrepared(prepared: Prepared): void {
+  for (const geometry of prepared.owned.geometries) geometry.dispose();
+  for (const material of prepared.owned.materials) material.dispose();
 }
 
 /** Peint la carrosserie ; l'ambiance règle la part de reflet de l'environnement. */
@@ -212,34 +234,8 @@ const ContactShadow = memo(function ContactShadow({ halfLength, halfWidth, heigh
   return <ContactShadows scale={[halfLength * 2.5, halfWidth * 3]} far={height} blur={2.2} opacity={0.8} resolution={512} frames={1} />;
 });
 
-/**
- * Compile d'avance, en tâche de fond, chaque variante du programme de peinture (vernis oui/non ×
- * irisation oui/non) avec l'éclairage de la scène : sinon elle se compile au premier toucher
- * d'une finition, sur le fil principal (saccade sur Android). Les matériaux témoins gardent les
- * programmes en vie ; la fonction rendue les libère.
- */
-function warmPaintPrograms(gl: WebGLRenderer, scene: Scene, camera: Camera, root: Object3D, paints: readonly MeshPhysicalMaterial[]): () => void {
-  let sample: Mesh | null = null;
-  root.traverse((object) => {
-    if (sample || !(object instanceof Mesh)) return;
-    const materials: readonly Material[] = Array.isArray(object.material) ? object.material : [object.material];
-    if (materials.some((material) => paints.includes(material as MeshPhysicalMaterial))) sample = object;
-  });
-  const source = paints[0];
-  if (!sample || !source) return () => {};
-  const geometry = (sample as Mesh).geometry;
-  const witnesses = new Group();
-  const materials = programVariants(FINISHES).map((item) => {
-    const material = createPaintMaterial(source);
-    applyPaint(material, '#808080', item);
-    witnesses.add(new Mesh(geometry, material));
-    return material;
-  });
-  void gl.compileAsync(witnesses, camera, scene).catch(() => undefined);
-  return () => {
-    for (const material of materials) material.dispose();
-  };
-}
+/** Intervalle de l'attente avant le préchauffage de la peinture (véhicule dessiné, programmes prêts). */
+const PAINT_WARM_POLL_MS = 100;
 
 interface BenchCarProps {
   model: BenchModel;
@@ -256,24 +252,62 @@ export function BenchCar({ model, onMeasured, bodyEnv }: BenchCarProps) {
     loader.setKTX2Loader(ktx2Loader(gl));
   });
   const prepared = useMemo(() => prepare(gltf.scene, model), [gltf, model]);
+  useEffect(() => () => disposePrepared(prepared), [prepared]);
 
   const colorId = useBench((state) => state.color);
   const finishId = useBench((state) => state.finish);
   const setStatus = useBench((state) => state.setStatus);
+  const scene = useThree((state) => state.scene);
+  const camera = useThree((state) => state.camera);
+  // Cible liée pendant les compilations d'avance : la clé de programme dépend d'une cible non nulle.
+  const warmTarget = useMemo(() => new WebGLRenderTarget(1, 1, { depthBuffer: false }), []);
+  useEffect(() => () => warmTarget.dispose(), [warmTarget]);
 
-  useEffect(() => {
+  // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
+  // vernis), et compilerait pour rien une variante de plus pendant le démarrage.
+  useLayoutEffect(() => {
     const { hex } = paintColor(colorId);
     const finish = findFinish(finishId);
     paintBody(prepared.paints, hex, finish, bodyEnv);
     invalidate();
   }, [prepared, colorId, finishId, bodyEnv, invalidate]);
-
-  const scene = useThree((state) => state.scene);
-  const camera = useThree((state) => state.camera);
-  useEffect(() => warmPaintPrograms(gl, scene, camera, prepared.root, prepared.paints), [gl, scene, camera, prepared]);
+  // Programmes du véhicule peint lancés ensemble avant sa première image, au lieu de se compiler
+  // un par un pendant celle-ci, fil principal bloqué (démarrage, changement de modèle).
+  useLayoutEffect(() => {
+    if (scene.environment !== null) precompileSeen(gl, prepared.root, scene, camera, warmTarget);
+  }, [gl, scene, camera, prepared, warmTarget]);
 
   // Contexte WebGL rendu après une perte : l'ombre, rendue une fois, se refait (revue n° 4).
   const epoch = useRenderStats((state) => state.gpuEpoch);
+
+  // Préchauffage des variantes de la peinture : après la première image du véhicule et ses
+  // programmes prêts (le démarrage passe d'abord), puis à chaque nouvelle sonde (ambiance, niveau,
+  // mode photo : autre environnement, autres lumières, donc autres clés de programme).
+  const witnesses = useMemo(() => paintWitnesses(prepared.root, prepared.paints), [prepared]);
+  useEffect(() => () => witnesses.dispose(), [witnesses]);
+  useEffect(() => {
+    let timer = 0;
+    const drawn = () => prepared.paints.every((paint) => (gl.properties.get(paint) as { currentProgram?: unknown }).currentProgram !== undefined);
+    const tick = () => {
+      if (scene.environment === null || !drawn() || !programsReady(gl.info.programs)) {
+        timer = window.setTimeout(tick, PAINT_WARM_POLL_MS);
+        return;
+      }
+      warmPaintPrograms(gl, witnesses, scene, camera, warmTarget);
+    };
+    const schedule = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(tick, 0);
+    };
+    schedule();
+    const unsubscribe = useRenderStats.subscribe((state, previous) => {
+      if (state.probe !== previous.probe) schedule();
+    });
+    return () => {
+      window.clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [gl, scene, camera, prepared, witnesses, warmTarget, epoch]);
 
   const { halfLength, halfWidth, height } = prepared;
   useEffect(() => {

@@ -125,6 +125,15 @@ describe('étape C2 : qualité automatique', () => {
     expect(resolveQuality('max', 'eco')).toBe('max');
     expect(resolveQuality('max', 'standard', false)).toBe('eco');
   });
+
+  it('sans flottants 32 bits (EXT_color_buffer_float, cible R32F de l’occlusion), le max se rend au standard', () => {
+    expect(resolveQuality('max', 'standard', true, false)).toBe('standard');
+    expect(resolveQuality('auto', 'max', true, false)).toBe('standard');
+    expect(resolveQuality('auto', 'max', true, true)).toBe('max');
+    expect(resolveQuality('standard', 'standard', true, false)).toBe('standard');
+    expect(resolveQuality('eco', 'standard', true, false)).toBe('eco');
+    expect(resolveQuality('max', 'standard', false, false)).toBe('eco');
+  });
 });
 
 describe('étape C2 : peinture compilée d’avance', () => {

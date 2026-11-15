@@ -598,6 +598,40 @@ button {
   user-select: text;
 }
 
+/* « Sous le capot » : résultats de « Comparer », une ligne par variante. */
+.facts .comparaison {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0.375rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.facts .comparaison li {
+  padding-left: 0.625rem;
+  border-left: 2px solid var(--edge);
+}
+
+.facts .comparaison li[data-fact='comparer-courant'] {
+  border-left-color: var(--ambre);
+}
+
+/* « Mesurer » et « Comparer » à côté de « Retour à l'atelier » : jamais rognés ; si le texte est
+   trop grand pour une rangée, « Retour à l'atelier » passe dessous, toujours sous le pouce. */
+.sheet-acts:has(> .btn-mesure) {
+  flex-wrap: wrap;
+}
+
+.sheet-acts:has(> .btn-mesure) > .btn.cta {
+  min-width: min-content;
+}
+
+.sheet-acts > .btn.btn-mesure {
+  min-width: max-content;
+  padding: 0 0.5rem;
+  letter-spacing: 0.02em;
+}
+
 @media (min-width: 700px) {
   .dock {
     padding-bottom: calc(1.125rem + var(--safe-b));

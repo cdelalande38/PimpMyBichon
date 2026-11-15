@@ -5,7 +5,7 @@
 // anticrénelage (SMAA, dans sa propre passe), puis la moyenne du rendu photo. Ce que chaque
 // niveau garde : src/render/quality.ts.
 
-import { Bloom, EffectComposer, EffectGroup, LUT, N8AO, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing';
+import { Bloom, EffectComposer, EffectGroup, LUT, N8AO, Noise, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing';
 import { BlendFunction, Effect, LookupTexture, ToneMappingMode, type VignetteEffect } from 'postprocessing';
 import { useEffect, useMemo, type ReactElement, type RefObject } from 'react';
 import { HalfFloatType, Uniform, UnsignedByteType } from 'three';
@@ -42,8 +42,6 @@ export class ExposureEffect extends Effect {
   }
 }
 
-const Exposure = wrapEffect(ExposureEffect);
-
 function gradeLut(grade: Grade): LookupTexture {
   const lut = LookupTexture.createNeutral(LUT_SIZE);
   (lut.image.data as Float32Array).set(gradeLutData(grade, LUT_SIZE));
@@ -66,13 +64,18 @@ export function PostChain({ ambiance, profile, accumulate, vignette, floatTarget
   const { grade } = ambiance;
   const lut = useMemo(() => gradeLut(grade), [grade]);
   useEffect(() => () => lut.dispose(), [lut]);
+  // Une seule exposition pour toute la vie de la chaîne, réglée par son uniforme : recréée à chaque
+  // ambiance (args d'un effet enveloppé), elle ferait reconstruire toutes les passes du composeur
+  // et recompiler leur nuanceur (revue n° 6).
+  const exposure = useMemo(() => new ExposureEffect(), []);
+  useEffect(() => () => exposure.dispose(), [exposure]);
 
   const effects = [
     profile.ao && <N8AO key="ao" quality="low" halfRes aoRadius={0.9} distanceFalloff={0.6} intensity={2.2} />,
     profile.bloom && (
       <Bloom key="bloom" mipmapBlur luminanceThreshold={1} luminanceSmoothing={0.15} intensity={ambiance.bloom} radius={0.72} />
     ),
-    <Exposure key="exposure" exposure={ambiance.exposure} />,
+    <primitive key="exposure" object={exposure} exposure={ambiance.exposure} dispose={null} />,
     <ToneMapping key="tone" mode={ToneMappingMode.ACES_FILMIC} />,
     <LUT key="lut" lut={lut} tetrahedralInterpolation />,
     <Vignette key="vignette" ref={vignette} offset={0.32} darkness={0.42} />,

@@ -2,7 +2,7 @@
 // « textures créées »). Motifs originaux ; rien n'est copié d'une photo.
 
 import { CanvasTexture, LinearFilter, RepeatWrapping, SRGBColorSpace, type Texture } from 'three';
-import type { GarageTextureId } from '../../data/garage.ts';
+import { GARAGE_MATERIALS, type GarageTextureId } from '../../data/garageBase.ts';
 
 type Draw = (context: CanvasRenderingContext2D, size: number) => void;
 
@@ -81,29 +81,50 @@ const carrelageRugosite: Draw = (c, s) => {
   }
 };
 
-// OSB : copeaux allongés orientés, tons de paille et de miel. Un panneau par texture.
+/** Panneau d'OSB dessiné par la texture, en mètres (u, v) : l'inverse des répétitions du matériau. */
+const OSB_SHEET = { u: 1 / GARAGE_MATERIALS.osb.repeat[0], v: 1 / GARAGE_MATERIALS.osb.repeat[1] } as const;
+
+// OSB : copeaux de 6 à 16 cm sur 2 à 4,5 cm, couchés dans le sens de la grande longueur à ± 40°
+// près, tons de paille clairs et proches (sous les ambiances colorées, l'ancien contraste se
+// lisait en camouflage : luminance moyenne 146 → 183, écart type 22 → 14). Dessin en mètres,
+// raccordé sur ses bords (le panneau de l'établi en montre plus d'une largeur), sans joint.
 const osb: Draw = (c, s) => {
   const rand = random(11);
-  c.fillStyle = '#c49a62';
+  c.fillStyle = '#d3b27f';
   c.fillRect(0, 0, s, s);
-  for (let k = 0; k < 1400; k += 1) {
-    const x = rand() * s;
-    const y = rand() * s;
-    const w = 10 + rand() * 38;
-    const h = 3 + rand() * 9;
-    const tone = rand();
-    c.save();
-    c.translate(x, y);
-    c.rotate((rand() - 0.5) * 1.2);
-    c.fillStyle = tone < 0.33 ? '#a87a45' : tone < 0.66 ? '#d8b07a' : '#8f6436';
-    c.globalAlpha = 0.55 + rand() * 0.4;
-    c.fillRect(-w / 2, -h / 2, w, h);
-    c.restore();
+  const sx = s / OSB_SHEET.u;
+  const sy = s / OSB_SHEET.v;
+  const tones = ['#dfc192', '#c7a26b', '#e8cfa3', '#d4ad76', '#b8905a'] as const;
+  for (let k = 0; k < 2200; k += 1) {
+    const u = rand() * OSB_SHEET.u;
+    const v = rand() * OSB_SHEET.v;
+    const length = 0.06 + rand() * 0.1;
+    const width = 0.02 + rand() * 0.025;
+    const angle = Math.PI / 2 + (rand() - 0.5) * 1.4;
+    const pick = rand();
+    const tone = tones[pick < 0.3 ? 0 : pick < 0.55 ? 1 : pick < 0.75 ? 2 : pick < 0.92 ? 3 : 4];
+    const alpha = 0.55 + rand() * 0.35;
+    const edge = rand() < 0.4;
+    const reach = length / 2;
+    // Copie décalée d'un panneau près des bords : la texture se raccorde en répétition.
+    for (const du of u < reach ? [0, OSB_SHEET.u] : u > OSB_SHEET.u - reach ? [0, -OSB_SHEET.u] : [0]) {
+      for (const dv of v < reach ? [0, OSB_SHEET.v] : v > OSB_SHEET.v - reach ? [0, -OSB_SHEET.v] : [0]) {
+        c.setTransform(sx, 0, 0, sy, (u + du) * sx, (v + dv) * sy);
+        c.rotate(angle);
+        c.globalAlpha = alpha;
+        c.fillStyle = tone;
+        c.fillRect(-length / 2, -width / 2, length, width);
+        if (edge) {
+          // Une arête un peu plus sombre : le copeau se lit posé sur les autres.
+          c.globalAlpha = 0.25;
+          c.fillStyle = '#8a6a40';
+          c.fillRect(-length / 2, width / 2 - 0.003, length, 0.003);
+        }
+      }
+    }
   }
+  c.setTransform(1, 0, 0, 1, 0, 0);
   c.globalAlpha = 1;
-  c.fillStyle = 'rgba(60,40,20,0.7)';
-  c.fillRect(0, 0, s, 3);
-  c.fillRect(0, 0, 3, s);
 };
 
 // Lambris de pin vertical des murs gauche et avant : 8 lames de 15 cm sur 1,2 m, veinées,

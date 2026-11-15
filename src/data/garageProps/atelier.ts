@@ -473,8 +473,9 @@ const enceintes: Prop = {
   at: [0, 0, BACK + 0.12],
   small: true,
   parts: [
-    // Trois enceintes empilées à gauche de la colonne, deux autres en haut à droite.
-    ...[1.79, 2.005, 2.22].flatMap((y) => speaker([1.33, y, 0], [0.26, 0.2, 0.22], false)),
+    // Trois enceintes empilées à gauche de la colonne, dos contre le mur ; deux autres en haut à
+    // droite, sur étriers.
+    ...[1.79, 2.005, 2.22].flatMap((y) => speaker([1.33, y, -0.01], [0.26, 0.2, 0.22], false)),
     ...[2.5, 2.1].flatMap((y) => speaker([3.25, y, 0.05], [0.22, 0.34, 0.2], true)),
   ],
 };

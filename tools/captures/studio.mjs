@@ -137,7 +137,7 @@ async function main() {
     });
     page.on('pageerror', (error) => consoleErrors.push(error.message));
     await page.goto(url);
-    await page.waitForSelector('body[data-studio-pret], body[data-studio-erreur]', { timeout: 180_000 });
+    await page.waitForSelector('body[data-studio-pret], body[data-studio-erreur]', { timeout: 60_000 });
     const erreur = await page.getAttribute('body', 'data-studio-erreur');
     if (erreur) throw new Error(`la page signale une erreur : ${erreur}`);
     mkdirSync(dirname(out), { recursive: true });

@@ -1,12 +1,13 @@
 // « Sous le capot » : l'état du socle, pour la recette sur le téléphone.
-// Quelle version tourne, est-elle prête hors ligne, installée, sauvegardée, et à quelle cadence.
+// Quelle version tourne, est-elle prête hors ligne, installée, sauvegardée, et à quelle cadence ;
+// « Comparer » dit, en un essai sur le téléphone, où part le temps d'une image.
 
 import { useEffect, useState } from 'react';
 import { BUILD, formatBuildDate } from '../app/buildInfo.ts';
 import { precachePercent, usePwa } from '../pwa/pwaStore.ts';
 import { QUALITY_LABELS, resolveQuality } from '../render/quality.ts';
-import { METER_DURATION_MS } from '../render/frameMeter.ts';
-import { startMeter, useRenderStats, type RenderStatsState } from '../render/renderStats.ts';
+import { COMPARE_STEPS, COMPARE_WINDOW_MS, METER_DURATION_MS, type CompareOutcome } from '../render/frameMeter.ts';
+import { abortCompare, startCompare, startMeter, useRenderStats, type CompareState, type RenderStatsState } from '../render/renderStats.ts';
 import { readStorageStatus, type StorageStatus } from '../state/persistence.ts';
 import { useSettings } from '../state/store.ts';
 import { count, formatBytes, offlineDetail, typo } from './labels.ts';
@@ -58,8 +59,10 @@ function installLine(standalone: boolean, canInstall: boolean): string {
 
 const decimal = (value: number) => value.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-function qualityLine(quality: string, level: string, auto: RenderStatsState['auto'], floatTargets: boolean | null): string {
+function qualityLine(quality: string, level: string, auto: RenderStatsState['auto'], floatTargets: boolean | null, fullFloat: boolean | null): string {
   if (floatTargets === false) return `${level} imposé : ce processeur graphique ne rend pas en demi-flottants`;
+  const wantsMax = quality === 'max' || (quality === 'auto' && auto.level === 'max');
+  if (wantsMax && fullFloat === false) return `${level} au lieu du max : ce processeur graphique ne rend pas en flottants 32 bits (occlusion)`;
   if (quality !== 'auto') return level;
   if (auto.fps === null) return `Auto, niveau ${level.toLowerCase()} pour l’instant : cadence pas encore mesurée`;
   const fixed = auto.settled ? ', retenu' : '';
@@ -95,15 +98,79 @@ function ditherLine(dither: RenderStatsState['cutDither']): string {
   return ` Fondu en trame prêt, compilé à part pour ${count(dither.carriers, 'matériau opaque', 'matériaux opaques')}${warm}${now}.`;
 }
 
-/** « Mesurer » : cinq secondes de rotation, cadence et coût par image au niveau en cours. */
+const signedMs = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : '±'}${decimal(Math.abs(value))} ms`;
+
+/** Une ligne de la comparaison ; l'écart de temps par image se lit contre le réglage en cours. */
+function compareLine(outcome: CompareOutcome, base: CompareOutcome | undefined): string {
+  if (!outcome.measured) return `${outcome.label} : non mesurée, ${outcome.reason}.`;
+  const { summary } = outcome;
+  const gap = outcome.id !== 'courant' && base?.measured ? ` (${signedMs(summary.meanMs - base.summary.meanMs)})` : '';
+  return (
+    `${outcome.label} : ${decimal(summary.fps)} i/s · ${decimal(summary.meanMs)} ms par image${gap} · ` +
+    `${decimal(summary.worstFps)} i/s au pire centile · processeur ${decimal(summary.cpuMs)} ms · ` +
+    `${summary.calls.toLocaleString('fr-FR')} appels.`
+  );
+}
+
+function compareStatus(compare: CompareState): string {
+  if (compare.running) {
+    const step = COMPARE_STEPS[compare.step];
+    return `Mesure ${compare.step + 1} sur ${COMPARE_STEPS.length}${step ? ` (${step.label.toLowerCase()})` : ''}… Ne touche à rien.`;
+  }
+  const result = compare.result;
+  if (compare.aborted !== null) return `Comparaison interrompue : ${compare.aborted}. Relance-la quand tu veux.`;
+  if (result === null) {
+    return '« Comparer » enchaîne quatre mesures au niveau en cours : compte une vingtaine de secondes, pose le téléphone et ne touche à rien.';
+  }
+  const ratio = result.dpr.toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  return `${QUALITY_LABELS[result.level]}, pixel ratio ${ratio}, ${COMPARE_WINDOW_MS / 1000} secondes de rotation par mesure :`;
+}
+
+/**
+ * « Mesurer » (cinq secondes de rotation, cadence et coût par image au niveau en cours) et
+ * « Comparer » (quatre mesures, une variante de la scène chacune ; src/scene/FrameMeter.tsx).
+ */
 export function MeterButton() {
   const running = useRenderStats((state) => state.meter.running);
+  const comparing = useRenderStats((state) => state.compare.running);
+  const step = useRenderStats((state) => state.compare.step);
   const ready = useRenderStats((state) => state.gpu !== null);
+  // Panneau fermé pendant la comparaison : elle s'arrête, la scène revient à son état d'origine.
+  useEffect(() => () => abortCompare('panneau fermé'), []);
+  const busy = running || comparing;
   return (
-    <button type="button" className="btn" disabled={running || !ready} onClick={startMeter}>
-      {running ? 'Mesure…' : 'Mesurer'}
-    </button>
+    <>
+      <button type="button" className="btn btn-mesure" disabled={busy || !ready} onClick={startMeter}>
+        {running ? 'Mesure…' : 'Mesurer'}
+      </button>
+      <button type="button" className="btn btn-mesure" disabled={busy || !ready} onClick={startCompare}>
+        {comparing ? `${Math.min(step + 1, COMPARE_STEPS.length)} sur ${COMPARE_STEPS.length}…` : 'Comparer'}
+      </button>
+    </>
   );
+}
+
+/** Nombre d'objets du mobilier et deux de leurs noms, tirés des données du garage (chargées à part). */
+function useGarageProps(): { count: number; names: string[] } | null {
+  const [props, setProps] = useState<{ count: number; names: string[] } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    // Import à part : les données du garage voyagent avec la scène, pas avec la coque.
+    void import('../data/garage.ts').then(({ GARAGE }) => {
+      const list = GARAGE.props;
+      const names = [list[0]?.name, list.length > 1 ? list.at(-1)?.name : undefined].filter((name) => name !== undefined);
+      if (alive) setProps({ count: list.length, names });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return props;
+}
+
+function substitutesLine(props: { count: number; names: string[] } | null): string {
+  const detail = props === null || props.count === 0 ? '' : ` : ${count(props.count, 'objet')} (${props.names.join(', ')}…)`;
+  return `Le mobilier du garage, modelé par le code en attendant des modèles${detail}, et placeholder_banc à la place des véhicules. Liste complète dans TODO_ASSETS.md.`;
 }
 
 export function UnderHoodPanel() {
@@ -121,14 +188,17 @@ export function UnderHoodPanel() {
   const quality = useSettings((state) => state.quality);
   const auto = useRenderStats((state) => state.auto);
   const floatTargets = useRenderStats((state) => state.floatTargets);
+  const fullFloat = useRenderStats((state) => state.fullFloatTargets);
   const meter = useRenderStats((state) => state.meter);
+  const compare = useRenderStats((state) => state.compare);
+  const garageProps = useGarageProps();
   const cut = useRenderStats((state) => state.cut);
   const dither = useRenderStats((state) => state.cutDither);
   const programs = useRenderStats((state) => state.programs);
   const storage = useStorageStatus();
 
   const date = formatBuildDate(BUILD.date);
-  const level = QUALITY_LABELS[resolveQuality(quality, auto.level, floatTargets !== false)];
+  const level = QUALITY_LABELS[resolveQuality(quality, auto.level, floatTargets !== false, fullFloat !== false)];
   const ratio =
     dpr === null ? '' : ` · pixel ratio ${dpr.toLocaleString('fr-FR', { maximumFractionDigits: 2 })}`;
 
@@ -200,7 +270,7 @@ export function UnderHoodPanel() {
 
       <dt>Qualité</dt>
       <dd data-fact="qualite">
-        {typo(qualityLine(quality, level, auto, floatTargets))}
+        {typo(qualityLine(quality, level, auto, floatTargets, fullFloat))}
         {ratio}.
       </dd>
 
@@ -209,15 +279,30 @@ export function UnderHoodPanel() {
         {typo(meterLine(meter))}
       </dd>
 
+      <dt>Comparer</dt>
+      <dd data-fact="comparer" aria-live="polite" data-etat={compare.running ? 'en-cours' : compare.aborted !== null ? 'interrompue' : compare.result ? 'finie' : 'vide'}>
+        {typo(compareStatus(compare))}
+        {compare.result !== null && compare.result.outcomes.length > 0 && (
+          <ul className="comparaison">
+            {compare.result.outcomes.map((outcome, _, all) => (
+              <li
+                key={outcome.id}
+                data-fact={`comparer-${outcome.id}`}
+                data-mesuree={outcome.measured ? 'oui' : 'non'}
+                data-programmes={outcome.measured ? outcome.programs : undefined}
+              >
+                {typo(compareLine(outcome, all.find((entry) => entry.id === 'courant')))}
+              </li>
+            ))}
+          </ul>
+        )}
+      </dd>
+
       <dt>Assets privés</dt>
       <dd>{typo(privateAssetsLine())}</dd>
 
       <dt>Substituts</dt>
-      <dd>
-        {typo(
-          'Le mobilier du garage, modelé par le code en attendant des modèles (placeholder_canape_a, placeholder_quad…), et placeholder_banc à la place des véhicules. Liste complète dans TODO_ASSETS.md.',
-        )}
-      </dd>
+      <dd data-fact="substituts">{typo(substitutesLine(garageProps))}</dd>
     </dl>
   );
 }

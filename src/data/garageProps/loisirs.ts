@@ -480,7 +480,8 @@ export const PROPS_LOISIRS: readonly Prop[] = [
       },
       { box: [0.004, POSTER_H, POSTER_W], at: [0.004, 0, 0], material: 'blanc' },
     ],
-    art: [{ art: 'affiche-atelier', at: [0.0065, 0, 0], rot: [0, Math.PI / 2, 0], width: POSTER_W }],
+    // Fond blanc jusqu'à x 0,006 ; l'affiche 1 mm devant (build.ts ajoute 1 mm), dans le cadre.
+    art: [{ art: 'affiche-atelier', at: [0.007, 0, 0], rot: [0, Math.PI / 2, 0], width: POSTER_W }],
   },
   {
     // Toile pop art au-dessus de l'écran, sur la colonne : châssis de 4 cm à chants clairs, de 2,0

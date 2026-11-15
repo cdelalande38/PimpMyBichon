@@ -45,8 +45,10 @@ export const FRAMINGS: readonly Framing[] = Object.freeze([
     label: 'Trois-quarts avant',
     short: 'Avant',
     azimuth: 0.95,
-    polar: 1.38,
-    distance: 1,
+    // Regard incliné d'une vingtaine de degrés vers le sol, et un peu plus près : en portrait, le
+    // champ vertical est grand, et à 1,38 le quart haut de l'image n'était que plafond.
+    polar: 1.22,
+    distance: 0.86,
     targetHeight: 1,
     targetAlong: 0,
     fovScale: 1,

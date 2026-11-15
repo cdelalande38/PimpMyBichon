@@ -46,7 +46,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GARAGE_MATERIALS, type GarageMaterial, type GarageMaterialId } from '../../data/garageBase.ts';
 import { garageArt } from '../../data/garageArt.ts';
-import { acquireArtwork } from '../../scene/garage/artwork.ts';
+import { acquireArtwork, ART_GAP, artworkMaterial } from '../../scene/garage/artwork.ts';
 import { shapeGeometry, triangleCount } from '../../scene/garage/shapes.ts';
 import { garageTexture } from '../../scene/garage/textures.ts';
 import type { ModulePlanches, PieceStudio, Planche } from './registre.ts';
@@ -102,7 +102,11 @@ function environnementGarage(): Scene {
   return scene;
 }
 
-/** Matière d'un matériau du garage, aux valeurs de GARAGE_MATERIALS (comme build.ts). */
+/**
+ * Matière d'un matériau du garage, aux valeurs de GARAGE_MATERIALS (couleur, rugosité, métal,
+ * émission et cartes, comme build.ts). Sans l'assombrissement de pied ni les ombres de contact du
+ * garage, qui dépendent de ce qui porte l'objet dans la pièce : le studio a de vraies ombres.
+ */
 function matiereGarage(id: GarageMaterialId, carte: CanvasTexture | null): MeshStandardMaterial {
   const spec: GarageMaterial = GARAGE_MATERIALS[id];
   const material = new MeshStandardMaterial({
@@ -137,15 +141,11 @@ function construire(piece: PieceStudio, carte: CanvasTexture | null): { geometry
     return { geometry: shapeGeometry(piece.forme), material };
   }
   const { art, region, largeur, hauteur } = piece.oeuvre;
-  const item = garageArt(art);
   const artwork = acquireArtwork(art, { ...(region ? { region } : {}), onReady: () => redemander() });
   chargements.push(artwork.ready);
-  const transparence = item.transparent ? { transparent: true, alphaTest: 0.02 } : {};
-  const material =
-    item.lighting === 'emissive'
-      ? new MeshBasicMaterial({ map: artwork.texture, color: new Color(1, 1, 1).multiplyScalar(item.glow ?? 1), ...transparence })
-      : new MeshStandardMaterial({ map: artwork.texture, roughness: 0.6, metalness: 0, ...transparence });
-  return { geometry: new PlaneGeometry(largeur, hauteur), material };
+  // Matière et millimètre de décollement du garage (artwork.ts, build.ts) : une planche montre le
+  // bord d'une œuvre transparente tel qu'il est dans la pièce.
+  return { geometry: new PlaneGeometry(largeur, hauteur).translate(0, 0, ART_GAP), material: artworkMaterial(garageArt(art), artwork.texture) };
 }
 
 function afficherErreur(error: unknown): void {

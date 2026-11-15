@@ -348,13 +348,17 @@ describe('formes d’origine : construites comme avant', () => {
       const material: GarageMaterial = GARAGE_MATERIALS[id];
       return material.map !== undefined || material.roughnessMap !== undefined;
     };
+    const checked = GARAGE.props.flatMap((prop) => prop.parts.filter((part) => historic(part) !== null && !('box' in part)));
     const offenders = GARAGE.props.flatMap((prop) =>
       prop.parts.filter((part) => historic(part) !== null && !('box' in part) && textured(part.material)).map((part) => `${prop.name} : ${part.material}`),
     );
     expect(offenders).toEqual([]);
+    // Garde-fou : des cylindres ou des sphères d'origine restent à vérifier.
+    expect(checked.length, 'cylindres et sphères d’origine').toBeGreaterThan(0);
   });
 
   it('les pièces d’origine du mobilier ont les mêmes boîtes avec shapeGeometry qu’avec partGeometry', () => {
+    let count = 0;
     for (const prop of GARAGE.props) {
       for (const part of prop.parts) {
         const shape = historic(part);
@@ -363,8 +367,12 @@ describe('formes d’origine : construites comme avant', () => {
         const now = new Box3().setFromBufferAttribute(shapeGeometry(shape).applyMatrix4(matrix).getAttribute('position') as never);
         const before = new Box3().setFromBufferAttribute(legacy(shape).applyMatrix4(matrix).getAttribute('position') as never);
         expect(now.equals(before)).toBe(true);
+        count += 1;
       }
     }
+    // Garde-fou : sans pièce d'origine, ce test ne vérifierait plus rien (le jour où tout le
+    // mobilier sera remodelé, le remplacer par une comparaison sur des formes témoins).
+    expect(count, 'pièces d’origine comparées').toBeGreaterThan(20);
   });
 });
 

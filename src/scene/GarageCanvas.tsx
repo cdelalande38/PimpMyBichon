@@ -10,7 +10,7 @@
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { VignetteEffect } from 'postprocessing';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { SceneBoundary } from '../app/SceneBoundary.tsx';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
@@ -18,6 +18,7 @@ import { BENCH_MODEL } from '../data/bench.ts';
 import { GARAGE } from '../data/garage.ts';
 import { CAMERA_LAYERS } from '../render/layers.ts';
 import { AccumulatePass } from '../render/photo/AccumulatePass.ts';
+import { CONTROLS_DAMPING, controlsDamping, slowSpinSpeed } from '../render/frameMeter.ts';
 import { frontFromTurn } from '../render/photo/framing.ts';
 import { PhotoDirector } from '../render/photo/PhotoDirector.tsx';
 import { photoPlan } from '../render/photo/plan.ts';
@@ -89,8 +90,8 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
 
   // Rendu à la demande : tant que la rotation lente est due, chaque image en demande une autre.
   // Sans cela elle ne repartirait pas après un geste, les contrôles n'émettant plus rien au repos.
-  // La mesure de cadence de « Sous le capot » fait tourner la scène elle aussi.
-  const measuring = useRenderStats((state) => state.meter.running);
+  // Les mesures de « Sous le capot » (« Mesurer », « Comparer ») font tourner la scène elles aussi.
+  const measuring = useRenderStats((state) => state.meter.running || state.compare.running);
   const exporting = usePhoto((state) => state.save.status === 'rendu');
   const rotating = (mayRotate && idle) || measuring;
   const invalidate = useThree((state) => state.invalidate);
@@ -108,6 +109,17 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     if (rotating) invalidate();
   });
 
+  // Rotation lente au temps : OrbitControls avance d'un angle fixe par image (deux fois plus vite à
+  // 120 i/s qu'à 60) ; avant sa mise à jour (priorité −1), on règle sa vitesse sur la durée de
+  // l'image, pas borné après un repos (src/render/frameMeter.ts, slowSpinSpeed), et son
+  // amortissement de même (controlsDamping : à 60 i/s, inchangé).
+  const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
+  useFrame((_, delta) => {
+    if (!controls.current) return;
+    controls.current.autoRotateSpeed = slowSpinSpeed(delta);
+    controls.current.dampingFactor = controlsDamping(delta);
+  }, -2);
+
   return (
     <>
       {/* Fond et brume : le sol et le plafond prolongés s'y perdent, jamais dans le noir. */}
@@ -116,17 +128,17 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
 
       <PerspectiveCamera makeDefault fov={fit.fov} near={0.1} far={80} position={position} />
       <OrbitControls
+        ref={controls}
         makeDefault
         target={TARGET}
         enablePan={false}
         enableDamping
-        dampingFactor={0.08}
+        dampingFactor={CONTROLS_DAMPING}
         minDistance={fit.minDistance}
         maxDistance={fit.maxDistance}
         minPolarAngle={MIN_POLAR}
         maxPolarAngle={MAX_POLAR}
         autoRotate={rotating}
-        autoRotateSpeed={0.9}
         onStart={() => {
           window.clearTimeout(idleTimer.current);
           setIdle(false);
@@ -168,7 +180,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
 
       <SceneProbe />
       <AutoQuality enabled={autoLevel && !measuring && !exporting} />
-      <FrameMeter level={level} />
+      <FrameMeter level={level} instantCut={reducedMotion || photo} photo={photo} />
     </>
   );
 }
@@ -200,9 +212,13 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
   const benchStatus = useBench((state) => state.status);
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const autoLevel = useRenderStats((state) => state.auto.level);
-  const floatTargets = useRenderStats((state) => state.floatTargets) !== false;
+  // Connu à la création du contexte (onCreated) : la scène attend, plutôt que de se monter un
+  // instant avec des cibles en demi-flottants que le processeur graphique ne saurait pas rendre.
+  const floatKnown = useRenderStats((state) => state.floatTargets);
+  const floatTargets = floatKnown !== false;
+  const fullFloat = useRenderStats((state) => state.fullFloatTargets) !== false;
   const exporting = usePhoto((state) => state.save.status === 'rendu');
-  const level = resolveQuality(quality, autoLevel, floatTargets);
+  const level = resolveQuality(quality, autoLevel, floatTargets, fullFloat);
   const profile = QUALITY_PROFILES[level];
 
   // Nombre d'éléments du décor retirés par la coupe caméra, trame du fondu (variantes prêtes,
@@ -244,19 +260,21 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
         // profondeur, ni de stencil (mémoire graphique, § 8).
         gl={{ antialias: false, depth: false, stencil: false, powerPreference: 'high-performance' }}
         onCreated={({ gl, invalidate }) => {
-          useRenderStats.setState({ floatTargets: hasFloatTargets(gl) });
+          useRenderStats.setState({ floatTargets: hasFloatTargets(gl), fullFloatTargets: gl.extensions.has('EXT_color_buffer_float') });
           watchContext(gl.domElement, () => invalidate());
         }}
       >
-        <Stage
-          level={level}
-          profile={profile}
-          mayRotate={autoRotate && !reducedMotion && !paused && !photo}
-          photo={photo}
-          autoLevel={quality === 'auto'}
-          floatTargets={floatTargets}
-          reducedMotion={reducedMotion}
-        />
+        {floatKnown !== null && (
+          <Stage
+            level={level}
+            profile={profile}
+            mayRotate={autoRotate && !reducedMotion && !paused && !photo}
+            photo={photo}
+            autoLevel={quality === 'auto'}
+            floatTargets={floatTargets}
+            reducedMotion={reducedMotion}
+          />
+        )}
       </Canvas>
     </div>
   );

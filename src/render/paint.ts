@@ -7,10 +7,23 @@
 //  - Effets d'angle : candy (vernis teinté, plus profond sur les bords), caméléon (seconde
 //    teinte sur les bords), nacré (irisation de three.js).
 // Les réglages propres passent par des uniformes ; seuls le vernis et l'irisation de three.js,
-// à 0 ou non, changent le programme (4 variantes, compilées d'avance : programVariants).
+// à 0 ou non, changent le programme (au plus 4 variantes, 3 avec les finitions actuelles,
+// compilées d'avance dans l'état des passes réelles : programVariants, src/scene/bench/BenchCar.tsx).
 
-import { Color, MeshPhysicalMaterial, type Material, type WebGLProgramParametersWithUniforms } from 'three';
-import type { Finish } from '../data/finishes.ts';
+import {
+  Color,
+  Group,
+  Mesh,
+  MeshPhysicalMaterial,
+  type Camera,
+  type Material,
+  type Object3D,
+  type Scene,
+  type WebGLProgramParametersWithUniforms,
+  type WebGLRenderer,
+  type WebGLRenderTarget,
+} from 'three';
+import { FINISHES, type Finish } from '../data/finishes.ts';
 
 /** Couleur d'un métal nu, vers laquelle tire une finition peu teintée (chrome, fond de candy). */
 const BARE_METAL = new Color('#e4e6ea');
@@ -206,6 +219,67 @@ export function programVariants<T extends Pick<Finish, 'clearcoat' | 'iridescenc
   return [...variants.values()];
 }
 
+/** Matériaux témoins : chaque variante du programme de peinture, pour chaque zone peinte. */
+export interface PaintWitnesses {
+  group: Group;
+  materials: MeshPhysicalMaterial[];
+  dispose: () => void;
+}
+
+/**
+ * Témoins de chaque variante du programme de peinture (vernis oui/non × irisation oui/non), pour
+ * chaque zone peinte de `root`, sur la géométrie d'une de ses pièces : la clé de programme dépend
+ * aussi de la carte de normales de la zone et des attributs de la pièce. Ils gardent les programmes
+ * en vie jusqu'à `dispose` ; la géométrie, empruntée, n'est pas libérée.
+ */
+export function paintWitnesses(root: Object3D, paints: readonly MeshPhysicalMaterial[]): PaintWitnesses {
+  const group = new Group();
+  const materials: MeshPhysicalMaterial[] = [];
+  const variants = programVariants(FINISHES);
+  for (const paint of paints) {
+    let sample: Mesh | null = null;
+    root.traverse((object) => {
+      if (sample || !(object instanceof Mesh)) return;
+      const used: readonly Material[] = Array.isArray(object.material) ? object.material : [object.material];
+      if (used.includes(paint)) sample = object;
+    });
+    if (!sample) continue;
+    const { geometry } = sample as Mesh;
+    for (const item of variants) {
+      const material = createPaintMaterial(paint);
+      applyPaint(material, '#808080', item);
+      group.add(new Mesh(geometry, material));
+      materials.push(material);
+    }
+  }
+  return {
+    group,
+    materials,
+    dispose: () => {
+      for (const material of materials) material.dispose();
+    },
+  };
+}
+
+/**
+ * Compile sans rien dessiner les variantes de la peinture dans l'état des passes réelles : cible
+ * de rendu non nulle liée (reflet du sol et scène du composeur rendent tous deux dans une cible :
+ * espace de travail linéaire, sans tone mapping ; avec la cible nulle, la clé serait « sRGB + tone
+ * mapping », jamais utilisée, et la variante se compilerait quand même au premier toucher d'une
+ * finition, sur le fil principal), lumières, brume et environnement de `scene` tels qu'ils sont à
+ * l'appel. Les programmes se compilent ensuite en tâche de fond (KHR_parallel_shader_compile) ;
+ * une variante déjà compilée ne coûte rien.
+ */
+export function warmPaintPrograms(gl: WebGLRenderer, witnesses: PaintWitnesses, scene: Scene, camera: Camera, target: WebGLRenderTarget): void {
+  const previous = gl.getRenderTarget();
+  gl.setRenderTarget(target);
+  try {
+    gl.compile(witnesses.group, camera, scene);
+  } finally {
+    gl.setRenderTarget(previous);
+  }
+}
+
 /** Couleur de base effective : la teinte choisie, mêlée au métal nu selon la finition. */
 export function paintBaseColor(hex: string, finish: Pick<Finish, 'tint'>): Color {
   return BARE_METAL.clone().lerp(new Color(hex), Math.min(1, Math.max(0, finish.tint)));
@@ -225,7 +299,9 @@ export function applyPaint(material: MeshPhysicalMaterial, hex: string, finish: 
   material.clearcoatRoughness = finish.clearcoatRoughness;
   material.iridescence = finish.iridescence;
   material.iridescenceIOR = finish.iridescenceIOR;
-  material.iridescenceThicknessRange = [100, finish.iridescenceThickness];
+  // three 0.187 : la plage d'épaisseur passe par ces deux réglages (l'ancien tableau est déprécié).
+  material.iridescenceThicknessMinimum = 100;
+  material.iridescenceThicknessMaximum = finish.iridescenceThickness;
   material.envMapIntensity = finish.envMapIntensity;
 
   const uniforms = uniformsOf(material);

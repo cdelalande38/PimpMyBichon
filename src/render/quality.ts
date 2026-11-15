@@ -43,11 +43,13 @@ export const QUALITY_PROFILES: Readonly<Record<QualityLevel, QualityProfile>> = 
 
 /**
  * Niveau appliqué pour un réglage donné. « auto » prend le niveau retenu d'après la cadence
- * mesurée (src/render/autoQuality.ts). Sans cibles de rendu flottantes, toujours l'économie.
+ * mesurée (src/render/autoQuality.ts). Sans cibles de rendu flottantes, toujours l'économie ;
+ * sans cibles en flottants 32 bits (`fullFloat`, exigées par l'occlusion), le max se rend au standard.
  */
-export function resolveQuality(setting: QualitySetting, auto: QualityLevel = 'standard', floatTargets = true): QualityLevel {
+export function resolveQuality(setting: QualitySetting, auto: QualityLevel = 'standard', floatTargets = true, fullFloat = true): QualityLevel {
   if (!floatTargets) return 'eco';
-  return setting === 'auto' ? auto : setting;
+  const level = setting === 'auto' ? auto : setting;
+  return level === 'max' && !fullFloat ? 'standard' : level;
 }
 
 export const QUALITY_LABELS: Readonly<Record<QualityLevel, string>> = Object.freeze({

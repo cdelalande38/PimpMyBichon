@@ -48,16 +48,41 @@ const sofa = (): Part[] => [
   ...SIDES.map((s): Part => ({ capsule: [0.095, 0.92], axis: 'z', detail: 0.75, at: [s * SOFA_ARM_X, 0.57, 0], material: 'cuirNoir' })),
 ];
 
-// ——— Table basse : quatre planches de sapin (long côté selon z) sur un socle noir ———
+// ——— Table basse : plateau de quatre planches de sapin (long côté selon z), piètement ouvert ———
+// Plateau de 0,41 m : la bande entre le grand volume protégé du véhicule (z 1,575, hystérésis
+// comprise) et le canapé A (z 2,065) fait 0,49 m ; il y garde 5,6 cm de marge côté véhicule et un
+// jour de 2,4 cm côté canapé.
 const TABLE_TOP = 0.48;
-const BOARD = { width: 0.105, thick: 0.06, length: 0.98 } as const;
+const BOARD = { width: 0.098, thick: 0.06, length: 0.98 } as const;
 /** Planches pas tout à fait à niveau, toutes sous le dessus du plateau (le bloc moteur y est posé à 0,48). */
 const BOARDS: ReadonlyArray<readonly [number, number]> = [
-  [-0.163, 0],
-  [-0.054, -0.003],
-  [0.054, -0.001],
-  [0.163, -0.002],
+  [-0.156, 0],
+  [-0.052, -0.003],
+  [0.052, -0.001],
+  [0.156, -0.002],
 ];
+/** Dessous du plateau (planche la plus basse). */
+const TABLE_UNDER = TABLE_TOP - BOARD.thick - 0.003;
+/** Pieds fuselés en retrait du bord : 3,3 cm sur la largeur, 7 cm aux bouts. */
+const TABLE_LEG = { x: 0.15, z: 0.4, foot: 0.015, top: 0.022 } as const;
+/** Ceinture sous le plateau et entretoise en H près du sol : hauteur de leur milieu. */
+const APRON_Y = TABLE_UNDER - 0.031;
+const STRETCHER_Y = 0.1;
+
+/** Traverse de bois clair : pavé aux bords adoucis, long de `length` selon `axis` (x ou z). */
+const rail = (axis: 'x' | 'z', thick: number, height: number, length: number, at: Vec3): Part => ({
+  extrude: [
+    [-thick / 2, -height / 2],
+    [thick / 2, -height / 2],
+    [thick / 2, height / 2],
+    [-thick / 2, height / 2],
+  ],
+  depth: length,
+  axis,
+  bevel: 0.003,
+  at,
+  material: 'boisClair',
+});
 
 // ——— Pouf : pneu couché (Ø 0,676 m, h 0,24 m), profil (rayon ; hauteur) de la tringle du bas à celle du haut ———
 const TIRE_PROFILE: Vec2[] = [
@@ -159,30 +184,49 @@ const COLUMN_SLATS = [0.06, 0.23, 0.4, 0.57, 0.74] as const;
 const WHEEL_CENTER: Vec3 = [0.34, 0.3, 0];
 /** Haut de la roue penché contre la caisse. */
 const WHEEL_TILT = 0.18;
-/** Jante pleine (rayon ; épaisseur selon l'axe, +x vers la pièce) : rebord, voile creusé, moyeu en cône. */
-const RIM_PROFILE: Vec2[] = [
-  [0, -0.02],
+/** Jante coulée : bague du bord (rayon ; épaisseur selon l'axe, +x vers la pièce), section bouclée. */
+const RIM_RING: Vec2[] = [
+  [0.172, -0.02],
   [0.19, -0.02],
   [0.205, -0.01],
   [0.205, 0.012],
   [0.195, 0.02],
-  [0.17, 0.012],
-  [0.08, -0.002],
-  [0.06, 0.012],
-  [0.05, 0.035],
-  [0, 0.035],
+  [0.172, 0.012],
+  [0.172, -0.02],
 ];
+/** Cinq branches, du moyeu (rayon 0,035) à la bague (0,18). */
+const RIM_SPOKES = 5;
+const SPOKE = { from: 0.035, to: 0.18, side: 0.024 } as const;
+
+/**
+ * Branche k de la jante : pavé radial dans le plan de la roue penchée (axe x tourné de
+ * WHEEL_TILT autour de z). Direction avant la pente (0, cos a, sin a), après Rz(pente) :
+ * (-sin t cos a, cos t cos a, sin a), atteinte par Rx(ex)·Rz(ez) appliqué à +y (ordre XYZ).
+ */
+const rimSpoke = (k: number): Part => {
+  const a = Math.PI / 2 + (k * 2 * Math.PI) / RIM_SPOKES;
+  const t = WHEEL_TILT;
+  const d: Vec3 = [-Math.sin(t) * Math.cos(a), Math.cos(t) * Math.cos(a), Math.sin(a)];
+  const mid = (SPOKE.from + SPOKE.to) / 2;
+  return {
+    box: [SPOKE.side, SPOKE.to - SPOKE.from, SPOKE.side],
+    at: [WHEEL_CENTER[0] + d[0] * mid, WHEEL_CENTER[1] + d[1] * mid, WHEEL_CENTER[2] + d[2] * mid],
+    rot: [Math.atan2(Math.sin(a), Math.cos(t) * Math.cos(a)), 0, Math.asin(Math.sin(t) * Math.cos(a))],
+    material: 'alu',
+  };
+};
 
 export const PROPS_SALON: readonly Prop[] = [
   {
     // Deux piles de deux caisses dans l'angle du mur rouge, légèrement désaxées.
     name: 'placeholder_caisses',
     at: [3.4, 0, -1.08],
+    // Caisses du haut posées sur celles du bas (CRATE.h).
     parts: [
       ...crate([0, 0, -0.25], 0, false),
-      ...crate([0.02, 0.5, -0.25], 0.1, true),
+      ...crate([0.02, CRATE.h, -0.25], 0.1, true),
       ...crate([0, 0, 0.25], -0.08, false),
-      ...crate([0, 0.5, 0.25], 0, true),
+      ...crate([0, CRATE.h, 0.25], 0, true),
     ],
   },
   // Coin salon, angle avant-gauche : deux canapés en L (A contre le mur avant, face au fond ;
@@ -192,25 +236,40 @@ export const PROPS_SALON: readonly Prop[] = [
   { name: 'placeholder_canape_a', at: [-2.3, 0, D / 2 - 0.475], turn: Math.PI, parts: sofa() },
   { name: 'placeholder_canape_b', at: [LEFT + 0.475, 0, 0.8], turn: Math.PI / 2, parts: sofa() },
   {
-    // Plateau de sapin de 6 cm qui déborde d'un socle noir fermé ; en long devant le canapé A,
-    // hors du volume protégé du véhicule (banc d'essai : z jusqu'à ±1,575 m, hystérésis
+    // Table basse en bois clair, en long devant le canapé A : plateau de sapin de 6 cm sur
+    // quatre pieds fuselés, ceinture et entretoise en H ; on voit le sol et le canapé dessous.
+    // Hors du volume protégé du véhicule (banc d'essai : z jusqu'à ±1,575 m, hystérésis
     // comprise), sinon la coupe caméra la garde masquée.
     name: 'placeholder_table_basse',
     at: [-2.2, 0, 1.836],
     turn: Math.PI / 2,
     parts: [
-      { box: [0.33, 0.42, 0.86], bevel: 0.01, at: [0, 0.21, 0], material: 'noirMat' },
       ...BOARDS.map(
         ([x, e]): Part => ({ box: [BOARD.width, BOARD.thick, BOARD.length], bevel: 0.006, at: [x, TABLE_TOP - BOARD.thick / 2 + e, 0], material: 'boisClair' }),
       ),
-      // Traverses sous le plateau, aux deux bouts.
-      ...SIDES.map((s): Part => ({ box: [0.42, 0.03, 0.06], bevel: 0.005, at: [0, TABLE_TOP - BOARD.thick - 0.015, s * 0.44], material: 'boisClair' })),
+      ...SIDES.flatMap((sx) =>
+        SIDES.map(
+          (sz): Part => ({
+            cylinder: [TABLE_LEG.foot, TABLE_UNDER],
+            top: TABLE_LEG.top,
+            at: [sx * TABLE_LEG.x, TABLE_UNDER / 2, sz * TABLE_LEG.z],
+            material: 'boisClair',
+          }),
+        ),
+      ),
+      // Ceinture : deux longues traverses et deux courtes, entre les hauts des pieds.
+      ...SIDES.map((s) => rail('z', 0.02, 0.06, 2 * TABLE_LEG.z - 0.02, [s * TABLE_LEG.x, APRON_Y, 0])),
+      ...SIDES.map((s) => rail('x', 0.02, 0.06, 2 * TABLE_LEG.x - 0.02, [0, APRON_Y, s * TABLE_LEG.z])),
+      // Entretoise en H près du sol.
+      ...SIDES.map((s) => rail('x', 0.02, 0.03, 2 * TABLE_LEG.x - 0.02, [0, STRETCHER_Y, s * TABLE_LEG.z])),
+      rail('z', 0.025, 0.03, 2 * TABLE_LEG.z - 0.02, [0, STRETCHER_Y, 0]),
     ],
   },
   {
     // Pied en disque de frein ajouré à moyeu en cloche, colonne fine, assise ronde en bois clair.
+    // À 5 cm au moins du volume protégé du véhicule.
     name: 'placeholder_tabouret_frein',
-    at: [-1.45, 0, 1.79],
+    at: [-1.45, 0, 1.81],
     small: true,
     parts: [
       {
@@ -334,7 +393,10 @@ export const PROPS_SALON: readonly Prop[] = [
       ...COLUMN_SLATS.map((y): Part => ({ box: [0.5, SLAT_H, 0.5], bevel: 0.006, at: [0, y, 0], material: 'caisse' })),
       ...[-0.17, 0, 0.17].map((z): Part => ({ box: [0.5, 0.022, 0.155], bevel: 0.006, at: [0, COLUMN_H + 0.011, z], material: 'caisse' })),
       { torus: [0.25, 0.05], axis: 'x', detail: 0.75, at: WHEEL_CENTER, rot: [0, 0, WHEEL_TILT], material: 'gomme' },
-      { lathe: RIM_PROFILE, axis: 'x', at: WHEEL_CENTER, rot: [0, 0, WHEEL_TILT], material: 'alu' },
+      // Jante à cinq branches : on voit la caisse au travers.
+      { lathe: RIM_RING, axis: 'x', at: WHEEL_CENTER, rot: [0, 0, WHEEL_TILT], material: 'alu' },
+      { cylinder: [0.05, 0.05], top: 0.034, axis: 'x', at: WHEEL_CENTER, rot: [0, 0, WHEEL_TILT], material: 'alu' },
+      ...Array.from({ length: RIM_SPOKES }, (_, k) => rimSpoke(k)),
     ],
   },
 ];

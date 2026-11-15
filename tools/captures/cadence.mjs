@@ -7,18 +7,24 @@
 // les programmes de nuanceur vivants. Il marche donc sur une version qui n'expose rien.
 //
 // Usage (après `npx vite build` dans chaque racine) :
-//   node tools/captures/cadence.mjs [--root <dossier>]... [--label <nom>]... [--levels standard,max]
-//     [--frames 4000] [--skip 120] [--repeat 3] [--port 4321] [--out <fichier.json>] [--logiciel] [--detail]
+//   node tools/captures/cadence.mjs [--root <dossier>]... [--label <nom>]... [--tour temps|images]...
+//     [--levels standard,max] [--frames <n>] [--skip 120] [--repeat 3] [--port 4321] [--out <fichier.json>]
+//     [--logiciel] [--detail]
 // --root : dossier qui contient dist/ (défaut : ce dépôt) ; plusieurs racines sont mesurées en
 // séries alternées (une série = une racine, un niveau, une page neuve). Chaque racine est servie
 // sous /PimpMyBichon/ sur son port (--port, puis les suivants).
-// Défauts : un tour entier de rotation lente (4 000 images à la vitesse 0,9), trois séries par
-// racine et par niveau, carte graphique réelle (ANGLE sur OpenGL ES) ; --logiciel prend le rendu
-// logiciel des parcours (pas de minuterie : seuls appels, triangles et programmes sont relevés).
+// --tour, un par racine, dans l'ordre des --root : comment la rotation lente de cette version
+// avance. « temps » (défaut) : au temps, un tour en 66,7 s de rotation quelle que soit la cadence
+// (src/render/frameMeter.ts, slowSpinSpeed : pas borné à 0,1 s, repris ici) ; « images » : d'un
+// angle fixe par image, un tour en 4 000 images (versions jusqu'à 8dc262f compris).
+// --frames <n> : n images au lieu d'un tour, pour toutes les racines (essai court).
+// Défauts : un tour entier de rotation lente, trois séries par racine et par niveau, carte
+// graphique réelle (ANGLE sur OpenGL ES) ; --logiciel prend le rendu logiciel des parcours (pas de
+// minuterie : seuls appels, triangles et programmes sont relevés).
 // Sortie : une ligne lisible par racine et par niveau (médiane, neuvième décile, bruit), et le
 // relevé complet en JSON (--out, défaut captures/cadence/cadence-<date>.json) ; --detail y ajoute,
-// par série, le temps de carte et les appels de chaque image (rang d'image depuis la première, donc
-// angle de rotation : on compare deux versions au même endroit du tour).
+// par série, le temps de carte et les appels de chaque image, avec son angle de rotation depuis la
+// première image gardée (on compare deux versions au même endroit du tour).
 
 /* global window, document, WebGL2RenderingContext, HTMLCanvasElement, MutationObserver -- fonctions exécutées dans la page */
 import { createReadStream, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -32,8 +38,9 @@ const { values } = parseArgs({
   options: {
     root: { type: 'string', multiple: true },
     label: { type: 'string', multiple: true },
+    tour: { type: 'string', multiple: true },
     levels: { type: 'string', default: 'standard,max' },
-    frames: { type: 'string', default: '4000' },
+    frames: { type: 'string' },
     skip: { type: 'string', default: '120' },
     repeat: { type: 'string', default: '3' },
     port: { type: 'string', default: '4321' },
@@ -52,7 +59,15 @@ const REPO = resolve(import.meta.dirname, '..', '..');
 const ROOTS = (values.root ?? [REPO]).map((root) => resolve(root));
 const LABELS = ROOTS.map((root, i) => values.label?.[i] ?? basename(root));
 const LEVELS = values.levels.split(',').map((level) => level.trim()).filter(Boolean);
-const FRAMES = Number(values.frames);
+/** Images gardées d'office (--frames) ; sinon, un tour de rotation lente. */
+const FRAMES = values.frames === undefined ? null : Number(values.frames);
+/** Tour de rotation lente, par racine : au temps (défaut) ou en images (anciennes versions). */
+const TOURS = ROOTS.map((_, i) => values.tour?.[i] ?? 'temps');
+/** Rotation au temps : durée d'un tour et pas maximal par image (src/render/frameMeter.ts). */
+const TURN_MS = (60 / 0.9) * 1000;
+const SPIN_MAX_STEP_MS = 100;
+/** Rotation d'un angle fixe par image (jusqu'à 8dc262f) : images par tour à la vitesse 0,9. */
+const TURN_FRAMES = 4000;
 const SKIP = Number(values.skip);
 const REPEAT = Number(values.repeat);
 const PORT = Number(values.port);
@@ -65,6 +80,8 @@ const LEVEL_LABELS = /** @type {Record<string, string>} */ ({ eco: 'Économie', 
 const GPU_FREQ = '/sys/class/drm/card1/gt_cur_freq_mhz';
 
 for (const level of LEVELS) if (!LEVEL_LABELS[level]) throw new Error(`Niveau inconnu : ${level} (eco, standard, max)`);
+for (const tour of TOURS) if (tour !== 'temps' && tour !== 'images') throw new Error(`Tour inconnu : ${tour} (temps, images)`);
+if (FRAMES !== null && !(FRAMES > 0)) throw new Error(`--frames : nombre d'images attendu`);
 for (const root of ROOTS) if (!existsSync(join(root, 'dist', 'index.html'))) throw new Error(`${root}/dist/index.html introuvable (lance le build)`);
 
 const MIME = /** @type {Record<string, string>} */ ({
@@ -128,11 +145,14 @@ function instrument() {
     gl: /** @type {WebGL2RenderingContext | null} */ (null),
     ext: /** @type {any} */ (null),
     renderer: /** @type {string | null} */ (null),
-    frames: /** @type {Array<{ i: number; t: number; draws: number; tris: number; programs: number; trame: number; gpu: number | null }>} */ ([]),
+    frames: /** @type {Array<{ i: number; t: number; s: number; draws: number; tris: number; programs: number; trame: number; gpu: number | null }>} */ ([]),
     pending: /** @type {Array<{ q: WebGLQuery; entry: { gpu: number | null } }>} */ ([]),
     current: /** @type {{ draws: number; tris: number } | null} */ (null),
     active: false,
     index: 0,
+    /** Temps de rotation cumulé, en millisecondes : écarts entre images dessinées, bornés comme l'app. */
+    spin: 0,
+    lastDraw: /** @type {number | null} */ (null),
     live: 0,
     disjoint: 0,
     outside: 0,
@@ -237,10 +257,13 @@ function instrument() {
         }
         if (frame.draws > 0) {
           rec.index += 1;
+          // Pas borné à 0,1 s, comme la rotation lente de l'app (slowSpinSpeed).
+          if (rec.lastDraw !== null) rec.spin += Math.min(Math.max(time - rec.lastDraw, 0), 100);
+          rec.lastDraw = time;
           rec.firstDraw ??= performance.now();
           // Matériaux de la coupe en trame à cette image, si la version l'expose (sinon −1).
           const trame = Number(document.querySelector('.stage')?.getAttribute('data-trame') ?? -1);
-          const entry = { i: rec.index, t: time, draws: frame.draws, tris: frame.tris, programs: rec.live, trame, gpu: null };
+          const entry = { i: rec.index, t: time, s: rec.spin, draws: frame.draws, tris: frame.tris, programs: rec.live, trame, gpu: null };
           rec.frames.push(entry);
           if (query) rec.pending.push({ q: query, entry });
         } else if (query && gl) gl.deleteQuery(query);
@@ -299,8 +322,9 @@ async function chooseLevel(page, level) {
  * @param {import('@playwright/test').Browser} browser
  * @param {string} base
  * @param {string} level
+ * @param {string} tour « temps » ou « images » : comment la rotation de cette version avance.
  */
-async function series(browser, base, level) {
+async function series(browser, base, level, tour) {
   const context = await browser.newContext({
     viewport: VIEWPORT,
     deviceScaleFactor: 2,
@@ -323,14 +347,25 @@ async function series(browser, base, level) {
     await page.locator(`.stage[data-quality="${level}"][data-bench="pret"]`).waitFor({ state: 'attached', timeout: 240_000 });
     const ready = await page.evaluate(() => /** @type {any} */ (window).__cadence.index);
     const first = ready + SKIP;
-    const last = first + FRAMES;
+    // Un tour : en images (--frames, ou version qui tourne d'un angle fixe par image), ou en temps
+    // de rotation depuis l'image `first` (version qui tourne au temps).
+    const byFrames = FRAMES ?? (tour === 'images' ? TURN_FRAMES : null);
     const freqs = /** @type {number[]} */ ([]);
-    const deadline = Date.now() + 60_000 + FRAMES * 100;
+    const deadline = Date.now() + 60_000 + (byFrames === null ? TURN_MS * 3 : byFrames * 100);
+    /** Temps de rotation cumulé à l'image `first` (rotation au temps). */
+    let spinStart = /** @type {number | null} */ (null);
+    let last = byFrames === null ? Number.POSITIVE_INFINITY : first + byFrames;
     let stalled = 0;
     let previous = ready;
     for (;;) {
       await page.waitForTimeout(250);
-      const index = await page.evaluate(() => /** @type {any} */ (window).__cadence.index);
+      const { index, spin, firstSpin } = await page.evaluate((from) => {
+        const rec = /** @type {any} */ (window).__cadence;
+        const entry = rec.index >= from ? rec.frames.find((/** @type {{ i: number }} */ f) => f.i === from) : null;
+        return { index: rec.index, spin: rec.spin, firstSpin: entry ? entry.s : null };
+      }, first);
+      if (spinStart === null && firstSpin !== null) spinStart = firstSpin;
+      if (byFrames === null && spinStart !== null && spin - spinStart >= TURN_MS && last === Number.POSITIVE_INFINITY) last = index;
       if (index >= first && index < last) freqs.push(readFreq());
       if (index >= last + 10) break;
       stalled = index === previous ? stalled + 1 : 0;
@@ -339,10 +374,12 @@ async function series(browser, base, level) {
       if (Date.now() > deadline) throw new Error('série trop longue');
     }
     const data = await page.evaluate(
-      ([from, to]) => {
+      ([from, to, start, turn]) => {
         const rec = /** @type {any} */ (window).__cadence;
+        // Rotation au temps : les images du tour sont celles dont la rotation depuis `from` tient dans un tour.
+        const inTurn = (/** @type {{ i: number; s: number }} */ f) => (start === null || turn === null ? f.i <= to : f.s - start <= turn);
         return {
-          frames: rec.frames.filter((/** @type {{ i: number }} */ f) => f.i > from && f.i <= to),
+          frames: rec.frames.filter((/** @type {{ i: number; s: number }} */ f) => f.i > from && inTurn(f)),
           renderer: rec.renderer,
           timer: rec.ext !== null,
           disjoint: rec.disjoint,
@@ -354,10 +391,13 @@ async function series(browser, base, level) {
           ),
         };
       },
-      [first, last],
+      /** @type {[number, number, number | null, number | null]} */ ([first, last, spinStart, byFrames === null ? TURN_MS : null]),
     );
-    /** @type {Array<{ t: number; draws: number; tris: number; programs: number; gpu: number | null }>} */
+    /** @type {Array<{ i: number; t: number; s: number; draws: number; tris: number; programs: number; gpu: number | null }>} */
     const frames = data.frames;
+    // Angle de rotation de chaque image depuis l'image `first`, en degrés.
+    const angleOf = (/** @type {{ i: number; s: number }} */ f) =>
+      tour === 'images' || spinStart === null ? ((f.i - first) / TURN_FRAMES) * 360 : ((f.s - spinStart) / TURN_MS) * 360;
     const gpu = sortNum(frames.flatMap((f) => (f.gpu === null ? [] : [f.gpu])));
     const span = frames.length > 1 ? ((frames.at(-1)?.t ?? 0) - (frames[0]?.t ?? 0)) / 1000 : Number.NaN;
     const freq = sortNum(freqs.filter(Number.isFinite));
@@ -371,6 +411,8 @@ async function series(browser, base, level) {
       triangles: { median: quantile(sortNum(frames.map((f) => f.tris)), 0.5), max: Math.max(...frames.map((f) => f.tris)) },
       programs: { start: frames[0]?.programs ?? null, end: frames.at(-1)?.programs ?? null, max: Math.max(...frames.map((f) => f.programs)) },
       fps: frames.length / span,
+      tour: byFrames === null ? 'temps' : tour === 'images' && FRAMES === null ? 'images' : 'images imposées',
+      turnDegrees: frames.length > 0 ? angleOf(/** @type {any} */ (frames.at(-1))) : Number.NaN,
       gpuFreqMHz: quantile(freq, 0.5),
       startup: {
         firstDrawMs: data.firstDraw,
@@ -379,7 +421,9 @@ async function series(browser, base, level) {
       },
       stage: data.stage,
       errors,
-      ...(values.detail ? { detail: frames.map((f) => [/** @type {any} */ (f).i, f.gpu === null ? null : Math.round(f.gpu * 1000) / 1000, f.draws, /** @type {any} */ (f).trame]) } : {}),
+      ...(values.detail
+        ? { detail: frames.map((f) => [f.i, Math.round(angleOf(f) * 100) / 100, f.gpu === null ? null : Math.round(f.gpu * 1000) / 1000, f.draws, /** @type {any} */ (f).trame]) }
+        : {}),
     };
   } finally {
     await context.close();
@@ -405,12 +449,12 @@ try {
       for (const i of order) {
         const label = LABELS[i] ?? '';
         const load = loadavg()[0] ?? 0;
-        const result = await series(browser, `http://127.0.0.1:${PORT + i}/PimpMyBichon/`, level);
+        const result = await series(browser, `http://127.0.0.1:${PORT + i}/PimpMyBichon/`, level, TOURS[i] ?? 'temps');
         results.push({ label, level, repeat, load, ...result });
         console.log(
           `  série ${repeat + 1}/${REPEAT} ${level} ${label} : médiane ${fr(result.gpu.median)} ms, p90 ${fr(result.gpu.p90)} ms` +
             ` · ${result.draws.median} appels · ${result.triangles.median.toLocaleString('fr-FR')} triangles · ${result.programs.end} programmes` +
-            ` · ${fr(result.fps, 1)} i/s · ${fr(result.gpuFreqMHz, 0)} MHz · charge ${fr(load, 1)}`,
+            ` · ${fr(result.fps, 1)} i/s · ${result.frames} images sur ${fr(result.turnDegrees, 1)}° · ${fr(result.gpuFreqMHz, 0)} MHz · charge ${fr(load, 1)}`,
         );
       }
     }
@@ -466,11 +510,12 @@ writeFileSync(
       renderer: results[0]?.renderer ?? null,
       viewport: { ...VIEWPORT, deviceScaleFactor: 2 },
       frames: FRAMES,
+      turn: { ms: TURN_MS, maxStepMs: SPIN_MAX_STEP_MS, framesPerTurnOld: TURN_FRAMES },
       skip: SKIP,
       repeat: REPEAT,
       software: values.logiciel,
       load: { before: loadBefore, after: loadavg() },
-      roots: ROOTS.map((root, i) => ({ label: LABELS[i], root })),
+      roots: ROOTS.map((root, i) => ({ label: LABELS[i], root, tour: TOURS[i] })),
       summary,
       series: results,
     },

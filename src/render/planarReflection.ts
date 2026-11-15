@@ -70,6 +70,12 @@ export class PlanarReflection {
   private readonly q = new Vector4();
   private readonly bias = new Matrix4().set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
   private readonly v = { camera: new Vector3(), look: new Vector3(), target: new Vector3(), up: new Vector3() };
+  // Objets de travail, alloués une fois : rien n'est créé à chaque image (ramasse-miettes).
+  private readonly normal = new Vector3(0, 1, 0);
+  private readonly origin = new Vector3();
+  private readonly view = new Vector3();
+  private readonly rotation = new Matrix4();
+  private readonly floorPosition = new Vector3();
 
   /** Taille de la cible nette, en pixels (pour les relevés). */
   readonly measured = { width: 0, height: 0 };
@@ -115,13 +121,12 @@ export class PlanarReflection {
 
   /** Caméra symétrique de `camera` par rapport au plan horizontal y = `height`, plan de coupe oblique. */
   private mirror(camera: Camera, height: number): void {
-    const { v, virtual } = this;
-    const normal = new Vector3(0, 1, 0);
-    const origin = new Vector3(0, height, 0);
+    const { v, virtual, normal } = this;
+    const origin = this.origin.set(0, height, 0);
     v.camera.setFromMatrixPosition(camera.matrixWorld);
-    const rotation = new Matrix4().extractRotation(camera.matrixWorld);
+    const rotation = this.rotation.extractRotation(camera.matrixWorld);
     v.look.set(0, 0, -1).applyMatrix4(rotation).add(v.camera);
-    const view = new Vector3().subVectors(origin, v.camera).reflect(normal).negate().add(origin);
+    const view = this.view.subVectors(origin, v.camera).reflect(normal).negate().add(origin);
     v.target.subVectors(origin, v.look).reflect(normal).negate().add(origin);
     virtual.position.copy(view);
     v.up.set(0, 1, 0).applyMatrix4(rotation).reflect(normal);
@@ -151,7 +156,11 @@ export class PlanarReflection {
   private blur(gl: WebGLRenderer): void {
     const uniforms = this.blurUniforms;
     let input: Texture = this.sharp.texture;
-    for (const [h, w] of BLUR_STEPS) {
+    // Boucle indexée : ni itérateur ni déstructuration à chaque image.
+    for (let i = 0; i < BLUR_STEPS.length; i += 1) {
+      const step = BLUR_STEPS[i] as readonly [number, number];
+      const h = step[0];
+      const w = step[1];
       uniforms.tInput.value = input;
       uniforms.uDirection.value.set(h / this.ping.width, 0);
       gl.setRenderTarget(this.ping);
@@ -171,7 +180,7 @@ export class PlanarReflection {
     camera.updateMatrixWorld();
     this.resize(gl);
     floor.updateMatrixWorld();
-    this.mirror(camera, floor.getWorldPosition(new Vector3()).y);
+    this.mirror(camera, floor.getWorldPosition(this.floorPosition).y);
     const autoClear = gl.autoClear;
     const previous = gl.getRenderTarget();
     floor.visible = false;

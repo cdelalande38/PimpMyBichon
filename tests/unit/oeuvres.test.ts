@@ -1,5 +1,6 @@
 // Œuvres du garage : registre, fichiers servis par l'app, préparation des SVG avant le canvas.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { Box3, type BufferGeometry } from 'three';
 import { describe, expect, it } from 'vitest';
 import { GARAGE } from '../../src/data/garage.ts';
 import {
@@ -12,6 +13,7 @@ import {
   garageArt,
 } from '../../src/data/garageArt.ts';
 import { artworkUrl, prepareSvg } from '../../src/scene/garage/artwork.ts';
+import { propGeometries } from '../../src/scene/garage/build.ts';
 
 const PUBLIC_ART = `public/${ART_DIR}`;
 const POIDS_MAX = 40 * 1024;
@@ -84,6 +86,12 @@ describe('registre des œuvres du garage', () => {
     }
   });
 
+  it('les substituts remplacés ou habillés (replaces) sont des objets du garage', () => {
+    const objets = new Set<string>(GARAGE.props.map((prop) => prop.name));
+    const inconnus = GARAGE_ART.flatMap((item) => item.replaces.filter((name) => !objets.has(name)).map((name) => `${item.id} : ${name}`));
+    expect(inconnus).toEqual([]);
+  });
+
   it('œuvres posées par les objets : œuvre et case connues, plan dans la pièce, largeur sensée', () => {
     const { width, depth, height } = GARAGE.room;
     const slots = GARAGE.props.flatMap((prop) => (prop.art ?? []).map((slot) => ({ prop, slot })));
@@ -104,8 +112,42 @@ describe('registre des œuvres du garage', () => {
     }
   });
 
-  it('la toile est un portrait 3:4', () => {
-    expect(garageArt('toile-pop-art').ratio).toBeCloseTo(3 / 4, 6);
+  it('la toile tient en portrait 3:4 sur la colonne, entre 2,0 et 2,9 m, sous les solives', () => {
+    const toile = garageArt('toile-pop-art');
+    expect(toile.ratio).toBeCloseTo(3 / 4, 6);
+    // Place lue dans l'objet qui la porte : centre du plan (y de l'objet et de la case), hauteur
+    // suivant le rapport de l'œuvre.
+    const posees = GARAGE.props.flatMap((prop) => (prop.art ?? []).filter((slot) => slot.art === toile.id).map((slot) => ({ prop, slot })));
+    expect(posees).toHaveLength(1);
+    const { prop, slot } = posees[0] as (typeof posees)[number];
+    const [w, h] = artSize(toile, slot.region);
+    const hauteur = (slot.width * h) / w;
+    const y = prop.at[1] + slot.at[1];
+    expect(y - hauteur / 2, 'bas de la toile').toBeGreaterThanOrEqual(2.0);
+    expect(y + hauteur / 2, 'haut de la toile').toBeLessThanOrEqual(2.9);
+    // Les solives qui passent au-dessus d'elle (x = 2,1 m) descendent à 2,76 m : le châssis reste
+    // dessous.
+    const boite = (geometries: BufferGeometry[]) => {
+      const box = new Box3();
+      for (const geometry of geometries) {
+        geometry.computeBoundingBox();
+        if (geometry.boundingBox) box.union(geometry.boundingBox);
+        geometry.dispose();
+      }
+      return box;
+    };
+    const chassis = boite(propGeometries(prop));
+    const solives = GARAGE.props
+      .filter((objet) => objet.parts.some((part) => part.material === 'solive'))
+      .flatMap((objet) => {
+        const geometries = propGeometries(objet);
+        const boxes = geometries.flatMap((geometry, index) => (objet.parts[index]?.material === 'solive' ? [boite([geometry])] : []));
+        for (const geometry of geometries) geometry.dispose();
+        return boxes;
+      });
+    const dessus = solives.filter((s) => s.min.x < chassis.max.x && s.max.x > chassis.min.x && s.min.z < chassis.max.z && s.max.z > chassis.min.z);
+    expect(dessus.length, 'solives au-dessus de la toile').toBeGreaterThan(0);
+    for (const solive of dessus) expect(chassis.max.y, 'haut du châssis sous la solive').toBeLessThan(solive.min.y);
   });
 
   it('taille et pixels d’une case suivent la densité de l’œuvre entière', () => {

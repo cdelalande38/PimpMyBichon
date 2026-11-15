@@ -7,8 +7,23 @@
 // image quand le dessin arrive. Aucune requête vers un tiers : le fichier vient de la base de
 // l'app, le dessin passe par une URL blob locale.
 
-import { CanvasTexture, SRGBColorSpace } from 'three';
+import { CanvasTexture, Color, MeshBasicMaterial, MeshStandardMaterial, SRGBColorSpace, type Texture } from 'three';
 import { type ArtRect, artPixels, artRect, garageArt, type GarageArt, type GarageArtId } from '../../data/garageArt.ts';
+
+/** Écart entre une œuvre et la surface qui la porte, ajouté au millimètre de son `at` (ArtSlot). */
+export const ART_GAP = 0.001;
+
+/**
+ * Matière d'une œuvre posée, la même dans le garage (build.ts) et dans le studio des formes :
+ * émissive (glace du flipper) ou éclairée par la pièce. Une œuvre transparente est découpée par
+ * alphaTest, sans mélange : elle reste opaque pour le tri et la profondeur.
+ */
+export function artworkMaterial(item: GarageArt, texture: Texture): MeshBasicMaterial | MeshStandardMaterial {
+  const alphaTest = item.transparent ? 0.5 : 0;
+  return item.lighting === 'emissive'
+    ? new MeshBasicMaterial({ map: texture, color: new Color(1, 1, 1).multiplyScalar(item.glow ?? 1), alphaTest })
+    : new MeshStandardMaterial({ map: texture, roughness: 0.6, metalness: 0, envMapIntensity: 0.2, alphaTest });
+}
 
 export interface ArtworkOptions {
   /** Case d'une planche (plaques, casques, cible seule). */
@@ -94,8 +109,11 @@ async function draw(
     const context = canvas.getContext('2d');
     if (!context) throw new Error('canvas 2D indisponible');
     // Sous une œuvre opaque, la teinte d'attente reste en fond : les coins arrondis et les bords
-    // lissés se fondent dans le dessin au lieu de virer au noir.
-    paintWaiting(context, item, canvas.width, canvas.height);
+    // lissés se fondent dans le dessin au lieu de virer au noir. Une œuvre transparente part d'un
+    // canvas vide : hors du dessin, l'alpha reste nul et l'alphaTest de la matière découpe sa
+    // silhouette (la cible et son panneau étagé).
+    if (item.transparent) context.clearRect(0, 0, canvas.width, canvas.height);
+    else paintWaiting(context, item, canvas.width, canvas.height);
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
   } finally {
     URL.revokeObjectURL(url);

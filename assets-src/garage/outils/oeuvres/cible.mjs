@@ -1,6 +1,6 @@
 // La cible de fléchettes dans son panneau de bois à bords étagés.
 // Unités du viewBox : le millimètre. Le panneau reprend les deux boîtes de `placeholder_panneau_cible`
-// (1,2 × 0,8 m et 0,8 × 1,0 m, centrées) ; la cible fait 456 mm, comme `placeholder_cible` (0,46 m).
+// (1,2 × 0,8 m et 0,8 × 1,0 m, centrées) ; la cible fait 456 mm (0,46 m).
 
 import { M, PALETTE as P, f, svg, texte } from '../traces.mjs';
 import { secteur } from '../motifs.mjs';
