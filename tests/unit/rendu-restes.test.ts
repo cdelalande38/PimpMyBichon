@@ -403,13 +403,13 @@ describe('ombre du véhicule (revue d, D1 et m5)', () => {
     rig.dispose();
   });
 
-  it('rendue dans une cible vidée (transparente), sans le mobilier, puis deux flous ; état du rendu rendu tel quel', () => {
+  it('rendue dans une cible vidée (transparente), sans le mobilier, puis deux flous, le halo et leur réunion ; état du rendu rendu tel quel', () => {
     const { world, vehicle, quad } = roomWithVehicle();
     const rig = new VehicleShadowRig(shadowSize({ halfLength: 2, halfWidth: 1, height: 1.4 }));
     world.add(rig.root);
     const { gl, calls, clear, bound } = fakeRenderer();
     rig.render(gl as unknown as WebGLRenderer, vehicle, world);
-    const [first, depth, ...blurs] = calls;
+    const [first, depth, ...passes] = calls;
     expect(first).toMatchObject({ kind: 'clear', alpha: 0 });
     expect(depth?.kind).toBe('render');
     expect(depth?.target).toBe(first?.target);
@@ -417,10 +417,15 @@ describe('ombre du véhicule (revue d, D1 et m5)', () => {
     depth?.scene?.traverse((object) => drawn.push(object));
     expect(drawn).not.toContain(quad);
     expect(drawn.filter((object) => object instanceof Mesh)).toHaveLength(2);
-    // Deux flous (horizontal puis vertical), deux fois : drei, `smooth`.
-    expect(blurs).toHaveLength(4);
-    expect(blurs.every((call) => call.kind === 'render')).toBe(true);
+    // Le cœur : deux flous (horizontal puis vertical), deux fois (drei, `smooth`), rendus dans la
+    // cible de profondeur. Puis le halo (deux fois deux flous larges) et la réunion des deux.
+    expect(passes).toHaveLength(9);
+    expect(passes.every((call) => call.kind === 'render')).toBe(true);
+    const blurs = passes.slice(0, 4);
     expect(blurs[3]?.target).toBe(first?.target);
+    const output = passes[8]?.target;
+    expect(output).not.toBe(first?.target);
+    expect((rig.plane.material as unknown as { map: unknown }).map).toBe(output?.texture);
     expect(bound()).toBeNull();
     expect(clear.alpha).toBe(1);
     expect(clear.color.getHex()).toBe(0x123456);
@@ -431,10 +436,13 @@ describe('ombre du véhicule (revue d, D1 et m5)', () => {
     rig.dispose();
   });
 
-  it('même plan, même flou et même opacité que l’ancien appel à ContactShadows', () => {
+  it('même flou et même opacité que l’ancien appel à ContactShadows ; plan élargi pour le halo', () => {
     expect(VEHICLE_SHADOW).toMatchObject({ spread: [2.5, 3], blur: 2.2, opacity: 0.8, resolution: 512, smooth: true });
     const size = shadowSize({ halfLength: 2.2, halfWidth: 0.9, height: 1.45 });
-    expect(size).toEqual({ width: 2.2 * 2.5, depth: 0.9 * 3, far: 1.45 });
+    // Les facteurs de drei laissaient 0,55 m devant et 0,45 m sur le côté : le bord passe à 0,7 m.
+    expect(size.width).toBeCloseTo(2 * (2.2 + VEHICLE_SHADOW.margin));
+    expect(size.depth).toBeCloseTo(2 * (0.9 + VEHICLE_SHADOW.margin));
+    expect(size.far).toBe(1.45);
     const rig = new VehicleShadowRig(size);
     expect(rig.root.rotation.x).toBeCloseTo(Math.PI / 2);
     expect([rig.camera.left, rig.camera.right, rig.camera.top, rig.camera.bottom, rig.camera.near, rig.camera.far]).toEqual([
@@ -453,10 +461,12 @@ describe('ombre du véhicule (revue d, D1 et m5)', () => {
     rig.dispose();
   });
 
-  it('libère ses deux cibles, son plan et ses matériaux au démontage', () => {
+  it('libère ses cinq cibles, son plan et ses matériaux au démontage', () => {
     const rig = new VehicleShadowRig(shadowSize({ halfLength: 2, halfWidth: 1, height: 1.4 }));
     const internals = rig as unknown as Record<string, { addEventListener: (type: 'dispose', listener: () => void) => void }>;
-    const owned = ['target', 'blurTarget', 'geometry', 'depth', 'horizontal', 'vertical', 'planeMaterial'].map((key) => internals[key]!);
+    const keys = ['target', 'blurTarget', 'output', 'haloTarget', 'haloBlurTarget', 'geometry', 'depth', 'horizontal', 'vertical', 'combine', 'planeMaterial'];
+    const owned = keys.map((key) => internals[key]!);
+    expect(owned.every(Boolean)).toBe(true);
     const disposed = watchDispose(owned);
     rig.dispose();
     expect(disposed.size).toBe(owned.length);

@@ -7,6 +7,12 @@
 // matériaux, mêmes positions dans la pièce) : rien d'autre n'y entre, et la scène du garage, ses
 // lumières et son état de rendu ne sont pas touchés. Seul écart voulu avec drei : la profondeur est
 // testée (shadowDepthMaterial), d'où une ombre identique d'un chargement à l'autre.
+// Ajout de la vague i : un halo large et doux autour de l'empreinte. Les réglages de drei ne
+// débordaient que de 10 à 20 cm autour de l'empreinte du véhicule : à hauteur d'œil, presque tout
+// tombait sous la caisse ou sur le sol qui reflète déjà la caisse sombre, et seule la bande de sol
+// vue sous le bas de caisse, côté opposé, changeait à l'écran (mêmes relevés à 8d46b53, 85dfa63 et
+// 9227b57). Le halo assombrit le sol clair autour des pneus et des bouts du véhicule ; le cœur net
+// sous les pneus reste celui de drei.
 
 import {
   Color,
@@ -35,6 +41,13 @@ export const VEHICLE_SHADOW = {
   /** Seconde passe de flou, plus fine (drei : `smooth`). */
   smooth: true,
   color: '#000000',
+  /**
+   * Halo autour de l'empreinte : rayon du flou en mètres (deux passes, la seconde de moitié),
+   * force (part de l'opacité du cœur) et résolution de ses cibles (flou large : peu de texels).
+   */
+  halo: { radius: 0.45, strength: 1, resolution: 128 },
+  /** Bord minimal du plan d'ombre autour du véhicule, en mètres : le halo ne doit pas y être coupé. */
+  margin: 0.7,
 } as const;
 
 export interface ShadowSize {
@@ -45,14 +58,40 @@ export interface ShadowSize {
   far: number;
 }
 
-/** Taille du plan d'ombre d'un véhicule posé (demi-longueur, demi-largeur, hauteur). */
+/**
+ * Taille du plan d'ombre d'un véhicule posé (demi-longueur, demi-largeur, hauteur) : celle de drei
+ * (facteurs `spread`), élargie s'il le faut pour laisser `margin` de chaque côté (moto étroite).
+ */
 export function shadowSize(measure: { halfLength: number; halfWidth: number; height: number }): ShadowSize {
+  const { spread, margin } = VEHICLE_SHADOW;
   return {
-    width: measure.halfLength * VEHICLE_SHADOW.spread[0],
-    depth: measure.halfWidth * VEHICLE_SHADOW.spread[1],
+    width: Math.max(measure.halfLength * spread[0], 2 * (measure.halfLength + margin)),
+    depth: Math.max(measure.halfWidth * spread[1], 2 * (measure.halfWidth + margin)),
     far: measure.height,
   };
 }
+
+/** Réunion du cœur net et du halo : le plus sombre des deux, le halo adouci et pesé par sa force. */
+const COMBINE_SHADER = {
+  uniforms: { tCore: { value: null }, tHalo: { value: null }, strength: { value: 1 } },
+  vertexShader: /* glsl */ `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+    }`,
+  fragmentShader: /* glsl */ `
+    uniform sampler2D tCore;
+    uniform sampler2D tHalo;
+    uniform float strength;
+    varying vec2 vUv;
+    void main() {
+      vec4 core = texture2D( tCore, vUv );
+      // Courbe adoucie (h · (2 − h)) : le halo pèse près de l'empreinte, sa traîne reste faible.
+      float halo = texture2D( tHalo, vUv ).a;
+      gl_FragColor = vec4( core.rgb, max( core.a, halo * ( 2.0 - halo ) * strength ) );
+    }`,
+};
 
 /**
  * Scène de rendu de l'ombre : une reprise de chaque pièce visible de `caster`, sur sa géométrie et
@@ -109,6 +148,12 @@ export class VehicleShadowRig {
   readonly plane: Mesh;
   private readonly target: WebGLRenderTarget;
   private readonly blurTarget: WebGLRenderTarget;
+  /** Cibles du halo (basse résolution) ; l'ombre finale est dans `output`. */
+  private readonly haloTarget: WebGLRenderTarget;
+  private readonly haloBlurTarget: WebGLRenderTarget;
+  private readonly output: WebGLRenderTarget;
+  private readonly combine = new ShaderMaterial(COMBINE_SHADER);
+  private readonly size: ShadowSize;
   private readonly geometry: PlaneGeometry;
   private readonly depth: MeshDepthMaterial;
   private readonly horizontal = new ShaderMaterial(HorizontalBlurShader);
@@ -118,17 +163,21 @@ export class VehicleShadowRig {
   private readonly clearColor = new Color();
 
   constructor(size: ShadowSize) {
-    const { resolution } = VEHICLE_SHADOW;
+    const { resolution, halo } = VEHICLE_SHADOW;
+    this.size = size;
     this.target = new WebGLRenderTarget(resolution, resolution);
     this.blurTarget = new WebGLRenderTarget(resolution, resolution);
-    this.target.texture.generateMipmaps = this.blurTarget.texture.generateMipmaps = false;
+    this.output = new WebGLRenderTarget(resolution, resolution, { depthBuffer: false });
+    this.haloTarget = new WebGLRenderTarget(halo.resolution, halo.resolution, { depthBuffer: false });
+    this.haloBlurTarget = new WebGLRenderTarget(halo.resolution, halo.resolution, { depthBuffer: false });
+    for (const item of [this.target, this.blurTarget, this.output, this.haloTarget, this.haloBlurTarget]) item.texture.generateMipmaps = false;
     this.geometry = new PlaneGeometry(size.width, size.depth).rotateX(Math.PI / 2);
     this.blurPlane = new Mesh(this.geometry, this.horizontal);
     this.depth = shadowDepthMaterial(VEHICLE_SHADOW.color);
-    this.horizontal.depthTest = this.vertical.depthTest = false;
+    this.horizontal.depthTest = this.vertical.depthTest = this.combine.depthTest = false;
 
     this.root.rotation.x = Math.PI / 2;
-    this.planeMaterial = new MeshBasicMaterial({ transparent: true, map: this.target.texture, opacity: VEHICLE_SHADOW.opacity, depthWrite: false });
+    this.planeMaterial = new MeshBasicMaterial({ transparent: true, map: this.output.texture, opacity: VEHICLE_SHADOW.opacity, depthWrite: false });
     this.plane = new Mesh(this.geometry, this.planeMaterial);
     this.plane.scale.set(1, -1, 1);
     this.plane.rotation.set(-Math.PI / 2, 0, 0);
@@ -137,7 +186,8 @@ export class VehicleShadowRig {
   }
 
   /**
-   * Rend l'ombre de `caster` (le véhicule) : profondeur vue d'en dessous, puis deux flous. `world` est
+   * Rend l'ombre de `caster` (le véhicule) : profondeur vue d'en dessous, puis deux flous (le cœur),
+   * le halo tiré du cœur (deux flous larges, en basse résolution) et leur réunion. `world` est
    * la scène où vivent le véhicule et ce plan : ses matrices sont mises à jour d'abord, comme le
    * faisait le rendu de drei. La cible de profondeur part vide (transparente) à chaque rendu.
    */
@@ -151,23 +201,39 @@ export class VehicleShadowRig {
     gl.clear(true, true, true);
     gl.setClearColor(this.clearColor, clearAlpha);
     gl.render(casters, this.camera);
-    this.blur(gl, VEHICLE_SHADOW.blur);
-    if (VEHICLE_SHADOW.smooth) this.blur(gl, VEHICLE_SHADOW.blur * 0.4);
+    this.blur(gl, this.target, this.blurTarget, this.target, VEHICLE_SHADOW.blur / 256, VEHICLE_SHADOW.blur / 256);
+    if (VEHICLE_SHADOW.smooth) this.blur(gl, this.target, this.blurTarget, this.target, (VEHICLE_SHADOW.blur * 0.4) / 256, (VEHICLE_SHADOW.blur * 0.4) / 256);
+    // Halo : le noyau du flou s'étend sur ± 4 pas ; rayon en mètres, ramené à chaque côté du plan.
+    const { radius, strength } = VEHICLE_SHADOW.halo;
+    const h = radius / 4 / this.size.width;
+    const v = radius / 4 / this.size.depth;
+    this.blur(gl, this.target, this.haloTarget, this.haloBlurTarget, h, v);
+    this.blur(gl, this.haloBlurTarget, this.haloTarget, this.haloBlurTarget, h / 2, v / 2);
+    const { blurPlane, combine } = this;
+    blurPlane.visible = true;
+    blurPlane.material = combine;
+    (combine.uniforms.tCore as { value: unknown }).value = this.target.texture;
+    (combine.uniforms.tHalo as { value: unknown }).value = this.haloBlurTarget.texture;
+    (combine.uniforms.strength as { value: number }).value = strength;
+    gl.setRenderTarget(this.output);
+    gl.render(blurPlane, this.camera);
+    blurPlane.visible = false;
     gl.setRenderTarget(null);
   }
 
-  private blur(gl: WebGLRenderer, amount: number): void {
+  /** Flou horizontal de `source` dans `between`, puis vertical dans `into` (pas en unités de texture). */
+  private blur(gl: WebGLRenderer, source: WebGLRenderTarget, between: WebGLRenderTarget, into: WebGLRenderTarget, h: number, v: number): void {
     const { blurPlane, horizontal, vertical } = this;
     blurPlane.visible = true;
     blurPlane.material = horizontal;
-    (horizontal.uniforms.tDiffuse as { value: unknown }).value = this.target.texture;
-    (horizontal.uniforms.h as { value: number }).value = amount / 256;
-    gl.setRenderTarget(this.blurTarget);
+    (horizontal.uniforms.tDiffuse as { value: unknown }).value = source.texture;
+    (horizontal.uniforms.h as { value: number }).value = h;
+    gl.setRenderTarget(between);
     gl.render(blurPlane, this.camera);
     blurPlane.material = vertical;
-    (vertical.uniforms.tDiffuse as { value: unknown }).value = this.blurTarget.texture;
-    (vertical.uniforms.v as { value: number }).value = amount / 256;
-    gl.setRenderTarget(this.target);
+    (vertical.uniforms.tDiffuse as { value: unknown }).value = between.texture;
+    (vertical.uniforms.v as { value: number }).value = v;
+    gl.setRenderTarget(into);
     gl.render(blurPlane, this.camera);
     blurPlane.visible = false;
   }
@@ -184,6 +250,8 @@ export class VehicleShadowRig {
       gl.compile(this.blurPlane, this.camera);
       this.blurPlane.material = this.vertical;
       gl.compile(this.blurPlane, this.camera);
+      this.blurPlane.material = this.combine;
+      gl.compile(this.blurPlane, this.camera);
     } finally {
       gl.setRenderTarget(previous);
     }
@@ -192,6 +260,10 @@ export class VehicleShadowRig {
   dispose(): void {
     this.target.dispose();
     this.blurTarget.dispose();
+    this.output.dispose();
+    this.haloTarget.dispose();
+    this.haloBlurTarget.dispose();
+    this.combine.dispose();
     this.geometry.dispose();
     this.depth.dispose();
     this.horizontal.dispose();

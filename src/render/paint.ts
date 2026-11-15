@@ -2,7 +2,8 @@
 // onBeforeCompile et piloté par les finitions de src/data/finishes.ts.
 //  - Base : teinte, métal, paillettes (normales perturbées par cellules, en repère monde).
 //    Une paillette plus petite qu'un pixel ne scintille plus : elle se fond en rugosité,
-//    comme à l'œil. Leur taille se règle en millimètres.
+//    comme à l'œil ; vue de loin (foule de paillettes par pixel) ou sur une pièce fine, son
+//    éclat se fond en scintillement doux. Leur taille se règle en millimètres.
 //  - Vernis (clearcoat) : léger grain de peau d'orange sur sa normale, Fresnel renforcé.
 //  - Effets d'angle : candy (vernis teinté, plus profond sur les bords), caméléon (seconde
 //    teinte sur les bords), nacré (irisation de three.js).
@@ -53,6 +54,13 @@ function createUniforms(): PaintUniforms {
   };
 }
 
+/**
+ * Nombre de paillettes par côté de pixel au-delà duquel leur grain se fond en scintillement doux.
+ * 16 : les cadrages photo du concept (au plus 11 à 16 paillettes de 0,35 mm par côté de pixel, en
+ * densité 2) et sa vue de départ au téléphone restent tels qu'ils ont été validés.
+ */
+export const FLAKE_CROWD = 16;
+
 const VERTEX_PARS = /* glsl */ `
 varying vec3 vPmbWorld;
 `;
@@ -63,6 +71,8 @@ vPmbWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
 
 const FRAGMENT_PARS = /* glsl */ `
 varying vec3 vPmbWorld;
+// Paillettes par côté de pixel au-delà desquelles leur grain se fond (voir FRAGMENT_SURFACE).
+#define PMB_FLAKE_CROWD ${FLAKE_CROWD.toFixed(1)}
 uniform float pmbFlake;
 uniform float pmbFlakeSize;
 uniform float pmbPeel;
@@ -101,19 +111,39 @@ diffuseColor.rgb = mix( diffuseColor.rgb, pmbFlipColor, pmbFlip * ( 1.0 - smooth
 // Paillettes : une normale inclinée au hasard par cellule. Les cellules plus petites qu'un
 // pixel sont regroupées (niveaux de détail fondus) et leur effet décroît comme une moyenne.
 vec3 pmbCell = vPmbWorld / max( pmbFlakeSize, 1e-5 );
-float pmbFootprint = max( length( dFdx( pmbCell ) ), length( dFdy( pmbCell ) ) );
+vec3 pmbCellDx = dFdx( pmbCell );
+vec3 pmbCellDy = dFdy( pmbCell );
+float pmbFootprint = max( length( pmbCellDx ), length( pmbCellDy ) );
 float pmbLod = max( 0.0, log2( max( pmbFootprint, 1e-4 ) ) + 0.5 );
 float pmbLod0 = floor( pmbLod );
 vec3 pmbFlakeA = pmbHash3( floor( pmbCell / exp2( pmbLod0 ) ) );
 vec3 pmbFlakeB = pmbHash3( floor( pmbCell / exp2( pmbLod0 + 1.0 ) ) + 17.0 );
 vec3 pmbFlakeDir = mix( pmbFlakeA, pmbFlakeB, fract( pmbLod ) ) * 2.0 - 1.0;
 float pmbResolved = sqrt( clamp( 1.0 / max( pmbFootprint, 1e-4 ), 0.0, 1.0 ) );
-normal = normalize( normal + ( viewMatrix * vec4( pmbFlakeDir, 0.0 ) ).xyz * pmbFlake * mix( 0.06, 0.28, pmbResolved ) );
-float pmbFlakeBlur = pmbFlake * ( 1.0 - pmbResolved ) * 0.22;
+// Foule : au-delà de PMB_FLAKE_CROWD paillettes par côté de pixel, un pixel en moyenne des
+// centaines et sa moyenne ne varie plus d'un pixel à l'autre que comme 1 / racine de leur nombre.
+// Le grain hérité (pmbResolved, en 1 / racine de la taille) décroît alors encore d'autant : en
+// 1 / taille, au lieu de laisser des points clairs grands comme un pixel. Le nombre se lit sur
+// l'aire de la tache du pixel sur la surface, en cellules (et non sur son plus grand côté : une
+// surface vue de biais en couvre beaucoup). En deçà, rien ne change : c'est le rendu validé de
+// près (cadrages photo du concept, vue de départ au téléphone).
+float pmbArea = length( cross( pmbCellDx, pmbCellDy ) );
+float pmbSpread = sqrt( clamp( PMB_FLAKE_CROWD / sqrt( max( pmbArea, 1e-8 ) ), 0.0, 1.0 ) );
+// Pièce fine ou très courbe (tube de moto, arête) : sa normale tourne de plus de 0,1 rad par
+// pixel. Un éclat par pixel y froisserait la surface et y paraîtrait gros pour l'échelle ; le
+// grain s'y fond (même moyenne). Sur les panneaux de carrosserie (0,01 à 0,02 rad), rien ne change.
+float pmbBend = length( fwidth( nonPerturbedNormal ) );
+float pmbKeep = pmbSpread * ( 1.0 - smoothstep( 0.08, 0.3, pmbBend ) );
+float pmbTilt = pmbFlake * mix( 0.06, 0.28, pmbResolved );
+normal = normalize( normal + ( viewMatrix * vec4( pmbFlakeDir, 0.0 ) ).xyz * pmbTilt * pmbKeep );
+// Ce que les normales ne montrent plus une à une élargit le reflet, comme une rugosité.
+float pmbFlakeBlur = pmbFlake * ( 1.0 - pmbResolved ) * 0.22 + pmbTilt * ( 1.0 - pmbKeep ) * 0.5;
 // Une paillette sur huit est un éclat d'alu nu, lisse comme un miroir : il renvoie la couleur
 // de la lumière (argent sous le blanc, rouge ou bleu sous les LED) et ne brille que tourné vers
-// une source. Trop fines pour être vues une à une, elles éclaircissent le reflet en moyenne.
+// une source. Trop fines pour être vues une à une, elles éclaircissent le reflet en moyenne : dans
+// la foule ou sur une pièce fine, un pixel en montre la proportion (0,12), à peine plus ou moins.
 float pmbSparkCell = step( 0.88, mix( pmbFlakeA.z, pmbFlakeB.z, fract( pmbLod ) ) );
+pmbSparkCell = mix( 0.12, pmbSparkCell, pmbKeep );
 float pmbSpark = pmbFlake * mix( 0.06, pmbSparkCell, pmbResolved );
 diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.92 ), pmbSpark * 0.5 );
 metalnessFactor = mix( metalnessFactor, 1.0, pmbSpark );
