@@ -29,7 +29,7 @@ test.describe('panneaux', () => {
     await expect(dialog.getByText('Version')).toBeVisible();
     await expect(dialog.getByText(/WebGL 2/)).toBeVisible();
     await expect(dialog.getByText(/Absents\s: sons et musique muets|Dossier privé présent|Présents\s:/)).toBeVisible();
-    await expect(dialog.getByText(/placeholder_garage, placeholder_banc/)).toBeVisible();
+    await expect(dialog.getByText(/Le mobilier du garage, modelé par le code.*placeholder_banc/)).toBeVisible();
     await expectControlsInThumbZone(page);
     await capture(page, '02-sous-le-capot');
   });

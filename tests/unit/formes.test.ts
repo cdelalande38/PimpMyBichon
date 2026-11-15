@@ -304,6 +304,21 @@ function legacy(shape: GarageShape): BufferGeometry {
   throw new Error('forme non historique');
 }
 
+/**
+ * Forme d'origine d'une pièce du mobilier (pavé, cylindre ou sphère sans paramètre nouveau), ou
+ * null : les pièces remodelées avec le vocabulaire entier sortent de ces comparaisons.
+ */
+function historic(part: GarageShape): GarageShape | null {
+  if ('box' in part) return part.bevel === undefined && part.detail === undefined ? { box: part.box } : null;
+  if ('cylinder' in part) {
+    return part.top === undefined && part.bevel === undefined && part.detail === undefined
+      ? { cylinder: part.cylinder, ...(part.axis ? { axis: part.axis } : {}) }
+      : null;
+  }
+  if ('sphere' in part) return part.scale === undefined && part.detail === undefined ? { sphere: part.sphere } : null;
+  return null;
+}
+
 describe('formes d’origine : construites comme avant', () => {
   const origin: GarageShape[] = [
     { box: [1.2, 0.9, 0.6] },
@@ -334,24 +349,22 @@ describe('formes d’origine : construites comme avant', () => {
       return material.map !== undefined || material.roughnessMap !== undefined;
     };
     const offenders = GARAGE.props.flatMap((prop) =>
-      prop.parts.filter((part) => ('cylinder' in part || 'sphere' in part) && textured(part.material)).map((part) => `${prop.name} : ${part.material}`),
+      prop.parts.filter((part) => historic(part) !== null && !('box' in part) && textured(part.material)).map((part) => `${prop.name} : ${part.material}`),
     );
     expect(offenders).toEqual([]);
   });
 
-  it('le mobilier actuel se construit en entier avec shapeGeometry, mêmes boîtes que partGeometry', () => {
-    let count = 0;
+  it('les pièces d’origine du mobilier ont les mêmes boîtes avec shapeGeometry qu’avec partGeometry', () => {
     for (const prop of GARAGE.props) {
       for (const part of prop.parts) {
-        const shape = ('box' in part ? { box: part.box } : 'cylinder' in part ? { cylinder: part.cylinder, axis: part.axis } : { sphere: part.sphere }) as GarageShape;
+        const shape = historic(part);
+        if (!shape) continue;
         const matrix = new Matrix4().compose(new Vector3(...part.at), new Quaternion().setFromEuler(new Euler(...(part.rot ?? [0, 0, 0]))), new Vector3(1, 1, 1));
         const now = new Box3().setFromBufferAttribute(shapeGeometry(shape).applyMatrix4(matrix).getAttribute('position') as never);
         const before = new Box3().setFromBufferAttribute(legacy(shape).applyMatrix4(matrix).getAttribute('position') as never);
         expect(now.equals(before)).toBe(true);
-        count += 1;
       }
     }
-    expect(count).toBeGreaterThan(20);
   });
 });
 

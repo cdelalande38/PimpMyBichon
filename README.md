@@ -7,7 +7,7 @@ Le périmètre, la stack, les budgets et les jalons sont dans [CAHIER_DES_CHARGE
 ## Où en est le projet
 
 - **Jalon 0, le socle** : accepté le 14 novembre 2026. Vite, React, React Three Fiber, PWA hors ligne, CI et déploiement Pages.
-- **Jalon 1, le rendu cible** : en cours. Rendu showroom néon sur un modèle de banc d'essai, substitut déclaré dans [TODO_ASSETS.md](TODO_ASSETS.md). Pas encore de véhicule du catalogue, pas encore de son.
+- **Jalon 1, le rendu cible** : en ligne, en attente de sa validation sur téléphone. Rendu showroom néon sur un modèle de banc d'essai, trois ambiances, mode photo. Le garage est construit d'après des données : son mobilier est modelé par le code en formes arrondies, les enseignes néon sont en tubes, les œuvres dessinées pour le projet sont accrochées. Quand on tourne autour du véhicule, les murs et les objets qui passeraient devant lui sortent de l'image (coupe caméra). Le modèle de banc d'essai et chaque meuble sont des substituts déclarés dans [TODO_ASSETS.md](TODO_ASSETS.md). Pas encore de véhicule du catalogue, pas encore de son.
 
 ## Démarrer
 
@@ -47,10 +47,13 @@ src/
   app/        coque, routage par hash, styles
   pwa/        service worker, précache, mise à jour, installation
   state/      réglages et sauvegarde IndexedDB
-  render/     niveaux de qualité, mesures du rendu
-  scene/      scène du garage (substituts au jalon 0)
+  data/       ambiances, finitions, cadrages, garage (pièce, mobilier, formes, œuvres, néons)
+  render/     niveaux de qualité, reflets, sol, coupe caméra, mesures du rendu
+  scene/      scène du garage, banc d'essai, mode photo
   ui/         HUD, dock, panneaux
-tools/        contrôles du dépôt, icônes, détection du dépôt privé d'assets
+  dev/        pages de développement (studio des formes, planche des œuvres), hors du site construit
+assets-src/   dessins sources faits pour le projet (œuvres du garage, stickers)
+tools/        contrôles du dépôt, icônes, captures de contrôle, détection du dépôt privé d'assets
 tests/        unit/ (Vitest) et e2e/ (Playwright)
 docs/         déploiement, sourcing audio
 proto/        prototype v0.1 : référence d'ergonomie uniquement

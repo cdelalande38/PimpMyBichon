@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { AMBIANCES } from '../../src/data/ambiances.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import { colorOf, GARAGE, GARAGE_MATERIALS, type ColorKey } from '../../src/data/garage.ts';
+import { NEON_SIGNS } from '../../src/data/neonAlphabet.ts';
 import { CUT_ATTRIBUTE } from '../../src/render/cut.ts';
 import { patchGarageShader, patchSurfaceShader } from '../../src/render/floor.ts';
 import { CAMERA_LAYERS, PROBE_LAYERS, PROBE_ONLY_LAYER } from '../../src/render/layers.ts';
@@ -52,10 +53,19 @@ describe('garage du § 4', () => {
       ...GARAGE.spots.map((item) => item.color),
       ...GARAGE.strips.map((item) => item.color),
       ...GARAGE.halos.map((item) => item.color),
-      ...GARAGE.signs.map((item) => item.color),
     ]);
     for (const ambiance of AMBIANCES) {
       for (const key of keys) expect(colorOf(ambiance, key), `${ambiance.id}.${key}`).toMatch(HEX);
+    }
+  });
+
+  it('chaque enseigne a sa composition en tubes, et son verre une couleur franche', () => {
+    expect(GARAGE.signs.length).toBeGreaterThan(0);
+    for (const sign of GARAGE.signs) {
+      const layout = NEON_SIGNS[sign.name];
+      expect(layout, sign.name).toBeDefined();
+      for (const line of layout?.lines ?? []) expect(typeof line === 'string' ? '#ffffff' : (line.color ?? '#ffffff'), sign.name).toMatch(HEX);
+      expect(sign.gain, sign.name).toBeGreaterThan(0);
     }
   });
 

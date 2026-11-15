@@ -4,7 +4,8 @@
 // son unique appel de dessin : ses éléments s'effacent chacun de leur côté.
 // - Masqué (0) : les sommets quittent le volume de vue, aucun fragment n'est produit.
 // - En fondu : trame de points stable à l'écran (rejet de fragments) pour les matériaux opaques,
-//   atténuation pour les additifs (cônes de lumière).
+//   atténuation pour les additifs (cônes de lumière) et pour les voiles transparents (ombres de
+//   contact : c'est leur opacité qui baisse).
 // Les valeurs sont celles de la passe en cours : le reflet du sol voit la même coupe ; la sonde
 // de réflexion, elle, voit tout (le crochet `onProbe` du garage remet tout à 1 le temps d'une capture).
 // GLSL ES 3.00 sans extension : indexation dynamique d'un tableau d'uniformes et d'un vec4 dans
@@ -54,6 +55,9 @@ if ( vPmbFade < 1.0 && vPmbFade <= pmbBayer( gl_FragCoord.xy ) ) discard;`;
 const FRAGMENT_ATTENUATE = /* glsl */ `
 gl_FragColor.rgb *= vPmbFade;`;
 
+const FRAGMENT_ATTENUATE_ALPHA = /* glsl */ `
+gl_FragColor.a *= vPmbFade;`;
+
 function inject(source: string, anchor: string, code: string): string {
   if (!source.includes(anchor)) throw new Error(`Coupe : repère ${anchor} introuvable`);
   return source.replace(anchor, `${anchor}\n${code}`);
@@ -61,13 +65,14 @@ function inject(source: string, anchor: string, code: string): string {
 
 /**
  * Ajoute la coupe aux sources d'un matériau de three (standard ou basique). `additive` : le
- * matériau s'ajoute à l'image (fondu par atténuation, après le brouillard) ; sinon, trame de points.
+ * matériau s'ajoute à l'image (fondu par atténuation, après le brouillard) ; `alpha` : voile
+ * transparent mélangé par son opacité (fondu par l'opacité) ; sinon, trame de points.
  */
-export function patchCutShader(shader: { vertexShader: string; fragmentShader: string }, additive: boolean): void {
+export function patchCutShader(shader: { vertexShader: string; fragmentShader: string }, additive: boolean, alpha = false): void {
   shader.vertexShader = inject(shader.vertexShader, '#include <common>', VERTEX_HEAD);
   shader.vertexShader = inject(shader.vertexShader, '#include <project_vertex>', VERTEX_BODY);
   shader.fragmentShader = inject(shader.fragmentShader, '#include <common>', FRAGMENT_HEAD);
-  shader.fragmentShader = additive
-    ? inject(shader.fragmentShader, '#include <fog_fragment>', FRAGMENT_ATTENUATE)
-    : inject(shader.fragmentShader, '#include <clipping_planes_fragment>', FRAGMENT_DITHER);
+  if (additive) shader.fragmentShader = inject(shader.fragmentShader, '#include <fog_fragment>', FRAGMENT_ATTENUATE);
+  else if (alpha) shader.fragmentShader = inject(shader.fragmentShader, '#include <fog_fragment>', FRAGMENT_ATTENUATE_ALPHA);
+  else shader.fragmentShader = inject(shader.fragmentShader, '#include <clipping_planes_fragment>', FRAGMENT_DITHER);
 }

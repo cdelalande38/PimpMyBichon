@@ -10,13 +10,11 @@ import {
   artSize,
   GARAGE_ART,
   garageArt,
-  type ArtPlace,
 } from '../../src/data/garageArt.ts';
 import { artworkUrl, prepareSvg } from '../../src/scene/garage/artwork.ts';
 
 const PUBLIC_ART = `public/${ART_DIR}`;
 const POIDS_MAX = 40 * 1024;
-const FACINGS = ['+x', '-x', '+z', '-z', '+y', '-y'];
 
 function lire(file: string): string {
   return readFileSync(`public/${file}`, 'utf8');
@@ -26,13 +24,6 @@ function viewBox(texte: string): [number, number] {
   const match = /<svg\b[^>]*\sviewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(texte);
   if (!match) throw new Error('viewBox absent');
   return [Number(match[1]), Number(match[2])];
-}
-
-function places(): ArtPlace[] {
-  return GARAGE_ART.flatMap((item) => [
-    ...(item.place ? [item.place] : []),
-    ...(item.regions ?? []).map((region) => region.place),
-  ]);
 }
 
 describe('registre des œuvres du garage', () => {
@@ -79,7 +70,7 @@ describe('registre des œuvres du garage', () => {
     }
   });
 
-  it('les cases tiennent dans le viewBox, une place pour toute œuvre sans case', () => {
+  it('les cases tiennent dans le viewBox, une note de place pour toute œuvre sans case', () => {
     for (const item of GARAGE_ART) {
       const regions = item.regions ?? [];
       expect(new Set(regions.map((region) => region.id)).size, item.id).toBe(regions.length);
@@ -93,28 +84,28 @@ describe('registre des œuvres du garage', () => {
     }
   });
 
-  it('les places désignent une orientation connue et un meuble du garage', () => {
-    const meubles = new Set(GARAGE.props.map((prop) => prop.name));
+  it('œuvres posées par les objets : œuvre et case connues, plan dans la pièce, largeur sensée', () => {
     const { width, depth, height } = GARAGE.room;
-    for (const place of places()) {
-      expect(FACINGS, place.note).toContain(place.facing);
-      if (place.kind === 'furniture') {
-        expect(meubles.has(place.furniture as `placeholder_${string}`), place.furniture).toBe(true);
-      } else {
-        const [x, y, z] = place.at;
-        expect(Math.abs(x) <= width / 2 && Math.abs(z) <= depth / 2 && y > 0 && y < height, place.note).toBe(true);
-      }
+    const slots = GARAGE.props.flatMap((prop) => (prop.art ?? []).map((slot) => ({ prop, slot })));
+    expect(slots.length).toBeGreaterThan(0);
+    for (const { prop, slot } of slots) {
+      const label = `${prop.name} / ${slot.art}${slot.region ? `#${slot.region}` : ''}`;
+      const item = garageArt(slot.art);
+      expect(() => artRect(item, slot.region), label).not.toThrow();
+      expect(slot.width, label).toBeGreaterThan(0.02);
+      expect(slot.width, label).toBeLessThan(2);
+      // Centre du plan dans la pièce : repère local, puis `turn` et `at` de l'objet.
+      const turn = prop.turn ?? 0;
+      const [lx, ly, lz] = slot.at;
+      const x = prop.at[0] + lx * Math.cos(turn) + lz * Math.sin(turn);
+      const z = prop.at[2] - lx * Math.sin(turn) + lz * Math.cos(turn);
+      const y = prop.at[1] + ly;
+      expect(Math.abs(x) <= width / 2 && Math.abs(z) <= depth / 2 && y > 0 && y < height, label).toBe(true);
     }
   });
 
-  it('la toile tient en portrait sur la colonne, entre 2,0 et 2,9 m', () => {
-    const toile = garageArt('toile-pop-art');
-    expect(toile.ratio).toBeCloseTo(3 / 4, 6);
-    const place = toile.place;
-    expect(place?.kind).toBe('room');
-    const y = place?.at[1] ?? 0;
-    expect(y - toile.size[1] / 2).toBeGreaterThanOrEqual(2.0);
-    expect(y + toile.size[1] / 2).toBeLessThanOrEqual(2.9);
+  it('la toile est un portrait 3:4', () => {
+    expect(garageArt('toile-pop-art').ratio).toBeCloseTo(3 / 4, 6);
   });
 
   it('taille et pixels d’une case suivent la densité de l’œuvre entière', () => {

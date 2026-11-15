@@ -1,7 +1,7 @@
 // Coupe caméra du décor : règles du module pur (R1 adossement, R2 dégagement, R3 support,
 // hystérésis, fondu), puis preuves sur le garage réel : garde-fou de structure, rien ne flotte,
 // balayage d'yeux autour du véhicule vérifié par lancer de rayons, et rien de trop masqué.
-import { FrontSide, Mesh, ShaderLib, Vector3, type BufferGeometry, type Material } from 'three';
+import { FrontSide, Mesh, ShaderLib, Texture, Vector3, type BufferGeometry, type Material } from 'three';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AMBIANCES } from '../../src/data/ambiances.ts';
 import { FRAMINGS } from '../../src/data/framings.ts';
@@ -187,6 +187,13 @@ describe('coupe : nuanceurs', () => {
       expect(shader.fragmentShader.includes('gl_FragColor.rgb *= vPmbFade'), `atténuation ${standard}/${additive}`).toBe(additive);
     }
   });
+
+  it('voile transparent (ombres de contact) : fondu par l’opacité, sans trame', () => {
+    const shader = { vertexShader: ShaderLib.basic.vertexShader, fragmentShader: ShaderLib.basic.fragmentShader };
+    patchGarageShader(shader, { standard: false, surface: false, additive: false, alpha: true });
+    expect(shader.fragmentShader).toContain('gl_FragColor.a *= vPmbFade');
+    expect(shader.fragmentShader.includes('discard')).toBe(false);
+  });
 });
 
 describe('coupe : fondu et volume protégé', () => {
@@ -242,7 +249,8 @@ let unstub = () => {};
 beforeAll(async () => {
   unstub = stubDocument();
   const { createGarage } = await import('../../src/scene/garage/build.ts');
-  garage = createGarage(GARAGE);
+  // Œuvres : une texture vide, sans réseau (le chargement réel est vérifié dans le navigateur).
+  garage = createGarage(GARAGE, { artwork: () => ({ texture: new Texture(), release: () => {} }) });
   structure = garage.cut.structure;
 });
 afterAll(() => {
@@ -498,6 +506,8 @@ describe('coupe : balayage autour du véhicule', () => {
     }
     expect(eyes).toBe(2 * (72 * 5 * 3 + FRAMINGS.length));
     expect(failures).toEqual([]);
+    // Balayage de 2 170 yeux par lancer de rayons : délai large (120 s, en tête du test), il
+    // s'allonge avec le mobilier remodelé.
   });
 
   it('pas d’excès de zèle : vue de départ, le mur du fond et le mur rouge restent meublés', () => {

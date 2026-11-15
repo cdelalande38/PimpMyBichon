@@ -8,110 +8,14 @@
 // prolongent hors de la pièce et s'y perdent dans la brume de l'ambiance.
 
 import type { Ambiance } from './ambiances.ts';
+import { BACK, CASIER, CASIER_CASES, D, H, LEFT, RIGHT, SOFFIT, W, type Facing, type GarageMaterialId, type GarageTextureId, type Prop, type Vec3 } from './garageBase.ts';
+import { PROPS_ATELIER } from './garageProps/atelier.ts';
+import { PROPS_ENGINS } from './garageProps/engins.ts';
+import { PROPS_LOISIRS } from './garageProps/loisirs.ts';
+import { PROPS_SALON } from './garageProps/salon.ts';
 
-export type Vec3 = readonly [number, number, number];
-
-/** Textures dessinées au canvas (src/scene/garage/textures.ts). */
-export type GarageTextureId =
-  | 'carrelage'
-  | 'carrelageRugosite'
-  | 'osb'
-  | 'lambris'
-  | 'pin'
-  | 'tiroirs'
-  | 'credence'
-  | 'ecran'
-  | 'popart'
-  | 'cible';
-
-export interface GarageMaterial {
-  color: string;
-  roughness: number;
-  metalness: number;
-  map?: GarageTextureId;
-  /** Répétitions de la texture par mètre (u, v), partagées par la carte de rugosité. */
-  repeat?: readonly [number, number];
-  /** Carte de rugosité (canal vert) : joints plus mats que les carreaux. */
-  roughnessMap?: GarageTextureId;
-  /** Couleur émissive fixe (optiques du quad, fronton du flipper). */
-  emissive?: string;
-  emissiveIntensity?: number;
-  /**
-   * Part du reflet de la sonde (environnement). Bas pour les surfaces mates : la sonde voit la
-   * pièce éclairée, elle ne doit pas l'éclairer une seconde fois. Défaut : 0,2.
-   */
-  env?: number;
-}
-
-export const GARAGE_MATERIALS = {
-  blanc: { color: '#e9e7e2', roughness: 0.55, metalness: 0 },
-  tiroirs: { color: '#f2f0ec', roughness: 0.4, metalness: 0, map: 'tiroirs', repeat: [1 / 0.675, 1 / 0.86] },
-  planDeTravail: { color: '#141316', roughness: 0.25, metalness: 0.1, env: 0.7 },
-  noir: { color: '#121115', roughness: 0.35, metalness: 0.2, env: 0.6 },
-  noirMat: { color: '#0c0b0e', roughness: 0.85, metalness: 0 },
-  bois: { color: '#8a5a32', roughness: 0.65, metalness: 0 },
-  boisClair: { color: '#d2b48a', roughness: 0.7, metalness: 0 },
-  rouge: { color: '#b3121b', roughness: 0.35, metalness: 0.2 },
-  orange: { color: '#ff5a10', roughness: 0.3, metalness: 0.1 },
-  chrome: { color: '#d8dbe0', roughness: 0.12, metalness: 1, env: 1 },
-  alu: { color: '#a7abb2', roughness: 0.35, metalness: 0.9, env: 0.8 },
-  gomme: { color: '#151416', roughness: 0.85, metalness: 0 },
-  cuir: { color: '#2a1810', roughness: 0.45, metalness: 0 },
-  creme: { color: '#efe2c8', roughness: 0.9, metalness: 0 },
-  caisse: { color: '#b88a55', roughness: 0.8, metalness: 0 },
-  optique: { color: '#ffffff', roughness: 0.2, metalness: 0, emissive: '#fff2dc', emissiveIntensity: 3 },
-  fronton: { color: '#ffffff', roughness: 0.4, metalness: 0, map: 'popart', repeat: [1 / 0.7, 1 / 0.45], emissive: '#ffffff', emissiveIntensity: 0.9 },
-  carrelage: {
-    color: '#c4c4c4',
-    roughness: 0.3,
-    metalness: 0,
-    map: 'carrelage',
-    roughnessMap: 'carrelageRugosite',
-    repeat: [1 / 0.9, 1 / 0.9],
-    env: 0.45,
-  },
-  osb: { color: '#ffffff', roughness: 0.85, metalness: 0, map: 'osb', repeat: [1 / 1.25, 1 / 2.5] },
-  lambris: { color: '#5a4a3c', roughness: 0.8, metalness: 0, map: 'lambris', repeat: [1 / 1.6, 1 / 1.6] },
-  /** Lambris de pin vertical des murs gauche et avant : lames de 15 cm, nœuds. */
-  pin: { color: '#ffffff', roughness: 0.7, metalness: 0, map: 'pin', repeat: [1 / 1.2, 1 / 1.2] },
-  /** Solives sombres du plafond. */
-  solive: { color: '#2b1c14', roughness: 0.8, metalness: 0 },
-  /** Cuir noir brillant des canapés : gros plis, reflets nets des LED. */
-  cuirNoir: { color: '#121014', roughness: 0.32, metalness: 0, env: 0.9 },
-  /** Laque noire (frigo rétro). */
-  laqueNoir: { color: '#0e0d10', roughness: 0.18, metalness: 0, env: 1 },
-  /** Anneau vert lumineux de l'enseigne ronde : la seule touche verte de la pièce, sans texte. */
-  neonVert: { color: '#0a1a0e', roughness: 0.4, metalness: 0, emissive: '#26ff6a', emissiveIntensity: 2.4 },
-  /** Casques : coques laquées. */
-  casqueBlanc: { color: '#e8e6e2', roughness: 0.2, metalness: 0, env: 0.8 },
-  murRouge: { color: '#b00010', roughness: 0.85, metalness: 0 },
-  murBlanc: { color: '#eeeeea', roughness: 0.9, metalness: 0 },
-} as const satisfies Record<string, GarageMaterial>;
-
-export type GarageMaterialId = keyof typeof GARAGE_MATERIALS;
-
-export type Shape =
-  | { box: Vec3 }
-  /** Rayon, hauteur ; axe du cylindre (y par défaut). */
-  | { cylinder: readonly [number, number]; axis?: 'x' | 'z' }
-  | { sphere: number };
-
-export type Part = Shape & { at: Vec3; material: GarageMaterialId; rot?: Vec3 };
-
-export interface Prop {
-  name: `placeholder_${string}`;
-  at: Vec3;
-  /** Rotation autour de la verticale, en radians. */
-  turn?: number;
-  /** Petit objet ou décor en hauteur : absent du reflet du sol (un appel de dessin de moins). */
-  small?: boolean;
-  /**
-   * Coupe caméra (src/scene/garage/cut.ts) : objets qui le portent, quand la déduction par les
-   * boîtes (posé dessus, pendu dessous, adossé) ne suffit pas. Il disparaît avec eux.
-   */
-  on?: readonly string[];
-  parts: readonly Part[];
-}
+// Socle (cotes, matériaux, types du mobilier) : src/data/garageBase.ts, réexporté ici.
+export * from './garageBase.ts';
 
 /** Côté de la pièce dont une source prend la couleur. */
 export type ColorKey = 'left' | 'right' | 'center' | 'violet' | 'accent' | 'bar' | 'spotLeft' | 'spotCenter' | 'spotRight';
@@ -129,9 +33,6 @@ export function colorOf(ambiance: Ambiance, key: ColorKey): string {
   }
 }
 
-/** Orientation d'une face : la direction vers laquelle elle regarde. */
-export type Facing = '+x' | '-x' | '+z' | '-z' | '+y' | '-y';
-
 export interface Panel {
   name: string;
   texture: GarageTextureId;
@@ -146,15 +47,16 @@ export interface Panel {
   small?: boolean;
 }
 
+/**
+ * Enseigne néon en tubes (src/scene/garage/neon.ts) : sa composition est NEON_SIGNS[name]
+ * (src/data/neonAlphabet.ts), à la hauteur de capitale conseillée, couleurs de verre comprises.
+ * `at` : centre de l'enseigne, sur le mur ; `facing` : sens dans lequel elle regarde.
+ */
 export interface NeonSign {
   name: string;
-  text: string;
-  /** Hauteur des lettres, en mètres. */
-  height: number;
   at: Vec3;
   facing: Facing;
-  color: ColorKey;
-  /** Multiplicateur appliqué à la force des tubes de l'ambiance. */
+  /** Luminance des tubes, en multiple de la force des tubes de l'ambiance (au-delà de 1 : bloom). */
   gain: number;
 }
 
@@ -276,57 +178,19 @@ export interface GarageLayout {
   props: readonly Prop[];
 }
 
-const W = 7.5;
-const D = 6;
-const H = 2.9;
-const BACK = -D / 2;
-const RIGHT = W / 2;
-const LEFT = -W / 2;
-/** Dessous de la retombée du mur du fond. */
-const SOFFIT = 2.35;
 /** Les spots sont à 15 cm du mur, juste sous la retombée. */
 const SPOT_Y = SOFFIT - 0.006;
 const SPOT_Z = BACK + 0.15;
-
-const wheel = (x: number, y: number, z: number, r: number, w: number): Part[] => [
-  { cylinder: [r, w], axis: 'z', at: [x, y, z], material: 'gomme' },
-  { cylinder: [r * 0.62, w + 0.01], axis: 'z', at: [x, y, z], material: 'chrome' },
-];
-
-const leg = (x: number, z: number, h: number, material: GarageMaterialId = 'boisClair'): Part => ({
-  box: [0.06, h, 0.06],
-  at: [x, h / 2, z],
-  material,
-});
-
-/** Canapé 2 places en cuir noir, dossier inclinable : assise vers +z, dossier vers -z (1,5 × 0,95 × 1,0 m). */
-const sofa = (): Part[] => [
-  { box: [1.5, 0.4, 0.85], at: [0, 0.2, 0], material: 'cuirNoir' },
-  { box: [0.57, 0.14, 0.62], at: [-0.29, 0.47, 0.09], material: 'cuirNoir' },
-  { box: [0.57, 0.14, 0.62], at: [0.29, 0.47, 0.09], material: 'cuirNoir' },
-  { box: [1.5, 0.6, 0.18], at: [0, 0.7, -0.385], material: 'cuirNoir' },
-  // Coussins de dossier bombés, inclinés.
-  { box: [0.56, 0.48, 0.22], at: [-0.29, 0.77, -0.22], rot: [-0.2, 0, 0], material: 'cuirNoir' },
-  { box: [0.56, 0.48, 0.22], at: [0.29, 0.77, -0.22], rot: [-0.2, 0, 0], material: 'cuirNoir' },
-  // Accoudoirs épais.
-  { box: [0.17, 0.64, 0.92], at: [-0.665, 0.32, 0.02], material: 'cuirNoir' },
-  { box: [0.17, 0.64, 0.92], at: [0.665, 0.32, 0.02], material: 'cuirNoir' },
-];
-
-/** Casier ouvert de quatre cases en ligne (le long de z), un casque par case. */
-const CASIER_CASES = [-0.525, -0.175, 0.175, 0.525] as const;
-const CASIER = { x: LEFT + 0.2, y: 1.9, z: 0.75 } as const;
-
-/** Solives du plafond, le long de z, tous les 0,6 m. */
-const JOISTS = Array.from({ length: 12 }, (_, index) => LEFT + 0.45 + index * 0.6);
 
 export const GARAGE: GarageLayout = {
   room: { width: W, depth: D, height: H },
   vehicle: {
     turn: Math.PI,
     protect: {
-      // Gabarit du modèle de banc d'essai (4,6 × 1,9 × 1,3 m), posé dans la pièce.
-      waiting: { min: [-2.3, 0, -0.95], max: [2.3, 1.3, 0.95] },
+      // Gabarit du modèle de banc d'essai tel que BenchCar le mesure (sommets du GLB :
+      // 4,36 × 2,54 × 1,15 m), posé dans la pièce : le mobilier reste hors du grand volume qui en
+      // découle, sinon la coupe caméra le garde masqué.
+      waiting: { min: [-2.18, 0, -1.275], max: [2.18, 1.15, 1.275] },
       side: 0.15,
       top: 0.2,
       // Le reflet entier du véhicule est protégé : le toit se lit dans le carrelage.
@@ -444,306 +308,13 @@ export const GARAGE: GarageLayout = {
     { kind: 'rond', size: [6.2, 4.2], at: [0, 0.008, 0.5], facing: '+y', color: 'bar', gain: 0.04 },
   ],
   panels: [
-    { name: 'placeholder_credence', texture: 'credence', size: [2.95, 0.55], at: [-0.025, 1.175, BACK + 0.003], facing: '+z' },
     { name: 'placeholder_ecran', texture: 'ecran', size: [1.45, 0.82], at: [2.25, 1.5, BACK + 0.405], facing: '+z', glow: 2.6 },
-    { name: 'placeholder_toile_pop_art', texture: 'popart', size: [1.2, 0.9], at: [2.25, 2.45, BACK + 0.405], facing: '+z', small: true },
-    { name: 'placeholder_cible', texture: 'cible', size: [0.46, 0.46], at: [RIGHT - 0.045, 1.8, 0.4], facing: '-x', small: true },
   ],
   signs: [
-    { name: 'neon_pimpmybichon', text: 'PimpMyBichon', height: 0.3, at: [LEFT + 0.02, 2.05, -1.55], facing: '+x', color: 'center', gain: 0.45 },
+    { name: 'neon_pimpmybichon', at: [LEFT, 2.05, -1.55], facing: '+x', gain: 0.45 },
     // Au-dessus du canapé : vu de dos depuis la caméra de départ, il se lit dans les flancs.
-    { name: 'neon_good_vibes', text: 'GOOD VIBES ONLY', height: 0.24, at: [0, 1.75, D / 2 - 0.02], facing: '-z', color: 'right', gain: 0.45 },
+    { name: 'neon_good_vibes', at: [0, 1.75, D / 2], facing: '-z', gain: 0.45 },
   ],
-  props: [
-    {
-      name: 'placeholder_meubles_atelier',
-      at: [0.05, 0, BACK],
-      parts: [
-        { box: [2.7, 0.86, 0.6], at: [0, 0.43, 0.3], material: 'tiroirs' },
-        { box: [2.74, 0.04, 0.63], at: [0, 0.88, 0.315], material: 'planDeTravail' },
-        // Poignées barres inox.
-        ...[-0.95, 0, 0.95].flatMap((x) =>
-          [0.74, 0.48, 0.22].map((y): Part => ({ box: [0.4, 0.018, 0.025], at: [x, y, 0.61], material: 'chrome' })),
-        ),
-        // Outils posés : cadre, rouleau d'essuie-tout, caisse à outils.
-        { box: [0.3, 0.38, 0.03], at: [-0.7, 1.09, 0.06], rot: [-0.12, 0, 0], material: 'noir' },
-        { cylinder: [0.06, 0.24], at: [0.55, 1.02, 0.15], material: 'blanc' },
-        { box: [0.45, 0.16, 0.24], at: [-0.25, 0.98, 0.25], material: 'rouge' },
-      ],
-    },
-    {
-      // Au bout droit des meubles blancs, juste avant la colonne : évier, robinet, flacons.
-      name: 'placeholder_evier',
-      at: [1.1, 0, BACK],
-      small: true,
-      parts: [
-        { box: [0.5, 0.03, 0.4], at: [0, 0.905, 0.3], material: 'chrome' },
-        { cylinder: [0.016, 0.3], at: [0, 1.05, 0.09], material: 'chrome' },
-        { box: [0.024, 0.024, 0.2], at: [0, 1.19, 0.18], material: 'chrome' },
-        { cylinder: [0.035, 0.2], at: [0.18, 1.0, 0.08], material: 'blanc' },
-        { cylinder: [0.03, 0.16], at: [0.26, 0.98, 0.1], material: 'rouge' },
-      ],
-    },
-    {
-      // Moto en pièces sur le plan de travail, à gauche : jante alu, cadre et moteur.
-      name: 'placeholder_moto_en_pieces',
-      at: [-0.85, 0.9, BACK + 0.3],
-      small: true,
-      parts: [
-        { cylinder: [0.28, 0.07], axis: 'z', at: [-0.25, 0.28, -0.05], material: 'alu' },
-        { cylinder: [0.18, 0.075], axis: 'z', at: [-0.25, 0.28, -0.05], material: 'noir' },
-        { box: [0.55, 0.06, 0.08], at: [0.2, 0.3, 0.05], rot: [0, 0, 0.35], material: 'alu' },
-        { box: [0.3, 0.22, 0.2], at: [0.25, 0.11, 0.05], material: 'noir' },
-      ],
-    },
-    {
-      name: 'placeholder_servante',
-      at: [-1.78, 0, BACK + 0.25],
-      parts: [
-        { box: [0.6, 1.0, 0.46], at: [0, 0.54, 0], material: 'noir' },
-        ...wheel(-0.24, 0.04, 0.18, 0.04, 0.03),
-        ...wheel(0.24, 0.04, 0.18, 0.04, 0.03),
-      ],
-    },
-    {
-      // Angle fond-gauche : établi en bois clair (h 0,9 m), son retour sur consoles le long du mur
-      // gauche (le quad passe dessous), panneau d'OSB et outils au-dessus.
-      name: 'placeholder_etabli',
-      at: [LEFT, 0, BACK],
-      parts: [
-        { box: [1.4, 0.82, 0.48], at: [0.72, 0.41, 0.26], material: 'bois' },
-        { box: [1.45, 0.05, 0.52], at: [0.725, 0.875, 0.26], material: 'boisClair' },
-        { box: [0.3, 0.05, 0.75], at: [0.15, 0.875, 0.88], material: 'boisClair' },
-        { box: [0.24, 0.04, 0.04], at: [0.12, 0.83, 0.7], material: 'noir' },
-        { box: [0.24, 0.04, 0.04], at: [0.12, 0.83, 1.15], material: 'noir' },
-        { box: [1.45, 1.25, 0.02], at: [0.725, 1.6, 0.01], material: 'osb' },
-        // Panneau d'outils.
-        { box: [0.6, 0.45, 0.025], at: [0.55, 1.55, 0.03], material: 'noir' },
-        { box: [0.04, 0.3, 0.03], at: [1.05, 1.5, 0.04], material: 'rouge' },
-      ],
-    },
-    {
-      name: 'placeholder_enceintes',
-      at: [0, 0, BACK + 0.12],
-      small: true,
-      parts: [
-        // Trois enceintes empilées à gauche de la colonne, deux autres en haut à droite.
-        { box: [0.26, 0.2, 0.22], at: [1.33, 1.79, 0], material: 'noir' },
-        { box: [0.26, 0.2, 0.22], at: [1.33, 2.005, 0], material: 'noir' },
-        { box: [0.26, 0.2, 0.22], at: [1.33, 2.22, 0], material: 'noir' },
-        { box: [0.22, 0.34, 0.2], at: [3.25, 2.5, 0.05], material: 'noir' },
-        { box: [0.22, 0.34, 0.2], at: [3.25, 2.1, 0.05], material: 'noir' },
-      ],
-    },
-    {
-      name: 'placeholder_applique',
-      at: [0.9, 1.9, BACK + 0.04],
-      small: true,
-      parts: [
-        { box: [0.03, 0.03, 0.34], at: [0, 0, 0.17], rot: [0.5, 0, 0], material: 'noir' },
-        { cylinder: [0.06, 0.13], at: [0, -0.18, 0.32], material: 'noir' },
-      ],
-    },
-    {
-      name: 'placeholder_colonne_ecran',
-      at: [2.25, 0, BACK + 0.2],
-      parts: [{ box: [1.5, H, 0.4], at: [0, H / 2, 0], material: 'noirMat' }],
-    },
-    {
-      // Sportive carénée noire devant la colonne, parallèle au mur, nez à droite : la place
-      // accueille la moto du moment ; une noire laisse briller la voiture.
-      name: 'placeholder_moto_sportive',
-      at: [2.05, 0, -2.15],
-      parts: [
-        ...wheel(-0.68, 0.3, 0, 0.3, 0.12),
-        ...wheel(0.7, 0.3, 0, 0.3, 0.11),
-        { box: [0.8, 0.3, 0.3], at: [0.12, 0.72, 0], material: 'laqueNoir' },
-        { box: [0.42, 0.34, 0.28], at: [0.55, 0.9, 0], rot: [0, 0, -0.45], material: 'laqueNoir' },
-        { box: [0.5, 0.08, 0.2], at: [-0.42, 0.92, 0], rot: [0, 0, 0.12], material: 'noir' },
-        { box: [0.3, 0.12, 0.16], at: [-0.75, 0.96, 0], rot: [0, 0, 0.25], material: 'laqueNoir' },
-        { box: [0.36, 0.3, 0.24], at: [0.05, 0.45, 0], material: 'alu' },
-        { box: [0.95, 0.06, 0.08], at: [-0.12, 0.6, 0], rot: [0, 0, 0.1], material: 'alu' },
-        { cylinder: [0.026, 0.62], at: [0.62, 0.6, 0], rot: [0, 0, -0.42], material: 'chrome' },
-        { cylinder: [0.05, 0.4], axis: 'x', at: [-0.4, 0.4, 0.14], material: 'chrome' },
-      ],
-    },
-    {
-      name: 'placeholder_flipper',
-      at: [3.2, 0, -2.35],
-      turn: -Math.PI / 4,
-      parts: [
-        { box: [0.7, 0.3, 1.25], at: [0, 0.9, 0.05], rot: [-0.06, 0, 0], material: 'bois' },
-        { box: [0.72, 0.1, 0.2], at: [0, 1.05, -0.58], material: 'bois' },
-        { box: [0.72, 0.62, 0.18], at: [0, 1.4, -0.58], material: 'fronton' },
-        leg(-0.3, 0.58, 0.76, 'chrome'),
-        leg(0.3, 0.58, 0.76, 'chrome'),
-        leg(-0.3, -0.48, 0.76, 'chrome'),
-        leg(0.3, -0.48, 0.76, 'chrome'),
-      ],
-    },
-    {
-      name: 'placeholder_peluche',
-      at: [3.2, 1.05, -2.25],
-      small: true,
-      parts: [
-        { sphere: 0.13, at: [0, 0.12, 0], material: 'creme' },
-        { sphere: 0.1, at: [0, 0.31, 0.02], material: 'creme' },
-      ],
-    },
-    {
-      name: 'placeholder_panneau_cible',
-      at: [RIGHT - 0.03, 1.8, 0.4],
-      small: true,
-      parts: [
-        // Panneau de bois à bords étagés.
-        { box: [0.03, 0.8, 1.2], at: [0, 0, 0], material: 'boisClair' },
-        { box: [0.03, 1.0, 0.8], at: [0, 0, 0], material: 'boisClair' },
-      ],
-    },
-    {
-      name: 'placeholder_caisses',
-      at: [3.4, 0, -1.3],
-      parts: [
-        { box: [0.5, 0.5, 0.45], at: [0, 0.25, -0.25], material: 'caisse' },
-        { box: [0.5, 0.5, 0.45], at: [0.02, 0.75, -0.25], rot: [0, 0.1, 0], material: 'caisse' },
-        { box: [0.5, 0.5, 0.45], at: [0, 0.25, 0.25], rot: [0, -0.08, 0], material: 'caisse' },
-        { box: [0.5, 0.5, 0.45], at: [0, 0.75, 0.25], material: 'caisse' },
-      ],
-    },
-    {
-      // Quad noir garé devant l'angle fond-gauche, presque parallèle au mur du fond, hors du
-      // volume protégé du véhicule (coupe caméra).
-      name: 'placeholder_quad',
-      at: [-2.85, 0, -1.9],
-      turn: -0.06,
-      parts: [
-        ...wheel(-0.5, 0.27, 0.42, 0.27, 0.24),
-        ...wheel(-0.5, 0.27, -0.42, 0.27, 0.24),
-        ...wheel(0.5, 0.27, 0.42, 0.27, 0.24),
-        ...wheel(0.5, 0.27, -0.42, 0.27, 0.24),
-        { box: [1.3, 0.32, 0.72], at: [0, 0.62, 0], material: 'noir' },
-        { box: [0.6, 0.12, 0.34], at: [-0.18, 0.85, 0], material: 'noir' },
-        { cylinder: [0.02, 0.72], axis: 'z', at: [0.38, 1.0, 0], material: 'chrome' },
-        { cylinder: [0.04, 0.3], at: [-0.3, 0.45, 0.3], material: 'rouge' },
-        { cylinder: [0.04, 0.3], at: [-0.3, 0.45, -0.3], material: 'rouge' },
-        { cylinder: [0.07, 0.04], axis: 'x', at: [0.66, 0.66, 0], material: 'optique' },
-      ],
-    },
-    // Coin salon, angle avant-gauche : deux canapés en L (A contre le mur avant, face au fond ;
-    // B contre le mur gauche), table au bloc moteur dans l'angle du L, tabouret et pouf à côté.
-    // Au premier plan de la vue de départ : la coupe caméra efface ceux qui masqueraient la
-    // voiture, le temps que la caméra est de ce côté.
-    { name: 'placeholder_canape_a', at: [-2.3, 0, D / 2 - 0.475], turn: Math.PI, parts: sofa() },
-    { name: 'placeholder_canape_b', at: [LEFT + 0.475, 0, 0.8], turn: Math.PI / 2, parts: sofa() },
-    {
-      // Plateau de sapin de 6 cm qui déborde d'un socle noir fermé ; en long devant le canapé A,
-      // hors du volume protégé du véhicule (coupe caméra).
-      name: 'placeholder_table_basse',
-      at: [-2.2, 0, 1.6],
-      turn: Math.PI / 2,
-      parts: [
-        { box: [0.46, 0.42, 0.86], at: [0, 0.21, 0], material: 'noirMat' },
-        { box: [0.58, 0.06, 0.98], at: [0, 0.45, 0], material: 'boisClair' },
-      ],
-    },
-    {
-      name: 'placeholder_bloc_moteur',
-      at: [-2.2, 0.48, 1.55],
-      small: true,
-      parts: [
-        { box: [0.6, 0.22, 0.4], at: [0, 0.11, 0], material: 'alu' },
-        { box: [0.56, 0.1, 0.3], at: [0, 0.27, 0], material: 'alu' },
-        ...[-0.21, -0.07, 0.07, 0.21].map((x): Part => ({ cylinder: [0.045, 0.16], axis: 'x', at: [x, 0.24, 0.26], material: 'rouge' })),
-      ],
-    },
-    {
-      // Assise en bois clair, pied en grand disque noir ajouré.
-      name: 'placeholder_tabouret_frein',
-      at: [-1.45, 0, 1.75],
-      small: true,
-      parts: [
-        { cylinder: [0.2, 0.03], at: [0, 0.02, 0], material: 'noir' },
-        { cylinder: [0.04, 0.45], at: [0, 0.25, 0], material: 'noir' },
-        { cylinder: [0.17, 0.05], at: [0, 0.5, 0], material: 'boisClair' },
-      ],
-    },
-    {
-      name: 'placeholder_pouf_pneu',
-      at: [-1.0, 0, 2.45],
-      parts: [
-        { cylinder: [0.33, 0.24], at: [0, 0.12, 0], material: 'gomme' },
-        { cylinder: [0.3, 0.245], at: [0, 0.12, 0], material: 'noirMat' },
-      ],
-    },
-    {
-      // Coin avant-gauche : petit frigo noir rétro sur un socle de palette, poignée chromée.
-      name: 'placeholder_frigo',
-      at: [LEFT + 0.33, 0, 2.62],
-      parts: [
-        { box: [0.6, 0.35, 0.62], at: [0, 0.175, 0], material: 'caisse' },
-        { box: [0.55, 0.85, 0.55], at: [0, 0.775, 0], material: 'laqueNoir' },
-        { box: [0.03, 0.32, 0.04], at: [0.29, 0.92, 0.17], material: 'chrome' },
-      ],
-    },
-    {
-      // Derrière le frigo : enseigne ronde à anneau vert lumineux, sans aucun texte.
-      name: 'placeholder_enseigne_ronde',
-      at: [LEFT + 0.02, 1.65, 2.62],
-      small: true,
-      parts: [
-        { cylinder: [0.23, 0.02], axis: 'x', at: [0, 0, 0], material: 'neonVert' },
-        { cylinder: [0.18, 0.03], axis: 'x', at: [0.004, 0, 0], material: 'noir' },
-      ],
-    },
-    {
-      name: 'placeholder_fut',
-      at: [LEFT + 0.33, 0, 1.95],
-      parts: [{ cylinder: [0.29, 0.88], at: [0, 0.44, 0], material: 'rouge' }],
-    },
-    {
-      // Au bout du canapé B, côté fond : caisse-colonne en bois de palette.
-      name: 'placeholder_caisse_colonne',
-      at: [LEFT + 0.3, 0, -0.32],
-      parts: [{ box: [0.5, 0.8, 0.5], at: [0, 0.4, 0], material: 'caisse' }],
-    },
-    {
-      // Casier noir ouvert de quatre cases en ligne au-dessus du canapé B (dessous à 1,9 m),
-      // un casque par case, un autre posé dessus.
-      name: 'placeholder_casiers_casques',
-      at: [CASIER.x, CASIER.y, CASIER.z],
-      small: true,
-      parts: [
-        { box: [0.4, 0.03, 1.4], at: [0, 0.015, 0], material: 'noir' },
-        { box: [0.4, 0.03, 1.4], at: [0, 0.385, 0], material: 'noir' },
-        { box: [0.03, 0.4, 1.4], at: [-0.185, 0.2, 0], material: 'noir' },
-        ...[-0.7, -0.35, 0, 0.35, 0.7].map((z): Part => ({ box: [0.4, 0.4, 0.025], at: [0, 0.2, z], material: 'noir' })),
-        { sphere: 0.13, at: [0.02, 0.16, CASIER_CASES[0]], material: 'noir' },
-        { sphere: 0.13, at: [0.02, 0.16, CASIER_CASES[1]], material: 'rouge' },
-        { sphere: 0.13, at: [0.02, 0.16, CASIER_CASES[2]], material: 'casqueBlanc' },
-        { sphere: 0.13, at: [0.02, 0.16, CASIER_CASES[3]], material: 'noir' },
-        { sphere: 0.13, at: [0, 0.53, 0.3], material: 'casqueBlanc' },
-      ],
-    },
-    {
-      // Petite sportive rouge d'environ 1 m accrochée juste sous le casier (1,3 à 1,8 m).
-      name: 'placeholder_moto_murale',
-      at: [LEFT + 0.16, 0, CASIER.z],
-      turn: Math.PI / 2,
-      small: true,
-      parts: [
-        ...wheel(-0.36, 1.5, 0, 0.19, 0.06),
-        ...wheel(0.38, 1.5, 0, 0.19, 0.06),
-        { box: [0.5, 0.17, 0.12], at: [0.02, 1.63, 0], material: 'rouge' },
-        { box: [0.2, 0.2, 0.12], at: [0.3, 1.7, 0], rot: [0, 0, -0.4], material: 'rouge' },
-        { box: [0.28, 0.05, 0.1], at: [-0.17, 1.74, 0], material: 'noir' },
-      ],
-    },
-    {
-      // Plafond : lames de pin (texture) entre solives sombres.
-      name: 'placeholder_solives',
-      at: [0, 0, 0],
-      small: true,
-      parts: JOISTS.map((x): Part => ({ box: [0.08, 0.14, D], at: [x, H - 0.07, 0], material: 'solive' })),
-    },
-  ],
+  // Mobilier : quatre familles, un fichier chacune (src/data/garageProps/).
+  props: [...PROPS_SALON, ...PROPS_ATELIER, ...PROPS_ENGINS, ...PROPS_LOISIRS],
 };

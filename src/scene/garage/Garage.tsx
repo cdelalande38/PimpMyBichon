@@ -1,5 +1,5 @@
 // Le garage du § 4, construit d'après src/data/garage.ts, sous l'ambiance choisie.
-// Remplace placeholder_garage ; le mobilier reste en volumes simples (placeholder_*).
+// Remplace placeholder_garage ; le mobilier reste construit par le code (placeholder_*).
 // Il porte aussi la réflexion planaire de son sol, son atmosphère, selon le niveau de qualité,
 // et la coupe caméra : ce qui passerait entre l'œil et le véhicule quitte l'image (cut.ts).
 
@@ -48,7 +48,8 @@ export interface GarageProps {
 
 export function Garage({ ambiance, profile, vehicle, instantCut }: GarageProps) {
   const invalidate = useThree((state) => state.invalidate);
-  const garage = useMemo(() => createGarage(GARAGE), []);
+  // Une œuvre qui arrive redemande une image (rendu à la demande).
+  const garage = useMemo(() => createGarage(GARAGE, { onChange: invalidate }), [invalidate]);
   useEffect(() => () => garage.dispose(), [garage]);
   // Avant les effets ordinaires : la sonde de réflexion se refait sur les nouvelles couleurs.
   useLayoutEffect(() => {

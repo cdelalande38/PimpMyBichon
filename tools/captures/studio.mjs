@@ -1,33 +1,54 @@
 // @ts-check
 // Capture d'une planche du studio des formes (src/dev/studio/) : lance le serveur de
-// développement sur le port 5191 (ou réutilise celui qui y tourne déjà), ouvre la page dans le
-// Chromium de Playwright en rendu logiciel, attend qu'elle soit prête, écrit
-// captures/deco/<planche>-<éclairage>.png (1600 × 1000), puis arrête le serveur qu'elle a lancé.
+// développement sur le port demandé (5191 par défaut ; ou réutilise celui qui y tourne déjà),
+// ouvre la page dans le Chromium de Playwright en rendu logiciel, attend qu'elle soit prête, écrit
+// <dossier>/<planche>-<éclairage>.png (1600 × 1000 ; dossier : captures/deco par défaut), puis
+// arrête le serveur qu'elle a lancé, et lui seul. Plusieurs captures peuvent tourner en même
+// temps, chacune sur son port (les modeleurs : 5201 à 5204).
 //
-//   node tools/captures/studio.mjs <planche> [studio|garage] [--azimut=<degrés>] [--damier] [--cadre=<i>-<j>]
+//   node tools/captures/studio.mjs <planche> [studio|garage] [--port <n>] [--out <dossier>]
+//        [--azimut=<degrés>] [--damier] [--cadre=<i>-<j>]
 //
 // --cadre cadre les pièces de rang i à j de la planche (à partir de 0), pour les voir de près.
-// Avec une option, le nom du fichier la dit : formes-studio-a120-c0-6-damier.png.
+// Avec une option de vue, le nom du fichier la dit : formes-studio-a120-c0-6-damier.png.
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const PORT = 5191;
-const BASE = `http://localhost:${PORT}/PimpMyBichon/`;
+const DEFAULT_PORT = 5191;
+const DEFAULT_OUT = join('captures', 'deco');
 const PAGE = 'src/dev/studio/index.html';
 /** Mêmes arguments que playwright.config.ts : WebGL en rendu logiciel. */
 const CHROMIUM_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 
-const USAGE = 'usage : node tools/captures/studio.mjs <planche> [studio|garage] [--azimut=<degrés>] [--damier] [--cadre=<i>-<j>]';
+const USAGE =
+  'usage : node tools/captures/studio.mjs <planche> [studio|garage] [--port <n>] [--out <dossier>] [--azimut=<degrés>] [--damier] [--cadre=<i>-<j>]';
 
 /** @param {string[]} argv */
 function parseArgs(argv) {
-  const positional = argv.filter((arg) => !arg.startsWith('--'));
-  const flags = argv.filter((arg) => arg.startsWith('--'));
+  /** @type {string[]} */
+  const positional = [];
+  /** @type {string[]} */
+  const flags = [];
+  let port = DEFAULT_PORT;
+  let out = DEFAULT_OUT;
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i] ?? '';
+    const valued = /^--(port|out)(?:=(.*))?$/.exec(arg);
+    if (valued) {
+      const value = valued[2] ?? argv[(i += 1)];
+      if (!value) throw new Error(`option --${valued[1]} sans valeur\n${USAGE}`);
+      if (valued[1] === 'port') {
+        port = Number(value);
+        if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error(`port « ${value} » invalide\n${USAGE}`);
+      } else out = value;
+    } else if (arg.startsWith('--')) flags.push(arg);
+    else positional.push(arg);
+  }
   const [planche, eclairage = 'studio'] = positional;
   if (!planche || !/^[a-z0-9-]+$/.test(planche)) throw new Error(USAGE);
   if (eclairage !== 'studio' && eclairage !== 'garage') throw new Error(`éclairage « ${eclairage} » inconnu (studio ou garage)\n${USAGE}`);
@@ -42,7 +63,7 @@ function parseArgs(argv) {
     else if (flag.startsWith('--azimut=') && Number.isFinite(Number(flag.slice(9)))) azimut = Number(flag.slice(9));
     else throw new Error(`option « ${flag} » inconnue\n${USAGE}`);
   }
-  return { planche, eclairage, azimut, damier, cadre };
+  return { planche, eclairage, azimut, damier, cadre, port, out };
 }
 
 /** @param {string} url */
@@ -58,13 +79,16 @@ async function reachable(url) {
 /** @param {number} ms */
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Lance `vite` sur le port du studio, sans la variable qui coupe la vérification TLS. */
-function startServer() {
+/**
+ * Lance `vite` sur le port demandé, sans la variable qui coupe la vérification TLS.
+ * @param {number} port
+ */
+function startServer(port) {
   const env = { ...process.env };
   delete env.NODE_TLS_REJECT_UNAUTHORIZED;
   const vite = join(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
   if (!existsSync(vite)) throw new Error('vite introuvable : lance « npm ci » d’abord');
-  const child = spawn(process.execPath, [vite, '--port', String(PORT), '--strictPort'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [vite, '--port', String(port), '--strictPort'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let log = '';
   child.stdout.on('data', (chunk) => (log += chunk));
   child.stderr.on('data', (chunk) => (log += chunk));
@@ -72,14 +96,15 @@ function startServer() {
 }
 
 async function main() {
-  const { planche, eclairage, azimut, damier, cadre } = parseArgs(process.argv.slice(2));
+  const { planche, eclairage, azimut, damier, cadre, port, out: outDir } = parseArgs(process.argv.slice(2));
+  const base = `http://localhost:${port}/PimpMyBichon/`;
   const query = new URLSearchParams({ planche, eclairage });
   if (azimut !== null) query.set('azimut', String(azimut));
   if (damier) query.set('damier', '');
   if (cadre !== null) query.set('cadre', cadre);
-  const url = `${BASE}${PAGE}?${query}`;
+  const url = `${base}${PAGE}?${query}`;
   const suffix = `${azimut !== null ? `-a${azimut}` : ''}${cadre !== null ? `-c${cadre}` : ''}${damier ? '-damier' : ''}`;
-  const out = join(ROOT, 'captures', 'deco', `${planche}-${eclairage}${suffix}.png`);
+  const out = join(resolve(ROOT, outDir), `${planche}-${eclairage}${suffix}.png`);
 
   /** @type {ReturnType<typeof startServer> | null} */
   let server = null;
@@ -94,12 +119,12 @@ async function main() {
     process.exit(130);
   });
   try {
-    if (!(await reachable(BASE))) {
-      server = startServer();
+    if (!(await reachable(base))) {
+      server = startServer(port);
       const deadline = Date.now() + 60_000;
-      while (!(await reachable(BASE))) {
+      while (!(await reachable(base))) {
         if (server.child.exitCode !== null) throw new Error(`le serveur de développement s’est arrêté :\n${server.log()}`);
-        if (Date.now() > deadline) throw new Error(`le serveur de développement ne répond pas sur le port ${PORT}`);
+        if (Date.now() > deadline) throw new Error(`le serveur de développement ne répond pas sur le port ${port}`);
         await pause(300);
       }
     }

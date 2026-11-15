@@ -30,8 +30,10 @@ function storageLine(status: StorageStatus | null): string {
   if (!status.writable) {
     return 'Indisponible sur ce navigateur : tes réglages ne survivront pas à la fermeture de l’app.';
   }
-  // Le navigateur ne dit pas toujours la place occupée : dans ce cas, on n'en parle pas.
-  const used = status.usage === null ? '' : ` ${formatBytes(status.usage)} sur le téléphone.`;
+  // Le navigateur ne dit pas toujours la place occupée : dans ce cas, on n'en parle pas. Son
+  // chiffre vaut pour toute l'adresse du site, pas pour l'atelier seul.
+  const used =
+    status.usage === null ? '' : ` Le navigateur garde ${formatBytes(status.usage)} pour toute l’adresse du site, atelier hors ligne compris.`;
   if (status.persisted === true) return `Protégée.${used}`;
   if (status.persisted === false) {
     return `Pas encore protégée : le navigateur peut l’effacer si la place manque. Installe l’atelier pour la mettre à l’abri.${used}`;
@@ -200,7 +202,11 @@ export function UnderHoodPanel() {
       <dd>{typo(privateAssetsLine())}</dd>
 
       <dt>Substituts</dt>
-      <dd>placeholder_garage, placeholder_banc (voir TODO_ASSETS.md).</dd>
+      <dd>
+        {typo(
+          'Le mobilier du garage, modelé par le code en attendant des modèles (placeholder_canape_a, placeholder_quad…), et placeholder_banc à la place des véhicules. Liste complète dans TODO_ASSETS.md.',
+        )}
+      </dd>
     </dl>
   );
 }

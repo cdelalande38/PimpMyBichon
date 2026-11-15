@@ -34,7 +34,7 @@ tirés de la palette (`#b3aecb`, `#1c3f96`, `#c81e2f`, `#1b1826`…).
 
 ## Les fichiers et leur place dans la pièce
 
-Places et tailles d'après `captures/notes-agents/jalon1-references*.md` et `src/data/garage.ts`.
+Places et tailles prévues au départ, d'après `captures/notes-agents/jalon1-references*.md` ; les places réelles sont celles du champ `art` des objets (voir plus bas).
 
 | Fichier | viewBox | Substitut remplacé | Place prévue |
 | --- | --- | --- | --- |
@@ -72,11 +72,19 @@ Rendu conseillé dans la scène :
 Aperçu de cette recette (flou proche 3,5 px, flou large 11 px, cœur blanc de 5 unités) : fonction `avecLueur` de
 `outils/fabriquer.mjs`, vignettes « + lueur » de la planche.
 
-## Écarts à trancher par l'intégrateur
+## Ce qui est branché dans l'app
 
-- La toile est en **portrait** (demande de la mission) ; le panneau actuel `placeholder_toile_pop_art` fait 1,2 × 0,9 m
-  en paysage. Dans la même hauteur de 0,9 m, la toile fait 0,675 m de large.
-- `NeonSign` (`src/data/garage.ts`) décrit une seule ligne de texte (`text`, `height`) : les enseignes livrées font deux
-  et trois lignes. Il faudra un champ qui pointe vers le SVG (et une hauteur totale) plutôt qu'un texte.
-- Les SVG sont des sources : l'app devra en tirer des textures (PNG ou KTX2 dans le budget du § 8) ou lire les tracés
-  au chargement. Rien n'est encore branché.
+- **Œuvres posées** : chaque objet du mobilier déclare ses œuvres par son champ `art` (`ArtSlot` de
+  `src/data/garageBase.ts` : œuvre, case éventuelle, place, rotation, largeur), et `src/scene/garage/build.ts` y
+  pose un plan à 2 mm de la face, texturé par `acquireArtwork` (`src/scene/garage/artwork.ts`) depuis la copie
+  servie `public/assets/garage/art/<id>.svg`. La teinte d'attente s'affiche tant que le dessin n'est pas arrivé.
+  Le registre (`src/data/garageArt.ts`) donne la matière : émissive pour le fronton, éclairée pour le reste.
+- Posées aujourd'hui : `toile-pop-art` (toile sur châssis au-dessus de l'écran, en portrait 0,54 × 0,72 m),
+  `cible` (panneau de la cible, mur rouge), `flipper-plateau` et `flipper-fronton` (flipper de l'angle fond-droit),
+  `plaques-deco` (trois tôles rivetées, une case chacune), `affiche-atelier` (affiche encadrée du mur de gauche).
+  La case `cible-seule` n'est pas utilisée.
+- **Pas encore posé** : `casque-motifs.svg` ; les casques du casier restent en couleurs unies.
+- **Néons** : les deux enseignes ne passent pas par leur SVG à l'exécution. Leur alphabet filaire
+  (`outils/traces.mjs`) est repris sans déformation dans `src/data/neonAlphabet.ts` (`NEON_SIGNS`), et `src/scene/garage/neon.ts` en tire des tubes émissifs (cœur
+  blanchi sur la face avant) posés à 3,2 cm du mur sur une plaque de plexi fumé et quatre entretoises chromées.
+  La lueur vient du bloom. Elles ne sont donc pas copiées dans `public/` (`servie: false`).

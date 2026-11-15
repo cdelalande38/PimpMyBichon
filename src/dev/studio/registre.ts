@@ -1,9 +1,12 @@
 // Registre des planches du studio des formes (page de développement, hors de l'app livrée).
 // Une planche = un nom → une liste de pièces. Pour en ajouter une, dépose un fichier dans
 // src/dev/studio/planches/ qui exporte `planches` (nom → pièces) : le studio les ramasse tous,
-// aucun fichier commun à modifier.
+// aucun fichier commun à modifier. Le vrai mobilier du garage a ses planches toutes faites
+// (planches/mobilier.ts, tirées de src/data/garageProps/).
 
 import { Box3, Euler, Matrix4, Quaternion, Vector3 } from 'three';
+import type { GarageMaterialId } from '../../data/garageBase.ts';
+import type { GarageArtId } from '../../data/garageArt.ts';
 import type { GarageShape, Vec3 } from '../../data/garageShapes.ts';
 import { shapeGeometry } from '../../scene/garage/shapes.ts';
 
@@ -21,6 +24,19 @@ export interface PieceStudio {
   metal?: number;
   /** Nom écrit sous la pièce, avec son nombre de triangles. */
   etiquette?: string;
+  /** Matériau du garage (GARAGE_MATERIALS) : remplace couleur, rugosité et métal, carte comprise. */
+  materiau?: GarageMaterialId;
+  /**
+   * Objet du garage dont la pièce fait partie : une étiquette par objet, « nom · triangles »
+   * (somme de ses pièces, œuvres exclues).
+   */
+  objet?: string;
+  /**
+   * Œuvre de src/data/garageArt.ts : la pièce est un plan qui regarde vers +z (avant rotation),
+   * large de `largeur`, haut de `hauteur` ; `forme` (un pavé mince aux mêmes cotes) ne sert qu'à
+   * la mise en place.
+   */
+  oeuvre?: { art: GarageArtId; region?: string; largeur: number; hauteur: number };
 }
 
 export type Planche = readonly PieceStudio[];

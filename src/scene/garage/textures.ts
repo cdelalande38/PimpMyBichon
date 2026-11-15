@@ -233,67 +233,192 @@ const ecran: Draw = (c, s) => {
   }
 };
 
-// Toile pop art : quatre cases de couleurs franches, trame de points, éclair.
-const popart: Draw = (c, s) => {
-  const colors = ['#ffd400', '#00b7ff', '#ff2d8a', '#7cff3a'];
-  const half = s / 2;
-  colors.forEach((color, index) => {
-    const x = (index % 2) * half;
-    const y = Math.floor(index / 2) * half;
-    c.fillStyle = color;
-    c.fillRect(x, y, half, half);
-    c.fillStyle = 'rgba(0,0,0,0.18)';
-    for (let i = 6; i < half; i += 14) {
-      for (let j = 6; j < half; j += 14) {
-        c.beginPath();
-        c.arc(x + i, y + j, 3, 0, Math.PI * 2);
-        c.fill();
+// Veines de bois (bois, bois clair, caisses, solives) : fond blanc, la couleur vient du matériau.
+// Stries sinueuses le long de u, d'une période entière sur la largeur (raccord exact), et quelques
+// nœuds en ellipses concentriques ; tout ce qui passe un bord est redessiné de l'autre côté.
+const veines: Draw = (c, s) => {
+  const rand = random(41);
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 0, s, s);
+  const tone = (t: number) => {
+    const r = Math.round(216 - 32 * t);
+    return `rgb(${r},${Math.round(207 - 38 * t)},${Math.round(196 - 44 * t)})`;
+  };
+  // Bandes larges et pâles : la luminance moyenne descend vers 0,85.
+  for (let k = 0; k < 14; k += 1) {
+    const y0 = rand() * s;
+    const width = 10 + rand() * 18;
+    c.globalAlpha = 0.28 + rand() * 0.2;
+    c.fillStyle = tone(rand() * 0.4);
+    for (const dy of [-s, 0, s]) c.fillRect(0, y0 + dy - width / 2, s, width);
+  }
+  c.globalAlpha = 1;
+  for (let k = 0; k < 56; k += 1) {
+    const y0 = rand() * s;
+    const waves = [1 + Math.floor(rand() * 3), 2 + Math.floor(rand() * 4)] as const;
+    const phases = [rand() * Math.PI * 2, rand() * Math.PI * 2] as const;
+    const amplitude = 2 + rand() * 4;
+    c.strokeStyle = tone(rand());
+    c.lineWidth = 1 + rand() * 2;
+    for (const dy of [-s, 0, s]) {
+      c.beginPath();
+      for (let x = 0; x <= s; x += 8) {
+        const t = (x / s) * Math.PI * 2;
+        const y = y0 + dy + amplitude * Math.sin(waves[0] * t + phases[0]) + 2 * Math.sin(waves[1] * t + phases[1]);
+        if (x === 0) c.moveTo(x, y);
+        else c.lineTo(x, y);
+      }
+      c.stroke();
+    }
+  }
+  const knots = 3 + Math.floor(rand() * 2);
+  for (let k = 0; k < knots; k += 1) {
+    const x = rand() * s;
+    const y = rand() * s;
+    const rings = 3 + Math.floor(rand() * 3);
+    const size = 12 + rand() * 18;
+    for (let r = rings; r >= 1; r -= 1) {
+      c.strokeStyle = tone(0.5 + (0.5 * r) / rings);
+      c.lineWidth = 1.5;
+      for (const dx of [-s, 0, s]) {
+        for (const dy of [-s, 0, s]) {
+          c.beginPath();
+          c.ellipse(x + dx, y + dy, (size * 1.6 * r) / rings, (size * 0.5 * r) / rings, 0, 0, Math.PI * 2);
+          c.stroke();
+        }
       }
     }
-    c.fillStyle = '#111';
-    c.beginPath();
-    c.moveTo(x + half * 0.55, y + half * 0.12);
-    c.lineTo(x + half * 0.3, y + half * 0.55);
-    c.lineTo(x + half * 0.48, y + half * 0.55);
-    c.lineTo(x + half * 0.4, y + half * 0.88);
-    c.lineTo(x + half * 0.72, y + half * 0.42);
-    c.lineTo(x + half * 0.54, y + half * 0.42);
-    c.closePath();
-    c.fill();
+    c.fillStyle = tone(1);
+    for (const dx of [-s, 0, s]) for (const dy of [-s, 0, s]) {
+      c.beginPath();
+      c.ellipse(x + dx, y + dy, size * 0.3, size * 0.12, 0, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+};
+
+/** Écrit une valeur de 0 à 1 par pixel (gris), en donnée linéaire. */
+function fillData(c: CanvasRenderingContext2D, width: number, height: number, value: (x: number, y: number) => number): void {
+  const image = c.createImageData(width, height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const v = Math.round(Math.min(1, Math.max(0, value(x, y))) * 255);
+      const i = (y * width + x) * 4;
+      image.data[i] = v;
+      image.data[i + 1] = v;
+      image.data[i + 2] = v;
+      image.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(image, 0, 0);
+}
+
+// Rugosité du cuir des canapés (canal vert) : grain fin de 2 à 4 px entre 0,28 et 0,42, et trois
+// ou quatre plis larges plus mats (0,5). Grain sur une grille qui divise la taille : raccord exact.
+const cuir: Draw = (c, s) => {
+  const rand = random(53);
+  const fine = Array.from({ length: (s / 2) ** 2 }, () => rand());
+  const coarse = Array.from({ length: (s / 4) ** 2 }, () => rand());
+  const folds = Array.from({ length: 4 }, () => ({
+    y: rand() * s,
+    amplitude: 8 + rand() * 18,
+    wave: 1 + Math.floor(rand() * 2),
+    phase: rand() * Math.PI * 2,
+    width: 4 + rand() * 5,
+  }));
+  fillData(c, s, s, (x, y) => {
+    const grain = 0.6 * (fine[(y >> 1) * (s / 2) + (x >> 1)] ?? 0) + 0.4 * (coarse[(y >> 2) * (s / 4) + (x >> 2)] ?? 0);
+    let v = 0.28 + 0.14 * grain;
+    for (const fold of folds) {
+      const centre = fold.y + fold.amplitude * Math.sin((x / s) * Math.PI * 2 * fold.wave + fold.phase);
+      const d = Math.abs((((y - centre) % s) + s * 1.5) % s - s / 2);
+      v += (0.5 - v) * Math.exp(-((d / fold.width) ** 2));
+    }
+    return v;
   });
 };
 
-// Cible de fléchettes : secteurs alternés, anneaux rouges et verts.
-const cible: Draw = (c, s) => {
-  const r = s / 2;
-  c.fillStyle = '#111';
+// Crampons des pneus : blocs de 20 × 28 px en quinconce, au pas de 32 px (raccord exact), blancs
+// sur des rainures grises ; la couleur vient du matériau.
+const crampons: Draw = (c, s) => {
+  c.fillStyle = '#8c8c8c';
   c.fillRect(0, 0, s, s);
-  for (let k = 0; k < 20; k += 1) {
-    c.beginPath();
-    c.moveTo(r, r);
-    c.arc(r, r, r * 0.92, (k * Math.PI) / 10, ((k + 1) * Math.PI) / 10);
-    c.closePath();
-    c.fillStyle = k % 2 ? '#efe4c8' : '#1a1a1a';
-    c.fill();
+  c.fillStyle = '#ffffff';
+  const pitch = 32;
+  for (let row = 0; row < s / pitch; row += 1) {
+    const offset = (row % 2) * (pitch / 2);
+    for (let col = 0; col < s / pitch; col += 1) {
+      const x = col * pitch + offset + 6;
+      const y = row * pitch + 2;
+      for (const dx of [0, -s]) c.fillRect(x + dx, y, 20, 28);
+    }
   }
-  for (const [radius, width] of [
-    [0.9, 0.06],
-    [0.56, 0.05],
-  ] as const) {
-    c.lineWidth = r * width;
-    c.strokeStyle = '#c4161c';
-    c.beginPath();
-    c.arc(r, r, r * radius, 0, Math.PI * 2);
-    c.stroke();
+};
+
+// Capiton du pouf : alvéoles hexagonales de 32 px, centre clair, bord #6a6a6a. Huit rangées sur la
+// hauteur (rapport √3 / 2 du canvas) : raccord exact dans les deux sens.
+const nidAbeille: Draw = (c, s) => {
+  const h = c.canvas.height;
+  c.fillStyle = '#6a6a6a';
+  c.fillRect(0, 0, s, h);
+  const rows = 8;
+  const px = s / 8;
+  const py = h / rows;
+  const radius = py / 1.5 - 1.6;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      const cx = col * px + (row % 2) * (px / 2);
+      const cy = row * py;
+      for (const dx of [-s, 0, s]) {
+        for (const dy of [-h, 0, h]) {
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < -px || x > s + px || y < -py || y > h + py) continue;
+          const g = c.createRadialGradient(x, y, 0, x, y, radius);
+          g.addColorStop(0, '#ffffff');
+          g.addColorStop(0.7, '#d6d6d6');
+          g.addColorStop(1, '#8a8a8a');
+          c.fillStyle = g;
+          c.beginPath();
+          for (let k = 0; k < 6; k += 1) {
+            const a = Math.PI / 6 + (k * Math.PI) / 3;
+            if (k === 0) c.moveTo(x + radius * Math.cos(a), y + radius * Math.sin(a));
+            else c.lineTo(x + radius * Math.cos(a), y + radius * Math.sin(a));
+          }
+          c.closePath();
+          c.fill();
+        }
+      }
+    }
   }
-  c.fillStyle = '#1e8a3a';
-  c.beginPath();
-  c.arc(r, r, r * 0.09, 0, Math.PI * 2);
-  c.fill();
-  c.fillStyle = '#c4161c';
-  c.beginPath();
-  c.arc(r, r, r * 0.04, 0, Math.PI * 2);
-  c.fill();
+};
+
+// Rugosité de la crédence (canal vert), alignée sur son dessin : carreaux brillants (0,15), joints
+// mats (0,7) au pas de 10 cm, comptés depuis le bas comme les carreaux.
+const credenceRugosite: Draw = (c, s) => {
+  const h = c.canvas.height;
+  const t = CREDENCE.tile * (s / CREDENCE.width);
+  const level = (value: number) => Math.round(value * 255);
+  const tile = level(0.15);
+  c.fillStyle = `rgb(${tile},${tile},${tile})`;
+  c.fillRect(0, 0, s, h);
+  const joint = level(0.7);
+  c.fillStyle = `rgb(${joint},${joint},${joint})`;
+  for (let x = 0; x <= s; x += t) c.fillRect(x - 1, 0, 2, h);
+  for (let y = h; y >= 0; y -= t) c.fillRect(0, y - 1, s, 2);
+};
+
+// Tache de contact (canal vert, linéaire) : pleine au centre, nulle sur le bord, coins arrondis.
+// Posée en neuf cases (build.ts) : le centre de la texture couvre l'emprise de l'objet, ses bords
+// la marge où l'ombre s'éteint.
+const contact: Draw = (c, s) => {
+  fillData(c, s, s, (x, y) => {
+    const dx = Math.abs(((x + 0.5) / s) * 2 - 1);
+    const dy = Math.abs(((y + 0.5) / s) * 2 - 1);
+    const r = Math.min(1, Math.hypot(dx, dy));
+    const t = 1 - r;
+    return t * t * (3 - 2 * t);
+  });
 };
 
 /**
@@ -308,9 +433,13 @@ const DRAWINGS: Record<GarageTextureId, [size: number, draw: Draw, ratio?: numbe
   pin: [512, pin],
   tiroirs: [256, tiroirs],
   credence: [1024, credence, CREDENCE.height / CREDENCE.width],
+  credenceRugosite: [512, credenceRugosite, CREDENCE.height / CREDENCE.width, true],
   ecran: [512, ecran],
-  popart: [512, popart],
-  cible: [256, cible],
+  veines: [512, veines],
+  cuir: [256, cuir, 1, true],
+  crampons: [256, crampons],
+  nidAbeille: [256, nidAbeille, 222 / 256],
+  contact: [128, contact, 1, true],
 };
 
 const cache = new Map<string, Texture>();
@@ -438,38 +567,4 @@ export function haloTexture(kind: HaloKind): Texture {
   result.generateMipmaps = false;
   cache.set(key, result);
   return result;
-}
-
-/** Enseigne néon : lettres blanches sur fond noir (la couleur vient du matériau). */
-export function signTexture(text: string): { texture: Texture; aspect: number } {
-  const key = `enseigne:${text}`;
-  const height = 128;
-  const font = `${Math.round(height * 0.72)}px "Russo One", "Chakra Petch", sans-serif`;
-  const measure = document.createElement('canvas').getContext('2d');
-  if (measure) measure.font = font;
-  const width = Math.ceil((measure?.measureText(text).width ?? text.length * 70) + height * 0.6);
-  const cached = cache.get(key);
-  if (cached) return { texture: cached, aspect: width / height };
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const c = canvas.getContext('2d');
-  if (c) {
-    c.fillStyle = '#000';
-    c.fillRect(0, 0, width, height);
-    c.font = font;
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.shadowColor = '#fff';
-    c.shadowBlur = 18;
-    c.strokeStyle = 'rgba(255,255,255,0.5)';
-    c.lineWidth = 10;
-    c.strokeText(text, width / 2, height / 2);
-    c.shadowBlur = 0;
-    c.fillStyle = '#fff';
-    c.fillText(text, width / 2, height / 2);
-  }
-  const result = new CanvasTexture(canvas);
-  cache.set(key, result);
-  return { texture: result, aspect: width / height };
 }

@@ -10,6 +10,9 @@
 //   damier                    damier de 10 cm sur toutes les pièces (coordonnées de texture en mètres)
 //   cadre=<i>-<j>             cadre les pièces de rang i à j (à partir de 0), pour les voir de près
 // Prête : attribut data-studio-pret sur body ; en cas d'erreur, data-studio-erreur.
+// Planches du vrai mobilier (une par famille, une par objet) : planches/mobilier.ts. Une pièce qui
+// porte un matériau du garage le prend tel quel (couleur, rugosité, métal, émission, carte) ; une
+// œuvre posée est un plan à la texture de l'œuvre (teinte d'attente, puis le dessin).
 // Capture : node tools/captures/studio.mjs <planche> [éclairage].
 
 import {
@@ -17,12 +20,14 @@ import {
   BackSide,
   Box3,
   BoxGeometry,
+  type BufferGeometry,
   CanvasTexture,
   Color,
   DirectionalLight,
   Euler,
   Mesh,
   MeshBasicMaterial,
+  type Material,
   MeshStandardMaterial,
   PCFSoftShadowMap,
   PerspectiveCamera,
@@ -39,8 +44,12 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { GARAGE_MATERIALS, type GarageMaterial, type GarageMaterialId } from '../../data/garageBase.ts';
+import { garageArt } from '../../data/garageArt.ts';
+import { acquireArtwork } from '../../scene/garage/artwork.ts';
 import { shapeGeometry, triangleCount } from '../../scene/garage/shapes.ts';
-import type { ModulePlanches, Planche } from './registre.ts';
+import { garageTexture } from '../../scene/garage/textures.ts';
+import type { ModulePlanches, PieceStudio, Planche } from './registre.ts';
 
 const modules = import.meta.glob<ModulePlanches>('./planches/*.ts', { eager: true });
 const PLANCHES: Record<string, Planche> = {};
@@ -93,6 +102,52 @@ function environnementGarage(): Scene {
   return scene;
 }
 
+/** Matière d'un matériau du garage, aux valeurs de GARAGE_MATERIALS (comme build.ts). */
+function matiereGarage(id: GarageMaterialId, carte: CanvasTexture | null): MeshStandardMaterial {
+  const spec: GarageMaterial = GARAGE_MATERIALS[id];
+  const material = new MeshStandardMaterial({
+    color: spec.color,
+    roughness: spec.roughness,
+    metalness: spec.metalness,
+    envMapIntensity: spec.env ?? 0.2,
+  });
+  if (carte) material.map = carte;
+  else if (spec.map) material.map = garageTexture(spec.map, spec.repeat);
+  if (spec.roughnessMap && !carte) material.roughnessMap = garageTexture(spec.roughnessMap, spec.repeat);
+  if (spec.emissive) {
+    material.emissive = new Color(spec.emissive);
+    material.emissiveIntensity = spec.emissiveIntensity ?? 1;
+  }
+  return material;
+}
+
+/** Œuvres en cours de chargement : la page n'est prête qu'une fois leurs dessins posés. */
+const chargements: Array<Promise<boolean>> = [];
+let redemander = () => {};
+
+/**
+ * Géométrie et matière d'une pièce ; une œuvre posée est un plan à la texture de l'œuvre, émissive
+ * ou éclairée selon le registre.
+ */
+function construire(piece: PieceStudio, carte: CanvasTexture | null): { geometry: BufferGeometry; material: Material } {
+  if (!piece.oeuvre) {
+    const material = piece.materiau
+      ? matiereGarage(piece.materiau, carte)
+      : new MeshStandardMaterial({ color: piece.couleur, roughness: piece.rugosite ?? 0.5, metalness: piece.metal ?? 0, map: carte });
+    return { geometry: shapeGeometry(piece.forme), material };
+  }
+  const { art, region, largeur, hauteur } = piece.oeuvre;
+  const item = garageArt(art);
+  const artwork = acquireArtwork(art, { ...(region ? { region } : {}), onReady: () => redemander() });
+  chargements.push(artwork.ready);
+  const transparence = item.transparent ? { transparent: true, alphaTest: 0.02 } : {};
+  const material =
+    item.lighting === 'emissive'
+      ? new MeshBasicMaterial({ map: artwork.texture, color: new Color(1, 1, 1).multiplyScalar(item.glow ?? 1), ...transparence })
+      : new MeshStandardMaterial({ map: artwork.texture, roughness: 0.6, metalness: 0, ...transparence });
+  return { geometry: new PlaneGeometry(largeur, hauteur), material };
+}
+
 function afficherErreur(error: unknown): void {
   const message = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
   const div = document.createElement('div');
@@ -135,30 +190,35 @@ function demarrer(): void {
   const boiteCadre = new Box3();
   let triangles = 0;
   const etiquettes: Array<{ texte: string; ancre: Vector3 }> = [];
-  for (const piece of planche) {
-    const geometry = shapeGeometry(piece.forme);
-    const n = triangleCount(geometry);
+  /** Objets du garage : triangles (œuvres exclues) et boîte, pour une étiquette par objet. */
+  const objets = new Map<string, { triangles: number; boite: Box3 }>();
+  for (const element of planche) {
+    const { geometry, material } = construire(element, carte);
+    const n = element.oeuvre ? 0 : triangleCount(geometry);
     triangles += n;
-    const material = new MeshStandardMaterial({
-      color: piece.couleur,
-      roughness: piece.rugosite ?? 0.5,
-      metalness: piece.metal ?? 0,
-      map: carte,
-    });
     const mesh = new Mesh(geometry, material);
-    mesh.position.set(...(piece.position ?? [0, 0, 0]));
-    mesh.rotation.copy(new Euler(...(piece.rotation ?? [0, 0, 0])));
+    mesh.position.set(...(element.position ?? [0, 0, 0]));
+    mesh.rotation.copy(new Euler(...(element.rotation ?? [0, 0, 0])));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     scene.add(mesh);
     mesh.updateMatrixWorld();
     const pieceBoite = new Box3().setFromObject(mesh);
     boite.union(pieceBoite);
-    const rang = planche.indexOf(piece);
+    const rang = planche.indexOf(element);
     if (!cadre || (rang >= Number(cadre[1]) && rang <= Number(cadre[2]))) boiteCadre.union(pieceBoite);
-    if (piece.etiquette) {
-      etiquettes.push({ texte: `${piece.etiquette} · ${n}`, ancre: new Vector3((pieceBoite.min.x + pieceBoite.max.x) / 2, 0, pieceBoite.max.z + 0.04) });
+    if (element.etiquette) {
+      etiquettes.push({ texte: `${element.etiquette} · ${n}`, ancre: new Vector3((pieceBoite.min.x + pieceBoite.max.x) / 2, 0, pieceBoite.max.z + 0.04) });
     }
+    if (element.objet) {
+      const entree = objets.get(element.objet) ?? { triangles: 0, boite: new Box3() };
+      entree.triangles += n;
+      entree.boite.union(pieceBoite);
+      objets.set(element.objet, entree);
+    }
+  }
+  for (const [nom, { triangles: n, boite: b }] of objets) {
+    etiquettes.push({ texte: `${nom.replace(/^placeholder_/, '')} · ${n}`, ancre: new Vector3((b.min.x + b.max.x) / 2, 0, b.max.z + 0.04) });
   }
 
   // Sol sombre légèrement brillant.
@@ -220,7 +280,7 @@ function demarrer(): void {
   controls.update();
 
   const info = document.getElementById('info')!;
-  info.textContent = `planche ${nomPlanche} · éclairage ${eclairage}${damier ? ' · damier 10 cm' : ''}\n${planche.length} pièces · ${triangles} triangles`;
+  info.textContent = `planche ${nomPlanche} · éclairage ${eclairage}${damier ? ' · damier 10 cm' : ''}\n${objets.size > 0 ? `${objets.size} objets · ` : ''}${planche.length} pièces · ${triangles} triangles`;
 
   const calque = document.getElementById('etiquettes')!;
   const divs = etiquettes.map(({ texte }) => {
@@ -242,6 +302,7 @@ function demarrer(): void {
     });
   };
   controls.addEventListener('change', rendre);
+  redemander = () => requestAnimationFrame(rendre);
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -249,8 +310,13 @@ function demarrer(): void {
     rendre();
   });
   rendre();
-  requestAnimationFrame(() => {
-    document.body.dataset.studioPret = 'oui';
+  // Prête quand les dessins des œuvres sont posés (ou au bout de 10 s : la teinte d'attente reste).
+  const attente = new Promise((resolve) => setTimeout(resolve, 10_000));
+  void Promise.race([Promise.all(chargements), attente]).then(() => {
+    rendre();
+    requestAnimationFrame(() => {
+      document.body.dataset.studioPret = 'oui';
+    });
   });
 }
 

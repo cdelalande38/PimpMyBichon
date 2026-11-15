@@ -226,11 +226,18 @@ export function analyzeCut(room: CutRoom, elements: readonly CutElement[], toler
   // Le dessous d'un élément : ses pièces les plus basses ; son dessus : les plus hautes.
   const bottoms = solid.map((parts, i) => parts.filter((part) => part.min[1] <= (boxes[i]?.min[1] ?? 0) + tolerances.contact));
   const tops = solid.map((parts, i) => parts.filter((part) => part.max[1] >= (boxes[i]?.max[1] ?? 0) - tolerances.contact));
+  // Rejet rapide par les boîtes d'objet : poser ou pendre demande que les deux boîtes se touchent
+  // (à la tolérance près) et se recouvrent au sol ; seules les pièces de B proches de A sont
+  // comparées. Mêmes décisions que la comparaison complète, pièce à pièce.
   elements.forEach((element, a) => {
-    if (element.light === true) return;
+    const boxA = boxes[a];
+    if (element.light === true || !boxA) return;
     elements.forEach((other, b) => {
-      if (b === a || other.light === true) return;
-      const parts = solid[b] ?? [];
+      const boxB = boxes[b];
+      if (b === a || other.light === true || !boxB) return;
+      if (!footprintOverlap(boxA, boxB) || !touches(boxA, boxB, tolerances.contact)) return;
+      const parts = (solid[b] ?? []).filter((part) => touches(boxA, part, tolerances.contact));
+      if (parts.length === 0) return;
       const on = bottoms[a]?.some((low) => parts.some((part) => restsOn(low, part, tolerances.contact)));
       if (on) pair(a, b);
       const under = tops[a]?.some((high) => parts.some((part) => hangsFrom(high, part, tolerances.contact)));
@@ -283,7 +290,8 @@ export function analyzeCut(room: CutRoom, elements: readonly CutElement[], toler
       const box = boxes[a];
       if (!box || elements[a]?.light === true) continue;
       for (let b = 0; b < count; b += 1) {
-        if (b === a || !anchored[b] || elements[b]?.light === true) continue;
+        const boxB = boxes[b];
+        if (b === a || !anchored[b] || !boxB || elements[b]?.light === true || !touches(box, boxB, tolerances.contact)) continue;
         if (solid[b]?.some((part) => touches(box, part, tolerances.contact))) {
           supports[a]?.add(b);
           anchored[a] = 1;

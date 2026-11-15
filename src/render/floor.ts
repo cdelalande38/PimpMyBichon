@@ -131,11 +131,13 @@ export interface GarageShaderVariant {
   surface: boolean;
   /** S'ajoute à l'image (fondu de la coupe par atténuation). */
   additive: boolean;
+  /** Voile transparent mélangé par son opacité (ombres de contact) : fondu par l'opacité. */
+  alpha?: boolean;
 }
 
 /** Modifie les sources d'un matériau du garage selon sa variante (exporté pour les tests). */
 export function patchGarageShader(shader: { vertexShader: string; fragmentShader: string }, variant: GarageShaderVariant): void {
-  patchCutShader(shader, variant.additive);
+  patchCutShader(shader, variant.additive, variant.alpha === true);
   if (!variant.standard) return;
   if (!variant.surface) {
     shader.fragmentShader = inject(shader.fragmentShader, '#include <common>', 'uniform float pmbIblDiffuse;');
@@ -170,7 +172,10 @@ export function patchGarageMaterial(
 ): void {
   const standard = material instanceof MeshStandardMaterial;
   const surface = standard && options.surface === true;
-  const variant = (): GarageShaderVariant => ({ standard, surface, additive: material.blending === AdditiveBlending });
+  const variant = (): GarageShaderVariant => {
+    const additive = material.blending === AdditiveBlending;
+    return { standard, surface, additive, alpha: !additive && material.transparent };
+  };
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
     if (surface) Object.assign(shader.uniforms, uniforms);
     else {
@@ -180,8 +185,8 @@ export function patchGarageMaterial(
     patchGarageShader(shader, variant());
   };
   material.customProgramCacheKey = () => {
-    const { additive } = variant();
-    return `pmb-garage-1:${surface ? 'surface' : standard ? 'decor' : 'basique'}:${additive ? 'additif' : 'opaque'}`;
+    const { additive, alpha } = variant();
+    return `pmb-garage-1:${surface ? 'surface' : standard ? 'decor' : 'basique'}:${additive ? 'additif' : alpha ? 'voile' : 'opaque'}`;
   };
   material.userData.pmbCut = true;
 }

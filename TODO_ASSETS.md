@@ -27,7 +27,7 @@ Claude Code tient ce fichier à jour : chaque substitut encore en place y figure
 
 Format : `placeholder_<nom>` · ce qu'il remplace · depuis quel jalon.
 
-- `placeholder_garage` · retiré au jalon 1 : le garage du § 4 est construit d'après `src/data/garage.ts` (enveloppe, lambris de pin, retombées, spots, halos, textures dessinées au canvas). Son mobilier reste en volumes simples, listés ci-dessous, en attendant des modèles. Pas encore représentés : étagère à cactus, roues murales, radiateur et cartons de l'établi, dalles blanches du plafond :
+- `placeholder_garage` · retiré au jalon 1 : le garage du § 4 est construit d'après `src/data/garage.ts` (enveloppe, lambris de pin, retombées, spots, halos, textures dessinées au canvas). Son mobilier est modelé par le code en formes arrondies (`src/data/garageProps/`, vocabulaire de `src/data/garageShapes.ts`), en attendant des modèles ; chaque objet reste un substitut, listé ci-dessous. Les œuvres dessinées pour le projet (`assets-src/garage/`, servies depuis `public/assets/garage/art/`) sont posées sur leurs objets, et les deux enseignes néon sont construites en tubes d'après leurs tracés (`src/data/neonAlphabet.ts`). Pas encore représentés : étagère à cactus, roues murales, radiateur et cartons de l'établi, dalles blanches du plafond, motifs des casques (`casque-motifs.svg`, non posé) :
   - `placeholder_meubles_atelier` · meubles blancs à tiroirs, plan de travail, outils posés · depuis le jalon 1
   - `placeholder_evier` · évier, robinet et flacons au bout des meubles blancs · depuis le jalon 1
   - `placeholder_moto_en_pieces` · jante, cadre et moteur posés sur le plan de travail · depuis le jalon 1
@@ -37,13 +37,14 @@ Format : `placeholder_<nom>` · ce qu'il remplace · depuis quel jalon.
   - `placeholder_applique` · applique articulée · depuis le jalon 1
   - `placeholder_colonne_ecran` · colonne noire toute hauteur · depuis le jalon 1
   - `placeholder_ecran` · grand écran (en attendant la photo du dernier build livré, un coucher de soleil dessiné) · depuis le jalon 1
-  - `placeholder_toile_pop_art` · toile pop art (motif original à créer) · depuis le jalon 1
-  - `placeholder_credence` · crédence noire à bouts en escalier de carreaux blancs (texture dessinée) · depuis le jalon 1
+  - `placeholder_toile_pop_art` · toile sur châssis au-dessus de l'écran, œuvre `toile-pop-art.svg` posée · depuis le jalon 1
+  - `placeholder_credence` · plaque de crédence noire à bouts en escalier de carreaux blancs (texture dessinée) · depuis le jalon 1
   - `placeholder_moto_sportive` · sportive carénée noire devant la colonne (la moto du moment) · depuis le jalon 1
-  - `placeholder_flipper` · flipper ancien et son fronton éclairé · depuis le jalon 1
+  - `placeholder_flipper` · flipper ancien, œuvres `flipper-plateau.svg` et `flipper-fronton.svg` (éclairé) posées · depuis le jalon 1
   - `placeholder_peluche` · peluche posée sur le flipper · depuis le jalon 1
-  - `placeholder_panneau_cible` · panneau de bois à bords étagés, rétroéclairé · depuis le jalon 1
-  - `placeholder_cible` · cible de fléchettes (texture dessinée) · depuis le jalon 1
+  - `placeholder_panneau_cible` · panneau de bois à bords étagés, cible de l'œuvre `cible.svg` et trois fléchettes · depuis le jalon 1
+  - `placeholder_plaques` · trois tôles décoratives rivetées, œuvre `plaques-deco.svg` posée · depuis le jalon 1
+  - `placeholder_affiche` · affiche encadrée sur le mur de gauche, œuvre `affiche-atelier.svg` posée · depuis le jalon 1
   - `placeholder_caisses` · caisses empilées · depuis le jalon 1
   - `placeholder_quad` · quad noir à phare rond et amortisseurs rouges · depuis le jalon 1
   - `placeholder_canape_a`, `placeholder_canape_b` · deux canapés 2 places en cuir noir, en L dans l'angle avant-gauche · depuis le jalon 1
@@ -55,7 +56,8 @@ Format : `placeholder_<nom>` · ce qu'il remplace · depuis quel jalon.
   - `placeholder_enseigne_ronde` · enseigne ronde à anneau vert lumineux, sans texte · depuis le jalon 1
   - `placeholder_fut` · fût métallique rouge, sans marque · depuis le jalon 1
   - `placeholder_caisse_colonne` · caisse-colonne en bois de palette au bout du canapé · depuis le jalon 1
-  - `placeholder_casiers_casques` · casier ouvert à quatre cases, un casque par case, un point LED bleu en haut de chacune · depuis le jalon 1
+  - `placeholder_casiers_casques` · casier ouvert à quatre cases, un point LED bleu en haut de chacune · depuis le jalon 1
+  - `placeholder_casques` · un casque par case du casier et un sur la patère, en couleurs unies · depuis le jalon 1
   - `placeholder_moto_murale` · petite sportive rouge accrochée sous le casier · depuis le jalon 1
   - `placeholder_solives` · solives sombres du plafond (lames de pin dessinées entre elles) · depuis le jalon 1
   - `placeholder_pieds_tubes` · pieds des tubes LED de l'ambiance « Néon » · depuis le jalon 1

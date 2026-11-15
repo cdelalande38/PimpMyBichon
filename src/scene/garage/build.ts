@@ -12,11 +12,15 @@
 // sommets portent son identifiant (attribut `pmbCut`), même fusionnés avec d'autres. Un nouveau
 // maillage du décor passe par `register` et `tagCut`, ou prouve qu'il ne peut pas cacher le
 // véhicule (tests/unit/coupe.test.ts, garde-fou de structure).
+// Mesures d'ensemble du cahier de remodelage (§ 3) : ombres de contact déduites des boîtes des
+// objets (une géométrie, un appel de dessin, hors reflet), assombrissement de pied par sommet à
+// la fusion (aucun appel de dessin), œuvres posées sur les objets (un plan et un appel de dessin
+// par texture), enseignes en tubes de verre (un appel de dessin pour toutes, plaques de fond
+// fusionnées avec le mobilier).
 
 import {
   AdditiveBlending,
   Box3,
-  BoxGeometry,
   BufferGeometry,
   Color,
   CylinderGeometry,
@@ -32,10 +36,11 @@ import {
   PlaneGeometry,
   PointLight,
   Quaternion,
-  SphereGeometry,
   SpotLight,
+  Uint16BufferAttribute,
   Vector3,
   type Material,
+  type Texture,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Ambiance } from '../../data/ambiances.ts';
@@ -50,12 +55,18 @@ import {
   type GarageLayout,
   type GarageMaterial,
   type GarageMaterialId,
-  type Part,
+  type Prop,
   type Spot,
   type Vec3,
 } from '../../data/garage.ts';
+import { artSize, garageArt, type GarageArtId } from '../../data/garageArt.ts';
+import type { GarageShape } from '../../data/garageShapes.ts';
+import { NEON_SIGNS } from '../../data/neonAlphabet.ts';
+import { acquireArtwork, type ArtworkOptions } from './artwork.ts';
 import { analyzeCut, type Box, type CutElement, type CutStructure } from './cut.ts';
-import { garageTexture, haloTexture, signTexture, type HaloKind } from './textures.ts';
+import { neonSign } from './neon.ts';
+import { roundedRectContour, shapeGeometry } from './shapes.ts';
+import { garageTexture, haloTexture, type HaloKind } from './textures.ts';
 
 /** Spots de la retombée, de gauche à droite : leur rang dans les listes de l'ambiance. */
 const SPOT_SLOTS: readonly ColorKey[] = ['spotLeft', 'spotCenter', 'spotRight'];
@@ -83,24 +94,27 @@ function plane(width: number, height: number, at: Vec3, facing: Facing, meters =
   return geometry.applyMatrix4(matrix);
 }
 
-function partGeometry(part: Part): BufferGeometry {
-  let geometry: BufferGeometry;
-  if ('box' in part) {
-    const [w, h, d] = part.box;
-    geometry = new BoxGeometry(w, h, d);
-    // Faces dans l'ordre +x, -x, +y, -y, +z, -z ; quatre sommets chacune.
-    const faces: Array<[number, number]> = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
-    faces.forEach(([su, sv], index) => scaleUv(geometry, index * 4, 4, su, sv));
-  } else if ('cylinder' in part) {
-    const [radius, height] = part.cylinder;
-    geometry = new CylinderGeometry(radius, radius, height, 20);
-    if (part.axis === 'x') geometry.rotateZ(Math.PI / 2);
-    if (part.axis === 'z') geometry.rotateX(Math.PI / 2);
-  } else {
-    geometry = new SphereGeometry(part.sphere, 18, 12);
-  }
+/**
+ * Pièce du décor : sa forme (src/scene/garage/shapes.ts), tournée de `rot` autour de son centre et
+ * posée en `at`, dans le repère de l'objet qui la porte.
+ */
+function partGeometry(part: GarageShape & { at: Vec3; rot?: Vec3 }): BufferGeometry {
   const rotation = new Quaternion().setFromEuler(new Euler(...(part.rot ?? [0, 0, 0])));
-  return geometry.applyMatrix4(new Matrix4().compose(new Vector3(...part.at), rotation, new Vector3(1, 1, 1)));
+  return shapeGeometry(part).applyMatrix4(new Matrix4().compose(new Vector3(...part.at), rotation, new Vector3(1, 1, 1)));
+}
+
+/** Pose d'un objet du mobilier : rotation `turn` autour de la verticale, puis `at`. */
+function propPlacement(prop: Prop): Matrix4 {
+  return new Matrix4().compose(new Vector3(...prop.at), new Quaternion().setFromEuler(new Euler(0, prop.turn ?? 0, 0)), new Vector3(1, 1, 1));
+}
+
+/**
+ * Pièces d'un objet du mobilier, tournées et posées dans le repère de la pièce, dans l'ordre de
+ * `prop.parts`. Ce sont elles que build.ts fusionne et dont la coupe caméra prend les boîtes.
+ */
+export function propGeometries(prop: Prop): BufferGeometry[] {
+  const placement = propPlacement(prop);
+  return prop.parts.map((part) => partGeometry(part).applyMatrix4(placement));
 }
 
 /** Coordonnées de texture prises au sol, en mètres depuis le coin du mur du fond et du mur gauche. */
@@ -124,6 +138,9 @@ function boxOf(geometry: BufferGeometry): Box {
   const box = geometry.boundingBox ?? new Box3();
   return { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] };
 }
+
+/** Rayon des arêtes des retombées. */
+const SOFFIT_BEVEL = 0.01;
 
 /** Épaisseur de l'optique d'un spot. */
 const SPOT_THICKNESS = 0.012;
@@ -161,8 +178,172 @@ function merge(geometries: BufferGeometry[]): BufferGeometry {
   return merged;
 }
 
+/** Union de boîtes (nulle si la liste est vide). */
+function unionBox(boxes: readonly Box[]): Box | null {
+  if (boxes.length === 0) return null;
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const box of boxes) {
+    for (let k = 0; k < 3; k += 1) {
+      min[k] = Math.min(min[k] ?? 0, box.min[k] ?? 0);
+      max[k] = Math.max(max[k] ?? 0, box.max[k] ?? 0);
+    }
+  }
+  return { min: [min[0] ?? 0, min[1] ?? 0, min[2] ?? 0], max: [max[0] ?? 0, max[1] ?? 0, max[2] ?? 0] };
+}
+
+/** Couleur par sommet blanche (sans effet) : toutes les géométries d'un matériau à couleurs par sommet en portent une. */
+function ensureColor(geometry: BufferGeometry): BufferGeometry {
+  if (geometry.getAttribute('color')) return geometry;
+  const count = geometry.getAttribute('position').count;
+  geometry.setAttribute('color', new Float32BufferAttribute(new Float32Array(count * 3).fill(1), 3));
+  return geometry;
+}
+
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Assombrissement de pied (cahier § 3.2), en couleur par sommet : plus sombre près de l'appui
+ * (`rest`, hauteur du sol ou du meuble porteur ; `null` pour un objet accroché), sur les faces
+ * tournées vers le bas et sur celles qui regardent un mur tout proche. `FOOT` règle la force.
+ */
+const FOOT = { strength: 0.7, rise: 0.3, base: 0.55, down: 0.6, wall: 0.75, wallGap: 0.05 } as const;
+
+function footShade(geometry: BufferGeometry, rest: number | null, room: { width: number; depth: number }): BufferGeometry {
+  const position = geometry.getAttribute('position');
+  const normal = geometry.getAttribute('normal');
+  const count = position.count;
+  const colors = new Float32Array(count * 3);
+  const halfW = room.width / 2;
+  const halfD = room.depth / 2;
+  for (let i = 0; i < count; i += 1) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const z = position.getZ(i);
+    let f = rest === null ? 1 : FOOT.base + (1 - FOOT.base) * smoothstep(0, FOOT.rise, y - rest);
+    if (normal) {
+      const nx = normal.getX(i);
+      const ny = normal.getY(i);
+      const nz = normal.getZ(i);
+      if (ny < -0.5) f *= FOOT.down;
+      const facesWall =
+        (nx < -0.5 && x + halfW < FOOT.wallGap) ||
+        (nx > 0.5 && halfW - x < FOOT.wallGap) ||
+        (nz < -0.5 && z + halfD < FOOT.wallGap) ||
+        (nz > 0.5 && halfD - z < FOOT.wallGap);
+      if (facesWall) f *= FOOT.wall;
+    }
+    const v = 1 - FOOT.strength * (1 - f);
+    colors[i * 3] = v;
+    colors[i * 3 + 1] = v;
+    colors[i * 3 + 2] = v;
+  }
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
+  return geometry;
+}
+
+/** Tache de contact (cahier § 3.1) : réglages par cas. `margin` : débord autour de l'emprise. */
+const CONTACT = {
+  floor: { margin: 0.12, opacity: 0.45, lift: 0.001 },
+  rest: { margin: 0.06, opacity: 0.4, lift: 0.001 },
+  wall: { margin: 0.06, opacity: 0.35, lift: 0.002, drop: 0.03, reach: 0.08, minHeight: 0.3 },
+  /** Hauteur sous laquelle un objet est posé au sol ; emprise au-delà de laquelle il n'en a pas. */
+  ground: 0.03,
+  maxExtent: 3,
+  /** Épaisseur sous laquelle un objet est un plat collé au mur (crédence, plaque) : pas de tache. */
+  flat: 0.03,
+} as const;
+
+/**
+ * Tache en neuf cases : l'intérieur (texture au centre, pleine) couvre l'emprise rentrée d'une
+ * part de la marge, le pourtour (bords de la texture) s'éteint jusqu'au bord de la tache. Repère :
+ * centre, axes u et v du plan (u × v = normale), demi-côtés de l'emprise.
+ */
+function contactPatch(centre: Vector3, u: Vector3, v: Vector3, half: readonly [number, number], margin: number, opacity: number): BufferGeometry {
+  const inner = half.map((h) => Math.max(0, h - Math.min(margin * 0.5, h * 0.4)));
+  const outer = half.map((h) => h + margin);
+  const us = [-(outer[0] ?? 0), -(inner[0] ?? 0), inner[0] ?? 0, outer[0] ?? 0];
+  const vs = [-(outer[1] ?? 0), -(inner[1] ?? 0), inner[1] ?? 0, outer[1] ?? 0];
+  const tex = [0, 0.5, 0.5, 1];
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const colors: number[] = [];
+  const point = new Vector3();
+  for (let j = 0; j < 4; j += 1) {
+    for (let i = 0; i < 4; i += 1) {
+      point.copy(centre).addScaledVector(u, us[i] ?? 0).addScaledVector(v, vs[j] ?? 0);
+      positions.push(point.x, point.y, point.z);
+      uvs.push(tex[i] ?? 0, tex[j] ?? 0);
+      colors.push(0, 0, 0, opacity);
+    }
+  }
+  const index: number[] = [];
+  for (let j = 0; j < 3; j += 1) {
+    for (let i = 0; i < 3; i += 1) {
+      const a = j * 4 + i;
+      index.push(a, a + 1, a + 5, a, a + 5, a + 4);
+    }
+  }
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute('color', new Float32BufferAttribute(colors, 4));
+  geometry.setIndex(new Uint16BufferAttribute(index, 1));
+  return geometry;
+}
+
+/** Écart entre une œuvre et la surface qui la porte, ajouté au millimètre de son `at` (ArtSlot). */
+const ART_GAP = 0.001;
+
+/**
+ * Enseignes : jour entre le mur et le dos des tubes ; plaque de fond (plexi fumé, débord autour
+ * des tubes, rayon des coins, épaisseur, jour au mur) et entretoises chromées aux quatre coins.
+ */
+const NEON = {
+  wallGap: 0.032,
+  plate: { margin: 0.04, radius: 0.03, depth: 0.006, gap: 0.02, material: 'planDeTravail' as GarageMaterialId },
+  standoff: { radius: 0.008, inset: 0.03, material: 'chrome' as GarageMaterialId },
+  /** Part de blanc sur la face avant des tubes (cœur presque blanc). */
+  core: 0.45,
+} as const;
+
+/** Luminance d'une couleur linéaire. */
+function luminance(color: Color): number {
+  return 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
+}
+
+/**
+ * Couleur de base de chaque sommet des tubes d'une enseigne (multipliée ensuite par la force des
+ * tubes de l'ambiance) : teinte du verre ramenée à une luminance de `gain`, blanchie sur la face
+ * qui regarde la pièce.
+ */
+function neonBaseColors(geometry: BufferGeometry, groups: ReadonlyArray<{ color: string; start: number; count: number }>, gain: number): Float32Array {
+  const count = geometry.getAttribute('position').count;
+  const normal = geometry.getAttribute('normal');
+  const index = geometry.getIndex();
+  const base = new Float32Array(count * 3);
+  const hue = new Color();
+  for (const group of groups) {
+    hue.set(group.color);
+    hue.multiplyScalar(1 / Math.max(1e-3, luminance(hue)));
+    for (let k = group.start; k < group.start + group.count; k += 1) {
+      const i = index ? index.getX(k) : k;
+      const front = normal ? Math.max(0, normal.getZ(i)) : 0;
+      const w = NEON.core * front * front;
+      base[i * 3] = gain * (hue.r * (1 - w) + w);
+      base[i * 3 + 1] = gain * (hue.g * (1 - w) + w);
+      base[i * 3 + 2] = gain * (hue.b * (1 - w) + w);
+    }
+  }
+  return base;
+}
+
 function createMaterial(id: GarageMaterialId): MeshStandardMaterial {
   const spec: GarageMaterial = GARAGE_MATERIALS[id];
+  // Couleurs par sommet : l'assombrissement de pied du mobilier (blanches ailleurs).
   const material = new MeshStandardMaterial({
     name: `garage_${id}`,
     color: spec.color,
@@ -170,6 +351,7 @@ function createMaterial(id: GarageMaterialId): MeshStandardMaterial {
     metalness: spec.metalness,
     side: FrontSide,
     envMapIntensity: spec.env ?? 0.2,
+    vertexColors: true,
   });
   if (spec.map) material.map = garageTexture(spec.map, spec.repeat);
   if (spec.roughnessMap) material.roughnessMap = garageTexture(spec.roughnessMap, spec.repeat);
@@ -216,7 +398,14 @@ export interface GarageScene {
   dispose: () => void;
 }
 
-export function createGarage(layout: GarageLayout): GarageScene {
+export interface GarageOptions {
+  /** Texture d'une œuvre (défaut : acquireArtwork, qui charge le dessin servi par l'app). */
+  artwork?: (id: GarageArtId, options: ArtworkOptions) => { texture: Texture; release: () => void };
+  /** Appelé quand l'image est à redessiner sans que rien n'ait bougé (une œuvre arrive). */
+  onChange?: () => void;
+}
+
+export function createGarage(layout: GarageLayout, options: GarageOptions = {}): GarageScene {
   const root = new Group();
   root.name = 'garage';
   const surfaceUniforms = createSurfaceUniforms(layout.room, layout.outside.falloff);
@@ -257,9 +446,13 @@ export function createGarage(layout: GarageLayout): GarageScene {
     return found;
   };
   const owned: Array<{ dispose: () => void }> = [];
-  /** Tout maillage d'un matériau patché porte l'attribut de coupe (0 par défaut). */
+  /**
+   * Tout maillage d'un matériau patché porte l'attribut de coupe (0 par défaut) ; tout maillage
+   * d'un matériau à couleurs par sommet, une couleur (blanche par défaut).
+   */
   const ensureCut = (geometry: BufferGeometry, mat: Material) => {
     if (mat.userData.pmbCut === true && !geometry.getAttribute(CUT_ATTRIBUTE)) tagCut(geometry, 0);
+    if ((mat as MeshBasicMaterial).vertexColors === true) ensureColor(geometry);
   };
   const add = (parent: Group, geometry: BufferGeometry, mat: Material, name: string) => {
     ensureCut(geometry, mat);
@@ -289,9 +482,10 @@ export function createGarage(layout: GarageLayout): GarageScene {
   add(shell, plane(W, H, [0, H / 2, D / 2], '-z'), material(surfaces.front), 'mur_avant');
   add(shell, plane(D, H, [-W / 2, H / 2, 0], '+x'), material(surfaces.left), 'mur_gauche');
   add(shell, plane(D, H, [W / 2, H / 2, 0], '-x'), material(surfaces.right), 'mur_droit');
-  // Retombées : un élément chacune, un seul appel de dessin pour toutes.
+  // Retombées : un élément chacune, un seul appel de dessin pour toutes. Arêtes adoucies d'un
+  // centimètre ; boîtes fermées (le dessus se voit quand l'œil passe au-dessus du plafond).
   const soffits = layout.soffits.map(({ size, at }, index) => {
-    const geometry = partGeometry({ box: size, at, material: surfaces.back });
+    const geometry = partGeometry({ box: size, bevel: SOFFIT_BEVEL, at });
     return tagCut(geometry, register({ name: `retombee_${index + 1}`, parts: [boxOf(geometry)] }));
   });
   add(shell, merge(soffits), material(surfaces.back), 'retombees');
@@ -299,35 +493,65 @@ export function createGarage(layout: GarageLayout): GarageScene {
 
   // 2. Mobilier : immobile, fusionné par matériau sur toute la pièce (un appel de dessin par
   //    matériau, § 8). Les petits objets (`small`) forment des volumes à part, hors du reflet du sol.
+  //    Les volumes sont fusionnés plus bas, une fois la coupe analysée (l'assombrissement de pied
+  //    et les ombres de contact demandent de savoir qui porte quoi).
+  const furnished = layout.props.map((prop) => {
+    const placement = propPlacement(prop);
+    const local = prop.parts.map((part) => partGeometry(part));
+    const localBox = unionBox(local.map(boxOf));
+    const geometries = local.map((geometry) => geometry.applyMatrix4(placement));
+    const boxes = geometries.map(boxOf);
+    const id = register({ name: prop.name, parts: boxes, ...(prop.on ? { on: prop.on } : {}) });
+    return { prop, placement, localBox, box: unionBox(boxes), geometries, id, small: prop.small === true };
+  });
   const furniture = new Map<string, { id: GarageMaterialId; small: boolean; geometries: BufferGeometry[] }>();
-  for (const prop of layout.props) {
-    const placement = new Matrix4().compose(
-      new Vector3(...prop.at),
-      new Quaternion().setFromEuler(new Euler(0, prop.turn ?? 0, 0)),
-      new Vector3(1, 1, 1),
-    );
-    const small = prop.small === true;
-    const geometries = prop.parts.map((part) => partGeometry(part).applyMatrix4(placement));
-    const id = register({ name: prop.name, parts: geometries.map(boxOf), ...(prop.on ? { on: prop.on } : {}) });
-    prop.parts.forEach((part, index) => {
-      const geometry = geometries[index];
-      if (!geometry) return;
-      const key = small ? `${part.material}_hors_reflet` : part.material;
-      const entry = furniture.get(key) ?? { id: part.material, small, geometries: [] };
-      entry.geometries.push(tagCut(geometry, id));
-      furniture.set(key, entry);
-    });
-  }
-  const furnitureGroup = new Group();
-  furnitureGroup.name = 'garage_mobilier';
-  furnitureGroup.userData.props = layout.props.map((prop) => prop.name);
-  for (const [key, { id, small, geometries }] of furniture) {
-    const mesh = add(furnitureGroup, merge(geometries), material(id), `garage_mobilier_${key}`);
-    if (small) mesh.layers.set(NO_MIRROR_LAYER);
-  }
-  root.add(furnitureGroup);
+  const addFurniture = (material: GarageMaterialId, small: boolean, geometry: BufferGeometry) => {
+    const key = small ? `${material}_hors_reflet` : material;
+    const entry = furniture.get(key) ?? { id: material, small, geometries: [] };
+    entry.geometries.push(geometry);
+    furniture.set(key, entry);
+  };
 
-  // 3. Panneaux à texture : crédence, écran, toile, cible.
+  // Enseignes néon en tubes (src/scene/garage/neon.ts) : une géométrie pour toutes, colorée par
+  // sommet (un appel de dessin), recolorée à chaque ambiance. Plaques de fond et entretoises vont
+  // avec le mobilier hors reflet. Chaque enseigne est un élément de la coupe (adossée à son mur).
+  const neonTubes: BufferGeometry[] = [];
+  const neonBases: Float32Array[] = [];
+  for (const sign of layout.signs) {
+    const composition = NEON_SIGNS[sign.name];
+    if (!composition) throw new Error(`Garage : enseigne « ${sign.name} » sans composition dans NEON_SIGNS`);
+    const built = neonSign(composition.lines, {
+      capHeight: composition.capHeight,
+      slant: composition.slant,
+      align: composition.align,
+      ornaments: composition.ornaments,
+      wallGap: NEON.wallGap,
+    });
+    const tubes = built.geometry;
+    neonBases.push(neonBaseColors(tubes, built.tubes, sign.gain));
+    tubes.clearGroups();
+    const { plate, standoff } = NEON;
+    const pw = built.width + 2 * plate.margin;
+    const ph = built.height + 2 * plate.margin;
+    const backing = partGeometry({ extrude: roundedRectContour(pw, ph, plate.radius), depth: plate.depth, bevel: 0.002, at: [0, 0, plate.gap + plate.depth / 2] });
+    const posts = [-1, 1].flatMap((sx) =>
+      [-1, 1].map((sy) =>
+        partGeometry({
+          cylinder: [standoff.radius, plate.gap],
+          axis: 'z',
+          at: [sx * (pw / 2 - standoff.inset), sy * (ph / 2 - standoff.inset), plate.gap / 2],
+        }),
+      ),
+    );
+    const orientation = new Matrix4().compose(new Vector3(...sign.at), new Quaternion().setFromEuler(FACING[sign.facing]), new Vector3(1, 1, 1));
+    for (const geometry of [tubes, backing, ...posts]) geometry.applyMatrix4(orientation);
+    const id = register({ name: sign.name, parts: [tubes, backing, ...posts].map(boxOf) });
+    neonTubes.push(tagCut(tubes, id));
+    addFurniture(plate.material, true, ensureColor(tagCut(backing, id)));
+    for (const post of posts) addFurniture(standoff.material, true, ensureColor(tagCut(post, id)));
+  }
+
+  // 3. Panneaux à texture (l'écran).
   for (const panel of layout.panels) {
     const map = garageTexture(panel.texture, panel.repeat ? [panel.repeat[0] / panel.size[0], panel.repeat[1] / panel.size[1]] : [1 / panel.size[0], 1 / panel.size[1]]);
     const mat =
@@ -343,13 +567,6 @@ export function createGarage(layout: GarageLayout): GarageScene {
   const dynamic = new Group();
   dynamic.name = 'garage_sources';
   root.add(dynamic);
-  const signMaterials = layout.signs.map((sign) => {
-    const { texture, aspect } = signTexture(sign.text);
-    const mat = new MeshBasicMaterial({ map: texture, transparent: true, blending: AdditiveBlending, depthWrite: false });
-    owned.push(mat);
-    add(root, plane(sign.height * aspect, sign.height, sign.at, sign.facing, false), mat, sign.name);
-    return mat;
-  });
   const emissive = new MeshBasicMaterial({ vertexColors: true });
   patchGarageMaterial(emissive, surfaceUniforms);
   const halo = (kind: HaloKind) =>
@@ -398,6 +615,143 @@ export function createGarage(layout: GarageLayout): GarageScene {
     const { foot, tube } = standGeometries(x, z, layout.standTubes.height);
     return register({ name: `pied_tube_${index + 1}`, parts: boxesOf([...foot, tube]) });
   });
+
+  // Tous les éléments sont posés : la coupe s'analyse (adossements, supports).
+  const structure = analyzeCut(layout.room, elements, { wall: layout.cut.wallTolerance, contact: layout.cut.contactTolerance });
+  const supportOf = (id: number): number[] => {
+    const i = id - 1;
+    return Array.from(structure.supportList.subarray(structure.supportStart[i] ?? 0, structure.supportStart[i + 1] ?? 0), (k) => k + 1);
+  };
+  const furnitureById = new Map(furnished.map((item) => [item.id, item]));
+  /** Hauteur d'appui d'un objet : le sol, le dessus du meuble qui le porte, ou rien (accroché). */
+  const restOf = (item: (typeof furnished)[number]): number | null => {
+    const box = item.box;
+    if (!box) return null;
+    if (box.min[1] < CONTACT.ground) return 0;
+    const carriers = supportOf(item.id).flatMap((k) => {
+      const carrier = furnitureById.get(k)?.box;
+      return carrier && carrier.max[1] <= box.min[1] + 0.05 ? [carrier] : [];
+    });
+    return carriers.length > 0 ? box.min[1] : null;
+  };
+
+  // Mobilier : assombrissement de pied, puis fusion par matériau.
+  for (const item of furnished) {
+    const rest = restOf(item);
+    item.prop.parts.forEach((part, index) => {
+      const geometry = item.geometries[index];
+      if (!geometry) return;
+      addFurniture(part.material, item.small, footShade(tagCut(geometry, item.id), rest, layout.room));
+    });
+  }
+  const furnitureGroup = new Group();
+  furnitureGroup.name = 'garage_mobilier';
+  furnitureGroup.userData.props = layout.props.map((prop) => prop.name);
+  for (const [key, { id, small, geometries }] of furniture) {
+    const mesh = add(furnitureGroup, merge(geometries), material(id), `garage_mobilier_${key}`);
+    if (small) mesh.layers.set(NO_MIRROR_LAYER);
+  }
+  root.add(furnitureGroup);
+
+  // Tubes des enseignes : reflétés (leur reflet au sol fait partie du néon).
+  const neonMesh = neonTubes.length > 0 ? add(root, merge(neonTubes), emissive, 'garage_neons') : null;
+  const neonBase = new Float32Array(neonBases.reduce((sum, base) => sum + base.length, 0));
+  neonBases.reduce((offset, base) => {
+    neonBase.set(base, offset);
+    return offset + base.length;
+  }, 0);
+  if (neonMesh) neonMesh.geometry.setAttribute('color', new Float32BufferAttribute(new Float32Array(neonBase.length), 3));
+
+  // Œuvres posées sur les objets : un plan par emplacement, 2 mm devant sa face, même élément de
+  // coupe et même règle de reflet que l'objet. Teinte d'attente, puis le dessin (rendu redemandé).
+  const artwork = options.artwork ?? acquireArtwork;
+  const releases: Array<() => void> = [];
+  const artGroup = new Group();
+  artGroup.name = 'garage_oeuvres';
+  for (const item of furnished) {
+    for (const slot of item.prop.art ?? []) {
+      const art = garageArt(slot.art);
+      const [aw, ah] = artSize(art, slot.region);
+      const geometry = new PlaneGeometry(slot.width, (slot.width * ah) / aw).translate(0, 0, ART_GAP);
+      geometry.applyMatrix4(new Matrix4().compose(new Vector3(...slot.at), new Quaternion().setFromEuler(new Euler(...(slot.rot ?? [0, 0, 0]))), new Vector3(1, 1, 1)));
+      geometry.applyMatrix4(item.placement);
+      const handle = artwork(slot.art, { ...(slot.region ? { region: slot.region } : {}), ...(options.onChange ? { onReady: options.onChange } : {}) });
+      releases.push(handle.release);
+      const alphaTest = art.transparent ? 0.5 : 0;
+      const mat =
+        art.lighting === 'emissive'
+          ? new MeshBasicMaterial({ map: handle.texture, color: new Color(1, 1, 1).multiplyScalar(art.glow ?? 1), alphaTest })
+          : new MeshStandardMaterial({ map: handle.texture, roughness: 0.6, metalness: 0, envMapIntensity: 0.2, alphaTest });
+      mat.name = `oeuvre_${slot.art}`;
+      patchGarageMaterial(mat, surfaceUniforms);
+      owned.push(mat);
+      const mesh = add(artGroup, tagCut(geometry, item.id), mat, `oeuvre_${item.prop.name}_${slot.region ?? slot.art}`);
+      if (item.small) mesh.layers.set(NO_MIRROR_LAYER);
+    }
+  }
+  root.add(artGroup);
+
+  // Ombres de contact (cahier § 3.1) : une tache par objet, au sol, sur le meuble qui le porte ou
+  // sur le mur qui l'accroche ; une géométrie, un appel de dessin, hors reflet, dessinée après les
+  // halos. Chaque tache porte l'élément de son objet et s'éteint avec lui (fondu par l'opacité).
+  const halfW = layout.room.width / 2;
+  const halfD = layout.room.depth / 2;
+  const patches: BufferGeometry[] = [];
+  for (const item of furnished) {
+    const { box, localBox, prop } = item;
+    if (prop.contact === false || !box || !localBox) continue;
+    const size = [box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]] as const;
+    if (Math.max(size[0], size[2]) > CONTACT.maxExtent) continue;
+    const rest = restOf(item);
+    if (rest !== null) {
+      // Au sol ou sur un meuble : emprise dans le repère de l'objet, tournée avec lui.
+      const kind = rest === 0 ? CONTACT.floor : CONTACT.rest;
+      const turn = new Quaternion().setFromEuler(new Euler(0, prop.turn ?? 0, 0));
+      const u = new Vector3(1, 0, 0).applyQuaternion(turn);
+      const v = new Vector3(0, 0, -1).applyQuaternion(turn);
+      const centre = new Vector3((localBox.min[0] + localBox.max[0]) / 2, 0, (localBox.min[2] + localBox.max[2]) / 2).applyMatrix4(item.placement);
+      centre.y = rest + kind.lift;
+      const half = [(localBox.max[0] - localBox.min[0]) / 2, (localBox.max[2] - localBox.min[2]) / 2] as const;
+      patches.push(tagCut(contactPatch(centre, u, v, half, kind.margin, kind.opacity), item.id));
+      continue;
+    }
+    const kind = CONTACT.wall;
+    if (box.min[1] < kind.minHeight) continue;
+    // Accroché : le mur le plus proche, à moins de `reach` ; projection de la boîte, un peu plus bas.
+    const walls = [
+      { gap: box.min[0] + halfW, normal: new Vector3(1, 0, 0), plane: -halfW, depth: size[0] },
+      { gap: halfW - box.max[0], normal: new Vector3(-1, 0, 0), plane: halfW, depth: size[0] },
+      { gap: box.min[2] + halfD, normal: new Vector3(0, 0, 1), plane: -halfD, depth: size[2] },
+      { gap: halfD - box.max[2], normal: new Vector3(0, 0, -1), plane: halfD, depth: size[2] },
+    ].sort((p, q) => p.gap - q.gap);
+    const wall = walls[0];
+    if (!wall || wall.gap > kind.reach || wall.depth < CONTACT.flat) continue;
+    const up = new Vector3(0, 1, 0);
+    const u = new Vector3().crossVectors(up, wall.normal);
+    const centre = new Vector3((box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2 - kind.drop, (box.min[2] + box.max[2]) / 2);
+    const across = Math.abs(wall.normal.x) > 0.5 ? size[2] : size[0];
+    if (Math.abs(wall.normal.x) > 0.5) centre.x = wall.plane + wall.normal.x * kind.lift;
+    else centre.z = wall.plane + wall.normal.z * kind.lift;
+    patches.push(tagCut(contactPatch(centre, u, up, [across / 2, size[1] / 2], kind.margin, kind.opacity), item.id));
+  }
+  const contactMaterial = new MeshBasicMaterial({
+    name: 'garage_contact',
+    color: 0x000000,
+    alphaMap: garageTexture('contact'),
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  });
+  patchGarageMaterial(contactMaterial, surfaceUniforms);
+  owned.push(contactMaterial);
+  if (patches.length > 0) {
+    const shadows = add(root, merge(patches), contactMaterial, 'garage_contact');
+    shadows.layers.set(NO_MIRROR_LAYER);
+    shadows.renderOrder = 0;
+  }
 
   const lights = {
     ambient: new HemisphereLight(),
@@ -510,9 +864,12 @@ export function createGarage(layout: GarageLayout): GarageScene {
     }
     surfaceUniforms.pmbHazeColor.value.set(ambiance.night);
 
-    layout.signs.forEach((sign, index) => {
-      signMaterials[index]?.color.copy(hdr(ambiance, sign.color, sign.gain * ambiance.tubeGain));
-    });
+    if (neonMesh) {
+      const colors = neonMesh.geometry.getAttribute('color') as Float32BufferAttribute;
+      const values = colors.array as Float32Array;
+      for (let i = 0; i < values.length; i += 1) values[i] = (neonBase[i] ?? 0) * ambiance.tubeGain;
+      colors.needsUpdate = true;
+    }
 
     lights.ambient.color.set(ambiance.sky);
     lights.ambient.groundColor.set(ambiance.ground);
@@ -536,8 +893,8 @@ export function createGarage(layout: GarageLayout): GarageScene {
     for (const geometry of [...dynamicGeometries, ...atmosphereGeometries]) geometry.dispose();
     for (const item of owned) item.dispose();
     for (const mat of materials.values()) mat.dispose();
+    for (const release of releases) release();
   }
 
-  const structure = analyzeCut(layout.room, elements, { wall: layout.cut.wallTolerance, contact: layout.cut.contactTolerance });
   return { root, floor, surfaces: surfaceUniforms, cut: { elements, structure, fades }, update, setQuality, dispose };
 }
