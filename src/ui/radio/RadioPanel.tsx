@@ -6,7 +6,9 @@ import type { Station } from '../../audio/radio/catalog.ts';
 import { cancelDownload, deletePack, deleteStation, dismissJob, downloadPack, importFiles } from '../../audio/radio/library.ts';
 import { next, playStation, previous, seekTo, setShuffle, setVolume, togglePlay } from '../../audio/radio/player.ts';
 import { spokenTime } from '../../audio/radio/position.ts';
+import { closeSheet } from '../../app/useRoute.ts';
 import { useRadio, type Job } from '../../state/radio.ts';
+import { Icon } from '../icons.tsx';
 import {
   formatBytes,
   formatDuration,
@@ -413,7 +415,7 @@ function StorageLine() {
   );
 }
 
-export function RadioPanel() {
+function RadioPanelBody() {
   const status = useRadio((state) => state.status);
   const stations = useRadio((state) => state.catalog.stations);
 
@@ -460,5 +462,48 @@ export function RadioPanel() {
       <AddMusic empty={stations.length === 0} />
       <StorageLine />
     </div>
+  );
+}
+
+/**
+ * Le panneau (dialogue modal) passe par-dessus le bouton rond « Radio » : un double du bouton, posé
+ * exactement au même endroit, le referme. Seul ce panneau a ce double : les autres restent fermés
+ * par « Retour à l’atelier ».
+ */
+function RadioCloseTwin() {
+  const [rect, setRect] = useState<{ top: number; left: number } | null>(null);
+  const playing = useRadio((state) => state.now?.playing === true);
+  useEffect(() => {
+    const measure = () => {
+      const button = document.querySelector('.radio-quick .quick-btn');
+      const box = button?.getBoundingClientRect();
+      setRect(box && box.width > 0 ? { top: box.top, left: box.left } : null);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+  if (!rect) return null;
+  return (
+    <button
+      type="button"
+      className="quick-btn radio-twin"
+      aria-label="Radio, fermer le panneau"
+      aria-expanded
+      title="Radio : fermer le panneau"
+      style={{ top: rect.top, left: rect.left }}
+      onClick={closeSheet}
+    >
+      <Icon name="radio" playing={playing} />
+    </button>
+  );
+}
+
+export function RadioPanel() {
+  return (
+    <>
+      <RadioCloseTwin />
+      <RadioPanelBody />
+    </>
   );
 }

@@ -207,7 +207,8 @@ describe('index des stations', () => {
     expect(catalog.stations.map((s) => s.id)).toEqual(['s1']);
     expect(catalog.stations[0]?.tracks).toEqual([{ id: 't1', path: 'rock/a.mp3', file: 'p1.zip', start: 5, end: 9, title: 'A', mime: 'audio/mpeg' }]);
     expect(sanitizeCatalog('nimporte quoi')).toEqual({ packs: [], stations: [] });
-    expect(sanitizePrefs({ volume: 7, shuffle: 'oui' })).toEqual({ volume: 1, shuffle: false, lastStationId: null, lastTrackId: null });
+    expect(sanitizePrefs({ volume: 7, shuffle: 'oui', miniOpen: 'oui' })).toEqual({ volume: 1, shuffle: false, lastStationId: null, lastTrackId: null, miniOpen: false });
+    expect(sanitizePrefs({ miniOpen: true }).miniOpen).toBe(true);
   });
 });
 

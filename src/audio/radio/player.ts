@@ -107,7 +107,7 @@ function takePrepared(index: number, track: Track): string | null {
 }
 
 /** Commandes de la radio : elles lancent la musique elles-mêmes, l'écoute globale les laisse faire. */
-const RADIO_CONTROLS = '.radio-mini button, .radio-player button, .radio-station-head button, .radio-tracks button';
+const RADIO_CONTROLS = '.radio-mini .radio-icon, .radio-player button, .radio-station-head button, .radio-tracks button';
 
 function pageHidden(): boolean {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden';

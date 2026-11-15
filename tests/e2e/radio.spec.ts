@@ -33,6 +33,9 @@ async function openRadio(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: 'Radio', level: 2 })).toBeVisible();
 }
 
+/** Bouton rond « Radio » de la colonne des raccourcis. */
+const radioButton = (page: Page) => page.getByRole('navigation', { name: 'Raccourcis' }).getByRole('button', { name: /^Radio/ });
+
 const station = (page: Page, name: string) => page.locator('.radio-station', { has: page.getByText(name, { exact: true }) });
 
 // Sur une machine chargée (WebGL en rendu logiciel), l'horloge audio de Chromium sans tête avance
@@ -67,15 +70,17 @@ test('import par fichier, lecture, suivant, rechargement, suppression', async ({
   await expect.poll(() => clockSeconds(page), { timeout: 45_000 }).toBeGreaterThanOrEqual(1);
   await page.screenshot({ path: 'test-results/radio-lecture.png' });
 
-  // Panneau fermé : la musique continue, le mini-lecteur du dock la montre.
+  // Panneau fermé : la musique continue ; le bouton rond déploie le mini-lecteur, qui la montre.
   await page.getByRole('button', { name: 'Retour à l’atelier' }).click();
+  await radioButton(page).click();
   // (Le morceau a pu s'achever entre-temps : l'enchaînement repart alors sur le premier.)
   await expect(page.locator('.radio-mini')).toContainText(/Bruit d’essai 1[ab]/);
   await expect(page.locator('.radio-mini').getByRole('button', { name: 'Pause' })).toBeVisible();
   await page.screenshot({ path: 'test-results/radio-dock.png' });
 
+  // Rechargement : le mini-lecteur est resté déployé ; son titre ouvre le panneau.
   await page.reload();
-  await page.getByRole('button', { name: /^Radio/ }).first().click();
+  await page.locator('.radio-mini-title').click();
   await expect(station(page, 'Électro')).toBeVisible();
   await expect(station(page, 'Rock')).toBeVisible();
 
@@ -115,7 +120,7 @@ test('import par adresse : avec CORS, puis sans CORS', async ({ page }) => {
   await expect(page.getByRole('alert')).toContainText('n’autorise pas l’atelier à lire le fichier');
   await page.screenshot({ path: 'test-results/radio-cors.png' });
 
-  await page.getByRole('button', { name: 'Fermer' }).click();
+  await page.getByRole('button', { name: 'Fermer', exact: true }).click();
   await page.getByRole('button', { name: 'Depuis une adresse' }).click();
   await page.getByLabel('Adresse du pack (ZIP)').fill(`http://${HOST}/cors/absent.zip`);
   await page.getByRole('button', { name: 'Télécharger' }).click();
@@ -171,9 +176,11 @@ test('réglage « Lecture automatique » coupé : rien ne démarre après un imp
   await expect(page.getByTestId('radio-titre')).toHaveText('Choisis une station.');
   await page.goto('about:blank');
   await page.goto('./');
-  await expect(page.getByRole('button', { name: /^Radio/ }).first()).toBeVisible();
+  await expect(radioButton(page)).toBeVisible();
   await page.waitForTimeout(2000);
-  await expect(page.locator('.radio-mini')).toHaveCount(0);
+  // Rien ne joue : le bouton ne dit pas « en lecture », et aucune invitation à toucher l'écran.
+  await expect(radioButton(page)).toHaveAccessibleName('Radio');
+  await expect(page.locator('.radio-tap-pill')).toHaveCount(0);
 });
 
 type Policy = 'geste exigé' | 'lecture libre';
@@ -213,11 +220,15 @@ for (const policy of ['geste exigé', 'lecture libre'] as const) {
       await page.goto('about:blank');
       await page.goto('./');
       const mini = page.locator('.radio-mini');
-      await expect(mini).toContainText('Bruit d’essai 2a', { timeout: 30_000 });
       if (policy === 'geste exigé') {
-        await expect(mini).toContainText('Touche pour lancer la musique');
+        // Mini-lecteur replié (par défaut) : l'invitation reste visible à côté du bouton rond.
+        await expect(page.locator('.radio-tap-pill')).toHaveText('Touche pour lancer la musique', { timeout: 30_000 });
         await page.mouse.click(195, 300); // un appui n'importe où (la scène)
+        await expect(page.locator('.radio-tap-pill')).toHaveCount(0, { timeout: 30_000 });
       }
+      await expect(radioButton(page)).toHaveAccessibleName('Radio, en lecture', { timeout: 30_000 });
+      await radioButton(page).click();
+      await expect(mini).toContainText('Bruit d’essai 2a');
       await expect(mini.getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 30_000 });
       await expect(mini).not.toContainText('Touche pour lancer la musique');
     }
@@ -553,6 +564,86 @@ test('barre de progression inactive tant que la durée manque, sans erreur', asy
   await expect(seekBar(page)).toBeDisabled();
   await expect(seekBar(page)).toHaveAttribute('aria-valuetext', 'Durée pas encore connue');
   expect(errors).toEqual([]);
+});
+
+// ——— Bouton rond et mini-lecteur ———
+
+type Box = { x: number; y: number; width: number; height: number };
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/** Le mini-lecteur tient dans l'écran et ne recouvre ni l'étiquette du véhicule ni les autres boutons ronds. */
+async function expectMiniFits(page: Page): Promise<void> {
+  const mini = (await page.locator('.radio-mini').boundingBox())!;
+  const viewport = page.viewportSize()!;
+  expect(mini.x).toBeGreaterThanOrEqual(0);
+  expect(mini.x + mini.width).toBeLessThanOrEqual(viewport.width);
+  const nav = page.getByRole('navigation', { name: 'Raccourcis' });
+  for (const name of ['Atelier', 'Photo']) {
+    const box = await nav.getByRole('button', { name, exact: true }).boundingBox();
+    if (box) expect(overlaps(mini, box), `recouvre ${name}`).toBe(false);
+  }
+  const tag = await page.locator('.tag').boundingBox();
+  if (tag) expect(overlaps(mini, tag), 'recouvre l’étiquette du véhicule').toBe(false);
+  for (const button of await page.locator('.radio-mini button').all()) {
+    const box = (await button.boundingBox())!;
+    expect(box.height).toBeGreaterThanOrEqual(47.5);
+  }
+}
+
+test('bouton rond : radio vide, déployer, replier, recharger, titre qui ouvre, bouton qui referme', async ({ page }) => {
+  test.setTimeout(150_000);
+  // Radio vide : le bouton ouvre le panneau.
+  await page.goto('./');
+  await expect(radioButton(page)).not.toHaveAttribute('aria-expanded');
+  await radioButton(page).click();
+  await expect(page.getByRole('heading', { name: /radio/i, level: 2 })).toBeVisible();
+  await page.getByTestId('radio-fichier-pack').setInputFiles({ name: 'p.zip', mimeType: 'application/zip', buffer: Buffer.from(smallPack()) });
+  await expect(page.getByText('Stations ajoutées')).toBeVisible({ timeout: 45_000 });
+  await page.getByRole('button', { name: 'Retour à l’atelier' }).click();
+
+  // Replié par défaut : seul le bouton reste, qui dit que ça joue.
+  await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.radio-mini')).toHaveCount(0);
+  await expect(radioButton(page)).toHaveAccessibleName('Radio, en lecture', { timeout: 30_000 });
+  await page.screenshot({ path: 'test-results/radio-replie.png' });
+
+  // Déployer : titre, fine barre, pause, suivant.
+  await radioButton(page).click();
+  await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'true');
+  const mini = page.locator('.radio-mini');
+  await expect(mini).toContainText('Bruit d’essai 1a');
+  await expect(mini.getByRole('button', { name: 'Pause' })).toBeVisible();
+  await expect(mini.locator('.radio-mini-progress')).toBeVisible();
+  await expectMiniFits(page);
+  await page.screenshot({ path: 'test-results/radio-deploye.png' });
+  for (const size of ['grand', 'tres-grand']) {
+    await page.evaluate((value) => document.documentElement.setAttribute('data-text', value), size);
+    await expectMiniFits(page);
+  }
+  await page.evaluate(() => document.documentElement.setAttribute('data-text', 'normal'));
+  await page.setViewportSize({ width: 360, height: 780 });
+  await expectMiniFits(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  // Replier, puis redéployer : le choix est retrouvé après un rechargement.
+  await radioButton(page).click();
+  await expect(mini).toHaveCount(0);
+  await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'false');
+  await radioButton(page).click();
+  await expect(mini).toBeVisible();
+  await page.reload();
+  await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('.radio-mini')).toBeVisible();
+
+  // Le titre ouvre le panneau ; un appui sur le bouton rond le referme.
+  const button = (await radioButton(page).boundingBox())!;
+  await page.locator('.radio-mini-title').click();
+  const heading = page.getByRole('heading', { name: /radio/i, level: 2 });
+  await expect(heading).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Radio, fermer le panneau' })).toHaveAttribute('aria-expanded', 'true');
+  await page.mouse.click(button.x + button.width / 2, button.y + button.height / 2);
+  await expect(heading).toBeHidden();
+  await expect(page).not.toHaveURL(/#\/radio/);
 });
 
 test('coupure pendant le téléchargement, puis reprise par une requête Range', async ({ page }) => {

@@ -63,6 +63,8 @@ export interface RadioPrefs {
   volume: number;
   lastStationId: string | null;
   lastTrackId: string | null;
+  /** Mini-lecteur du haut de l'écran déployé (bouton rond « Radio ») ; replié par défaut. */
+  miniOpen: boolean;
 }
 
 export const DEFAULT_PREFS: RadioPrefs = Object.freeze({
@@ -70,6 +72,7 @@ export const DEFAULT_PREFS: RadioPrefs = Object.freeze({
   volume: 0.9,
   lastStationId: null,
   lastTrackId: null,
+  miniOpen: false,
 });
 
 export interface RadioState extends RadioPrefs {
@@ -115,6 +118,7 @@ export function sanitizePrefs(raw: unknown): RadioPrefs {
     volume,
     lastStationId: typeof p.lastStationId === 'string' ? p.lastStationId : null,
     lastTrackId: typeof p.lastTrackId === 'string' ? p.lastTrackId : null,
+    miniOpen: typeof p.miniOpen === 'boolean' ? p.miniOpen : DEFAULT_PREFS.miniOpen,
   };
 }
 
@@ -129,8 +133,8 @@ export async function loadPrefs(): Promise<RadioPrefs> {
 /** Retient un réglage de la radio (aléatoire, volume, dernière station). */
 export function setPrefs(patch: Partial<RadioPrefs>): void {
   useRadio.setState(patch);
-  const { shuffle, volume, lastStationId, lastTrackId } = useRadio.getState();
-  void set('reglages', { shuffle, volume, lastStationId, lastTrackId }, db()).catch(() => undefined);
+  const { shuffle, volume, lastStationId, lastTrackId, miniOpen } = useRadio.getState();
+  void set('reglages', { shuffle, volume, lastStationId, lastTrackId, miniOpen }, db()).catch(() => undefined);
 }
 
 /** Remplace l'index et l'enregistre. */
