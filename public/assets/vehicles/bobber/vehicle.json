@@ -69,6 +69,7 @@
     "sound": "bicylindre-v"
   },
   "performance": { "mass": 365, "topKmh": 160, "grip": 6.5 },
+  "driver": { "reach": 0.93, "leanExtra": 0.18, "hangOff": 0.02 },
   "presentSide": "droite",
   "wheels": {
     "fit": {

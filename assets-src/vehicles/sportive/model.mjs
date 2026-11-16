@@ -328,6 +328,23 @@ export default function sportive(k) {
   }
   stand.push(...k.rod([-0.36, 0.035, -0.21], [-0.36, 0.035, 0.21], 0.012, { material: 'black', radial: 8 }));
   m.add('bequille', stand);
+  // Béquille latérale, repliée le long du cadre gauche (en sortie, la béquille d'atelier, pièce au
+  // sol, est retirée).
+  /** @type {*[]} */
+  const side = [];
+  side.push(...k.rod([-0.1, 0.33, -0.15], [-0.36, 0.3, -0.17], 0.009, { material: 'black', radial: 8 }));
+  side.push(...k.place(k.roundedExtrude(k.roundedRect(0.04, 0.025, 0.007, 3), { material: 'black', depth: 0.01, bevel: 0.003, bevelSegments: 1 }), { position: [-0.365, 0.3, -0.172], rotation: [0, 0.08, 0] }));
+  m.add('bequille_laterale', side);
+
+  // --- Le conducteur à bord (src/scene/vehicle/conducteur.ts) : assise (dessus de la selle du pilote),
+  // poignées (centre, axe de prise vers l'extérieur sur X local), repose-pieds reculés (dessus).
+  m.anchor('assise', { position: [-0.43, 0.826, 0] });
+  for (const sz of [-1, 1]) {
+    const out = /** @type {[number, number, number]} */ ([0.235 - 0.305, 0.93 - 0.902, (0.31 - 0.245) * sz]);
+    const len = Math.hypot(...out);
+    m.anchor(sz < 0 ? 'poignee_gauche' : 'poignee_droite', { position: [0.27, 0.916, 0.2775 * sz], rotation: [0, Math.atan2(-out[2] / len, out[0] / len), Math.asin(out[1] / len)] });
+    m.anchor(sz < 0 ? 'repose_pied_gauche' : 'repose_pied_droit', { position: [-0.28, 0.42 + 0.011, 0.225 * sz] });
+  }
 
   // --- Roues ------------------------------------------------------------------------------------
   // Deux ancres (axe Z) : l'app y pose la jante et le pneu choisis (d'origine : bâtons orange).

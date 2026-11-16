@@ -85,6 +85,7 @@
     "sound": "quatre-en-ligne-moto"
   },
   "performance": { "mass": 265, "topKmh": 285, "grip": 8.5 },
+  "driver": { "reach": 0.74, "leanExtra": 0.3, "hangOff": 0.06 },
   "wheels": {
     "fit": {
       "zone": "jantes",

@@ -1,0 +1,75 @@
+{
+  "about": "Le conducteur à bord (demande du 16 novembre 2026 : « il manque un pilote au volant »), pièce partagée entre véhicules, modelée par le code (tools/vehicles/conducteur.mjs, npm run vehicles:build) d'après la fiche de texte captures/notes-agents/reference-personnage.md : une allure, aucun visage ressemblant, aucun nom, aucun logo, aucun texte. Squelette au repos debout, bras le long du corps, repère du bassin : avant +X, haut +Y, droite +Z, en mètres. Chaque nœud du fichier suit une chaîne d'os (fondu linéaire de `blend` mètres autour de chaque articulation, le long de l'axe de la chaîne au repos). L'app (src/scene/vehicle/conducteur.ts) en fait un maillage articulé par passe de rendu, le pose sur les ancres du véhicule (siège et volant ; assise, poignées et repose-pieds d'une moto ; à défaut, la place « conducteur » du manifeste) par une cinématique inverse simple. Substitut déclaré : placeholder_conducteur (TODO_ASSETS.md).",
+  "bones": [
+    { "id": "bassin", "parent": null, "at": [0, 0, 0] },
+    { "id": "buste", "parent": "bassin", "at": [0, 0.12, 0] },
+    { "id": "cou", "parent": "buste", "at": [-0.015, 0.39, 0] },
+    { "id": "tete", "parent": "cou", "at": [0.015, 0.095, 0] },
+    { "id": "epaule_g", "parent": "buste", "at": [-0.02, 0.33, -0.19] },
+    { "id": "coude_g", "parent": "epaule_g", "at": [0, -0.3, 0] },
+    { "id": "main_g", "parent": "coude_g", "at": [0, -0.27, 0] },
+    { "id": "epaule_d", "parent": "buste", "at": [-0.02, 0.33, 0.19] },
+    { "id": "coude_d", "parent": "epaule_d", "at": [0, -0.3, 0] },
+    { "id": "main_d", "parent": "coude_d", "at": [0, -0.27, 0] },
+    { "id": "hanche_g", "parent": "bassin", "at": [0, 0, -0.1] },
+    { "id": "genou_g", "parent": "hanche_g", "at": [0, -0.45, 0] },
+    { "id": "pied_g", "parent": "genou_g", "at": [0, -0.44, 0] },
+    { "id": "hanche_d", "parent": "bassin", "at": [0, 0, 0.1] },
+    { "id": "genou_d", "parent": "hanche_d", "at": [0, -0.45, 0] },
+    { "id": "pied_d", "parent": "genou_d", "at": [0, -0.44, 0] }
+  ],
+  "nodes": {
+    "torse": ["bassin", "buste"],
+    "cou": ["buste", "cou", "tete"],
+    "tete": ["tete"],
+    "bras_g": ["epaule_g", "coude_g", "main_g"],
+    "main_g": ["main_g"],
+    "bras_d": ["epaule_d", "coude_d", "main_d"],
+    "main_d": ["main_d"],
+    "jambe_g": ["hanche_g", "genou_g", "pied_g"],
+    "pied_g": ["pied_g"],
+    "jambe_d": ["hanche_d", "genou_d", "pied_d"],
+    "pied_d": ["pied_d"]
+  },
+  "blend": 0.045,
+  "passes": [
+    { "id": "peau", "materials": ["paint_peau", "paint_encre", "paint_yeux"], "roughness": 0.52, "metalness": 0, "envMapIntensity": 0.5 },
+    { "id": "tissu", "materials": ["paint_debardeur", "paint_jean", "paint_jean_use", "paint_ceinture", "paint_barbe", "paint_casquette", "paint_chaussure", "paint_semelle", "paint_gant"], "roughness": 0.86, "metalness": 0, "envMapIntensity": 0.35 },
+    { "id": "brillant", "materials": ["paint_casque", "paint_visiere"], "roughness": 0.14, "metalness": 0, "envMapIntensity": 1, "clearcoat": 1 },
+    { "id": "metal", "materials": ["chrome"], "roughness": 0.18, "metalness": 1, "envMapIntensity": 1 }
+  ],
+  "colors": {
+    "paint_peau": "#c48d6c",
+    "paint_encre": "#26262b",
+    "paint_yeux": "#18120f",
+    "paint_debardeur": "#131315",
+    "paint_jean": "#4f6f93",
+    "paint_jean_use": "#8ea3bb",
+    "paint_ceinture": "#1b1410",
+    "paint_barbe": "#1d1714",
+    "paint_casquette": "#101012",
+    "paint_chaussure": "#19191b",
+    "paint_semelle": "#0b0b0c",
+    "paint_gant": "#121214",
+    "paint_casque": "#f1f1ec",
+    "paint_visiere": "#0b0c10"
+  },
+  "outfits": [
+    { "id": "voiture", "kind": "car", "label": "Casquette à l'envers, débardeur, jean", "head": "casquette", "hands": "nues", "feet": "chaussures" },
+    { "id": "moto", "kind": "bike", "label": "Casque intégral blanc, débardeur, gants, bottes", "head": "casque", "hands": "gants", "feet": "bottes" }
+  ],
+  "contacts": {
+    "seat": [-0.035, -0.105, 0],
+    "eye": [0.085, 0.105, 0],
+    "grip": [0, -0.085, 0.03],
+    "heel": [-0.055, -0.085, 0],
+    "ball": [0.13, -0.085, 0]
+  },
+  "anchors": {
+    "seat": "assise",
+    "grips": ["poignee_gauche", "poignee_droite"],
+    "pegs": ["repose_pied_gauche", "repose_pied_droit"]
+  },
+  "cockpitHidden": ["buste", "cou", "tete"],
+  "budget": { "triangles": 12000, "drawCalls": 4 }
+}

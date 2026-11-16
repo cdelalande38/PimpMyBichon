@@ -7,7 +7,9 @@
 // d'habitacle partagées (volants, pommeaux, sièges du catalogue public/assets/shared/habitacle/,
 // modelés par tools/vehicles/habitacle.mjs), les compte au pire cas avec le véhicule, et vérifie
 // qu'aucune, posée sur son ancre, ne traverse le plancher ni le tableau de bord (manifeste,
-// interior.clearance). Node seul, déterministe.
+// interior.clearance). Fabrique enfin le conducteur à bord, une tenue par genre de véhicule
+// (catalogue public/assets/shared/conducteur/, modelé par tools/vehicles/conducteur.mjs), tenu à son
+// budget (12 000 triangles, 4 appels de dessin) et compté avec le véhicule. Node seul, déterministe.
 // Mode d'emploi : assets-src/vehicles/LISEZ-MOI.md.
 //
 //   node tools/vehicles/build.mjs [id…]      (sans id : tous les dossiers qui ont un model.mjs)
@@ -20,12 +22,14 @@ import { countGeometry, parseGlb } from '../lib/glb.mjs';
 import * as kit from './kit.mjs';
 import { buildRim, buildTire, readCatalogue, rimFile, tireFile } from './roues.mjs';
 import * as habitacle from './habitacle.mjs';
+import * as conducteur from './conducteur.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, 'assets-src', 'vehicles');
 const OUT = join(ROOT, 'public', 'assets', 'vehicles');
 const WHEELS_OUT = join(ROOT, 'public', 'assets', 'shared', 'wheels');
 const INTERIOR_OUT = join(ROOT, 'public', 'assets', 'shared', 'habitacle');
+const DRIVER_OUT = join(ROOT, 'public', 'assets', 'shared', 'conducteur');
 /** Budgets d'un véhicule complet à l'écran (§ 8) : maximum, roues posées comprises. */
 export const VEHICLE_MAX = Object.freeze({ triangles: 400_000, drawCalls: 80 });
 
@@ -155,6 +159,26 @@ export function buildInterior() {
 }
 
 /**
+ * Le conducteur à bord : un fichier par tenue. Rend, par tenue, son genre de véhicule, son résumé et
+ * son budget (triangles, appels de dessin = passes de rendu occupées).
+ * @returns {Map<string, { kind: 'car' | 'bike', summary: ReturnType<typeof summarize>, budget: ReturnType<typeof conducteur.driverBudget> }>}
+ */
+export function buildDrivers() {
+  const catalogue = conducteur.readCatalogue();
+  /** @type {Map<string, { kind: 'car' | 'bike', summary: ReturnType<typeof summarize>, budget: ReturnType<typeof conducteur.driverBudget> }>} */
+  const out = new Map();
+  mkdirSync(DRIVER_OUT, { recursive: true });
+  for (const outfit of catalogue.outfits) {
+    const built = conducteur.buildDriver(outfit, catalogue).toGlb();
+    const file = conducteur.driverFile(outfit.id);
+    writeFileSync(join(DRIVER_OUT, file), built.bytes);
+    const summary = summarize(built.bytes);
+    out.set(outfit.id, { kind: outfit.kind, summary, budget: conducteur.driverBudget(built, summary.triangles, catalogue) });
+  }
+  return out;
+}
+
+/**
  * Pose de chaque ancre d'habitacle d'un GLB de véhicule : translation et rotation (quaternion).
  * @param {Uint8Array} bytes
  * @returns {Map<string, { t: number[], q: [number, number, number, number] }>}
@@ -216,7 +240,7 @@ export function interiorClearance(manifest, anchors, pieces) {
  * Habitacle au pire cas : le volant, le pommeau et le siège les plus lourds, sur leurs ancres.
  * @param {ReturnType<typeof summarize>} body @param {ReturnType<typeof buildInterior>} pieces
  */
-function interiorWorst(body, pieces) {
+export function interiorWorst(body, pieces) {
   const catalogue = habitacle.readCatalogue();
   const count = { steering: 0, knob: 0, seat: 0 };
   if (body.nodes.includes(catalogue.anchors.steering)) count.steering = 1;
@@ -237,7 +261,7 @@ function interiorWorst(body, pieces) {
  * lourds de son genre.
  * @param {string} id @param {ReturnType<typeof summarize>} body @param {Map<string, ReturnType<typeof summarize>>} wheels
  */
-function withWheels(id, body, wheels) {
+export function withWheels(id, body, wheels) {
   const manifest = JSON.parse(readFileSync(join(OUT, id, 'vehicle.json'), 'utf8'));
   const fit = manifest.wheels?.fit;
   if (!fit) return null;
@@ -286,6 +310,25 @@ async function main() {
     failed += 1;
     console.error(`habitacle partagé : ${error instanceof Error ? error.message : error}`);
   }
+  /** @type {ReturnType<typeof buildDrivers>} */
+  let drivers = new Map();
+  try {
+    const started = Date.now();
+    drivers = buildDrivers();
+    const { budget } = conducteur.readCatalogue();
+    for (const [id, d] of drivers) {
+      const over = d.budget.triangles > budget.triangles || d.budget.drawCalls > budget.drawCalls;
+      const line = `conducteur ${id} : ${d.budget.triangles.toLocaleString('fr-FR')} triangles · ${d.budget.drawCalls} appels de dessin (${d.budget.passes.join(', ')}) · ${(d.summary.bytes / 1024).toFixed(0)} Kio (maximum : ${budget.triangles.toLocaleString('fr-FR')} et ${budget.drawCalls})`;
+      if (over) {
+        failed += 1;
+        console.error(`${line} : HORS BUDGET`);
+      } else console.log(line);
+    }
+    console.log(`  ${drivers.size} tenues en ${((Date.now() - started) / 1000).toFixed(1)} s → ${relative(ROOT, DRIVER_OUT)}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`conducteur : ${error instanceof Error ? error.message : error}`);
+  }
   for (const id of ids) {
     const started = Date.now();
     try {
@@ -304,8 +347,15 @@ async function main() {
       if (full) {
         full.triangles += inside.triangles;
         full.drawCalls += inside.drawCalls;
+        // Le conducteur à bord, dans la tenue de son genre de véhicule.
+        const kindOf = JSON.parse(readFileSync(join(OUT, id, 'vehicle.json'), 'utf8')).kind === 'bike' ? 'bike' : 'car';
+        const driver = [...drivers.values()].find((d) => d.kind === kindOf);
+        if (driver) {
+          full.triangles += driver.budget.triangles;
+          full.drawCalls += driver.budget.drawCalls;
+        }
         const over = full.triangles > VEHICLE_MAX.triangles || full.drawCalls > VEHICLE_MAX.drawCalls;
-        const extra = inside.anchors > 0 ? ` et habitacle le plus lourd sur ${inside.anchors} ancres` : '';
+        const extra = (inside.anchors > 0 ? ` et habitacle le plus lourd sur ${inside.anchors} ancres` : '') + (driver ? ', conducteur à bord' : '');
         const line = `  complet, roues les plus lourdes sur ${full.anchors} ancres${extra} : ${full.triangles.toLocaleString('fr-FR')} triangles · ${full.drawCalls} appels de dessin (maximum § 8 : ${VEHICLE_MAX.triangles.toLocaleString('fr-FR')} et ${VEHICLE_MAX.drawCalls})`;
         if (over) {
           failed += 1;

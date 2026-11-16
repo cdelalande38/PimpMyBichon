@@ -558,6 +558,23 @@ export default function bobber(k) {
   }
   stand.push(...k.rod([AX_R - 0.09, 0.02, -0.13], [AX_R - 0.09, 0.02, 0.13], 0.01, { material: 'black' }));
   m.add('bequille', stand);
+  // Béquille latérale, repliée le long du berceau gauche (la moto est sur sa béquille d'atelier au
+  // garage ; en sortie, la béquille d'atelier, pièce au sol, est retirée).
+  /** @type {Parts} */
+  const side = [];
+  side.push(...k.rod([-0.02, 0.2, -0.105], [-0.34, 0.205, -0.135], 0.011, { material: 'black', radial: 8 }));
+  side.push(...k.place(k.roundedExtrude(k.roundedRect(0.05, 0.03, 0.008, 3), { material: 'black', depth: 0.012, bevel: 0.003, bevelSegments: 1 }), { position: [-0.345, 0.205, -0.14], rotation: [0, 0.09, 0] }));
+  m.add('bequille_laterale', side);
+
+  // --- Le conducteur à bord (src/scene/vehicle/conducteur.ts) : assise (dessus de la selle), poignées
+  // (centre, axe de prise vers l'extérieur sur X local), repose-pieds avancés (dessus du caoutchouc).
+  m.anchor('assise', { position: [-0.33, 0.684, 0] });
+  for (const s of [-1, 1]) {
+    const out = /** @type {P3} */ ([0.248 - 0.322, 0, (0.408 - 0.31) * s]);
+    const len = Math.hypot(...out);
+    m.anchor(s < 0 ? 'poignee_gauche' : 'poignee_droite', { position: [0.285, 1.22, 0.359 * s], rotation: [0, Math.atan2(-out[2] / len, out[0] / len), 0] });
+    m.anchor(s < 0 ? 'repose_pied_gauche' : 'repose_pied_droit', { position: [0.3, 0.25 + 0.019, 0.245 * s] });
+  }
 
   return m;
 }

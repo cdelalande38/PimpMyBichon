@@ -44,7 +44,13 @@ import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 import { DEFAULT_SEAT, placeEye, seatMetrics, type PlacedSeat } from '../../scene/fit.ts';
 import { bodyPoint, STILL_BODY, useBodyPose } from '../../scene/vehicle/wheels.ts';
 import { cockpit } from '../cameras.ts';
-import { rollingWheels, type Wheel } from './roues.ts';
+import { CurvatureFollower, follow, liftStands, rollingWheels, type Wheel } from './roues.ts';
+import { DRIVER_POSE, driverSpecOf } from '../../data/conducteur.ts';
+import { INTERIOR_CATALOGUE } from '../../data/habitacle.ts';
+import { livePilot } from '../../state/drive.ts';
+import { DRIVE_STAGE_CLASS } from '../contrat.ts';
+import { hideForCockpit, measureSeating, mountDriver, seatDriver, unmountDriver, useDriverRig, type DriverHandle } from '../../scene/vehicle/conducteur.ts';
+import type { DriverMotion } from '../../scene/vehicle/conducteur-pose.ts';
 
 export { WHEEL_NODE, rollingWheels };
 export type { Wheel };
@@ -274,6 +280,17 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     },
     [gltf, vehicle],
   );
+  // La béquille d'atelier (pièce posée au sol du manifeste) est retirée pour toute la sortie : la moto
+  // roule dès le départ, et revient sur sa béquille au garage.
+  useLayoutEffect(() => {
+    const lifted = liftStands(drive.prepared.root, vehicle.wheels?.grounded);
+    const stage = gl.domElement.closest<HTMLElement>(`.${DRIVE_STAGE_CLASS}`);
+    if (stage && lifted.length > 0) stage.dataset.bequille = 'relevee';
+    return () => {
+      for (const node of lifted) node.visible = true;
+      if (stage) delete stage.dataset.bequille;
+    };
+  }, [drive, vehicle, gl]);
   const build = useBuilds((state) => state.builds[vehicle.id]);
   const paints = useMemo(() => resolvePaints(vehicle, build), [vehicle, build]);
   useLayoutEffect(() => paintZones(drive.prepared.zones, paints, bodyEnv), [drive, paints, bodyEnv]);
@@ -309,6 +326,8 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     cockpit.eye = eye ? bodyPoint(eye, useBodyPose.getState().poses[vehicle.id] ?? STILL_BODY) : null;
     seated.current = !pending;
   });
+
+  useDriver(drive.prepared, vehicle, rig.group);
 
   const { halfLength, halfWidth, height } = drive.prepared;
   const isBike = vehicle.kind === 'bike';
@@ -381,4 +400,107 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
       </primitive>
     </primitive>
   );
+}
+
+/** Distance de la caméra à l'œil du conducteur sous laquelle on est « dans sa tête ». */
+const IN_HEAD = 0.32;
+
+/**
+ * Le conducteur à bord (src/scene/vehicle/conducteur.ts) : assis sur les ancres du véhicule dès que
+ * le siège et le volant sont posés, il vit un peu en roulant. Les mains suivent le volant qui tourne
+ * avec la courbure de la route, la tête se tourne vers l'intérieur du virage, le buste recule à
+ * l'accélération et avance au freinage ; le motard se penche au-delà de la moto. Tout est borné et
+ * lissé. Quand la caméra est à son œil (embarquée), sa tête et son buste sont cachés.
+ */
+function useDriver(prepared: Prepared, vehicle: VehicleManifest, carrier: Group): void {
+  const rig = useDriverRig(vehicle, true);
+  const gl = useThree((state) => state.gl);
+  const state = useRef<{
+    handle: DriverHandle | null;
+    tries: number;
+    wheel: { anchor: Object3D; base: Quaternion } | null;
+    curve: CurvatureFollower;
+    motion: DriverMotion;
+    solved: DriverMotion;
+    hidden: boolean;
+    stage: HTMLElement | null;
+  } | null>(null);
+  useLayoutEffect(() => {
+    if (!rig) return;
+    const anchor = prepared.root.getObjectByName(INTERIOR_CATALOGUE.anchors.steering) ?? null;
+    state.current = {
+      handle: null,
+      tries: 0,
+      wheel: anchor ? { anchor, base: anchor.quaternion.clone() } : null,
+      curve: new CurvatureFollower(DRIVER_POSE.motion.smoothing),
+      motion: { steer: 0, look: 0, lean: 0, surge: 0, hang: 0 },
+      solved: { steer: 0, look: 0, lean: 0, surge: 0, hang: 0 },
+      hidden: false,
+      stage: gl.domElement.closest<HTMLElement>(`.${DRIVE_STAGE_CLASS}`),
+    };
+    return () => {
+      const current = state.current;
+      if (current?.wheel) current.wheel.anchor.quaternion.copy(current.wheel.base);
+      unmountDriver(rig);
+      if (current?.stage) delete current.stage.dataset.conducteur;
+      state.current = null;
+    };
+  }, [rig, prepared, gl]);
+
+  const spec = useMemo(() => driverSpecOf(vehicle), [vehicle]);
+  const turn = useMemo(() => new Quaternion(), []);
+  const eye = useMemo(() => new Vector3(), []);
+  const axis = useMemo(() => new Vector3(0, 0, 1), []);
+  // Après le moteur de la scène (priorité 0) qui pose le véhicule et la caméra, avant la chaîne de
+  // rendu (priorité 1, toujours montée) : la caméra de cette image est connue.
+  useFrame(({ camera }, delta) => {
+    const current = state.current;
+    if (!rig || !current) return;
+    if (!current.handle) {
+      // Mesure du véhicule (au rayon) dès que le siège et le volant sont posés ; quelques essais espacés.
+      current.tries += 1;
+      if (current.tries % 10 !== 1) return;
+      const body = prepared.root.getObjectByName('caisse');
+      if (!body) return;
+      const started = performance.now();
+      const { seating } = measureSeating(prepared.root, body, vehicle);
+      if (!seating) return;
+      current.handle = seatDriver(rig, seating);
+      mountDriver(rig, body, Math.round(performance.now() - started));
+      if (current.stage) current.stage.dataset.conducteur = 'assis';
+      return;
+    }
+    const pilot = livePilot.current;
+    const dt = Math.min(0.1, delta);
+    const M = DRIVER_POSE.motion;
+    const m = current.motion;
+    if (pilot) {
+      const motion = pilot.motion;
+      const curvature = current.curve.update(motion.s, carrier.rotation.y, dt);
+      const steerable = current.wheel !== null && current.handle.seating.kind === 'car';
+      m.steer = follow(m.steer, steerable ? curvature * M.steerPerCurvature : 0, M.steerMax, dt, M.smoothing);
+      m.look = follow(m.look, curvature * M.lookPerCurvature, M.lookMax, dt, M.smoothing);
+      m.surge = follow(m.surge, -(motion.pull ?? motion.accel) * M.surgePerAccel, M.surgeMax, dt, M.smoothing);
+      if (current.handle.seating.kind === 'bike') {
+        m.lean = follow(m.lean, motion.roll * spec.leanExtra, 0.25, dt, M.smoothing);
+        m.hang = follow(m.hang, (motion.roll / 0.6) * spec.hangOff, spec.hangOff, dt, M.smoothing);
+      }
+    }
+    // Re-pose seulement quand le mouvement a changé (rien à recalculer en ligne droite stabilisée).
+    const s = current.solved;
+    if (Math.abs(m.steer - s.steer) + Math.abs(m.look - s.look) + Math.abs(m.lean - s.lean) + Math.abs(m.surge - s.surge) + Math.abs(m.hang - s.hang) > 0.002) {
+      if (current.wheel) current.wheel.anchor.quaternion.copy(current.wheel.base).multiply(turn.setFromAxisAngle(axis, m.steer));
+      current.handle.move(m);
+      Object.assign(s, m);
+    }
+    // Caméra à l'œil du conducteur : tête et buste cachés, avant-bras et mains visibles.
+    const pose = current.handle.pose;
+    eye.copy(pose.eye).applyMatrix4(rig.root.matrixWorld);
+    const hidden = camera.position.distanceTo(eye) < IN_HEAD;
+    if (hidden !== current.hidden) {
+      current.hidden = hidden;
+      hideForCockpit(rig, hidden);
+      if (current.stage) current.stage.dataset.conducteur = hidden ? 'tete-cachee' : 'assis';
+    }
+  }, 0.5);
 }

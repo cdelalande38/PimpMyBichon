@@ -42,6 +42,9 @@ public/assets/shared/wheels/*.glb
 # Pièces d'habitacle partagées (volants, pommeaux, sièges) : produites par la même commande depuis
 # tools/vehicles/habitacle.mjs ; le catalogue public/assets/shared/habitacle/catalogue.json reste versionné.
 public/assets/shared/habitacle/*.glb
+# Le conducteur à bord : GLB produits par npm run vehicles:build depuis tools/vehicles/conducteur.mjs ;
+# le catalogue public/assets/shared/conducteur/catalogue.json reste versionné.
+public/assets/shared/conducteur/*.glb
 
 # Cartes de sortie : réponses brutes des fournisseurs (assets-src/maps/<id>/brut/) et fichiers produits
 # par npm run maps:build depuis assets-src/maps/<id>/donnees.json. Le manifeste map.json reste versionné.

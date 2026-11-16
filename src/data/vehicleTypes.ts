@@ -284,6 +284,19 @@ export interface WheelFit {
   rims?: readonly string[];
 }
 
+/**
+ * Le conducteur à bord : sa pose se calcule sur les ancres du modèle (siège et volant ; assise,
+ * poignées et repose-pieds d'une moto). Ce bloc n'en règle que l'allure.
+ */
+export interface DriverSpec {
+  /** Bras vers les poignées d'une moto, en part de la longueur du bras : 0,75 coudes pliés, 0,95 bras tendus. */
+  reach?: number;
+  /** En courbe, penché au-delà de la moto, en part de son inclinaison. */
+  leanExtra?: number;
+  /** Décalage du bassin vers l'intérieur de la courbe, en mètres, au plus. */
+  hangOff?: number;
+}
+
 /** Roues et assiette d'un véhicule. */
 export interface VehicleWheels {
   /** Jantes et pneus au choix ; absent : le modèle garde les siens, seule l'assiette se règle. */
@@ -345,6 +358,8 @@ export interface VehicleManifest {
   wheels?: VehicleWheels;
   /** Volant, pommeau et sièges au choix ; absent : pas d'habitacle à garnir. */
   interior?: VehicleInterior;
+  /** Le conducteur à bord (src/data/conducteur.ts) ; absent : les réglages par défaut de son genre. */
+  driver?: DriverSpec;
 }
 
 /**

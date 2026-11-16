@@ -6,7 +6,10 @@
 // braquées ou ses nœuds dans un autre repère (le concept : Z vers le haut, roues avant braquées de
 // 30°) : chaque roue est d'abord redressée, son axe (la plus petite dimension de sa boîte, dans le
 // repère de son nœud) ramené sur le côté du véhicule, puis elle tourne autour de cet axe.
-// Module pur (three seul) : testé dans tests/unit/drive-scene-roues.test.ts.
+// Aussi : la béquille d'atelier retirée en roulant, et la courbure suivie qui fait tourner le volant
+// et la tête du conducteur.
+// Module pur (three seul) : testé dans tests/unit/drive-scene-roues.test.ts et
+// tests/unit/conducteur-sortie.test.ts.
 
 import { Box3, Matrix4, Quaternion, Vector3, type Mesh, type Object3D } from 'three';
 
@@ -85,4 +88,69 @@ export function rollingWheels(root: Object3D, spins: ReadonlyArray<{ node: Objec
     wheels.push({ node, base, axis, radius: Math.max(0.1, radius) });
   }
   return wheels;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Béquille et volant en roulant (demande du 16 novembre 2026 : « les motos il faut bien retirer la
+// béquille pendant les sorties » ; « il manque un pilote au volant »).
+
+/**
+ * Retire les pièces posées au sol du manifeste (`wheels.grounded` : la béquille d'atelier) : elles ne
+ * suivent pas la caisse et ne peuvent pas rouler avec elle. La béquille latérale, repliée le long du
+ * cadre dans le modèle, reste. Rend les nœuds retirés (aucun identifiant de véhicule ici).
+ */
+export function liftStands(root: Object3D, grounded: readonly string[] | undefined): Object3D[] {
+  const lifted: Object3D[] = [];
+  for (const name of grounded ?? []) {
+    root.traverse((object) => {
+      if (object.name === name && object.visible) {
+        object.visible = false;
+        lifted.push(object);
+      }
+    });
+  }
+  return lifted;
+}
+
+/** Ramène un angle dans ]−π, π]. */
+function wrapAngle(a: number): number {
+  const t = a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
+  return t <= -Math.PI ? t + Math.PI * 2 : t;
+}
+
+/**
+ * Courbure de la trajectoire suivie (1/m, positive vers la gauche), d'après le cap du véhicule et
+ * son abscisse à chaque image, lissée (constante de temps `smoothing` s) : sans mémoire du rail.
+ * Un saut d'abscisse (départ, retour en arrière) remet à zéro.
+ */
+export class CurvatureFollower {
+  private s = Number.NaN;
+  private heading = 0;
+  private readonly smoothing: number;
+  value = 0;
+  constructor(smoothing = 0.25) {
+    this.smoothing = smoothing;
+  }
+
+  update(s: number, heading: number, dt: number): number {
+    const ds = s - this.s;
+    if (!Number.isFinite(ds) || ds < 0 || ds > 30) {
+      this.s = s;
+      this.heading = heading;
+      return this.value;
+    }
+    if (ds < 0.2) return this.value;
+    const raw = wrapAngle(heading - this.heading) / ds;
+    this.s = s;
+    this.heading = heading;
+    const k = 1 - Math.exp(-Math.max(0, dt) / this.smoothing);
+    this.value += (Math.max(-0.3, Math.min(0.3, raw)) - this.value) * Math.min(1, k * Math.max(1, ds / 0.5));
+    return this.value;
+  }
+}
+
+/** Valeur bornée, rapprochée de sa cible avec une constante de temps (aucun tremblement). */
+export function follow(current: number, target: number, max: number, dt: number, smoothing: number): number {
+  const goal = Math.max(-max, Math.min(max, target));
+  return current + (goal - current) * (1 - Math.exp(-Math.max(0, dt) / smoothing));
 }
