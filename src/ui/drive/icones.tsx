@@ -3,7 +3,22 @@
 
 import type { ReactNode } from 'react';
 
-export type DriveIconName = 'camera' | 'realisateur' | 'auto' | 'main' | 'ralenti' | 'sec' | 'pluie' | 'pause' | 'lecture' | 'garage';
+export type DriveIconName =
+  | 'camera'
+  | 'realisateur'
+  | 'auto'
+  | 'main'
+  | 'ralenti'
+  | 'sec'
+  | 'pluie'
+  | 'pause'
+  | 'lecture'
+  | 'garage'
+  | 'moteur'
+  | 'moteurCoupe';
+
+// Bloc moteur vu de côté : carter, bouchon de remplissage, échappement à droite, ventilateur à gauche.
+const BLOC = 'M6 9h2.5l1.5-2h5l1.5 2H18v8.5h-1.5L15 19H9l-1.5-1.5H6Z M10 7V4.5h4V7 M18 12h2.5v3H18 M6 12.25H3.5 M3.5 10v4.5';
 
 const SHAPES: Record<DriveIconName, ReactNode> = {
   // Caméra de tournage : boîtier et pare-soleil.
@@ -51,6 +66,14 @@ const SHAPES: Record<DriveIconName, ReactNode> = {
   ),
   pause: <path d="M8.5 5v14M15.5 5v14" />,
   lecture: <path d="M7.5 4.5v15l12-7.5Z" />,
+  // Son du moteur : le bloc ; coupé, barré.
+  moteur: <path d={BLOC} />,
+  moteurCoupe: (
+    <>
+      <path d={BLOC} />
+      <path d="m3.5 4 17 16" />
+    </>
+  ),
   // Porte de garage : le linteau et les lames.
   garage: (
     <>

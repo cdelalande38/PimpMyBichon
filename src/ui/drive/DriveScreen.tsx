@@ -4,16 +4,20 @@
 //   freiner, glissé latéral pour se placer dans sa voie ; en pilote automatique, appui long pour le
 //   ralenti, et, sur la caméra d'orbite, glissé pour tourner autour du véhicule ;
 // - en bas, au pouce : caméra suivante, réalisateur, pilote automatique ou conduite à la main,
-//   ralenti (maintenu), météo, et « Rentrer au garage » en un geste.
+//   ralenti (maintenu), météo, moteur (coupe et remet le son du moteur, choix gardé), et « Rentrer
+//   au garage » en un geste.
 // Chargement et erreur viennent de la télémétrie de la scène (ready, failed). La sortie se regarde
-// sans toucher l'écran : pilote automatique et réalisateur sont mis d'office.
+// sans toucher l'écran : pilote automatique et réalisateur sont mis d'office. Le son du moteur est
+// branché sur la sortie tant que l'écran est monté (src/drive/son.ts).
 
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { closeSheet } from '../../app/useRoute.ts';
 import { creditLine, mapById } from '../../data/maps.ts';
+import { basculerMoteur, brancherSonSortie, useSonSortie, type EtatSonSortie } from '../../drive/son.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { useBuilds } from '../../state/builds.ts';
 import { CAMERA_LABELS, useDrive, WEATHERS } from '../../state/drive.ts';
+import { useEngineSoundPrefs } from '../../state/engineSound.ts';
 import { DriveIcon } from './icones.tsx';
 import './drive.css';
 
@@ -185,6 +189,43 @@ function DriveGestures() {
   );
 }
 
+const MOTEUR_LIBELLES: Record<EtatSonSortie, string> = {
+  'sans-son': 'Sans son',
+  muet: 'Coupé',
+  attente: 'Moteur',
+  coupe: 'Moteur',
+  demarre: 'Moteur',
+  tourne: 'Moteur',
+};
+
+/**
+ * Coupe et remet le son du moteur ; le choix est gardé d'une sortie à l'autre. Pour les parcours :
+ * data-moteur (sans-son, muet, attente d'un geste, coupe, demarre, tourne), data-regime (tr/min du
+ * moteur réel), data-rapport et data-niveau (volume d'ensemble du moteur).
+ */
+function EngineToggle() {
+  const { etat, regime, rapport, niveau } = useSonSortie();
+  const enSortie = useEngineSoundPrefs((state) => state.enSortie);
+  const sansSon = etat === 'sans-son';
+  return (
+    <button
+      type="button"
+      className="drive-act drive-engine"
+      aria-label={sansSon ? 'Son du moteur : pas encore de son pour ce moteur' : 'Son du moteur'}
+      aria-pressed={sansSon ? undefined : enSortie}
+      disabled={sansSon}
+      data-moteur={etat}
+      data-regime={regime}
+      data-rapport={rapport}
+      data-niveau={niveau.toFixed(2)}
+      onClick={basculerMoteur}
+    >
+      <DriveIcon name={enSortie && !sansSon ? 'moteur' : 'moteurCoupe'} />
+      <span>{MOTEUR_LIBELLES[etat]}</span>
+    </button>
+  );
+}
+
 function DriveBar() {
   const camera = useDrive((state) => state.camera);
   const director = useDrive((state) => state.director);
@@ -247,10 +288,13 @@ function DriveBar() {
           <span>{weatherLabel}</span>
         </button>
       </nav>
-      <button type="button" className="btn drive-home" onClick={closeSheet}>
-        <DriveIcon name="garage" />
-        Rentrer au garage
-      </button>
+      <div className="drive-foot">
+        <EngineToggle />
+        <button type="button" className="btn drive-home" onClick={closeSheet}>
+          <DriveIcon name="garage" />
+          Rentrer au garage
+        </button>
+      </div>
     </footer>
   );
 }
@@ -294,6 +338,9 @@ function DriveVeil() {
 }
 
 export function DriveScreen() {
+  // Le son du moteur suit la sortie tant que l'écran est là ; il se coupe au retour au garage.
+  useEffect(() => brancherSonSortie(), []);
+
   // Page cachée (appel, écran éteint) : la sortie se met en pause, et reprend au retour si c'est
   // nous qui l'avions arrêtée.
   useEffect(() => {

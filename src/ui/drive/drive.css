@@ -376,12 +376,33 @@
   box-shadow: inset 0 -3px 0 var(--bleu);
 }
 
+.drive-act:disabled {
+  opacity: 0.55;
+}
+
+/* Son du moteur coupé à la main : le bouton reste lisible, sans l'accent des commandes actives. */
+.drive-act[data-moteur='muet'] {
+  color: var(--mute);
+}
+
 .drive-act[data-conduite='main'] {
   border-color: var(--ambre);
   color: var(--ambre);
 }
 
 .drive-home {
-  flex: none;
+  flex: 1;
   gap: 0.5rem;
+}
+
+/* Dernière ligne, au pouce : le son du moteur, puis « Rentrer au garage ». */
+.drive-foot {
+  display: flex;
+  gap: 6px;
+}
+
+.drive-engine {
+  flex: none;
+  width: 4.5rem;
+  min-height: var(--tap);
 }

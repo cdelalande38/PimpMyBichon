@@ -5,7 +5,10 @@
 // suspendu. Contexte à part de la radio (élément audio) : les deux se mélangent sans se couper.
 //
 // Au garage : démarrer, ralenti tant qu'on le laisse, coup de gaz à l'appui (le régime monte tant
-// qu'on appuie, retombe quand on lâche), couper. Depuis une autre scène : `drive(régime, charge)`.
+// qu'on appuie, retombe quand on lâche), couper. Depuis une autre scène : `drive(régime, charge,
+// glissé)` (le régime glisse vers la cible en `glissé` secondes, entre deux mesures espacées),
+// `setLevel(volume)` (volume d'ensemble, en rampe, sans toucher à la hauteur), démarrage sans le
+// démarreur enregistré (véhicule déjà lancé).
 
 import { dbToGain, loadGain, loopLevels, rpmRange, stepRpm } from './mix.ts';
 import { engineFileUrl, parseEngineManifest, type EngineLoop, type EngineOneShot, type EngineSoundManifest } from './manifeste.ts';
@@ -24,6 +27,8 @@ const START_FADE = 1;
 const STOP_FADE = 0.5;
 /** Volume du bus moteur. */
 const BUS_GAIN = 0.85;
+/** Fondu de la coupure nette (s) : assez court pour être net, assez long pour ne pas claquer. */
+const CUT_FADE = 0.04;
 
 interface LoopVoice {
   loop: EngineLoop;
@@ -39,13 +44,17 @@ export class EngineSoundPlayer {
   private readonly cache = new Map<string, Promise<Loaded | null>>();
   private current: Loaded | null = null;
   private voices: LoopVoice[] = [];
-  private readonly shots = new Set<AudioBufferSourceNode>();
+  /** Sons ponctuels en cours et leur gain. */
+  private readonly shots = new Map<AudioBufferSourceNode, GainNode>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private timeouts: ReturnType<typeof setTimeout>[] = [];
   private rpm = 0;
   private pressed = false;
   private loadLevel = 0.3;
-  private external: { rpm: number; load: number } | null = null;
+  /** Pilotage externe : régime visé, charge, et glissé depuis `from` à partir de `at` (temps du contexte) en `glide` s. */
+  private external: { rpm: number; load: number; from: number; at: number; glide: number } | null = null;
+  /** Volume d'ensemble, de 0 à 1 (1 au garage). */
+  private level = 1;
   /** Fin du coup de gaz enregistré en cours (mode « prises »), en temps du contexte. */
   private revUntil = 0;
   private state: EngineState = 'coupe';
@@ -81,7 +90,7 @@ export class EngineSoundPlayer {
       limiter.attack.value = 0.003;
       limiter.release.value = 0.2;
       const bus = ctx.createGain();
-      bus.gain.value = BUS_GAIN;
+      bus.gain.value = BUS_GAIN * this.level;
       bus.connect(limiter).connect(ctx.destination);
       this.ctx = ctx;
       this.bus = bus;
@@ -126,9 +135,10 @@ export class EngineSoundPlayer {
   /**
    * Démarre le moteur de la famille : démarrage enregistré, puis ralenti en boucle. Rend « echec »
    * si les sons n'ont pas pu être chargés (le moteur reste coupé, muet), « annule » si l'on a coupé
-   * pendant le chargement.
+   * pendant le chargement. `demarreur` faux : sans le démarrage enregistré, les boucles entrent en
+   * fondu (moteur remis en marche véhicule lancé).
    */
-  async start(famille: string): Promise<'ok' | 'echec' | 'annule'> {
+  async start(famille: string, options: { demarreur?: boolean } = {}): Promise<'ok' | 'echec' | 'annule'> {
     if (this.state !== 'coupe') return 'ok';
     const ctx = this.context();
     const run = ++this.run;
@@ -150,7 +160,7 @@ export class EngineSoundPlayer {
     this.current = loaded;
     const { manifest, buffers } = loaded;
     const now = ctx.currentTime + 0.02;
-    const start = this.pick('start');
+    const start = options.demarreur === false ? undefined : this.pick('start');
     let handoff = 0;
     if (start) {
       const length = buffers.get(start.fichier)?.duration ?? start.duree;
@@ -180,7 +190,7 @@ export class EngineSoundPlayer {
     this.later(() => {
       if (run !== this.run) return;
       this.timer = setInterval(() => this.tick(), TICK_MS);
-      this.tick(START_FADE);
+      this.tick(start ? START_FADE : 0.25);
       this.later(() => {
         if (run === this.run && this.state === 'demarrage') this.setState('ralenti');
       }, START_FADE * 1000);
@@ -207,10 +217,38 @@ export class EngineSoundPlayer {
 
   /**
    * Pilotage depuis une autre scène (sortie de nuit) : régime en tr/min et charge de 0 à 1. `null`
-   * rend la main au garage (ralenti et coup de gaz).
+   * rend la main au garage (ralenti et coup de gaz). `glide` : le régime glisse en ligne droite
+   * vers la cible en tant de secondes (mesures espacées), au lieu d'y sauter.
    */
-  drive(rpm: number | null, load = 0.5): void {
-    this.external = rpm === null ? null : { rpm, load };
+  drive(rpm: number | null, load = 0.5, glide = 0): void {
+    if (rpm === null || !Number.isFinite(rpm)) {
+      this.external = null;
+      return;
+    }
+    const now = this.ctx?.currentTime ?? 0;
+    const from = this.external ? this.externalRpm(now) : this.rpm;
+    this.external = { rpm, load, from, at: now, glide: Number.isFinite(glide) ? Math.max(0, glide) : 0 };
+  }
+
+  /** Régime piloté à l'instant `now`, au fil du glissé. */
+  private externalRpm(now: number): number {
+    const external = this.external;
+    if (!external) return this.rpm;
+    if (!(external.glide > 0)) return external.rpm;
+    const t = Math.min(1, Math.max(0, (now - external.at) / external.glide));
+    return external.from + (external.rpm - external.from) * t;
+  }
+
+  /** Volume d'ensemble du moteur, de 0 à 1 (1 au garage), en rampe de `ramp` secondes : la hauteur ne change pas. */
+  setLevel(level: number, ramp = 0.25): void {
+    this.level = Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 1;
+    const ctx = this.ctx;
+    const bus = this.bus;
+    if (!ctx || !bus) return;
+    const now = ctx.currentTime;
+    bus.gain.cancelScheduledValues(now);
+    bus.gain.setValueAtTime(bus.gain.value, now);
+    bus.gain.linearRampToValueAtTime(BUS_GAIN * this.level, now + Math.max(0.01, ramp));
   }
 
   /** Plage de régime jouable du jeu chargé (ralenti, plus haute boucle + 25 %), ou null. */
@@ -253,36 +291,57 @@ export class EngineSoundPlayer {
     }, (length + 0.1) * 1000);
   }
 
-  /** Arrête tout, sans bruit : sources, minuteries, contexte suspendu. */
+  /**
+   * Arrête tout, sans bruit : sources (après un fondu de CUT_FADE s, contre le claquement),
+   * minuteries, contexte suspendu.
+   */
   private cleanup(): void {
     this.run += 1;
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
     for (const id of this.timeouts) clearTimeout(id);
     this.timeouts = [];
-    for (const voice of this.voices) {
+    const ctx = this.ctx;
+    const live = ctx !== null && ctx.state === 'running';
+    const now = ctx?.currentTime ?? 0;
+    const fadeOut = (gain: GainNode, source: AudioBufferSourceNode) => {
+      if (live) {
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setValueAtTime(gain.gain.value, now);
+        gain.gain.linearRampToValueAtTime(0, now + CUT_FADE);
+      }
       try {
-        voice.source.stop();
+        source.stop(live ? now + CUT_FADE + 0.01 : undefined);
       } catch {
         // déjà arrêtée
       }
-      voice.source.disconnect();
-      voice.gain.disconnect();
+    };
+    for (const voice of this.voices) {
+      fadeOut(voice.gain, voice.source);
+      const { source, gain } = voice;
+      const release = () => {
+        source.disconnect();
+        gain.disconnect();
+      };
+      if (live) source.onended = release;
+      else release();
     }
     this.voices = [];
-    for (const shot of this.shots) {
-      try {
-        shot.stop();
-      } catch {
-        // déjà arrêtée
-      }
-      shot.disconnect();
+    for (const [shot, gain] of this.shots) {
+      fadeOut(gain, shot);
+      if (!live) shot.disconnect();
     }
     this.shots.clear();
     this.pressed = false;
     this.external = null;
     this.revUntil = 0;
-    if (this.ctx && this.ctx.state === 'running') void this.ctx.suspend();
+    if (ctx && live) {
+      // Suspendu après le fondu, sauf si l'on a redémarré entre-temps.
+      const run = this.run;
+      this.later(() => {
+        if (run === this.run && this.ctx === ctx && ctx.state === 'running') void ctx.suspend();
+      }, (CUT_FADE + 0.05) * 1000);
+    }
     this.setState('coupe');
   }
 
@@ -324,7 +383,7 @@ export class EngineSoundPlayer {
       gain.gain.value = level;
     }
     source.connect(gain).connect(this.bus);
-    this.shots.add(source);
+    this.shots.set(source, gain);
     source.onended = () => {
       this.shots.delete(source);
       source.disconnect();
@@ -343,7 +402,7 @@ export class EngineSoundPlayer {
     const range = rpmRange(manifest.boucles, manifest.ralenti);
     let load: number;
     if (this.external) {
-      this.rpm = Math.min(range.max, Math.max(range.min * 0.75, this.external.rpm));
+      this.rpm = Math.min(range.max, Math.max(range.min * 0.75, this.externalRpm(now)));
       load = this.external.load;
     } else {
       const loops = manifest.gaz === 'boucles' || !manifest.ponctuels.some((shot) => shot.emplacement === 'rev');

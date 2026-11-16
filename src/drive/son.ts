@@ -1,0 +1,206 @@
+// Son du moteur en sortie de nuit (§ 5.5 « Son », § 9 « Sur la route ») : le lecteur des sons
+// moteur (src/state/engineSound.ts, src/audio/engine/) branché sur l'état de la sortie
+// (src/state/drive.ts). Rien ne touche à la boucle de rendu : on lit les commandes et la télémétrie
+// que la scène publie quatre fois par seconde, on en tire le régime par une boîte fictive
+// (src/drive/boite.ts, src/data/boites.ts) et la charge (src/drive/mixage.ts), et le lecteur glisse
+// d'une mesure à l'autre en rampes Web Audio.
+//
+// - Démarrage enregistré au départ (scène prête), ralenti à l'arrêt, régime qui suit la vitesse avec
+//   des rapports, charge qui suit l'accélérateur (en pilote automatique : l'accélération), relâchée
+//   au frein.
+// - Coupure nette à la fin du parcours, en pause, au retour au garage ; remis en marche sans le
+//   démarreur si le véhicule roule déjà (reprise après la pause, bouton « Moteur »).
+// - Au ralenti d'image, le volume baisse, la hauteur ne bouge pas. Sous la radio, le moteur reste
+//   sous la musique.
+// - Aucun son avant un geste dans la page (ouverture directe de #/sortie comprise) : le moteur
+//   attend le premier appui.
+// - Une famille sans sons reste muette, sans erreur.
+
+import { create } from 'zustand';
+import { boiteDe } from '../data/boites.ts';
+import { resolveVehicle } from '../data/vehicles.ts';
+import { useBuilds } from '../state/builds.ts';
+import { useDrive } from '../state/drive.ts';
+import { soundFamilyOf, useEngineSound, useEngineSoundPrefs } from '../state/engineSound.ts';
+import { useRadio } from '../state/radio.ts';
+import { etatInitial, pasBoite, regimeJoue, type EtatBoite } from './boite.ts';
+import { chargeDe, etatAffiche, lisserAccel, moteurVoulu, niveauSortie, type ConditionsSon, type EtatSonSortie } from './mixage.ts';
+
+export type { EtatSonSortie };
+
+export interface SonSortie {
+  etat: EtatSonSortie;
+  /** Régime du moteur réel (tr/min arrondis), tel que la boîte le calcule ; 0 moteur coupé. */
+  regime: number;
+  /** Rapport engagé ; 0 moteur coupé. */
+  rapport: number;
+  /** Volume d'ensemble donné au moteur, de 0 à 1 (sous la radio, au ralenti d'image). */
+  niveau: number;
+}
+
+const REPOS: Readonly<SonSortie> = Object.freeze({ etat: 'coupe', regime: 0, rapport: 0, niveau: 1 });
+
+/** Ce que l'écran de sortie montre du moteur ; mis à jour au rythme de la télémétrie. */
+export const useSonSortie = create<SonSortie>(() => ({ ...REPOS }));
+
+/** Glissé du régime entre deux mesures : l'intervalle de la télémétrie (quatre par seconde), en s. */
+const GLISSE = 0.25;
+/** Au-dessus de cette vitesse (km/h), on remet le moteur en marche sans le démarreur. */
+const VITESSE_LANCEE = 2;
+/** Un appui sur « Moteur » dans cette fenêtre après le premier geste de la page ne compte pas (ms). */
+const FENETRE_REVEIL = 1000;
+
+/** Un geste a-t-il déjà eu lieu dans la page ? (Le navigateur ne laisse pas jouer avant.) */
+function gesteDejaFait(): boolean {
+  return typeof navigator !== 'undefined' && navigator.userActivation?.hasBeenActive === true;
+}
+
+/** Moment du geste qui a réveillé le son, si la page s'est ouverte sans geste (performance.now()). */
+let reveil = -Infinity;
+
+/**
+ * Bouton « Moteur » : coupe ou remet le moteur, choix gardé d'une sortie à l'autre. L'appui qui
+ * réveille le son d'une sortie ouverte sans geste ne coupe pas ce qu'il vient de lancer.
+ */
+export function basculerMoteur(): void {
+  const prefs = useEngineSoundPrefs.getState();
+  if (prefs.enSortie && performance.now() - reveil < FENETRE_REVEIL) return;
+  prefs.setEnSortie(!prefs.enSortie);
+}
+
+/** Branche le son du moteur sur la sortie ; rend la fonction qui le débranche (retour au garage). */
+export function brancherSonSortie(): () => void {
+  let geste = gesteDejaFait();
+  let tentative = false;
+  let boite: EtatBoite | null = null;
+  let dernier = 0;
+  let vitesseAvant = 0;
+  let accel = 0;
+  let niveau = -1;
+
+  const famille = () => soundFamilyOf(resolveVehicle(useBuilds.getState().current));
+
+  const conditions = (): ConditionsSon => {
+    const drive = useDrive.getState();
+    return {
+      enSortie: drive.map !== null,
+      prete: drive.telemetry.ready,
+      echec: drive.telemetry.failed,
+      finie: drive.telemetry.finished,
+      pause: drive.paused,
+      voulu: useEngineSoundPrefs.getState().enSortie,
+      geste,
+      sons: famille() !== null,
+    };
+  };
+
+  /** Démarre ou coupe selon les conditions, règle le volume, publie l'état. */
+  const evaluer = () => {
+    const c = conditions();
+    const moteur = useEngineSound.getState();
+    if (!moteurVoulu(c)) {
+      tentative = false;
+      boite = null;
+      dernier = 0;
+      if (moteur.state !== 'coupe') {
+        moteur.piloter(null);
+        moteur.couperNet();
+      }
+    } else if (moteur.state === 'coupe' && !tentative) {
+      // Une seule tentative par départ : un échec (hors ligne, sons absents) laisse le moteur muet.
+      tentative = true;
+      if (useDrive.getState().telemetry.speedKmh >= VITESSE_LANCEE) moteur.reprendre();
+      else moteur.demarrer();
+    }
+    const drive = useDrive.getState();
+    const radio = useRadio.getState();
+    const voulu = niveauSortie({ radioJoue: radio.now?.playing === true, volumeRadio: radio.volume, ralentiImage: drive.slow });
+    if (voulu !== niveau) {
+      niveau = voulu;
+      useEngineSound.getState().niveau(voulu);
+      useSonSortie.setState({ niveau: voulu });
+    }
+    const etat = etatAffiche(c, useEngineSound.getState().state);
+    if (etat !== useSonSortie.getState().etat) useSonSortie.setState(etat === 'tourne' || etat === 'demarre' ? { etat } : { etat, regime: 0, rapport: 0 });
+  };
+
+  /** Une mesure : la boîte avance, le lecteur glisse vers le nouveau régime. */
+  const mesurer = () => {
+    const moteur = useEngineSound.getState();
+    const plage = moteur.plage();
+    if (!plage || (moteur.state !== 'demarrage' && moteur.state !== 'ralenti' && moteur.state !== 'charge')) return;
+    const drive = useDrive.getState();
+    const now = performance.now();
+    const dt = dernier > 0 ? Math.min(0.5, (now - dernier) / 1000) : 0;
+    dernier = now;
+    const vitesse = drive.telemetry.speedKmh;
+    accel = lisserAccel(accel, vitesseAvant, vitesse, dt);
+    vitesseAvant = vitesse;
+    const spec = boiteDe(moteur.famille);
+    const { charge, frein } = chargeDe(drive.input, accel);
+    const sortie = pasBoite(boite ?? etatInitial(plage.min), { vitesseKmh: vitesse, charge, frein }, spec, plage.min, dt);
+    boite = { rapport: sortie.rapport, regime: sortie.regime, passage: sortie.passage };
+    moteur.piloter(regimeJoue(sortie.regime, plage.min, spec.rupteur, plage), sortie.charge, GLISSE);
+    useSonSortie.setState({ regime: Math.round(sortie.regime), rapport: sortie.rapport });
+  };
+
+  const offDrive = useDrive.subscribe((state, previous) => {
+    if (state.telemetry !== previous.telemetry || state.input !== previous.input) mesurer();
+    if (
+      state.map !== previous.map ||
+      state.paused !== previous.paused ||
+      state.slow !== previous.slow ||
+      state.attempt !== previous.attempt ||
+      state.telemetry.ready !== previous.telemetry.ready ||
+      state.telemetry.failed !== previous.telemetry.failed ||
+      state.telemetry.finished !== previous.telemetry.finished
+    ) {
+      evaluer();
+    }
+  });
+  const offMoteur = useEngineSound.subscribe((state, previous) => {
+    if (state.state === previous.state) return;
+    // Le moteur vient de tourner : la première mesure part de l'état présent de la sortie.
+    if (state.state === 'demarrage' || state.state === 'ralenti') mesurer();
+    evaluer();
+  });
+  const offPrefs = useEngineSoundPrefs.subscribe((state, previous) => {
+    if (state.enSortie !== previous.enSortie) evaluer();
+  });
+  const offRadio = useRadio.subscribe((state, previous) => {
+    if (state.volume !== previous.volume || state.now?.playing !== previous.now?.playing) evaluer();
+  });
+
+  // Ouverture sans geste : le premier appui ou la première touche réveille le son. Le contexte
+  // audio naît dans ce geste (le navigateur l'exige).
+  const surGeste = () => {
+    if (geste) return;
+    geste = true;
+    reveil = performance.now();
+    retirerGeste();
+    evaluer();
+  };
+  const retirerGeste = () => {
+    document.removeEventListener('pointerdown', surGeste, true);
+    document.removeEventListener('keydown', surGeste, true);
+  };
+  if (!geste) {
+    document.addEventListener('pointerdown', surGeste, true);
+    document.addEventListener('keydown', surGeste, true);
+  }
+
+  evaluer();
+
+  return () => {
+    offDrive();
+    offMoteur();
+    offPrefs();
+    offRadio();
+    retirerGeste();
+    const moteur = useEngineSound.getState();
+    moteur.piloter(null);
+    moteur.couperNet();
+    moteur.niveau(1);
+    useSonSortie.setState({ ...REPOS });
+  };
+}
