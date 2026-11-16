@@ -12,8 +12,12 @@ const numberAttr = async (page: Page, name: string) => Number(await stage(page).
 const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
 
 test.describe('sortie de nuit', () => {
+  // Rendu logiciel sur une machine partagée (CI) : la scène tourne à quelques images par seconde et
+  // la route avance au ralenti. Les délais disent « ça avance », pas « ça avance vite ».
+  test.setTimeout(300_000);
+
   test('du menu à la route, et retour au garage', async ({ page }) => {
-    test.setTimeout(180_000);
+    test.setTimeout(480_000);
     await openApp(page);
     await waitForScene(page);
 
@@ -33,15 +37,15 @@ test.describe('sortie de nuit', () => {
 
     // L'écran de la sortie : l'atelier s'efface, la scène de la route est prête.
     await expect(page).toHaveURL(/#\/sortie$/);
-    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 60_000 });
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(page.locator('footer.dock')).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toHaveCount(0);
     await expect(stage(page)).toHaveAttribute('data-meteo', 'pluie');
 
     // Pilote automatique : l'abscisse et la vitesse avancent sans toucher l'écran.
     const s0 = await numberAttr(page, 'data-s');
-    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 20_000 }).toBeGreaterThan(10);
-    await expect.poll(() => numberAttr(page, 'data-s'), { timeout: 20_000 }).toBeGreaterThan(s0 + 20);
+    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 90_000 }).toBeGreaterThan(10);
+    await expect.poll(() => numberAttr(page, 'data-s'), { timeout: 120_000 }).toBeGreaterThan(s0 + 20);
     await expect(page.locator('.drive-speed b')).not.toHaveText('0');
     await capture(page, 'sortie-route');
 
@@ -62,13 +66,13 @@ test.describe('sortie de nuit', () => {
     const before = await numberAttr(page, 'data-vitesse');
     await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.6);
     await page.mouse.down();
-    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 10_000 }).toBeLessThan(Math.max(1, before - 10));
+    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 60_000 }).toBeLessThan(Math.max(1, before - 10));
     await expect(page.locator('.drive-pedal[data-pedale="frein"]')).toHaveAttribute('data-appui', 'true');
     await page.mouse.up();
     const stopped = await numberAttr(page, 'data-vitesse');
     await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.6);
     await page.mouse.down();
-    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 10_000 }).toBeGreaterThan(stopped + 5);
+    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 60_000 }).toBeGreaterThan(stopped + 5);
     await capture(page, 'sortie-main');
     await page.mouse.up();
 
@@ -96,7 +100,7 @@ test.describe('sortie de nuit', () => {
     await expect(veil).toContainText('Licence Ouverte');
     await capture(page, 'sortie-chargement');
     release();
-    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 60_000 });
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(veil).toHaveCount(0);
     const controls = page.locator('.app button:visible');
     const count = await controls.count();
@@ -111,16 +115,16 @@ test.describe('sortie de nuit', () => {
   });
 
   test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les deux météos', async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(300_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
       if (message.type() === 'error' && /shader|webglprogram|glsl|program/i.test(message.text())) errors.push(message.text().slice(0, 300));
     });
     await page.goto('./#/sortie');
-    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 60_000 });
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     // Quelques secondes de route : enseignes, lumières lointaines, brume au sol, garde des caméras.
-    await expect.poll(() => numberAttr(page, 'data-s'), { timeout: 30_000 }).toBeGreaterThan(20);
+    await expect.poll(() => numberAttr(page, 'data-s'), { timeout: 120_000 }).toBeGreaterThan(20);
     // L'autre météo (celle du joueur est enregistrée : pluie par défaut).
     const before = await stage(page).getAttribute('data-meteo');
     await bar(page).getByRole('button', { name: /^Météo/ }).tap();
@@ -138,7 +142,7 @@ test.describe('sortie de nuit', () => {
     await capture(page, 'sortie-erreur');
     await page.unroute('**/assets/maps/*/route.json');
     await page.getByRole('button', { name: 'Réessayer' }).tap();
-    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 60_000 });
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
   });

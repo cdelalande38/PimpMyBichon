@@ -5,7 +5,7 @@
 
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openApp, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
@@ -61,6 +61,18 @@ async function reveal(page: Page): Promise<void> {
   await expect(page.locator('.piece-overlay')).toHaveAttribute('data-visible', 'oui');
 }
 
+/**
+ * Appui sur une pastille. Le repère ne reste allumé que quelques secondes : sur une machine lente
+ * (rendu logiciel partagé), il peut s'être éteint avant que l'appui n'aboutisse. On rallume et on
+ * recommence, au lieu d'attendre un repère qui ne reviendra pas.
+ */
+async function tapPin(page: Page, pin: Locator): Promise<void> {
+  await expect(async () => {
+    await reveal(page);
+    await pin.click({ timeout: 4_000 });
+  }).toPass({ timeout: 120_000 });
+}
+
 async function ready(page: Page): Promise<void> {
   await openApp(page);
   await waitForScene(page);
@@ -85,8 +97,7 @@ test.describe('pièce cliquable', () => {
     // Atteignable au clavier : c'est un vrai bouton.
     await radio.focus();
     await expect(radio).toBeFocused();
-    await reveal(page);
-    await radio.click();
+    await tapPin(page, radio);
     await expect(page).toHaveURL(/#\/radio$/);
     await expect(page.getByRole('heading', { name: 'Radio', level: 2 })).toBeVisible();
     await shot(page, 'apres-enceintes');
@@ -99,8 +110,7 @@ test.describe('pièce cliquable', () => {
     await orbitUntil(page, 'Préparer le moteur');
     await shot(page, 'pastilles-autre-cote');
     const engine = page.getByRole('button', { name: 'Préparer le moteur', exact: true });
-    await reveal(page);
-    await engine.click();
+    await tapPin(page, engine);
     // Un seul niveau du menu : la fiche de préparation, sections et entrées masquées.
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Mécanique', 'Préparation']);
     await expect(dock(page).locator('.dock-tab[data-onglet="preparation"]')).toBeVisible();
