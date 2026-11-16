@@ -4,8 +4,9 @@
 // en pilote automatique comme à la main collé à gauche ou à droite, dans les villages, les
 // ronds-points et les lacets. La chaussée dessinée est rejouée comme la fabrique la carte
 // (tools/maps/build.mjs : ruban posé sur un point du rail sur deux, demi-largeur adoucie).
-// Quelques virages de carte sont plus serrés que la voiture elle-même (rayon de 3,5 à 5,6 m sur
-// une chaussée de 3 à 4 m) : la cause est dans la carte ; ils sont listés et exclus ici.
+// Strict partout : les virages plus serrés que la voiture (rayon de 3,5 à 5,6 m sur 3 à 4 m de
+// chaussée, au circuit de Monaco et à Miami) sont adoucis à la fabrication (rail de 8 m de rayon au
+// moins, chaussée de 5 m au moins : tools/maps/build.mjs), et le demi-tour du départ de Miami rogné.
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MapRoute } from '../../src/data/mapTypes.ts';
@@ -190,11 +191,6 @@ function mesurer(
 
 
 const MAPS = ['plateau-matheysin', 'monaco-ville', 'monaco-circuit', 'miami-beach'];
-/** Virages plus serrés que le véhicule : abscisses (m) exclues, par carte et genre. Cause dans la carte. */
-const MAP_CAUSE: Record<string, { car: [number, number][]; bike: [number, number][] }> = {
-  'monaco-circuit': { car: [[1425, 1455], [3020, 3050]], bike: [[1425, 1455], [3020, 3050]] },
-  'miami-beach': { car: [[80, 106]], bike: [[80, 106]] },
-};
 const SIZES = { car: { halfWidth: 1.0, halfLength: 2.2 }, bike: { halfWidth: 0.45, halfLength: 1.05 } };
 const MARGIN = 0.15;
 
@@ -210,8 +206,7 @@ describe('marge au bord de la chaussée, sur les quatre cartes', () => {
             const vehicle = VEHICLES.find((v) => v.kind === kind) ?? VEHICLES[0]!;
             const pilot = createPilot(rail, { ...performanceDe(vehicle), ...SIZES[kind] });
             const input: DriveInput = lane === 0 ? { auto: true, throttle: 0, brake: 0, lane: 0 } : { auto: false, throttle: 0.6, brake: 0, lane };
-            const excluded = MAP_CAUSE[id]?.[kind] ?? [];
-            const m = mesurer(route, rail, pilot, kind, SIZES[kind], () => input, createPose(), 4000, (s) => excluded.some(([a, b]) => s >= a && s <= b));
+            const m = mesurer(route, rail, pilot, kind, SIZES[kind], () => input, createPose(), 4000);
             expect(m.min, `${id} : marge la plus faible à ${m.at} m (zones ${m.zones.join(', ')})`).toBeGreaterThan(MARGIN);
             expect(m.outside).toBe(0);
           });

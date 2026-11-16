@@ -12,7 +12,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { countGeometry, parseGlb } from '../lib/glb.mjs';
+import { continuiteChaussee, erreursContinuite, resumerContinuite } from './continuite.mjs';
 import { chausseeCouverte, resumerCouverture } from './couverture.mjs';
+import { rayons } from './trace.mjs';
 import { empreinteNom, MAP_SHOP_KINDS, normaliserNom } from './enrichissement.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -26,6 +28,9 @@ export const BUDGETS = Object.freeze({
   octetsCarte: 12_000_000,
   octetsDonnees: 3_000_000,
 });
+
+/** Rayon minimal du rail en plan, m (8 m à la fabrication, tolérance du rééchantillonnage). */
+export const RAYON_RAIL_MIN = 7.5;
 
 /** @param {unknown} v */
 const nombre = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -148,7 +153,7 @@ export function lireTroncon(bytes) {
 /**
  * Maillages d'un GLB de tronçon dans le repère de la carte (positions + origine), pour la couverture.
  * @param {Uint8Array} bytes @param {number[]} origine
- * @returns {Array<{ role: string, positions: Float32Array, index: Uint32Array | Uint16Array | null }>}
+ * @returns {Array<{ role: string, positions: Float64Array, index: Uint32Array | Uint16Array | null }>}
  */
 export function maillagesTroncon(bytes, origine) {
   const p = parseGlb(bytes);
@@ -165,7 +170,9 @@ export function maillagesTroncon(bytes, origine) {
   };
   return (json.meshes ?? []).flatMap((/** @type {any} */ m) =>
     (m.primitives ?? []).map((/** @type {any} */ prim) => {
-      const positions = /** @type {Float32Array} */ (lire(prim.attributes.POSITION));
+      // Repère de la carte en double précision : en simple précision, à 15 km de l'origine, l'arrondi
+      // (1 mm) ouvrirait de fausses fentes entre deux tronçons qui partagent leurs sommets de bord.
+      const positions = Float64Array.from(/** @type {Float32Array} */ (lire(prim.attributes.POSITION)));
       for (let i = 0; i < positions.length; i += 3) for (let k = 0; k < 3; k += 1) positions[i + k] = (positions[i + k] ?? 0) + (origine[k] ?? 0);
       return { role: String(m.name).replace(/^fusion_/, ''), positions, index: prim.indices === undefined ? null : /** @type {Uint32Array | Uint16Array} */ (lire(prim.indices)) };
     }),
@@ -313,6 +320,26 @@ export function verifierCarte(id, o = {}) {
       );
     }
   }
+  // Chaussée continue sous les roues, assez large, rail au milieu (tools/maps/continuite.mjs) ; rail
+  // sans virage plus serré que le véhicule (8 m, cercle par les points à ±4 m, 0,5 m de tolérance).
+  /** @type {string} */
+  let largeurs = '';
+  if (Array.isArray(r.rail) && Array.isArray(r.sections) && maillages.length) {
+    const ct = continuiteChaussee(r, maillages);
+    erreurs.push(...erreursContinuite(ct));
+    const z = resumerContinuite(ct);
+    largeurs = `largeurs dessinées ${Object.entries(z.histogramme).map(([k, v]) => `${k} : ${v} m`).join(', ')} ; rail-milieu ${z.ecartMax} m au plus`;
+    const pts = [];
+    for (let i = 0; i + 2 < r.rail.length; i += 3) pts.push([r.rail[i], r.rail[i + 1], r.rail[i + 2]]);
+    const k = Math.max(1, Math.round(4 / r.step));
+    const R = rayons(pts, k);
+    let rmin = Infinity;
+    let at = 0;
+    R.forEach((v, i) => {
+      if (v < rmin) [rmin, at] = [v, i * r.step];
+    });
+    if (rmin < RAYON_RAIL_MIN) erreurs.push(`rail : virage de ${rmin.toFixed(1)} m de rayon à ${Math.round(at)} m (${RAYON_RAIL_MIN} m au moins)`);
+  }
   const total = poids(dir);
   if (total > BUDGETS.octetsCarte) erreurs.push(`dossier de ${(total / 1e6).toFixed(2)} Mo, budget ${BUDGETS.octetsCarte / 1e6} Mo`);
   const donnees = join(root, 'assets-src', 'maps', id, 'donnees.json');
@@ -331,6 +358,7 @@ export function verifierCarte(id, o = {}) {
     `${id} : ${(r.length / 1000).toFixed(2)} km, ${tri.length} tronçons, ${Math.max(...tri)} triangles au plus par tronçon, ${pire} pour ${BUDGETS.tronconsVisibles} consécutifs, ` +
       `lointain ${r.far?.triangles ?? 0}, ${(total / 1e6).toFixed(2)} Mo`,
   );
+  if (largeurs) notes.push(`${id} : ${largeurs}`);
   return { erreurs, notes };
 }
 

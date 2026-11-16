@@ -221,6 +221,130 @@ export function lisserSerie(v, sigma, boucle = false) {
 }
 
 /**
+ * Rayon du cercle qui passe par trois points du plan ; Infinity s'ils sont alignés ou confondus.
+ * @param {number} ax @param {number} az @param {number} bx @param {number} bz @param {number} cx @param {number} cz
+ */
+export function rayonCercle(ax, az, bx, bz, cx, cz) {
+  const ux = bx - ax;
+  const uz = bz - az;
+  const vx = cx - bx;
+  const vz = cz - bz;
+  const cross = ux * vz - uz * vx;
+  if (Math.abs(cross) < 1e-9) return Infinity;
+  return (Math.hypot(ux, uz) * Math.hypot(vx, vz) * Math.hypot(cx - ax, cz - az)) / (2 * Math.abs(cross));
+}
+
+/**
+ * Adoucit les virages plus serrés que `rmin` mètres sur une série plane densifiée au mètre (déjà
+ * lissée) : tant qu'un point a un rayon (cercle par les points à ±k) sous `rmin`, un lissage
+ * gaussien supplémentaire (écart type 3 points) est appliqué sur une fenêtre de ±14 points autour,
+ * pleine sur ±6, dégressive au-delà (écart type et fenêtre grandissent avec les passes). Rend les séries corrigées et le nombre de passes. En boucle, la
+ * série est périodique (le dernier point répète le premier).
+ * @param {number[]} xs @param {number[]} zs @param {number} rmin
+ * @param {{ boucle?: boolean, k?: number, max?: number, ecartMax?: number }} [o]
+ */
+export function adoucirVirages(xs, zs, rmin, o = {}) {
+  const boucle = Boolean(o.boucle);
+  const k = o.k ?? 4;
+  const n = xs.length;
+  const per = n - 1;
+  let X = [...xs];
+  let Z = [...zs];
+  // Aucun point ne s'écarte de plus de `ecartMax` mètres de sa place.
+  const dmax = o.ecartMax ?? 12;
+  const idx = (/** @type {number} */ j) => (boucle && per > 0 ? ((j % per) + per) % per : Math.max(0, Math.min(n - 1, j)));
+  const rayon = (/** @type {number} */ i) => {
+    const a = idx(i - k);
+    const c = idx(i + k);
+    if (a === i || c === i) return Infinity;
+    return rayonCercle(X[a] ?? 0, Z[a] ?? 0, X[i] ?? 0, Z[i] ?? 0, X[c] ?? 0, Z[c] ?? 0);
+  };
+  /** Points touchés par au moins une passe. */
+  const touche = new Uint8Array(n);
+  let passes = 0;
+  let pire = Infinity;
+  for (let i = 0; i < n; i += 1) pire = Math.min(pire, rayon(i));
+  const avant = pire;
+  for (let it = 0; it < (o.max ?? 120) && pire < rmin; it += 1) {
+    // Le lissage et sa fenêtre grandissent avec les passes : une épingle dont les deux branches se
+    // rapprochent s'ouvre sur toute sa longueur au lieu de se plier au bord de la fenêtre.
+    const sigma = Math.min(12, 3 + it * 0.2);
+    const plein = Math.round(6 + sigma * 2);
+    const fondu = Math.round(8 + sigma * 2);
+    const m = new Float64Array(n);
+    for (let i = 0; i < n; i += 1) {
+      if (rayon(i) >= rmin) continue;
+      for (let j = -(plein + fondu); j <= plein + fondu; j += 1) {
+        const q = idx(i + j);
+        m[q] = Math.max(m[q] ?? 0, Math.min(1, 1 - (Math.abs(j) - plein) / fondu));
+        touche[q] = 1;
+      }
+    }
+    const sx = lisserSerie(X, sigma, boucle);
+    const sz = lisserSerie(Z, sigma, boucle);
+    X = X.map((x, i) => x + ((sx[i] ?? 0) - x) * (m[i] ?? 0));
+    Z = Z.map((z, i) => z + ((sz[i] ?? 0) - z) * (m[i] ?? 0));
+    for (let i = 0; i < n; i += 1) {
+      const dx = (X[i] ?? 0) - (xs[i] ?? 0);
+      const dz = (Z[i] ?? 0) - (zs[i] ?? 0);
+      const d = Math.hypot(dx, dz);
+      if (d > dmax) {
+        X[i] = (xs[i] ?? 0) + (dx * dmax) / d;
+        Z[i] = (zs[i] ?? 0) + (dz * dmax) / d;
+      }
+    }
+    if (boucle && per > 0) {
+      X[per] = X[0] ?? 0;
+      Z[per] = Z[0] ?? 0;
+    }
+    passes += 1;
+    pire = Infinity;
+    for (let i = 0; i < n; i += 1) pire = Math.min(pire, rayon(i));
+  }
+  // Une épingle que les passes n'ont pas su ouvrir (branches trop proches pour le rayon voulu) reprend
+  // sa forme d'origine au lieu de rester à demi effondrée : le contrôle (tools/maps/check.mjs) la signale.
+  if (pire < rmin) {
+    for (let i = 0; i < n; i += 1) {
+      if (!touche[i]) continue;
+      let j = i;
+      while (j < n && touche[j]) j += 1;
+      let rate = false;
+      for (let q = i; q < j && !rate; q += 1) rate = rayon(q) < rmin;
+      if (rate)
+        for (let q = i; q < j; q += 1) {
+          X[q] = xs[q] ?? 0;
+          Z[q] = zs[q] ?? 0;
+        }
+      i = j;
+    }
+    pire = Infinity;
+    for (let i = 0; i < n; i += 1) pire = Math.min(pire, rayon(i));
+  }
+  let ou = 0;
+  for (let i = 0; i < n; i += 1) if (rayon(i) <= pire) ou = i;
+  let deplacement = 0;
+  for (let i = 0; i < n; i += 1) deplacement = Math.max(deplacement, Math.hypot((X[i] ?? 0) - (xs[i] ?? 0), (Z[i] ?? 0) - (zs[i] ?? 0)));
+  return { xs: X, zs: Z, passes, avant, apres: pire, ou, deplacement };
+}
+
+/**
+ * Plancher de largeur et largeur adoucie : la largeur de chaque point est d'abord portée au
+ * maximum de ses voisins à ±3σ (dilatation), puis lissée (écart type σ) ; le résultat n'est jamais
+ * sous la largeur d'origine du point (les transitions se font du côté de la section étroite).
+ * @param {number[]} w @param {number} sigma
+ */
+export function largeurAdoucie(w, sigma) {
+  const r = Math.ceil(sigma * 3);
+  const n = w.length;
+  const d = w.map((_, i) => {
+    let m = -Infinity;
+    for (let j = Math.max(0, i - r); j <= Math.min(n - 1, i + r); j += 1) m = Math.max(m, w[j] ?? 0);
+    return m;
+  });
+  return lisserSerie(d, sigma).map((v, i) => Math.max(v, w[i] ?? 0));
+}
+
+/**
  * Rééchantillonne une polyligne 3D [X, Y, Z] (repère de la carte) à pas constant le long de sa
  * longueur 3D. Le point i est à l'abscisse i × pas ; le dernier point est le dernier pas entier.
  * Rend aussi, pour chaque point produit, l'indice fractionnaire dans la polyligne d'entrée.

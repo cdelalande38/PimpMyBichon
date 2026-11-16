@@ -58,6 +58,7 @@
     }
   },
   "fabrication": {
+    "rogner": { "debut": 112 },
     "pasRail": 2,
     "pasProfil": 2,
     "lissagePlan": 5,

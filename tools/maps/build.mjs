@@ -21,7 +21,8 @@ import { chausseeCouverte, gardeChaussee, resumerCouverture } from './couverture
 import { aire, boite, dansPolygone, hasard, indexPolyligne, simplifier } from './geom2d.mjs';
 import { Assembleur, ecrireGlb } from './maillage.mjs';
 import { Grille, jalonner, vitessesLeLong } from './enrichissement.mjs';
-import { decouper, dentsDeScie, densifier, lisserSerie, pentes, rayons, reechantillonnerCorde, sections as faireSections } from './trace.mjs';
+import { continuiteChaussee, LARGEUR_MIN, LARGEUR_MIN_DEUX_VOIES, resumerContinuite } from './continuite.mjs';
+import { adoucirVirages, decouper, dentsDeScie, densifier, largeurAdoucie, lisserSerie, pentes, rayonCercle, rayons, reechantillonnerCorde, sections as faireSections } from './trace.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, 'assets-src', 'maps');
@@ -33,6 +34,12 @@ const DECALAGES = [0, 1.5, 3.5, 6, 9, 13, 18, 24, 32, 42, 54, 68, 85, 105, 127];
 const TALUS = 2 / 3;
 /** Retrait des bâtiments rognés au-delà du bord du trottoir, en mètres. */
 const RETRAIT_BATI = 0.5;
+/**
+ * Rayon minimal du rail en plan, m (cercle par les points à ±4 m) : un véhicule de 1,90 m de large y
+ * tourne sans sortir d'une chaussée de deux fois sa largeur (carte.json, fabrication.rayonMin, pour
+ * une autre valeur).
+ */
+const RAYON_MIN = 8;
 /** Tunnels : hauteur des piédroits, de la voûte, et du dessus (terrain recouvrant), au-dessus de l'axe. */
 const TUNNEL = { piedroit: 5.2, voute: 6, dessus: 7.2 };
 
@@ -121,9 +128,22 @@ export function buildMap(id, o = {}) {
   // --- 1. Rail : densifié au mètre, lissé (plan et altitude), rééchantillonné à pas constant.
   const brut = [];
   for (let i = 0; i < d.axe.points.length; i += 3) brut.push([d.axe.points[i], d.axe.points[i + 2], d.axe.points[i + 1]]);
-  const dense = densifier(brut, d.axe.rang, 1);
-  const xs = lisserSerie(dense.points.map((p) => p[0] ?? 0), fab.lissagePlan, boucle);
-  const zs = lisserSerie(dense.points.map((p) => p[1] ?? 0), fab.lissagePlan, boucle);
+  const dense0 = densifier(brut, d.axe.rang, 1);
+  // Bouts rognés (carte.json, fabrication.rogner : { debut, fin } en mètres, hors boucle) : un départ
+  // posé au-delà d'un carrefour fait faire au chaînage un demi-tour que nul rail ne peut suivre.
+  const rg = boucle ? {} : (fab.rogner ?? {});
+  const a0 = Math.max(0, Math.round(rg.debut ?? 0));
+  const a1 = dense0.points.length - Math.max(0, Math.round(rg.fin ?? 0));
+  const dense = { points: dense0.points.slice(a0, a1), etiquettes: dense0.etiquettes.slice(a0, a1) };
+  // Lissage, puis virages adoucis jusqu'au rayon minimal (épingles et angles droits des villes).
+  const doux = adoucirVirages(
+    lisserSerie(dense.points.map((p) => p[0] ?? 0), fab.lissagePlan, boucle),
+    lisserSerie(dense.points.map((p) => p[1] ?? 0), fab.lissagePlan, boucle),
+    fab.rayonMin ?? RAYON_MIN,
+    { boucle },
+  );
+  const xs = doux.xs;
+  const zs = doux.zs;
   const ys = lisserSerie(dense.points.map((p) => p[2] ?? 0), fab.lissageAltitude, boucle);
   const lisse = xs.map((x, i) => [x, ys[i] ?? 0, zs[i] ?? 0]);
   // Corde constante : chaque point du rail à `step` mètres du précédent, épingles comprises ; en
@@ -145,7 +165,10 @@ export function buildMap(id, o = {}) {
   const valeurs = rail.map((_, i) => {
     const t = d.axe.troncons[rangDe(i)] ?? {};
     const lanes = t.voies && t.voies > 0 ? t.voies : 2;
-    const width = t.largeur && t.largeur > 0 ? t.largeur : lanes * 3;
+    // Plancher de largeur (règle du commanditaire : le véhicule le plus large, 2,26 m rétroviseurs
+    // compris, n'occupe jamais plus de la moitié de la chaussée) : 5 m, 6 m dès deux voies ; une
+    // route plus large garde sa largeur réelle.
+    const width = Math.max(t.largeur && t.largeur > 0 ? t.largeur : lanes * 3, lanes >= 2 ? LARGEUR_MIN_DEUX_VOIES : LARGEUR_MIN);
     const speed = t.vitesse > 0 ? t.vitesse : (vOsm[i] ?? 0);
     return { ground: /** @type {'sol' | 'pont' | 'tunnel'} */ (t.sol ?? 'sol'), urban: Boolean(t.urbain), lanes, width, speed };
   });
@@ -158,8 +181,10 @@ export function buildMap(id, o = {}) {
     return sections.find((x) => s >= x.from && s <= x.to) ?? /** @type {typeof sections[0]} */ (sections[sections.length - 1]);
   };
   const sec = rail.map((_, i) => sectionDe(i));
-  // Largeur adoucie sur une vingtaine de mètres aux changements de section.
-  const largeur = lisserSerie(sec.map((s) => s.width), 8 / step);
+  // Largeur adoucie sur une vingtaine de mètres aux changements de section, jamais sous celle de la
+  // section (la transition se fait dans la section étroite) : le pilote, qui lit la largeur de la
+  // section, a toujours au moins cette chaussée-là.
+  const largeur = largeurAdoucie(sec.map((s) => s.width), 8 / step);
 
   // --- 3. Repères locaux : tangente plane et normale à droite (X est, Z sud : droite = (−tz, tx)).
   const per = N - 1;
@@ -196,7 +221,7 @@ export function buildMap(id, o = {}) {
   if (stations[stations.length - 1] !== N - 1) stations.push(N - 1);
   const NS = stations.length;
   // Décalages retenus : ceux qui restent dans le couloir pour le plus large des profils, puis le bord du couloir.
-  const eMax = Math.max(...largeur.map((w) => w / 2)) + 2.2;
+  const eMax = Math.max(...largeur.map((w) => w / 2)) + 2.2 + 0.5;
   const DEC = DECALAGES.filter((v) => v < dl - eMax - 5);
   const nT = DEC.length + 1;
   // Normales moyennées sur une fenêtre qui grandit avec le décalage (évite les plis à l'intérieur des courbes).
@@ -216,16 +241,42 @@ export function buildMap(id, o = {}) {
     const L = Math.hypot(nx, nz) || 1;
     return [nx / L, nz / L];
   };
-  const profils = stations.map((i, s) => {
+  // Le ruban va en ligne droite d'une station à la suivante (corde de K pas) : dans un virage de rayon
+  // R, son milieu passerait à l'intérieur du rail de la flèche L²/8R. Chaque station est donc décalée
+  // vers l'extérieur de la moitié de la flèche et élargie de la flèche : le milieu de la chaussée reste à
+  // moins d'une demi-flèche du rail, et la chaussée déclarée (largeur de la section) est dessinée de
+  // part et d'autre du rail sur toute la corde.
+  const corde = K * step;
+  /** Flèche (m) et sens de l'intérieur du virage (+1 : à droite) au point i du rail. @param {number} i */
+  const fleche = (i) => {
+    const ia = boucle ? (((i - K) % per) + per) % per : Math.max(0, i - K);
+    const ib = boucle ? (i + K) % per : Math.min(N - 1, i + K);
+    if (ia === i || ib === i) return { f: 0, cote: 0 };
+    const a = /** @type {number[]} */ (rail[ia]);
+    const b = /** @type {number[]} */ (rail[ib]);
     const p = /** @type {number[]} */ (rail[i]);
-    const hw = (largeur[i] ?? 6) / 2;
+    const R = rayonCercle(a[0] ?? 0, a[2] ?? 0, p[0] ?? 0, p[2] ?? 0, b[0] ?? 0, b[2] ?? 0);
+    const t = /** @type {number[]} */ (T[i]);
+    const wx = ((a[0] ?? 0) + (b[0] ?? 0)) / 2 - (p[0] ?? 0);
+    const wz = ((a[2] ?? 0) + (b[2] ?? 0)) / 2 - (p[2] ?? 0);
+    return { f: Math.min(1, (corde * corde) / (8 * R)), cote: Math.sign(-(t[1] ?? 0) * wx + (t[0] ?? 0) * wz) };
+  };
+  const profils = stations.map((i, s) => {
+    const q = /** @type {number[]} */ (rail[i]);
+    const fl = fleche(i);
+    const n0 = normale(s, 0);
+    // Décalage vers l'extérieur du virage (−cote le long de la normale à droite).
+    const dec = (-fl.cote * fl.f) / 2;
+    const p = [(q[0] ?? 0) + (n0[0] ?? 0) * dec, q[1] ?? 0, (q[2] ?? 0) + (n0[1] ?? 0) * dec];
+    // Élargie de la flèche entière : dans un S, le décalage change de côté d'une station à l'autre.
+    const hw = (largeur[i] ?? 6) / 2 + fl.f;
     const se = sec[i] ?? /** @type {typeof sections[0]} */ (sections[0]);
     const sw = se.urban ? 2.2 : 1.0;
     const bordure = se.urban ? 0.14 : 0;
     const y = p[1] ?? 0;
     const e = hw + sw;
     const ye = y + bordure - (se.urban ? 0 : 0.05);
-    return { i, s, p, hw, sw, e, y, ye, bordure, ground: se.ground, urban: se.urban, n: normale(s, 0) };
+    return { i, s, p, hw, sw, e, y, ye, bordure, ground: se.ground, urban: se.urban, n: n0, dec };
   });
   // Emprise protégée : chaussée et trottoirs de toutes les passes du parcours, hors tunnel, en
   // triangles (chaussée bombée ; dessus du trottoir relevé de 5 cm). Aucun
@@ -238,7 +289,8 @@ export function buildMap(id, o = {}) {
   const coupeProtegee = (i) => {
     const se = sec[i] ?? /** @type {typeof sections[0]} */ (sections[0]);
     const y = rail[i]?.[1] ?? 0;
-    const hw = Math.max((largeur[i] ?? 6) / 2, se.width / 2 - 0.3);
+    const pf = /** @type {typeof profils[0]} */ (profils[Math.min(NS - 1, Math.round(i / K))]);
+    const hw = Math.max((largeur[i] ?? 6) / 2, se.width / 2 - 0.3) + Math.abs(pf.dec);
     const e = hw + (se.urban ? 2.2 : 1.0);
     const yt = y + (se.urban ? 0.14 : -0.05) + 0.05;
     return [
@@ -612,6 +664,88 @@ export function buildMap(id, o = {}) {
       }
     }
   });
+
+  // --- 7 bis. Bouts d'un parcours sans boucle : la chaussée s'arrêtait net sur le vide (pas de terrain
+  //     proche au-delà du dernier profil, relief lointain abaissé de 4 m) : « la route est coupée ».
+  //     Chaque bout est fermé par un demi-disque de trottoir (rayon : bord d'accotement) au niveau de
+  //     l'accotement, une bordure entre lui et la chaussée, puis un éventail de terrain jusqu'au bord
+  //     du couloir, aux mêmes talus que les profils. Les deux rayons extrêmes reprennent les sommets du
+  //     dernier profil de terrain : aucune fente.
+  if (!boucle) {
+    /** Triangle tourné vers le haut (ordre corrigé d'après sa normale). @param {Assembleur} m @param {number} a @param {number} b @param {number} c */
+    const dessus = (m, a, b, c) => {
+      const P = (/** @type {number} */ k, /** @type {number} */ j) => m.pos[k * 3 + j] ?? 0;
+      const ny = (P(b, 2) - P(a, 2)) * (P(c, 0) - P(a, 0)) - (P(b, 0) - P(a, 0)) * (P(c, 2) - P(a, 2));
+      if (ny >= 0) m.tri(a, b, c);
+      else m.tri(a, c, b);
+    };
+    for (const [s, sens, c] of /** @type {Array<[number, number, number]>} */ ([
+      [0, -1, 0],
+      [NS - 1, 1, bornes.length - 1],
+    ])) {
+      const pr = /** @type {typeof profils[0]} */ (profils[s]);
+      if (pr.ground === 'tunnel') continue;
+      const t = /** @type {number[]} */ (T[pr.i]);
+      const fx = (t[0] ?? 0) * sens;
+      const fz = (t[1] ?? 0) * sens;
+      const n = pr.n;
+      const ac = asm(c, 'accotement');
+      const te = asm(c, 'terrain');
+      const A = 12;
+      /** Direction du rayon a (−90° : côté gauche du profil, +90° : côté droit). @param {number} a */
+      const dir = (a) => {
+        const th = -Math.PI / 2 + (Math.PI * a) / A;
+        // Côté droit du profil : +n ; au départ (sens −1), la droite de la marche est à gauche du rayon.
+        const cd = sens > 0 ? 1 : -1;
+        return [Math.cos(th) * fx + Math.sin(th) * cd * (n[0] ?? 0), Math.cos(th) * fz + Math.sin(th) * cd * (n[1] ?? 0)];
+      };
+      // Demi-disque de trottoir et bordure contre la chaussée.
+      const centre = ac.sommet(pr.p[0] ?? 0, pr.ye, pr.p[2] ?? 0);
+      const bord = Array.from({ length: A + 1 }, (_, a) => {
+        const [dx = 0, dz = 0] = dir(a);
+        return ac.sommet((pr.p[0] ?? 0) + dx * pr.e, pr.ye, (pr.p[2] ?? 0) + dz * pr.e);
+      });
+      for (let a = 0; a < A; a += 1) dessus(ac, centre, /** @type {number} */ (bord[a]), /** @type {number} */ (bord[a + 1]));
+      const bas = [-pr.hw, 0, pr.hw].map((u, k) => ac.sommet((pr.p[0] ?? 0) + (n[0] ?? 0) * u, pr.y + (k === 1 ? 0.06 : 0), (pr.p[2] ?? 0) + (n[1] ?? 0) * u));
+      const haut = [-pr.hw, 0, pr.hw].map((u) => ac.sommet((pr.p[0] ?? 0) + (n[0] ?? 0) * u, pr.ye, (pr.p[2] ?? 0) + (n[1] ?? 0) * u));
+      for (let k = 0; k < 2; k += 1) {
+        const q = /** @type {number[]} */ ([bas[k], bas[k + 1], haut[k + 1], haut[k]]);
+        ac.quad(/** @type {number} */ (q[0]), /** @type {number} */ (q[1]), /** @type {number} */ (q[2]), /** @type {number} */ (q[3]));
+        ac.quad(/** @type {number} */ (q[0]), /** @type {number} */ (q[3]), /** @type {number} */ (q[2]), /** @type {number} */ (q[1]));
+      }
+      // Éventail de terrain : anneaux aux décalages des profils, au-delà du bord d'accotement.
+      /** @type {number[][]} */
+      const anneaux = [];
+      for (let a = 0; a <= A; a += 1) {
+        const cote = sens > 0 ? (a === 0 ? 0 : a === A ? 1 : -1) : a === 0 ? 1 : a === A ? 0 : -1;
+        const [dx = 0, dz = 0] = dir(a);
+        anneaux.push(
+          Array.from({ length: nT }, (_, k) => {
+            if (cote >= 0) return te.sommet(terX[at(s, cote, k)] ?? 0, terY[at(s, cote, k)] ?? 0, terZ[at(s, cote, k)] ?? 0);
+            const dk = k < DEC.length ? (DEC[k] ?? 0) : dl - pr.e;
+            const x = (pr.p[0] ?? 0) + dx * (pr.e + dk);
+            const z = (pr.p[2] ?? 0) + dz * (pr.e + dk);
+            const hn = H(x, z);
+            const y = pr.ground === 'sol' ? pr.ye + Math.max(-dk * TALUS, Math.min(dk * TALUS, hn - pr.ye)) : Math.min(hn, pr.y - 2.5 + dk * 0.3);
+            return te.sommet(x, y, z);
+          }),
+        );
+      }
+      for (let a = 0; a < A; a += 1)
+        for (let k = 0; k < nT - 1; k += 1) {
+          const r0 = /** @type {number[]} */ (anneaux[a]);
+          const r1 = /** @type {number[]} */ (anneaux[a + 1]);
+          for (const [i0, i1, i2] of [
+            [r0[k], r1[k], r1[k + 1]],
+            [r0[k], r1[k + 1], r0[k + 1]],
+          ]) {
+            const v = [i0, i1, i2].map((q) => [te.pos[(q ?? 0) * 3] ?? 0, te.pos[(q ?? 0) * 3 + 1] ?? 0, te.pos[(q ?? 0) * 3 + 2] ?? 0]);
+            if (garde.couvre(/** @type {number[]} */ (v[0]), /** @type {number[]} */ (v[1]), /** @type {number[]} */ (v[2]), 0.1)) terrainRefuse += 1;
+            else dessus(te, /** @type {number} */ (i0), /** @type {number} */ (i1), /** @type {number} */ (i2));
+          }
+        }
+    }
+  }
 
   // Marquage : axe en tirets (3 m, 10 m de vide), lignes de rive continues hors agglomération.
   /**
@@ -1355,6 +1489,9 @@ export function buildMap(id, o = {}) {
   // Contrôle : aucun point de la chaussée (hors tunnel) sous le décor ni sous le relief lointain.
   const maillagesEnMemoire = parChunk.flatMap((m) => [...m].map(([role, a]) => ({ role, positions: a.pos, index: a.idx })));
   const couverture = chausseeCouverte(route, maillagesEnMemoire, [{ role: 'lointain', positions: far.pos, index: far.idx }]);
+  // Contrôle : chaussée continue sous les roues, largeur dessinée, rail au milieu (tools/maps/continuite.mjs).
+  const continuite = continuiteChaussee(route, maillagesEnMemoire);
+  const largeurs = resumerContinuite(continuite);
   const P = pentes(rail, Math.round(10 / step));
   const mesures = {
     longueur: length,
@@ -1377,6 +1514,9 @@ export function buildMap(id, o = {}) {
     chausseeCouverte: couverture.couverts.length,
     couverture: resumerCouverture(couverture.couverts),
     couverts: couverture.couverts,
+    fautesChaussee: continuite.fautes,
+    largeurs,
+    virages: { passes: doux.passes, rayonAvant: doux.avant, rayonApres: doux.apres, ou: doux.ou + a0, deplacement: doux.deplacement },
     batiments: nbBatiments,
     batimentsRognes,
     batimentsEcartes,
@@ -1460,6 +1600,12 @@ async function main() {
       console.log(
         `  chaussée couverte (hors tunnel) : ${m.chausseeCouverte} points` +
           (m.chausseeCouverte ? ` (${Object.entries(m.couverture.parRole).map(([k, v]) => `${k} ${v}`).join(', ')} ; jusqu'à ${m.couverture.dyMax.toFixed(2)} m ; vers ${m.couverture.zones.slice(0, 16).join(', ')} m)` : ''),
+      );
+      const lz = m.largeurs;
+      console.log(
+        `  chaussée sous les roues : ${m.fautesChaussee.length} fautes${m.fautesChaussee.length ? ` (${Object.entries(lz.zones).map(([k, v]) => `${k} vers ${v.slice(0, 8).join(', ')} m`).join(' ; ')})` : ''} · ` +
+          `largeur dessinée ${lz.largeurMin.toFixed(1)} m au moins (à ${lz.largeurMinAt} m), ${lz.sous5} m sous 5 m, ${lz.sous6DeuxVoies} m sous 6 m à deux voies · ` +
+          `rail-milieu ${lz.ecartMax.toFixed(2)} m au plus · section plus large que le dessin : ${lz.surDeclaree} m · virages adoucis en ${m.virages.passes} passes (rayon ${m.virages.rayonAvant.toFixed(1)} → ${m.virages.rayonApres.toFixed(1)} m, le plus serré vers ${m.virages.ou} m du début de l’axe ; rail déplacé de ${m.virages.deplacement.toFixed(1)} m au plus)`,
       );
       console.log(`  ${m.batiments} bâtiments (${m.batimentsRognes} rognés hors de l'emprise, ${m.batimentsEcartes} écartés) · ${m.arbres} arbres · ${m.palmiers} palmiers · ${m.lampadaires} lampadaires · ${m.feux} feux · ${m.balises} balises · ${Math.round(m.glissieres)} m de glissières · ${m.ponts} ponts · ${m.tunnels} tunnels`);
       if (m.osm) console.log(`  OpenStreetMap : ${Object.entries(m.osm).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
