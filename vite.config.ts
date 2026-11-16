@@ -170,6 +170,13 @@ export default defineConfig({
         // modèles alourdiront le catalogue (§ 7). Les manifestes entrent dans le bundle JS. La
         // musique n'y entre pas.
         globPatterns: ['**/*.{js,css,html,woff2,svg,png,webp,ico,glb,wasm}'],
+        // Seuls les fichiers que Vite nomme d'après leur contenu (assets/<nom>-<8 caractères>.<ext>,
+        // à la racine de assets/) se passent de numéro de révision. Sans cette règle, tout ce qui
+        // vit sous assets/ était tenu pour « déjà haché » (réglage d'origine : /^assets\//), y compris
+        // les fichiers de public/assets/ dont le nom ne change jamais (modèles des véhicules, pièces
+        // partagées, œuvres du garage) : une fois précachés, un téléphone ne les rechargeait plus
+        // jamais, et gardait par exemple l'ancienne Cox avec le code nouveau (constaté le 16 novembre 2026).
+        dontCacheBustURLsMatching: /^assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/,
         // Copie hachée du transcodeur émise par KTX2Loader (son chemin par défaut, `new URL(…)`) :
         // jamais lue, l'app fixe transcoderPath sur libs/basis/. Inutile de la précacher (≈ 0,6 Mo).
         // Les cartes de sortie (assets/maps/<id>/ : tronçons GLB, relief lointain, route.json) se
