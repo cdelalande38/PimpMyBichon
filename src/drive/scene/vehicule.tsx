@@ -10,7 +10,8 @@
 // le manifeste) ; `prepare` les range à part de la caisse, jamais fusionnées. Chaque roue est
 // redressée puis tourne autour du côté du véhicule, centre à l'origine de son nœud (src/drive/scene/
 // roues.ts) ; une roue dont le pivot est loin du centre reste fixe. Un modèle sans roue roule roues
-// fixes (dit par `rig.wheels.length === 0`).
+// fixes (dit par `rig.wheels.length === 0`). Les roues avant braquent du braquage du pilote, amplifié
+// pour l'image (`wheelSteer`) ; une moto tourne aussi sa fourche, son guidon et ses poignées.
 
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
@@ -44,7 +45,8 @@ import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 import { DEFAULT_SEAT, placeEye, seatMetrics, type PlacedSeat } from '../../scene/fit.ts';
 import { bodyPoint, STILL_BODY, useBodyPose } from '../../scene/vehicle/wheels.ts';
 import { cockpit } from '../cameras.ts';
-import { CurvatureFollower, follow, liftStands, rollingWheels, type Wheel } from './roues.ts';
+import { bikeSteering, follow, liftStands, rollingWheels, steeringWheelPart, steerParts, wheelSteer, type SteeringPart, type Wheel } from './roues.ts';
+import { PILOT } from '../pilote.ts';
 import { DRIVER_POSE, driverSpecOf } from '../../data/conducteur.ts';
 import { INTERIOR_CATALOGUE } from '../../data/habitacle.ts';
 import { livePilot } from '../../state/drive.ts';
@@ -75,6 +77,8 @@ export interface DriveRig {
   /** Dans `group` : roulis et plongée de caisse (l'ombre de contact reste au sol). */
   readonly body: Group;
   wheels: Wheel[];
+  /** Fourche, guidon et poignées d'une moto, tournés avec sa roue avant (vide pour une voiture). */
+  steering: SteeringPart[];
   /** Angle de roulement cumulé, en radians par mètre de rayon (distance parcourue). */
   distance: number;
   measure: { halfLength: number; halfWidth: number; height: number } | null;
@@ -102,6 +106,7 @@ export function createRig(): DriveRig {
     group,
     body,
     wheels: [],
+    steering: [],
     distance: 0,
     measure: null,
     tails: [],
@@ -117,15 +122,24 @@ export function createRig(): DriveRig {
 }
 
 const axisWork = new Quaternion();
+const steerWork = new Quaternion();
 
-/** Fait tourner les roues de la distance parcourue (aucune allocation). */
-export function rollWheels(rig: DriveRig, meters: number): void {
+/**
+ * Fait tourner les roues de la distance parcourue et braque les roues avant de `steer` radians
+ * (positif à gauche, déjà amplifié pour l'image : `wheelSteer`), fourche d'une moto comprise
+ * (aucune allocation).
+ */
+export function rollWheels(rig: DriveRig, meters: number, steer = 0): void {
   rig.distance += meters;
   for (let i = 0; i < rig.wheels.length; i += 1) {
     const w = rig.wheels[i] as Wheel;
     axisWork.setFromAxisAngle(w.axis, -rig.distance / w.radius);
-    w.node.quaternion.multiplyQuaternions(axisWork, w.base);
+    if (w.steer) {
+      steerWork.setFromAxisAngle(w.steer, steer);
+      w.node.quaternion.multiplyQuaternions(steerWork, axisWork).multiply(w.base);
+    } else w.node.quaternion.multiplyQuaternions(axisWork, w.base);
   }
+  steerParts(rig.steering, steer);
 }
 
 interface DrivePrepared {
@@ -240,6 +254,8 @@ function seatedEye(root: Object3D, view: InteriorView): { eye: [number, number, 
 /** Ce que le modèle posé donne au moteur de la scène (src/drive/scene/moteur.ts, setModel). */
 export interface DriveModel {
   wheels: Wheel[];
+  /** Fourche, guidon et poignées d'une moto, tournés avec sa roue avant (vide pour une voiture). */
+  steering: SteeringPart[];
   tails: MeshStandardMaterial[];
   tailLight: PointLight;
   measure: { halfLength: number; halfWidth: number; height: number };
@@ -299,7 +315,10 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   const { stamp, spins } = useVehicleWheels(drive.prepared, vehicle, invalidate, { merge: false });
   // Volant, pommeau et sièges du build, posés comme au garage (sinon l'habitacle serait vide).
   useHabitacle(drive.prepared, vehicle, invalidate);
-  const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins), [drive, spins]);
+  const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins, vehicle.kind), [drive, spins, vehicle.kind]);
+  // Direction d'une moto : fourche, guidon et poignées tournent avec la roue avant ; remis droits au départ.
+  const steering = useMemo(() => bikeSteering(drive.prepared.root, wheels, vehicle.kind), [drive, wheels, vehicle.kind]);
+  useLayoutEffect(() => () => steerParts(steering, 0), [steering]);
 
   // Caméra embarquée (src/drive/cameras.ts, cockpit) : à la place du conducteur du manifeste, posée
   // sur son siège dans le modèle chargé, comme au garage ; résolue une fois le siège posé.
@@ -327,7 +346,7 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     seated.current = !pending;
   });
 
-  useDriver(drive.prepared, vehicle, rig.group);
+  useDriver(drive.prepared, vehicle);
 
   const { halfLength, halfWidth, height } = drive.prepared;
   const isBike = vehicle.kind === 'bike';
@@ -386,9 +405,9 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   });
 
   useLayoutEffect(() => {
-    onModel({ wheels, tails: drive.tails, tailLight: lights.tail, measure: { halfLength, halfWidth, height }, head: new Vector3(lights.x, lights.y, 0), headSpread: lights.spread });
+    onModel({ wheels, steering, tails: drive.tails, tailLight: lights.tail, measure: { halfLength, halfWidth, height }, head: new Vector3(lights.x, lights.y, 0), headSpread: lights.spread });
     return () => onModel(null);
-  }, [drive, wheels, lights, halfLength, halfWidth, height, onModel]);
+  }, [drive, wheels, steering, lights, halfLength, halfWidth, height, onModel]);
 
   return (
     <primitive object={rig.group} dispose={null}>
@@ -405,21 +424,26 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
 /** Distance de la caméra à l'œil du conducteur sous laquelle on est « dans sa tête ». */
 const IN_HEAD = 0.32;
 
+/** Démultiplication de la direction : rotation du volant pour le braquage montré des roues (`wheelSteer`). */
+const STEERING_RATIO = DRIVER_POSE.motion.steerPerCurvature / PILOT.steer.wheelbase.car;
+
 /**
  * Le conducteur à bord (src/scene/vehicle/conducteur.ts) : assis sur les ancres du véhicule dès que
  * le siège et le volant sont posés, il vit un peu en roulant. Les mains suivent le volant qui tourne
- * avec la courbure de la route, la tête se tourne vers l'intérieur du virage, le buste recule à
+ * avec le braquage du pilote (`motion.steer`, la même vérité que les roues), la tête se tourne vers
+ * l'intérieur du virage (courbure tirée du même braquage), le buste recule à
  * l'accélération et avance au freinage ; le motard se penche au-delà de la moto. Tout est borné et
  * lissé. Quand la caméra est à son œil (embarquée), sa tête et son buste sont cachés.
  */
-function useDriver(prepared: Prepared, vehicle: VehicleManifest, carrier: Group): void {
+function useDriver(prepared: Prepared, vehicle: VehicleManifest): void {
   const rig = useDriverRig(vehicle, true);
   const gl = useThree((state) => state.gl);
   const state = useRef<{
     handle: DriverHandle | null;
     tries: number;
     wheel: { anchor: Object3D; base: Quaternion } | null;
-    curve: CurvatureFollower;
+    /** Volant d'origine d'un vrai modèle (manifeste, `interior.steeringNode`), tourné autour de sa colonne. */
+    column: SteeringPart[];
     motion: DriverMotion;
     solved: DriverMotion;
     hidden: boolean;
@@ -428,11 +452,13 @@ function useDriver(prepared: Prepared, vehicle: VehicleManifest, carrier: Group)
   useLayoutEffect(() => {
     if (!rig) return;
     const anchor = prepared.root.getObjectByName(INTERIOR_CATALOGUE.anchors.steering) ?? null;
+    const named = !anchor && vehicle.interior?.steeringNode ? prepared.root.getObjectByName(vehicle.interior.steeringNode) : undefined;
+    const column = named ? steeringWheelPart(prepared.root, named) : null;
     state.current = {
       handle: null,
       tries: 0,
       wheel: anchor ? { anchor, base: anchor.quaternion.clone() } : null,
-      curve: new CurvatureFollower(DRIVER_POSE.motion.smoothing),
+      column: column ? [column] : [],
       motion: { steer: 0, look: 0, lean: 0, surge: 0, hang: 0 },
       solved: { steer: 0, look: 0, lean: 0, surge: 0, hang: 0 },
       hidden: false,
@@ -441,11 +467,12 @@ function useDriver(prepared: Prepared, vehicle: VehicleManifest, carrier: Group)
     return () => {
       const current = state.current;
       if (current?.wheel) current.wheel.anchor.quaternion.copy(current.wheel.base);
+      if (current) steerParts(current.column, 0);
       unmountDriver(rig);
       if (current?.stage) delete current.stage.dataset.conducteur;
       state.current = null;
     };
-  }, [rig, prepared, gl]);
+  }, [rig, prepared, gl, vehicle]);
 
   const spec = useMemo(() => driverSpecOf(vehicle), [vehicle]);
   const turn = useMemo(() => new Quaternion(), []);
@@ -476,9 +503,16 @@ function useDriver(prepared: Prepared, vehicle: VehicleManifest, carrier: Group)
     const m = current.motion;
     if (pilot) {
       const motion = pilot.motion;
-      const curvature = current.curve.update(motion.s, carrier.rotation.y, dt);
-      const steerable = current.wheel !== null && current.handle.seating.kind === 'car';
-      m.steer = follow(m.steer, steerable ? curvature * M.steerPerCurvature : 0, M.steerMax, dt, M.smoothing);
+      const steer = Number.isFinite(motion.steer) ? (motion.steer as number) : 0;
+      const curvature = Math.tan(steer) / PILOT.steer.wheelbase[current.handle.seating.kind];
+      // Voiture : le volant (démultiplié, borné) ; moto : le guidon, du braquage montré de sa fourche.
+      const bike = current.handle.seating.kind === 'bike';
+      const steerable = (current.wheel !== null || current.column.length > 0) && !bike;
+      // Le volant suit le braquage montré des roues (amplifié comme elles) : il se voit tourner dès
+      // une courbe ordinaire, borné pour que les mains restent sur la jante.
+      const target = wheelSteer(steer, motion.speed, bike ? 'bike' : 'car') * (bike ? 1 : steerable ? STEERING_RATIO : 0);
+      // Le guidon tient les mains : sans lissage de plus que la fourche (déjà lissée par le pilote).
+      m.steer = bike ? target : follow(m.steer, target, M.steerMax, dt, M.smoothing);
       m.look = follow(m.look, curvature * M.lookPerCurvature, M.lookMax, dt, M.smoothing);
       m.surge = follow(m.surge, -(motion.pull ?? motion.accel) * M.surgePerAccel, M.surgeMax, dt, M.smoothing);
       if (current.handle.seating.kind === 'bike') {
@@ -490,6 +524,7 @@ function useDriver(prepared: Prepared, vehicle: VehicleManifest, carrier: Group)
     const s = current.solved;
     if (Math.abs(m.steer - s.steer) + Math.abs(m.look - s.look) + Math.abs(m.lean - s.lean) + Math.abs(m.surge - s.surge) + Math.abs(m.hang - s.hang) > 0.002) {
       if (current.wheel) current.wheel.anchor.quaternion.copy(current.wheel.base).multiply(turn.setFromAxisAngle(axis, m.steer));
+      steerParts(current.column, m.steer);
       current.handle.move(m);
       Object.assign(s, m);
     }

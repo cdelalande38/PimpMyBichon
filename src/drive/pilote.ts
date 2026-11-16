@@ -31,13 +31,22 @@
 // demi-largeur du véhicule (`setSize`, sinon celle de son genre) et une garde, plus grande à
 // l'extérieur des courbes (les coins du véhicule débordent, la chaussée dessinée suit des cordes de
 // 4 m), resserrée un peu avant et après les rétrécissements. À la main, le placement demandé va
-// jusqu'au bord gauche ou droit de la chaussée ; sans demande, la même trajectoire que le pilote.
+// jusqu'au bord gauche ou droit de la chaussée ; sans demande, la même trajectoire que le pilote. Au
+// manche (`steer`), le placement est progressif : la place visée glisse à une allure proportionnelle
+// (toute la largeur en une seconde, moins vite à basse vitesse, rien à l'arrêt), tient au lâcher, puis
+// revient doucement sur la trajectoire (`pasPlacement`).
 // Le véhicule la suit avec un ressort amorti et ne quitte jamais la chaussée.
 //
 // Caisse : `roll` est la rotation autour de l'axe avant (+X) du véhicule, au sens direct de three.js :
 // positif, le toit part vers la droite (+Z du véhicule). Une voiture roule vers l'extérieur du virage
-// (ressort amorti) ; une moto s'incline vers l'intérieur (angle d'équilibre atan(v²κ/g)). `dive` est la
-// rotation autour de l'axe latéral, positive nez en l'air (cabrage), négative au freinage (plongée).
+// (ressort amorti), d'autant plus qu'elle est souple (peu d'adhérence) : de l'ordre de 2,5 à 4° en
+// pilote automatique, 5 à 5,5° à la limite (`carRollOf`) ; une moto s'incline vers l'intérieur (angle
+// d'équilibre atan(v²κ/g), un peu appuyé, jusqu'à 45° et plus à la limite), un peu avant la corde
+// (courbure à venir). `dive` est la rotation autour de l'axe latéral, positive nez en l'air (cabrage),
+// négative au freinage (plongée). Virage : la courbure de la trajectoire réellement suivie (celle de la
+// route, plus le changement de place) donne le braquage des roues avant (`steer`, angle d'Ackermann sur
+// l'empattement du genre de véhicule) ; le changement de place fait pivoter le véhicule (`yaw`) au lieu
+// de le faire glisser en crabe. Tout s'efface à l'arrêt.
 //
 // Tout est déterministe : l'intégration se fait en sous-pas d'au plus 1/120 s, quel que soit `dt`.
 // `step` n'alloue rien.
@@ -94,9 +103,25 @@ export const PILOT = {
    * Placement latéral : pulsation du ressort (rad/s), vitesse latérale la plus forte (m/s, et en
    * part de la vitesse), avance de la visée (s), retrait d'un placement demandé au bord (m), garde
    * entre le flanc et le bord (m), en courbe : rentrée de la chaussée dessinée (m², fois la courbure)
-   * et débord le plus fort compté (m).
+   * et débord le plus fort compté (m). Au manche (`DriveInput.steer`) : temps pour balayer toute la
+   * largeur utile manche à fond (s), vitesse sous laquelle tout ralentit en proportion (m/s ; à
+   * l'arrêt, rien ne bouge), tenue au lâcher (s), constante de temps du retour sur la trajectoire (s).
    */
-  lane: { omega: 3, maxRate: 2.5, maxRatePerSpeed: 0.15, lead: 0.3, request: 0.15, clearanceCar: 0.4, clearanceBike: 0.45, chordInset: 2, curveMax: 1 },
+  lane: {
+    omega: 3,
+    maxRate: 2.5,
+    maxRatePerSpeed: 0.15,
+    lead: 0.3,
+    request: 0.15,
+    clearanceCar: 0.4,
+    clearanceBike: 0.45,
+    chordInset: 2,
+    curveMax: 1,
+    steerFull: 1,
+    steerSpeed: 6,
+    steerHold: 1.2,
+    steerReturn: 3,
+  },
   /**
    * Trajectoire de route dégagée : pas (m), bornes resserrées sur ± `erode` pas (rétrécissements
    * adoucis par la fabrication), itérations et facteur de relaxation de la ficelle tendue, rappel
@@ -106,10 +131,23 @@ export const PILOT = {
   /** Demi-largeur et demi-longueur d'un véhicule avant que son modèle soit posé, m. */
   halfWidth: { car: 0.95, bike: 0.45 },
   halfLength: { car: 2.2, bike: 1.05 },
-  /** Roulis de caisse d'une voiture : rad par m/s² d'accélération latérale, plafond, ressort. */
-  roll: { gain: 0.011, max: 0.075, omega: 9, damping: 0.55 },
-  /** Inclinaison d'une moto : plafond, temps de réponse (s). */
-  lean: { max: 0.8, tau: 0.22 },
+  /**
+   * Roulis de caisse d'une voiture (`carRollOf`) : à la limite d'adhérence, roulis d'une voiture raide
+   * et d'une voiture souple (rad), adhérences (m/s²) qui les bornent, exposant de la montée (moins de 1 :
+   * lisible dès les courbes du pilote automatique), plafond ; ressort.
+   */
+  roll: { atLimitStiff: 0.087, atLimitSoft: 0.096, gripStiff: 10, gripSoft: 5, exponent: 0.65, max: 0.1, omega: 9, damping: 0.55 },
+  /**
+   * Inclinaison d'une moto : plafond (rad), temps de réponse (s), appui ajouté à l'angle d'équilibre
+   * (facteur de l'accélération latérale), anticipation sur la courbure à venir (s).
+   */
+  lean: { max: 0.87, tau: 0.22, gain: 1.2, anticipation: 0.4 },
+  /**
+   * Virage : empattement par genre (m), braquage physique le plus fort (rad), lissages de la vitesse
+   * latérale, de la courbure suivie et du braquage (s), cap ajouté par un changement de place le plus
+   * fort (rad), vitesse sous laquelle cap et braquage s'effacent (m/s).
+   */
+  steer: { wheelbase: { car: 2.6, bike: 1.45 }, max: 0.6, lateralTau: 0.12, curveTau: 0.08, tau: 0.12, yawMax: 0.105, fade: 2 },
   /** Plongée et cabrage : rad par m/s², plafond, ressort. */
   dive: { gainCar: 0.005, gainBike: 0.003, max: 0.035, omega: 8, damping: 0.6 },
   /** Lissage de l'accélération ressentie par les caméras, s. */
@@ -219,6 +257,51 @@ export function laneLimits(
   out[0] = right;
   out[1] = left;
   return out;
+}
+
+/** Placement au manche : la place visée, son poids face à la trajectoire, la tenue qui reste. */
+export interface PlacementManche {
+  /** Écart visé à l'axe, m, positif vers la gauche de la marche. */
+  target: number;
+  /** 1 : la place du manche ; 0 : la trajectoire ; entre les deux, le retour en cours. */
+  weight: number;
+  /** Tenue au lâcher qui reste, s. */
+  hold: number;
+}
+
+export function createPlacementManche(): PlacementManche {
+  return { target: 0, weight: 0, hold: 0 };
+}
+
+/**
+ * Un sous-pas du placement au manche, fonction pure de l'état donné (modifié sur place) : manche
+ * poussé (`steer`, −1 à gauche, 1 à droite), la place visée glisse à une allure proportionnelle ;
+ * lâché, elle tient `steerHold` s, puis revient sur la trajectoire (`line`) avec la constante de temps
+ * `steerReturn`. Tout ralentit sous `steerSpeed` m/s : à l'arrêt, rien ne bouge. Bornée par [lo, hi]
+ * (laneLimits : droite négative, gauche positive). Rend l'écart visé, continu d'un pas à l'autre.
+ */
+export function pasPlacement(state: PlacementManche, steer: number, line: number, lo: number, hi: number, speed: number, h: number): number {
+  const L = PILOT.lane;
+  const moving = Math.min(1, Math.max(0, speed) / L.steerSpeed);
+  const push = Number.isFinite(steer) ? Math.max(-1, Math.min(1, steer)) : 0;
+  if (Math.abs(push) > 1e-3) {
+    // On reprend d'où l'on en est : la place mêlée à la trajectoire, sans saut.
+    if (state.weight < 1) {
+      state.target = state.weight * state.target + (1 - state.weight) * line;
+      state.weight = 1;
+    }
+    const rate = (Math.max(0, hi - lo) / L.steerFull) * moving;
+    state.target -= push * rate * h;
+    state.hold = L.steerHold;
+  } else if (state.weight > 0) {
+    if (state.hold > 0) state.hold = Math.max(0, state.hold - h * moving);
+    else {
+      state.weight *= Math.exp((-h * moving) / L.steerReturn);
+      if (state.weight < 1e-3) state.weight = 0;
+    }
+  }
+  state.target = Math.max(lo, Math.min(hi, state.target));
+  return state.weight * state.target + (1 - state.weight) * line;
 }
 
 /** Trajectoire de route dégagée, échantillonnée tous les `step` mètres le long du rail. */
@@ -405,7 +488,7 @@ export interface PilotWithProfile extends Pilot {
 }
 
 function newMotion(): DriveMotion {
-  return { s: 0, speed: 0, accel: 0, offset: 0, roll: 0, dive: 0, braking: false, finished: false, pull: 0, boost: 0 };
+  return { s: 0, speed: 0, accel: 0, offset: 0, roll: 0, dive: 0, braking: false, finished: false, pull: 0, boost: 0, steer: 0, yaw: 0 };
 }
 
 /** Accélération du moteur à plein gaz, avant la résistance de l'air (m/s²), et ce qui freine (m/s²). */
@@ -457,6 +540,59 @@ export function engineModel(performance: DrivePerformance): EngineModel {
   };
 }
 
+// ---------------------------------------------------------------------------------------------
+// Virage (demande du 16 novembre 2026 : « voir la voiture qui tourne, roues plus direction ; moto ça
+// penche ») : fonctions pures, sans allocation, appelées à chaque sous-pas par le bloc « Caisse ».
+
+const clampTo = (value: number, max: number) => Math.max(-max, Math.min(max, value));
+
+/**
+ * Cap ajouté par un changement de place (rad, positif vers la gauche, comme `RailPose.heading`) :
+ * atan(vitesse latérale / vitesse), borné à `PILOT.steer.yawMax`, effacé à l'arrêt.
+ */
+export function yawOf(lateralRate: number, speed: number): number {
+  const S = PILOT.steer;
+  const v = Number.isFinite(speed) ? Math.max(0, speed) : 0;
+  if (v <= 0 || !Number.isFinite(lateralRate)) return 0;
+  return clampTo(Math.atan2(lateralRate, Math.max(v, S.fade)), S.yawMax) * Math.min(1, v / S.fade);
+}
+
+/**
+ * Braquage des roues avant (rad, positif à gauche) qui fait suivre une courbure (1/m, positive à
+ * gauche) : angle d'Ackermann atan(empattement × courbure), borné, effacé à l'arrêt.
+ */
+export function steerOf(curvature: number, speed: number, kind: 'car' | 'bike'): number {
+  const S = PILOT.steer;
+  if (!Number.isFinite(curvature) || !Number.isFinite(speed)) return 0;
+  return clampTo(Math.atan(S.wheelbase[kind] * curvature), S.max) * Math.min(1, Math.max(0, speed) / S.fade);
+}
+
+/** Roulis d'une voiture à la limite d'adhérence (rad) : plus fort pour une voiture souple (peu d'adhérence). */
+export function rollLimitOf(grip: number): number {
+  const R = PILOT.roll;
+  const soft = Math.min(1, Math.max(0, (R.gripStiff - grip) / (R.gripStiff - R.gripSoft)));
+  return R.atLimitStiff + (R.atLimitSoft - R.atLimitStiff) * soft;
+}
+
+/**
+ * Roulis visé d'une voiture (rad, positif toit à droite) pour une accélération latérale (m/s², positive
+ * vers la gauche) : vers l'extérieur, `rollLimitOf(grip)` à la limite, une montée progressive avant.
+ */
+export function carRollOf(lateral: number, grip: number): number {
+  const R = PILOT.roll;
+  if (!Number.isFinite(lateral)) return 0;
+  const g = Math.max(1, Number.isFinite(grip) ? grip : PILOT.manual.lateral);
+  const x = Math.min(1, Math.abs(lateral) / g);
+  return clampTo(Math.sign(lateral) * rollLimitOf(g) * Math.pow(x, R.exponent), R.max);
+}
+
+/** Inclinaison visée d'une moto (rad, négative vers la gauche) : angle d'équilibre, un peu appuyé, borné. */
+export function bikeLeanOf(lateral: number): number {
+  const L = PILOT.lean;
+  if (!Number.isFinite(lateral)) return 0;
+  return clampTo(-Math.atan((L.gain * lateral) / G), L.max);
+}
+
 export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_PERFORMANCE): PilotWithProfile {
   let line = createRacingLine(rail, performance.kind, performance.halfWidth, performance.halfLength);
   let profile = createSpeedProfile(rail, performance, line);
@@ -486,8 +622,14 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
   const here: [number, number] = [0, 0];
   let accel = 0;
   let offsetRate = 0;
+  /** Placement au manche (`DriveInput.steer`). */
+  const manche = createPlacementManche();
   let rollRate = 0;
   let diveRate = 0;
+  // Caisse (virage) : écart du sous-pas précédent, vitesse latérale et courbure suivie lissées.
+  let lastOffset = 0;
+  let lateralRate = 0;
+  let pathCurvature = 0;
   let nosLeft = 0;
   /** Dernier compteur d'appuis du NOS vu (`null` : pas encore lu ; la première lecture ne lance rien). */
   let nosSeen: number | null = null;
@@ -502,12 +644,19 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     motion.offset = Math.max(here[0], Math.min(here[1], sampleLine(line.offset, line, pose.s)));
     motion.roll = 0;
     motion.dive = 0;
+    motion.steer = 0;
+    motion.yaw = 0;
+    lastOffset = motion.offset;
+    lateralRate = 0;
+    pathCurvature = 0;
     motion.braking = true;
     motion.finished = !rail.loop && pose.s >= rail.length;
     motion.pull = 0;
     motion.boost = 0;
     accel = 0;
     offsetRate = 0;
+    manche.weight = 0;
+    manche.hold = 0;
     rollRate = 0;
     diveRate = 0;
     nosLeft = 0;
@@ -627,29 +776,50 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     motion.s = s;
 
     // Placement : la trajectoire de route dégagée, visée un peu en avant ; à la main, le bord gauche ou
-    // droit demandé. Jamais au-delà des bornes d'ici.
+    // droit demandé, ou la place tenue au manche (progressive, rien ne bouge à l'arrêt). Jamais au-delà
+    // des bornes d'ici.
     rail.poseAt(s, pose);
     laneLimits(pose, kind, halfWidth, halfLength, here);
     const lead = s + (rail.loop ? 1 : Math.sign(rail.length - s) || 1) * speed * PILOT.lane.lead;
+    const steer = input.auto || input.steer === undefined ? null : input.steer;
     const lane = input.auto ? 0 : input.lane;
     let target = sampleLine(line.offset, line, lead);
-    if (lane < 0) target = sampleLine(line.left, line, lead) - PILOT.lane.request;
-    else if (lane > 0) target = sampleLine(line.right, line, lead) + PILOT.lane.request;
+    if (steer !== null) target = pasPlacement(manche, steer, target, here[0], here[1], speed, h);
+    else {
+      manche.weight = 0;
+      if (lane < 0) target = sampleLine(line.left, line, lead) - PILOT.lane.request;
+      else if (lane > 0) target = sampleLine(line.right, line, lead) + PILOT.lane.request;
+    }
     target = Math.max(here[0], Math.min(here[1], target));
     const omega = PILOT.lane.omega;
     offsetRate += (omega * omega * (target - motion.offset) - 2 * omega * offsetRate) * h;
-    const maxRate = Math.max(PILOT.lane.maxRate, PILOT.lane.maxRatePerSpeed * speed);
+    let maxRate = Math.max(PILOT.lane.maxRate, PILOT.lane.maxRatePerSpeed * speed);
+    if (steer !== null) maxRate *= Math.min(1, speed / PILOT.lane.steerSpeed);
     offsetRate = Math.max(-maxRate, Math.min(maxRate, offsetRate));
     motion.offset = Math.max(here[0], Math.min(here[1], motion.offset + offsetRate * h));
 
-    // Caisse.
-    const lateral = speed * speed * sampleLine(line.curvature, line, s);
+    // Caisse. La vitesse latérale (changement de place), lissée, fait pivoter le véhicule (`yaw`) ; la
+    // courbure réellement suivie (la route ici, plus la variation de ce cap par mètre) fait le braquage
+    // des roues avant et l'accélération latérale du roulis.
+    const S = PILOT.steer;
+    if (pose.s !== s) rail.poseAt(s, pose);
+    lateralRate += ((motion.offset - lastOffset) / h - lateralRate) * Math.min(1, h / S.lateralTau);
+    lastOffset = motion.offset;
+    const yawBefore = motion.yaw ?? 0;
+    motion.yaw = yawOf(lateralRate, speed);
+    const followed = pose.curvature + (motion.yaw - yawBefore) / (h * Math.max(speed, S.fade));
+    pathCurvature += (followed - pathCurvature) * Math.min(1, h / S.curveTau);
+    const wheelAngle = motion.steer ?? 0;
+    motion.steer = wheelAngle + (steerOf(pathCurvature, speed, kind) - wheelAngle) * Math.min(1, h / S.tau);
+    const lateral = speed * speed * pathCurvature;
     if (kind === 'bike') {
-      const lean = Math.max(-PILOT.lean.max, Math.min(PILOT.lean.max, -Math.atan(lateral / G)));
+      // Elle se couche un peu avant la corde : la courbure à venir sur la trajectoire s'ajoute.
+      const ahead = sampleLine(line.curvature, line, s + speed * PILOT.lean.anticipation) - sampleLine(line.curvature, line, s);
+      const lean = bikeLeanOf(lateral + speed * speed * ahead);
       motion.roll += (lean - motion.roll) * Math.min(1, h / PILOT.lean.tau);
       rollRate = 0;
     } else {
-      const roll = Math.max(-PILOT.roll.max, Math.min(PILOT.roll.max, PILOT.roll.gain * lateral));
+      const roll = carRollOf(lateral, performance.grip);
       const w = PILOT.roll.omega;
       rollRate += (w * w * (roll - motion.roll) - 2 * PILOT.roll.damping * w * rollRate) * h;
       motion.roll += rollRate * h;
@@ -671,6 +841,8 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
       // Arrivé : la caisse se pose, le véhicule ne bouge plus, le moteur retombe au ralenti.
       motion.roll *= Math.max(0, 1 - span * 4);
       motion.dive *= Math.max(0, 1 - span * 4);
+      motion.steer = (motion.steer ?? 0) * Math.max(0, 1 - span * 4);
+      motion.yaw = (motion.yaw ?? 0) * Math.max(0, 1 - span * 4);
       motion.pull = (motion.pull ?? 0) * Math.max(0, 1 - span * 4);
       stepNos(span, input);
       stepGearbox(span, 0, 0, true);

@@ -31,7 +31,11 @@ describe('CREDITS.md — licence admise sur un seul dossier', () => {
   const MUSIC = 'public/assets/audio/radio/accueil/midnight-cruise.mp3';
 
   it('« droits du commanditaire » n’entre pas dans la liste générale', () => {
-    expect(SCOPED_LICENSES).toEqual([{ license: 'droits du commanditaire', scope: 'public/assets/audio/radio/accueil/' }]);
+    expect(SCOPED_LICENSES).toEqual([
+      { license: 'droits du commanditaire', scope: 'public/assets/audio/radio/accueil/' },
+      { license: 'son généré par le commanditaire', scope: 'public/assets/audio/engines/' },
+      { license: 'son généré par le commanditaire', scope: 'public/assets/audio/sfx/' },
+    ]);
     expect(isAllowedLicense('droits du commanditaire')).toBe(false);
     expect(licenseScope('Droits du commanditaire')).toBe('public/assets/audio/radio/accueil/');
     expect(licenseScope('CC0-1.0')).toBeNull();
@@ -48,6 +52,16 @@ describe('CREDITS.md — licence admise sur un seul dossier', () => {
     expect(located(elsewhere)).toEqual(['CREDITS.md:5 licence']);
     expect(elsewhere[0]?.message).toContain('admise sous public/assets/audio/radio/accueil/ seulement');
     expect(elsewhere[0]?.message).toContain('2 fichiers');
+  });
+
+  it('« son généré par le commanditaire » : sons de moteur et bruitages, pas la musique', () => {
+    const credits = parseCredits(creditsFile(['public/assets/audio/**', 'son généré par le commanditaire']));
+    const sons = ['public/assets/audio/sfx/route/vent.ogg', 'public/assets/audio/engines/v8/high.ogg'];
+    expect(checkLicenseCoverage({ files: sons, credits: { present: true, ...credits }, rule: 'licence' }).errors).toEqual([]);
+    const musique = checkLicenseCoverage({ files: [...sons, MUSIC], credits: { present: true, ...credits }, rule: 'licence' }).errors;
+    expect(located(musique)).toEqual(['CREDITS.md:5 licence']);
+    expect(musique[0]?.message).toContain('public/assets/audio/engines/ et public/assets/audio/sfx/ seulement');
+    expect(isAllowedLicense('son généré par le commanditaire')).toBe(false);
   });
 });
 

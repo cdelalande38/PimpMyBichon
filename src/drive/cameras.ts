@@ -1,13 +1,20 @@
-// Les six caméras de la sortie (§ 5.5) : des fonctions pures du véhicule, de son mouvement et du
-// rail. Aucune mémoire d'une image à l'autre : un plan est une fonction continue de l'abscisse et de
-// la pose, donc sans saut (sauf le travelling, qui change de poste comme on coupe un plan).
+// Les six caméras de la sortie (§ 5.5) : des fonctions du véhicule, de son mouvement et du rail. Une
+// seule mémoire d'une image à l'autre, le retard de la poursuite et de la rasante (`chase`, avancé par
+// le temps de sortie) ; sinon un plan est une fonction continue de l'abscisse et de la pose, donc sans
+// saut (sauf le travelling, qui change de poste comme on coupe un plan).
+//
+// Virage (demande du 16 novembre 2026 : « on voit un véhicule qui reste droit et prend le virage ») :
+// la poursuite et la rasante suivent le cap du véhicule avec un retard (CHASE.tau, écart borné à
+// CHASE.max) et sa place avec un retard plus court : en courbe on voit son flanc qui s'inscrit, puis
+// la caméra revient dans l'axe. L'embarquée penche avec la caisse (une part bornée du roulis, l'œil
+// suit le motard qui se couche) et regarde un peu vers l'intérieur de la courbe.
 //
 // - poursuite : derrière, sur le rail quelques mètres en arrière, à la hauteur du toit ; suit la route.
 // - rasante : au ras du sol (0,35 m), le long du flanc gauche (côté axe de la chaussée), regarde vers
 //   l'arrière du véhicule.
 // - avant : devant, sur le rail, regarde le véhicule arriver.
 // - embarquee : à la place du conducteur du manifeste (œil posé sur son siège par la scène, `cockpit`),
-//   sinon au-dessus du toit (de la tête du pilote d'une moto) ; regarde la route plus loin.
+//   sinon au-dessus du toit (du casque du motard) ; regarde la route plus loin.
 // - travelling : un poste fixe sur le bas-côté, tous les TRAVELLING.spacing m, côté droit puis côté
 //   gauche ; le véhicule arrive de loin, passe devant, s'éloigne, puis on coupe au poste suivant. Le
 //   champ se resserre quand il est loin (téléobjectif) et s'ouvre quand il passe.
@@ -58,6 +65,79 @@ export const CAMERA_FEEL = {
   shakeFull: 75,
   shakeMax: 0.03,
 } as const;
+
+/** Retard des caméras sur le véhicule en courbe, et inclinaison de l'embarquée : réglages et bornes. */
+export const CHASE = {
+  /** Retard sur le cap (s) et écart de cap le plus fort (rad, ≈ 15°). */
+  tau: 0.4,
+  max: 0.26,
+  /** Retard sur la place (s) et écart latéral le plus fort (m). */
+  lateralTau: 0.25,
+  lateralMax: 1.2,
+  /** Au-delà de ce temps (s) ou de cet écart d'abscisse (m) entre deux plans : la caméra se remet dans l'axe. */
+  gap: 0.5,
+  jump: 30,
+  /** Embarquée : part du roulis suivie par l'image, et inclinaison la plus forte (rad), voiture et moto. */
+  rollShare: { car: 0.6, bike: 0.5 },
+  rollMax: 0.4,
+  /** Embarquée : regard vers l'intérieur de la courbe (m par 1/m de courbure au point visé), borné (m). */
+  inside: 220,
+  insideMax: 2.5,
+  /** Embarquée : distance du point visé en ligne droite (m), raccourcie en courbe (1 + distance × courbure × lookBend). */
+  lookAt: 28,
+  lookBend: 1,
+  /** Embarquée d'une moto : œil relevé au-dessus du casque du motard (m). */
+  bikeEyeLift: 0.4,
+} as const;
+
+/**
+ * Mémoire du retard (une seule scène à la fois) : cap et écart latéral de la caméra, temps et abscisse
+ * du dernier plan. `lag` (rad) et `slide` (m) sont les écarts au véhicule, bornés.
+ */
+export const chase = { time: Number.NaN, s: Number.NaN, heading: 0, offset: 0, lag: 0, slide: 0 };
+
+const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+
+/**
+ * Avance le retard jusqu'au temps `time` (s). Le premier plan, un temps qui recule ou saute de plus de
+ * CHASE.gap, ou un saut d'abscisse (départ choisi, retour au début) remettent la caméra dans l'axe ;
+ * un même temps ne change rien (plusieurs plans d'une même image). Aucune allocation.
+ */
+export function followChase(frame: VehicleFrame, motion: DriveMotion, rail: Rail, time: number): void {
+  const C = CHASE;
+  const dt = time - chase.time;
+  let ds = motion.s - chase.s;
+  if (rail.loop) ds -= rail.length * Math.round(ds / rail.length);
+  if (!(dt >= 0) || dt > C.gap || !(Math.abs(ds) <= C.jump) || !Number.isFinite(frame.heading)) {
+    chase.time = time;
+    chase.s = motion.s;
+    chase.heading = Number.isFinite(frame.heading) ? frame.heading : 0;
+    chase.offset = motion.offset;
+    chase.lag = 0;
+    chase.slide = 0;
+    return;
+  }
+  if (dt === 0) return;
+  chase.time = time;
+  chase.s = motion.s;
+  chase.heading += wrap(frame.heading - chase.heading) * (1 - Math.exp(-dt / C.tau));
+  chase.lag = Math.max(-C.max, Math.min(C.max, wrap(chase.heading - frame.heading)));
+  chase.heading = frame.heading + chase.lag;
+  chase.offset += (motion.offset - chase.offset) * (1 - Math.exp(-dt / C.lateralTau));
+  chase.slide = Math.max(-C.lateralMax, Math.min(C.lateralMax, chase.offset - motion.offset));
+  chase.offset = motion.offset + chase.slide;
+}
+
+/** Tourne le point `p` de `angle` radians autour de la verticale passant par (cx, cz), comme un cap. */
+function turnAround(p: Vec3, cx: number, cz: number, angle: number): void {
+  if (angle === 0) return;
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const x = p[0] - cx;
+  const z = p[2] - cz;
+  p[0] = cx + x * c + z * s;
+  p[2] = cz - x * s + z * c;
+}
 
 /** Mouvement réduit demandé par le téléphone : pas de tremblement. Réglable par les tests. */
 export const cameraFeel = {
@@ -164,6 +244,8 @@ export function cameraShot(
   const shake = shakeAmplitude(motion.speed);
   const shakeY = shake * (0.6 * Math.sin(time * 31.3) + 0.4 * Math.sin(time * 17.9));
   const shakeX = shake * 0.5 * Math.sin(time * 23.7);
+  followChase(frame, motion, rail, time);
+  out.roll = 0;
 
   switch (id) {
     case 'poursuite': {
@@ -172,7 +254,9 @@ export function cameraShot(
       const back = frame.halfLength * 2 + 4 + swing;
       const lower = F.speedLower * Math.min(1, motion.speed / F.fovFull) + Math.min(F.lowerMax, Math.max(0, pull) * F.lower);
       extendedPose(rail, motion.s - back, scratch);
-      lateralPoint(scratch, motion.offset, frame.height + 1.1 - lower + shakeY, out.position);
+      // En retard sur la place, puis sur le cap : le point tourne autour du véhicule de l'écart de cap.
+      lateralPoint(scratch, motion.offset + chase.slide, frame.height + 1.1 - lower + shakeY, out.position);
+      turnAround(out.position, px, pz, chase.lag);
       out.position[0] += lx * shakeX;
       out.position[2] += lz * shakeX;
       set(out.target, px + fx * frame.halfLength * 0.6, py + frame.height * 0.75, pz + fz * frame.halfLength * 0.6);
@@ -184,6 +268,9 @@ export function cameraShot(
       const fore = frame.halfLength * 0.95;
       set(out.position, px + fx * fore + lx * side, py + 0.35 + shakeY * 0.6, pz + fz * fore + lz * side);
       set(out.target, px - fx * frame.halfLength * 1.2 + lx * frame.halfWidth * 0.2, py + frame.height * 0.35, pz - fz * frame.halfLength * 1.2 + lz * frame.halfWidth * 0.2);
+      // En retard sur le cap : tout le plan tourne autour du véhicule, qui pivote dans le cadre.
+      turnAround(out.position, px, pz, chase.lag);
+      turnAround(out.target, px, pz, chase.lag);
       // Au ras du sol, le champ ne s'ouvre qu'au NOS : ouvert avec la vitesse, il ralentirait le défilement.
       out.fov = 62 + F.fovBoost * boost * 0.8;
       return out;
@@ -199,22 +286,41 @@ export function cameraShot(
     case 'embarquee': {
       const bike = frame.kind === 'bike';
       const eye = bike ? null : cockpit.eye;
+      // L'œil suit la caisse qui roule (la moto qui se couche) : rotation autour de l'axe avant, au sol.
+      const roll = Number.isFinite(frame.roll) ? frame.roll : 0;
+      const rc = Math.cos(roll);
+      const rs = Math.sin(roll);
       if (eye) {
         // À la place du conducteur : l'œil suit la caisse en pente et en plongée (rotation autour du
         // côté, comme le groupe du véhicule), à droite du véhicule pour un +Z positif.
         const c = Math.cos(frame.pitch);
         const s = Math.sin(frame.pitch);
-        const ahead = eye[0] * c - eye[1] * s;
-        const up = eye[0] * s + eye[1] * c;
-        set(out.position, px + fx * ahead - lx * eye[2], py + up, pz + fz * ahead - lz * eye[2]);
+        const rolledUp = eye[1] * rc - eye[2] * rs;
+        const right = eye[1] * rs + eye[2] * rc;
+        const ahead = eye[0] * c - rolledUp * s;
+        const up = eye[0] * s + rolledUp * c;
+        set(out.position, px + fx * ahead - lx * right, py + up, pz + fz * ahead - lz * right);
       } else {
         const back = bike ? frame.halfLength * 0.9 : frame.halfLength * 0.15;
-        set(out.position, px - fx * back, py + frame.height + (bike ? 0.3 : 0.32), pz - fz * back);
+        // Moto : au-dessus du casque du motard (monté depuis), sinon il bouche la vue.
+        const height = frame.height + (bike ? 0.3 + CHASE.bikeEyeLift : 0.32);
+        set(out.position, px - fx * back - lx * height * rs, py + height * rc, pz - fz * back - lz * height * rs);
       }
+      // L'image penche avec la caisse, d'une part bornée de son roulis (positif : vers la gauche).
+      const R = CHASE;
+      out.roll = Math.max(-R.rollMax, Math.min(R.rollMax, -roll * R.rollShare[frame.kind]));
       // Point visé gardé loin et au-dessus de la chaussée : la garde de la ligne de visée (guardShot)
-      // relèverait la caméra hors de l'habitacle pour un point visé au ras de la route.
-      extendedPose(rail, motion.s + 28, scratch);
-      lateralPoint(scratch, motion.offset, frame.height * 0.6, point);
+      // relèverait la caméra hors de l'habitacle pour un point visé au ras de la route. Plus près dans
+      // une courbe serrée (dans un lacet, 28 m plus loin sur la route, c'est sur le côté ou derrière),
+      // et un peu vers l'intérieur de la courbe qui vient.
+      let bend = 0;
+      for (let k = 0; k < 3; k += 1) {
+        extendedPose(rail, motion.s + R.lookAt * (k / 2), scratch);
+        bend = Math.max(bend, Math.abs(scratch.curvature));
+      }
+      extendedPose(rail, motion.s + R.lookAt / (1 + R.lookAt * bend * R.lookBend), scratch);
+      const inside = Math.max(-R.insideMax, Math.min(R.insideMax, scratch.curvature * R.inside));
+      lateralPoint(scratch, motion.offset + inside, frame.height * 0.6, point);
       set(out.target, point[0], point[1], point[2]);
       // Dans l'habitacle, un champ plus ouvert : le volant, la planche et la route.
       out.position[1] += shakeY * 0.5;
@@ -336,5 +442,5 @@ export function guardShot(shot: CameraShot, sampler: GroundSampler): CameraShot 
 
 /** Plan neuf, à allouer une fois. */
 export function createShot(): CameraShot {
-  return { position: [0, 0, 0], target: [0, 0, 0], fov: 50 };
+  return { position: [0, 0, 0], target: [0, 0, 0], fov: 50, roll: 0 };
 }

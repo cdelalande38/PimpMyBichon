@@ -53,12 +53,20 @@ export function idPrise(ligne) {
   return `prise-${createHash('sha256').update(ligne.fichier).digest('hex').slice(0, 10)}`;
 }
 
+/** Licence d'une prise générée par le commanditaire (sources.csv), et sa forme dans CREDITS.md. */
+export const LICENCE_GENEREE = 'genere-commanditaire';
+export const LICENCE_GENEREE_CREDITS = 'son généré par le commanditaire';
+
 /**
  * Licence d'une prise sous la forme admise par CREDITS.md, et si elle demande de citer l'auteur.
- * @param {string} cellule  « CC0 », « CC BY 3.0 (citer l'auteur) », « CC0 (attribution appréciée) »…
+ * « genere-commanditaire » : son fabriqué par le commanditaire avec un outil de génération sonore,
+ * dont il a les droits d'usage ; aucun auteur tiers à citer (admise sous public/assets/audio/engines/
+ * et public/assets/audio/sfx/ seulement, tools/lib/credits.mjs).
+ * @param {string} cellule  « CC0 », « CC BY 3.0 (citer l'auteur) », « CC0 (attribution appréciée) », « genere-commanditaire »…
  */
 export function licence(cellule) {
-  const texte = cellule.toLowerCase();
+  const texte = cellule.toLowerCase().trim();
+  if (/^g[ée]n[ée]r[ée]e?[\s-]+(par[\s-]+le[\s-]+)?commanditaire/.test(texte)) return { code: LICENCE_GENEREE_CREDITS, citer: false, texte: 'son généré', generee: true };
   if (texte.startsWith('cc0')) return { code: 'CC0-1.0', citer: false, texte: 'CC0' };
   const by = /cc[\s-]*by[\s-]*(\d\.\d)/.exec(texte);
   if (by && !/nc|nd|sa/.test(texte.replace(/citer|attribution/g, ''))) return { code: `CC-BY-${by[1]}`, citer: true, texte: `CC BY ${by[1]}` };
@@ -244,3 +252,18 @@ export function problemesChoix(choix) {
   }
   return problemes;
 }
+
+/**
+ * Ligne de CREDITS.md pour une prise (écrite par sons:build). Une prise générée se crédite sans
+ * auteur tiers : son généré par le commanditaire avec un outil de génération sonore, qui en a les
+ * droits d'usage.
+ * @param {{ fichiers: string[], credit: { auteur: string, licence: string, source: string, generee?: boolean }, moteur: boolean, date: string, note: string }} o
+ */
+export function ligneCredit({ fichiers, credit, moteur, date, note }) {
+  const traitement = `découpé, ${moteur ? 'bouclé ou adouci' : 'adouci'} et mis à niveau par \`npm run sons:build\` (Opus)`;
+  const origine = credit.generee
+    ? `son généré par le commanditaire avec un outil de génération sonore, dont il a les droits d'usage ; ${traitement}`
+    : `${credit.source}, ${traitement}`;
+  return `| ${fichiers.map((f) => `\`${f}\``).join(', ')} | ${origine} | ${credit.generee ? 'le commanditaire' : credit.auteur} | ${credit.licence} | ${date} | ${note} |`;
+}
+

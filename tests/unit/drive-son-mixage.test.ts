@@ -10,9 +10,11 @@ import {
   chargeDe,
   etatAffiche,
   lisserAccel,
+  melangeSortie,
+  MIXAGE_ORIGINE,
   moteurVoulu,
-  NIVEAU_SEUL,
-  niveauSortie,
+  NIVEAU_RALENTI_IMAGE,
+  RAMPE_RADIO,
   type ConditionsSon,
 } from '../../src/drive/mixage.ts';
 
@@ -82,29 +84,51 @@ describe('charge', () => {
   });
 });
 
-describe('volume du moteur en sortie', () => {
-  it('plein sans radio, sous la musique quand elle joue, plus bas encore musique basse', () => {
-    expect(niveauSortie({ radioJoue: false, volumeRadio: 0.9, ralentiImage: false })).toBe(NIVEAU_SEUL);
-    const sous = niveauSortie({ radioJoue: true, volumeRadio: 0.9, ralentiImage: false });
-    expect(sous).toBeLessThan(NIVEAU_SEUL);
-    expect(sous).toBeLessThan(0.9);
-    const bas = niveauSortie({ radioJoue: true, volumeRadio: 0.3, ralentiImage: false });
-    expect(bas).toBeLessThan(sous);
-    expect(bas).toBeGreaterThan(0);
+describe('mélange de la sortie', () => {
+  it('en route, moteur voulu : la radio baisse au réglage « Radio », le moteur joue à plein', () => {
+    const m = melangeSortie({ roule: true, ralentiImage: false, reglages: MIXAGE_ORIGINE });
+    expect(m.radio).toBeCloseTo(0.45, 5);
+    expect(m.moteur).toBe(1);
+    expect(m.route).toBeCloseTo(0.7, 5);
+    expect(RAMPE_RADIO).toBeCloseTo(0.4, 5);
   });
 
-  it('au ralenti d’image : le volume baisse', () => {
-    for (const radioJoue of [false, true]) {
-      const normal = niveauSortie({ radioJoue, volumeRadio: 0.9, ralentiImage: false });
-      const ralenti = niveauSortie({ radioJoue, volumeRadio: 0.9, ralentiImage: true });
-      expect(ralenti).toBeLessThan(normal);
-      expect(ralenti).toBeGreaterThan(0);
-    }
+  it('en pause, au bout du parcours, au garage ou moteur coupé : la radio reprend son volume', () => {
+    expect(moteurVoulu({ ...EN_ROUTE, pause: true })).toBe(false);
+    expect(moteurVoulu({ ...EN_ROUTE, finie: true })).toBe(false);
+    expect(moteurVoulu({ ...EN_ROUTE, enSortie: false })).toBe(false);
+    expect(moteurVoulu({ ...EN_ROUTE, voulu: false })).toBe(false);
+    expect(melangeSortie({ roule: false, ralentiImage: false, reglages: MIXAGE_ORIGINE }).radio).toBe(1);
+  });
+
+  it('les trois curseurs agissent, bornés de 0 à 100 %', () => {
+    const m = melangeSortie({ roule: true, ralentiImage: false, reglages: { radio: 10, moteur: 60, route: 0 } });
+    expect(m).toEqual({ radio: 0.1, moteur: 0.6, route: 0 });
+    const hors = melangeSortie({ roule: true, ralentiImage: false, reglages: { radio: 150, moteur: -20, route: Number.NaN } });
+    expect(hors).toEqual({ radio: 1, moteur: 0, route: 0 });
+  });
+
+  it('au ralenti d’image : moteur et route baissent, pas la radio', () => {
+    const normal = melangeSortie({ roule: true, ralentiImage: false, reglages: MIXAGE_ORIGINE });
+    const ralenti = melangeSortie({ roule: true, ralentiImage: true, reglages: MIXAGE_ORIGINE });
+    expect(ralenti.moteur).toBeCloseTo(normal.moteur * NIVEAU_RALENTI_IMAGE, 5);
+    expect(ralenti.route).toBeCloseTo(normal.route * NIVEAU_RALENTI_IMAGE, 5);
+    expect(ralenti.radio).toBe(normal.radio);
   });
 });
 
 describe('aucune synthèse dans le son de la sortie', () => {
-  for (const file of ['src/drive/son.ts', 'src/drive/boite.ts', 'src/drive/mixage.ts', 'src/data/boites.ts']) {
+  for (const file of [
+    'src/drive/son.ts',
+    'src/drive/boite.ts',
+    'src/drive/mixage.ts',
+    'src/data/boites.ts',
+    'src/data/bruitages.ts',
+    'src/audio/sfx/route.ts',
+    'src/audio/sfx/regles.ts',
+    'src/audio/sfx/manifeste.ts',
+    'src/audio/sfx/meteo.ts',
+  ]) {
     it(`${file} : ni oscillateur, ni onde, ni tampon fabriqué`, () => {
       const text = readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8');
       expect(text).not.toMatch(/createOscillator|createPeriodicWave|createConstantSource|createBuffer\s*\(|OscillatorNode/);

@@ -26,9 +26,9 @@ beforeEach(() => {
 
 describe('préférences', () => {
   it('lecture tolérante : une valeur inconnue retombe sur l’origine', () => {
-    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ weather: 'sec', camera: 'orbite' });
-    expect(sanitizeDrivePrefs({ weather: 'neige', camera: 'orbite' })).toEqual({ weather: 'neige', camera: 'orbite' });
-    for (const raw of [null, 42, 'pluie', [], {}, { weather: 'grele', camera: 'drone' }, { weather: '__proto__' }, { camera: '__proto__' }]) {
+    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ weather: 'sec', camera: 'orbite', commande: 'manche' });
+    expect(sanitizeDrivePrefs({ weather: 'neige', camera: 'orbite', commande: 'pedales' })).toEqual({ weather: 'neige', camera: 'orbite', commande: 'pedales' });
+    for (const raw of [null, 42, 'pluie', [], {}, { weather: 'grele', camera: 'drone', commande: 'volant' }, { weather: '__proto__' }, { camera: '__proto__' }, { commande: '__proto__' }]) {
       expect(sanitizeDrivePrefs(raw), JSON.stringify(raw)).toEqual(DEFAULT_DRIVE_PREFS);
     }
   });
@@ -38,25 +38,33 @@ describe('préférences', () => {
     expect(nextCameraOf('orbite')).toBe(CAMERA_IDS[0]);
   });
 
-  it('garde la météo et la caméra d’une séance à l’autre, et rien d’autre', async () => {
+  it('garde la météo, la caméra et la commande d’une séance à l’autre, et rien d’autre', async () => {
     const drive = await launch();
+    expect(drive.getState().commande).toBe('manche');
     drive.getState().setWeather('sec');
     drive.getState().setCamera('avant');
+    drive.getState().setCommande('pedales');
     drive.getState().enter(first.id, null);
     drive.getState().setSlow(true);
     await vi.waitFor(async () => {
       const raw = await get<string>(DRIVE_KEY, db());
-      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ weather: 'sec', camera: 'avant' });
+      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ weather: 'sec', camera: 'avant', commande: 'pedales' });
     });
     const again = await launch();
     const state = again.getState();
-    expect({ weather: state.weather, camera: state.camera, map: state.map, slow: state.slow }).toEqual({ weather: 'sec', camera: 'avant', map: null, slow: false });
+    expect({ weather: state.weather, camera: state.camera, commande: state.commande, map: state.map, slow: state.slow }).toEqual({
+      weather: 'sec',
+      camera: 'avant',
+      commande: 'pedales',
+      map: null,
+      slow: false,
+    });
   });
 
   it('une sauvegarde trafiquée ne bloque pas l’ouverture', async () => {
-    await set(DRIVE_KEY, JSON.stringify({ state: { weather: '<script>', camera: 12 }, version: 1 }), db());
+    await set(DRIVE_KEY, JSON.stringify({ state: { weather: '<script>', camera: 12, commande: { a: 1 } }, version: 1 }), db());
     const drive = await launch();
-    expect({ weather: drive.getState().weather, camera: drive.getState().camera }).toEqual(DEFAULT_DRIVE_PREFS);
+    expect({ weather: drive.getState().weather, camera: drive.getState().camera, commande: drive.getState().commande }).toEqual(DEFAULT_DRIVE_PREFS);
   });
 });
 
@@ -116,6 +124,25 @@ describe('une sortie', () => {
     expect(drive.getState().input).toEqual({ auto: false, throttle: 1, brake: 0, lane: 1 });
     drive.getState().setThrottle(Number.NaN);
     expect(drive.getState().input.throttle).toBe(0);
+    drive.getState().setAuto(true);
+    expect(drive.getState().input).toEqual(AUTO_INPUT);
+  });
+
+  it('manche : gaz, frein et placement d’un coup, bornés ; sans placement, retour aux bords demandés', async () => {
+    const drive = await launch();
+    drive.getState().enter();
+    drive.getState().setManual({ throttle: 1, brake: 0, steer: 1 });
+    expect(drive.getState().input).toEqual(AUTO_INPUT);
+    drive.getState().setAuto(false);
+    drive.getState().setManual({ throttle: 0.4, brake: -2, steer: -3 });
+    expect(drive.getState().input).toEqual({ auto: false, throttle: 0.4, brake: 0, lane: 0, steer: -1 });
+    const same = drive.getState().input;
+    drive.getState().setManual({ throttle: 0.4, brake: 0, steer: -1 });
+    expect(drive.getState().input).toBe(same);
+    drive.getState().setManual({ throttle: Number.NaN, brake: 0.5, steer: Number.NaN });
+    expect(drive.getState().input).toEqual({ auto: false, throttle: 0, brake: 0.5, lane: 0, steer: 0 });
+    drive.getState().setManual({ throttle: 0, brake: 0 });
+    expect('steer' in drive.getState().input).toBe(false);
     drive.getState().setAuto(true);
     expect(drive.getState().input).toEqual(AUTO_INPUT);
   });

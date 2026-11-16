@@ -24,6 +24,7 @@ import {
   type Texture,
   type WebGLRenderer,
 } from 'three';
+import { meteoSon } from '../../audio/sfx/meteo.ts';
 import { resolveStart } from '../../data/maps.ts';
 import type { MapRoute } from '../../data/mapTypes.ts';
 import type { VehicleManifest } from '../../data/vehicleTypes.ts';
@@ -38,7 +39,7 @@ import type { CameraId, CameraShot, Director, DriveTelemetry, Pilot, Rail, RailP
 import { createPilot, performanceDe } from '../pilote.ts';
 import { createPose, createRail } from '../rail.ts';
 import { createDirector } from '../realisateur.ts';
-import { localWeather, nearestSpan, type WeatherAmounts } from './abri.ts';
+import { localWeather, nearestSpan, shelteredAt, type WeatherAmounts } from './abri.ts';
 import { createFarLights, createProbeBand, createRain, createSky, createTownGlow, SKY } from './ciel.ts';
 import { driveDebug, type DriveMeasure } from './debug.ts';
 import { Decor, DecorKit, LAMP_HEAD } from './decor.ts';
@@ -47,6 +48,7 @@ import type { Relief } from './relief.ts';
 import { createNightUniforms, createRoleMaterials, LAMP_FADE, MAX_LAMPS, MAX_NEONS, MIST, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
 import { DRIVE_PROFILES, due, fogDensity, lampWeights, nearestLamps, stepOf, type DriveProfile } from './profil.ts';
 import { MovingProbe } from './sonde.ts';
+import { wheelSteer } from './roues.ts';
 import { createRig, rollWheels, type DriveModel, type DriveRig } from './vehicule.tsx';
 
 /** Intensité des vraies lumières des lampadaires, en candelas : même éclairement que la flaque calculée (PMB_LAMP_DIFFUSE de la chaussée × 64 × π). */
@@ -194,7 +196,7 @@ export class DriveEngine {
   // Objets de travail de la boucle.
   private readonly pose: RailPose = { s: 0, position: [0, 0, 0], tangent: [1, 0, 0], heading: 0, pitch: 0, curvature: 0, ground: 'sol', urban: false, lanes: 2, width: 7 };
   private readonly frameOf: VehicleFrame;
-  private readonly shot: CameraShot = { position: [0, 2, -6], target: [0, 0.5, 0], fov: 55 };
+  private readonly shot: CameraShot = { position: [0, 2, -6], target: [0, 0.5, 0], fov: 55, roll: 0 };
   private readonly probeAt = new Vector3();
   private readonly hidden: Object3D[];
   private readonly order = new Int32Array(MAX_LAMPS + 1);
@@ -302,6 +304,7 @@ export class DriveEngine {
     const rig = this.rig;
     this.vehicleReady = model !== null;
     rig.wheels = model?.wheels ?? [];
+    rig.steering = model?.steering ?? [];
     rig.distance = 0;
     rig.measure = model?.measure ?? null;
     rig.tails = model?.tails ?? [];
@@ -330,6 +333,8 @@ export class DriveEngine {
     const dt = stepOf(delta, drive.paused, drive.slow);
     this.time += dt;
     const motion = this.pilot.step(dt, drive.input, this.kind);
+    // Le pilote publié est celui qui roule (en mode strict de React, une scène écartée a pu le publier).
+    livePilot.current = this.pilot;
     const pose = this.rail.poseAt(motion.s, this.pose);
 
     // Véhicule sur le rail : écart latéral vers la gauche de la marche, cap, pente, roulis, plongée.
@@ -340,11 +345,15 @@ export class DriveEngine {
     const py = pose.position[1];
     const pz = pose.position[2] - (tx / hl) * motion.offset;
     rig.group.position.set(px, py, pz);
-    rig.group.rotation.set(0, pose.heading, pose.pitch);
+    // Cap : celui de la route, plus celui que donne un changement de place (le véhicule pivote).
+    const heading = pose.heading + (motion.yaw ?? 0);
+    rig.group.rotation.set(0, heading, pose.pitch);
     // Roulis (contrat) : rotation autour de l'avant +X, positive toit vers la droite (+Z) ; plongée
     // autour de l'axe latéral, de même sens que la pente (négative au freinage).
     rig.body.rotation.set(motion.roll, 0, motion.dive);
-    rollWheels(rig, motion.speed * dt);
+    // Roues avant braquées du braquage du pilote, amplifié pour l'image (roues.ts).
+    const steer = wheelSteer(motion.steer ?? 0, motion.speed, this.kind);
+    rollWheels(rig, motion.speed * dt, steer);
     const brake = motion.braking ? 3.2 : 1;
     for (let i = 0; i < rig.tails.length; i += 1) (rig.tails[i] as { emissiveIntensity: number }).emissiveIntensity = rig.tailBase * brake;
     if (rig.tailLight) {
@@ -360,7 +369,7 @@ export class DriveEngine {
     frame.position[0] = px;
     frame.position[1] = py;
     frame.position[2] = pz;
-    frame.heading = pose.heading;
+    frame.heading = heading;
     frame.pitch = pose.pitch + motion.dive;
     frame.roll = motion.roll;
     if (rig.measure) {
@@ -375,6 +384,7 @@ export class DriveEngine {
     if (pose.ground !== 'tunnel') guardShot(shot, decor.relief);
     camera.position.set(shot.position[0], shot.position[1], shot.position[2]);
     camera.lookAt(shot.target[0], shot.target[1], shot.target[2]);
+    if (shot.roll) camera.rotateZ(shot.roll);
     if (camera.fov !== shot.fov) {
       camera.fov = shot.fov;
       camera.updateProjectionMatrix();
@@ -411,6 +421,12 @@ export class DriveEngine {
     this.wet = sky0.wet;
     const wet = Math.max(sky0.rain, sky0.snow);
     const here = localWeather(sky0, decor.spans, motion.s, this.here);
+    // Les bruitages de route écoutent la même météo locale (src/audio/sfx/meteo.ts) : objet réécrit sur place.
+    meteoSon.posee = true;
+    meteoSon.pluie = here.rain;
+    meteoSon.neige = here.snow;
+    meteoSon.mouille = here.wet;
+    meteoSon.abri = shelteredAt(decor.spans, motion.s);
     this.speedFactor = Math.min(1, motion.speed / 36);
     uniforms.pmbTime.value = elapsed;
     uniforms.pmbWet.value = off?.mouille ? 0 : sky0.wet;
@@ -553,6 +569,9 @@ export class DriveEngine {
       putData(stage, 'troncons', String(decor.status.loaded));
       putData(stage, 'meteo', drive.weather);
       putData(stage, 'abri', here.rain + here.snow + here.wet < 1e-3 && wet > 0 ? 'oui' : 'non');
+      // Virage : braquage montré des roues avant et roulis de la caisse, en degrés arrondis.
+      putData(stage, 'braquage', String(Math.round((steer * 180) / Math.PI)));
+      putData(stage, 'roulis', String(Math.round((motion.roll * 180) / Math.PI)));
     }
   }
 

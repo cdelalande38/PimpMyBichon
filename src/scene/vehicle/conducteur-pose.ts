@@ -72,6 +72,11 @@ export interface BikeSeating {
   /** Repose-pieds (gauche, droit) : centre et rayon. */
   pegs: [{ at: Vec3; radius: number }, { at: Vec3; radius: number }];
   reach: number;
+  /**
+   * Axe de direction (un point, une direction unitaire) : les poignées tournent autour quand la moto
+   * braque (`DriverMotion.steer`), les mains avec elles. Absent : poignées fixes.
+   */
+  steering?: { at: Vec3; dir: Vec3 };
   plan?: { torso: number; shift: number; sink: number };
 }
 
@@ -79,7 +84,7 @@ export type Seating = CarSeating | BikeSeating;
 
 /** Ce qui fait vivre la pose en roulant. */
 export interface DriverMotion {
-  /** Rotation du volant, en radians (positive : vers la gauche). */
+  /** Rotation du volant (voiture) ou braquage du guidon (moto), en radians (positive : vers la gauche). */
   steer: number;
   /** Lacet de la tête, en radians (positif : vers la gauche). */
   look: number;
@@ -311,6 +316,13 @@ export function solvePose(sk: DriverSkeleton, catalogue: DriverCatalogue, seatin
       const grip = seating.grips[i] as { at: Vec3; axis: Vec3 };
       at = v3(grip.at);
       axis = v3(grip.axis);
+      // Guidon braqué : la poignée tourne autour de l'axe de direction, la main la suit.
+      if (seating.steering && motion.steer !== 0) {
+        const turn = new Quaternion().setFromAxisAngle(v3(seating.steering.dir), motion.steer);
+        const pivot = v3(seating.steering.at);
+        at.sub(pivot).applyQuaternion(turn).add(pivot);
+        axis.applyQuaternion(turn);
+      }
       palmToward = new Vector3(0.3, -1, 0);
     }
     const hand = gripHand(at, axis, shoulder, palmToward, side, C.grip);

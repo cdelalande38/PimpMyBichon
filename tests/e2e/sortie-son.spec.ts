@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
@@ -9,7 +9,8 @@ import { openApp, openEntry, pickMap, reloadSaved } from './helpers.ts';
 // gardé d'une sortie à l'autre), la pause et le retour au garage coupent ; ouverte sans geste, la
 // sortie reste muette jusqu'au premier appui. L'état se lit dans data-moteur, data-regime et
 // data-rapport du bouton (src/ui/drive/DriveScreen.tsx) ; on vérifie l'état du lecteur et les
-// requêtes, pas le son entendu.
+// requêtes, pas le son entendu. Le mélange (panneau « Son », src/ui/drive/Mixage.tsx) se lit dans
+// data-radio, data-moteur-niveau, data-route, data-bruitage et data-bruitages du bloc `.mixage`.
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
@@ -58,8 +59,8 @@ function watchSounds(page: Page): string[] {
   return sounds;
 }
 
-async function shot(page: Page, name: string): Promise<void> {
-  const path = resolve('captures', 'vague-n-sonsortie', `${name}.png`);
+async function shot(page: Page, name: string, dossier = 'vague-n-sonsortie'): Promise<void> {
+  const path = resolve('captures', dossier, `${name}.png`);
   mkdirSync(dirname(path), { recursive: true });
   await page.screenshot({ path });
 }
@@ -192,5 +193,125 @@ test.describe('son du moteur en sortie', () => {
     expect(sounds.length).toBeGreaterThan(0);
     await shot(page, 'sortie-ouverte-directe');
     expect(errors).toEqual([]);
+  });
+
+  test.describe('mélange et bruitages', () => {
+    // Le service worker servirait les sons lui-même : on le bloque pour servir l'index d'essai.
+    test.use({ serviceWorkers: 'block' });
+
+    test('la radio baisse moteur tournant et remonte en pause ; les curseurs agissent ; le rapport part au passage', async ({ page }) => {
+      test.setTimeout(420_000);
+      const errors = watchErrors(page);
+      // Index de bruitages d'essai : le seul rapport, avec pour fichier une prise réelle du dépôt
+      // (la coupure d'un moteur). Rien n'est fabriqué.
+      const prise = readFileSync(resolve('public/assets/audio/engines/quatre-en-ligne-moto/stop.ogg'));
+      const sfx: string[] = [];
+      await page.route('**/assets/audio/sfx/route/**', async (route) => {
+        const path = new URL(route.request().url()).pathname.split('/assets/audio/sfx/route/')[1] ?? '';
+        sfx.push(path);
+        if (path === 'sfx.json') {
+          await route.fulfill({
+            json: {
+              format: 'pmb-sfx-sons',
+              version: 1,
+              famille: 'route',
+              provisoire: true,
+              boucles: [],
+              ponctuels: [{ emplacement: 'rapport', fichier: 'rapport-1.ogg', empreinte: 'e55a1', duree: 1, gain: -6, credit: 0 }],
+              credits: [{ auteur: 'essai', licence: 'CC0-1.0', source: 'essai', citer: false }],
+            },
+          });
+          return;
+        }
+        await route.fulfill({ body: prise, contentType: 'audio/ogg' });
+      });
+      await openApp(page);
+      await putOnScreen(page, 'sportive');
+      await reloadSaved(page);
+      await goOut(page);
+      const mix = page.locator('.mixage');
+      const radioFacteur = async () => Number(await mix.getAttribute('data-radio'));
+
+      // Le moteur tourne : la radio passe derrière (45 % de son volume), le moteur à plein.
+      await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 60_000 });
+      await expect.poll(radioFacteur).toBeCloseTo(0.45, 2);
+      await expect(engine(page)).toHaveAttribute('data-niveau', '1.00');
+      await expect(mix).toHaveAttribute('data-route', '0.70');
+
+      // Pause : la radio reprend son volume ; reprise : elle repasse derrière.
+      const top = page.locator('.drive-top');
+      await top.getByRole('button', { name: 'Pause' }).tap();
+      await expect.poll(radioFacteur).toBe(1);
+      await top.getByRole('button', { name: 'Reprendre' }).tap();
+      await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
+      await expect.poll(radioFacteur).toBeCloseTo(0.45, 2);
+
+      // Un bruitage de rapport part au passage de rapport ; l'index n'est demandé qu'une fois.
+      await expect.poll(async () => Number(await mix.getAttribute('data-bruitages')), { timeout: 150_000, intervals: [250] }).toBeGreaterThan(0);
+      await expect(mix).toHaveAttribute('data-bruitage', 'rapport');
+      expect(sfx.filter((path) => path === 'sfx.json')).toHaveLength(1);
+      expect(sfx.some((path) => path.startsWith('rapport-1.ogg'))).toBe(true);
+
+      // Le panneau « Son » : trois curseurs au doigt, aux valeurs d'origine.
+      const bouton = mix.getByRole('button', { name: 'Réglages du son', exact: true });
+      await bouton.tap();
+      await expect(bouton).toHaveAttribute('aria-expanded', 'true');
+      const panneau = page.getByRole('region', { name: 'Son de la sortie' });
+      await expect(panneau).toBeVisible();
+      const curseur = (nom: string) => panneau.getByRole('slider', { name: nom, exact: true });
+      await expect(curseur('Radio')).toHaveValue('45');
+      await expect(curseur('Moteur')).toHaveValue('100');
+      await expect(curseur('Route')).toHaveValue('70');
+      for (const nom of ['Radio', 'Moteur', 'Route']) {
+        const box = await curseur(nom).boundingBox();
+        expect(box && box.height, nom).toBeGreaterThanOrEqual(48);
+      }
+      const cadre = await panneau.boundingBox();
+      expect(cadre && cadre.width).toBeLessThanOrEqual(358);
+      expect(cadre && cadre.x).toBeGreaterThanOrEqual(0);
+      expect(cadre && cadre.x + cadre.width).toBeLessThanOrEqual(390);
+      await shot(page, 'son-origine-390', 'vague-o-sonsroute');
+
+      // Les curseurs agissent tout de suite.
+      await curseur('Radio').fill('20');
+      await expect.poll(radioFacteur).toBeCloseTo(0.2, 2);
+      await curseur('Moteur').fill('50');
+      await expect(engine(page)).toHaveAttribute('data-niveau', '0.50');
+      await expect(mix).toHaveAttribute('data-moteur-niveau', '0.50');
+      await curseur('Route').fill('30');
+      await expect(mix).toHaveAttribute('data-route', '0.30');
+      await shot(page, 'son-deplaces-390', 'vague-o-sonsroute');
+
+      // Petit téléphone : le panneau tient dans la largeur.
+      await bouton.tap();
+      await page.setViewportSize({ width: 360, height: 780 });
+      await bouton.tap();
+      const petit = await panneau.boundingBox();
+      expect(petit && petit.x).toBeGreaterThanOrEqual(0);
+      expect(petit && petit.x + petit.width).toBeLessThanOrEqual(360);
+      await shot(page, 'son-deplaces-360', 'vague-o-sonsroute');
+      await panneau.getByRole('button', { name: 'Valeurs d’origine' }).tap();
+      await expect(curseur('Radio')).toHaveValue('45');
+      await expect.poll(radioFacteur).toBeCloseTo(0.45, 2);
+      await shot(page, 'son-origine-360', 'vague-o-sonsroute');
+      await panneau.getByRole('button', { name: 'Fermer les réglages du son' }).tap();
+      await expect(panneau).toHaveCount(0);
+      // Un appui ailleurs (ici la route) le ferme aussi.
+      await bouton.tap();
+      await expect(panneau).toBeVisible();
+      await page.locator('.drive-mid').tap({ position: { x: 100, y: 40 } });
+      await expect(panneau).toHaveCount(0);
+
+      // Au garage, la radio reprend son volume ; les réglages sont gardés d'une sortie à l'autre.
+      await bouton.tap();
+      await curseur('Route').fill('55');
+      await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+      await expect(stage(page)).toHaveCount(0);
+      await goOut(page);
+      await page.locator('.mixage').getByRole('button', { name: 'Réglages du son', exact: true }).tap();
+      await expect(curseur('Route')).toHaveValue('55');
+
+      expect(errors).toEqual([]);
+    });
   });
 });

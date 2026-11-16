@@ -278,6 +278,7 @@ function checkInteriorParts(raw: Raw, problems: string[]): void {
     return;
   }
   if (interior.fixed !== undefined && typeof interior.fixed !== 'boolean') problems.push('interior.fixed doit valoir vrai ou faux');
+  if (interior.steeringNode !== undefined && (typeof interior.steeringNode !== 'string' || interior.steeringNode.trim() === '')) problems.push('interior.steeringNode doit être un nom de nœud');
   const zones = Array.isArray(raw.zones) ? raw.zones.map((zone: unknown) => (isObject(zone) ? zone.id : undefined)) : [];
   const lists = { steering: INTERIOR_CATALOGUE.steering, knob: INTERIOR_CATALOGUE.knobs, seats: INTERIOR_CATALOGUE.seats } as const;
   for (const key of ['steering', 'knob', 'seats'] as const) {

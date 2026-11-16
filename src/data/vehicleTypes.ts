@@ -239,6 +239,12 @@ export interface CabinLighting {
 export interface VehicleInterior {
   /** Vrai : un vrai modèle qui garde son intérieur ; l'atelier le dit au lieu de proposer des choix. */
   fixed?: boolean;
+  /**
+   * Volant d'origine d'un vrai modèle (habitacle fixe) : nom de son nœud. Gardé hors de la fusion des
+   * pièces (`prepare`), il tourne en sortie de nuit autour de sa colonne (src/drive/scene/roues.ts,
+   * `steeringWheelPart`), les mains du conducteur avec lui. Un substitut a, lui, l'ancre `volant`.
+   */
+  steeringNode?: string;
   /** Volant d'origine (identifiant du catalogue). */
   steering?: { default: string };
   /** Pommeau d'origine ; `zone` : zone de peinture qui le colore (sinon sa couleur propre). */

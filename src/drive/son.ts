@@ -11,21 +11,29 @@
 //   au frein.
 // - Coupure nette à la fin du parcours, en pause, au retour au garage ; remis en marche sans le
 //   démarreur si le véhicule roule déjà (reprise après la pause, bouton « Moteur »).
-// - Au ralenti d'image, le volume baisse, la hauteur ne bouge pas. Sous la radio, le moteur reste
-//   sous la musique.
+// - Mélange (src/drive/mixage.ts, réglages du panneau « Son » : src/state/mixage.ts) : tant que la
+//   sortie roule moteur voulu, le moteur et la route sont devant et la radio baisse (rampe de 0,4 s) ;
+//   elle reprend son volume en pause, au bout du parcours et au garage. Au ralenti d'image, moteur et
+//   route baissent, la hauteur ne bouge pas.
+// - Bruitages de route (src/audio/sfx/route.ts, qui joue quoi : src/data/bruitages.ts), relus dix
+//   fois par seconde avec le pilote : coupés en pause, au garage et moteur coupé.
 // - Aucun son avant un geste dans la page (ouverture directe de #/sortie comprise) : le moteur
 //   attend le premier appui.
 // - Une famille sans sons reste muette, sans erreur.
 
 import { create } from 'zustand';
+import { baisserRadio } from '../audio/radio/player.ts';
+import { meteoSon } from '../audio/sfx/meteo.ts';
+import type { EtatRoute } from '../audio/sfx/regles.ts';
+import { instantRepos, LecteurBruitages } from '../audio/sfx/route.ts';
 import { boiteDuVehicule } from '../data/boites.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
 import { useBuilds } from '../state/builds.ts';
 import { livePilot, useDrive } from '../state/drive.ts';
 import { soundFamilyOf, useEngineSound, useEngineSoundPrefs } from '../state/engineSound.ts';
-import { useRadio } from '../state/radio.ts';
+import { useMixage } from '../state/mixage.ts';
 import { etatInitial, pasBoite, regimeJoue, type EtatBoite } from './boite.ts';
-import { chargeDe, etatAffiche, lisserAccel, moteurVoulu, niveauSortie, type ConditionsSon, type EtatSonSortie } from './mixage.ts';
+import { chargeDe, etatAffiche, lisserAccel, melangeSortie, moteurVoulu, RAMPE_RADIO, type ConditionsSon, type EtatSonSortie } from './mixage.ts';
 
 export type { EtatSonSortie };
 
@@ -35,11 +43,18 @@ export interface SonSortie {
   regime: number;
   /** Rapport engagé ; 0 moteur coupé. */
   rapport: number;
-  /** Volume d'ensemble donné au moteur, de 0 à 1 (sous la radio, au ralenti d'image). */
+  /** Volume d'ensemble donné au moteur, de 0 à 1 (curseur « Moteur », ralenti d'image). */
   niveau: number;
+  /** Facteur appliqué au volume de la radio, de 0 à 1 (1 : la radio à son volume). */
+  radio: number;
+  /** Volume d'ensemble des bruitages de route, de 0 à 1 (curseur « Route », ralenti d'image). */
+  route: number;
+  /** Dernier bruitage ponctuel parti (emplacement), et leur nombre depuis le départ. */
+  bruitage: string;
+  bruitages: number;
 }
 
-const REPOS: Readonly<SonSortie> = Object.freeze({ etat: 'coupe', regime: 0, rapport: 0, niveau: 1 });
+const REPOS: Readonly<SonSortie> = Object.freeze({ etat: 'coupe', regime: 0, rapport: 0, niveau: 1, radio: 1, route: 0, bruitage: '', bruitages: 0 });
 
 /** Ce que l'écran de sortie montre du moteur ; mis à jour au rythme de la télémétrie. */
 export const useSonSortie = create<SonSortie>(() => ({ ...REPOS }));
@@ -62,6 +77,9 @@ function gesteDejaFait(): boolean {
 /** Moment du geste qui a réveillé le son, si la page s'est ouverte sans geste (performance.now()). */
 let reveil = -Infinity;
 
+/** Lecteur des bruitages de route : un pour l'app, son index n'est lu qu'une fois par session. */
+let bruitages: LecteurBruitages | null = null;
+
 /**
  * Bouton « Moteur » : coupe ou remet le moteur, choix gardé d'une sortie à l'autre. L'appui qui
  * réveille le son d'une sortie ouverte sans geste ne coupe pas ce qu'il vient de lancer.
@@ -81,8 +99,16 @@ export function brancherSonSortie(): () => void {
   let vitesseAvant = 0;
   let accel = 0;
   let niveau = -1;
+  let route = 1;
+  let roule = false;
 
   const famille = () => soundFamilyOf(resolveVehicle(useBuilds.getState().current));
+  let familleCourante = famille();
+  bruitages ??= new LecteurBruitages((emplacement) => useSonSortie.setState((state) => ({ bruitage: emplacement, bruitages: state.bruitages + 1 })));
+  const lecteur = bruitages;
+  // Ce que les bruitages écoutent, réécrit sur place à chaque relecture.
+  const etatRoute: EtatRoute = { vitesseKmh: 0, pluie: 0, neige: 0, mouille: 0, abri: 0, nos: false };
+  const instant = instantRepos();
 
   const conditions = (): ConditionsSon => {
     const drive = useDrive.getState();
@@ -98,9 +124,11 @@ export function brancherSonSortie(): () => void {
     };
   };
 
-  /** Démarre ou coupe selon les conditions, règle le volume, publie l'état. */
+  /** Démarre ou coupe selon les conditions, règle le mélange, publie l'état. */
   const evaluer = () => {
+    familleCourante = famille();
     const c = conditions();
+    roule = moteurVoulu(c);
     const moteur = useEngineSound.getState();
     if (!moteurVoulu(c)) {
       tentative = false;
@@ -117,16 +145,53 @@ export function brancherSonSortie(): () => void {
       else moteur.demarrer();
     }
     const drive = useDrive.getState();
-    const radio = useRadio.getState();
-    const voulu = niveauSortie({ radioJoue: radio.now?.playing === true, volumeRadio: radio.volume, ralentiImage: drive.slow });
-    if (voulu !== niveau) {
-      niveau = voulu;
-      useEngineSound.getState().niveau(voulu);
-      useSonSortie.setState({ niveau: voulu });
+    const melange = melangeSortie({ roule, ralentiImage: drive.slow, reglages: useMixage.getState() });
+    if (melange.moteur !== niveau) {
+      niveau = melange.moteur;
+      useEngineSound.getState().niveau(melange.moteur);
+      useSonSortie.setState({ niveau: melange.moteur });
     }
+    route = melange.route;
+    baisserRadio(melange.radio, RAMPE_RADIO);
+    const publie = useSonSortie.getState();
+    if (publie.radio !== melange.radio || publie.route !== melange.route) useSonSortie.setState({ radio: melange.radio, route: melange.route });
+    majBruitages();
     const etat = etatAffiche(c, useEngineSound.getState().state);
     if (etat !== useSonSortie.getState().etat) useSonSortie.setState(etat === 'tourne' || etat === 'demarre' ? { etat } : { etat, regime: 0, rapport: 0 });
   };
+
+  /** Relecture des bruitages de route : météo locale, vitesse, moteur ; coupés hors de la route. */
+  function majBruitages(): void {
+    const moteur = useEngineSound.getState();
+    const pilote = livePilot.current;
+    const tourne = moteur.state === 'demarrage' || moteur.state === 'ralenti' || moteur.state === 'charge';
+    const actif = roule && tourne && pilote !== null;
+    if (pilote) {
+      const motion = pilote.motion;
+      const train = pilote.train;
+      etatRoute.vitesseKmh = motion.speed * 3.6;
+      etatRoute.nos = train?.nos === true;
+      instant.vitesseKmh = etatRoute.vitesseKmh;
+      instant.accel = motion.accel;
+      instant.shifting = train?.shifting === true;
+      instant.charge = train ? train.load : 0;
+      instant.regime = train && train.redline > 0 ? train.rpm / train.redline : 0;
+    }
+    if (meteoSon.posee) {
+      etatRoute.pluie = meteoSon.pluie;
+      etatRoute.neige = meteoSon.neige;
+      etatRoute.mouille = meteoSon.mouille;
+      etatRoute.abri = meteoSon.abri;
+    } else {
+      // Sans la météo locale de la scène : celle qui est choisie, sans tunnel.
+      const weather = useDrive.getState().weather;
+      etatRoute.pluie = weather === 'pluie' ? 1 : 0;
+      etatRoute.neige = weather === 'neige' ? 1 : 0;
+      etatRoute.mouille = weather === 'sec' ? 0 : 1;
+      etatRoute.abri = 0;
+    }
+    lecteur.mettreAJour(moteur.audio(), actif, route, etatRoute, instant, familleCourante);
+  }
 
   /** Une mesure : la boîte avance, le lecteur glisse vers le nouveau régime. */
   const mesurer = () => {
@@ -180,12 +245,13 @@ export function brancherSonSortie(): () => void {
   const offPrefs = useEngineSoundPrefs.subscribe((state, previous) => {
     if (state.enSortie !== previous.enSortie) evaluer();
   });
-  const offRadio = useRadio.subscribe((state, previous) => {
-    if (state.volume !== previous.volume || state.now?.playing !== previous.now?.playing) evaluer();
+  const offMixage = useMixage.subscribe((state, previous) => {
+    if (state.radio !== previous.radio || state.moteur !== previous.moteur || state.route !== previous.route) evaluer();
   });
-  // Entre deux télémétries, le pilote est relu : les passages de rapport s'entendent.
+  // Entre deux télémétries, le pilote est relu : les passages de rapport s'entendent, les bruitages suivent.
   const minuterie = window.setInterval(() => {
     if (livePilot.current?.train && !useDrive.getState().paused) mesurer();
+    majBruitages();
   }, PAS_PILOTE);
 
   // Ouverture sans geste : le premier appui ou la première touche réveille le son. Le contexte
@@ -213,8 +279,12 @@ export function brancherSonSortie(): () => void {
     offDrive();
     offMoteur();
     offPrefs();
-    offRadio();
+    offMixage();
     retirerGeste();
+    lecteur.couper();
+    meteoSon.posee = false;
+    // Au garage, la radio reprend son volume.
+    baisserRadio(1, RAMPE_RADIO);
     const moteur = useEngineSound.getState();
     moteur.piloter(null);
     moteur.couperNet();

@@ -41,6 +41,8 @@ export interface EngineSoundStore {
   niveau: (niveau: number) => void;
   /** Plage de régime jouable du jeu chargé (ralenti, plus haute boucle + 25 %), ou null. */
   plage: () => { min: number; max: number } | null;
+  /** Contexte audio et sortie commune du moteur (les bruitages de route s'y branchent), ou null. */
+  audio: () => { ctx: AudioContext; sortie: AudioNode } | null;
 }
 
 /** Famille de sons d'un véhicule, si des sons ont été fabriqués pour elle. */
@@ -80,6 +82,7 @@ export const useEngineSound = create<EngineSoundStore>()((set, get) => {
     piloter: (regime, charge = 0.5, glisse = 0) => player?.drive(regime, charge, glisse),
     niveau: (niveau) => getPlayer().setLevel(niveau),
     plage: () => player?.range ?? null,
+    audio: () => player?.audio ?? null,
   };
 });
 

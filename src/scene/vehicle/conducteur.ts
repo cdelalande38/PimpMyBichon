@@ -253,6 +253,28 @@ const notBody = (object: Object3D) => {
 };
 
 /** Position et rotation d'un nœud dans le repère `frame`. */
+/** Nœuds de roue (convention des modèles : roue_*, wheel_*). */
+const WHEEL_NAME = /^(roue|wheel)_/i;
+
+/**
+ * Axe de direction d'une moto dans le repère de la caisse : du moyeu avant (la roue la plus en avant)
+ * au milieu des poignées, comme la direction de la scène de route (src/drive/scene/roues.ts,
+ * `steeringAxis`). `null` : pas de roue, ou un axe invraisemblable.
+ */
+function steeringOf(model: Object3D, frame: Object3D, left: Vector3, right: Vector3): { at: Vector3; dir: Vector3 } | null {
+  let hub: Vector3 | null = null;
+  model.traverse((node) => {
+    if (!WHEEL_NAME.test(node.name)) return;
+    const at = inFrame(node, frame).at;
+    if (!hub || at.x > hub.x) hub = at;
+  });
+  const front = hub as Vector3 | null;
+  if (!front || front.x <= 0.05) return null;
+  const dir = left.clone().add(right).multiplyScalar(0.5).sub(front);
+  if (dir.lengthSq() < 0.04 || dir.normalize().y <= 0.5) return null;
+  return { at: front, dir };
+}
+
 function inFrame(node: Object3D, frame: Object3D): { at: Vector3; quaternion: Quaternion } {
   frame.updateWorldMatrix(true, false);
   node.updateWorldMatrix(true, false);
@@ -334,6 +356,7 @@ export function measureSeating(model: Object3D, frame: Object3D, vehicle: Vehicl
     if (!seat || grips.some((g) => !g) || pegs.some((g) => !g)) return { seating: null, pending: false };
     const vec = (v: Vector3): Vec3 => [v.x, v.y, v.z];
     const spec = driverSpecOf(vehicle);
+    const steering = steeringOf(model, frame, grips[0]!.at, grips[1]!.at);
     return {
       pending: false,
       seating: {
@@ -342,6 +365,7 @@ export function measureSeating(model: Object3D, frame: Object3D, vehicle: Vehicl
         grips: grips.map((g) => ({ at: vec(g!.at), axis: vec(new Vector3(1, 0, 0).applyQuaternion(g!.quaternion)) })) as [{ at: Vec3; axis: Vec3 }, { at: Vec3; axis: Vec3 }],
         pegs: pegs.map((g) => ({ at: vec(g!.at), radius: 0 })) as [{ at: Vec3; radius: number }, { at: Vec3; radius: number }],
         reach: spec.reach,
+        ...(steering ? { steering: { at: vec(steering.at), dir: vec(steering.dir) } } : {}),
       },
     };
   }

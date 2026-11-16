@@ -42,10 +42,16 @@ const ALLOWED_KEYS = new Set(ALLOWED_LICENSES.map(cellKey));
  * Licences admises sur un seul dossier, jamais ailleurs. « droits du commanditaire » : la musique
  * d'accueil, générée par le commanditaire qui en a les droits d'usage (décision du 15 novembre 2026,
  * § 9 et § 18 du cahier des charges) ; partout ailleurs, la ligne est refusée comme toute autre.
+ * « son généré par le commanditaire » : bruitages et sons de moteur qu'il fabrique avec un outil de
+ * génération sonore et dont il a les droits d'usage (tools/sons/, licence « genere-commanditaire »
+ * du dossier privé) ; admise sous les dossiers des sons fabriqués par sons:build seulement. Une
+ * licence peut avoir plusieurs dossiers : une entrée par dossier.
  * @type {ReadonlyArray<Readonly<{ license: string, scope: string }>>}
  */
 export const SCOPED_LICENSES = Object.freeze([
   Object.freeze({ license: 'droits du commanditaire', scope: 'public/assets/audio/radio/accueil/' }),
+  Object.freeze({ license: 'son généré par le commanditaire', scope: 'public/assets/audio/engines/' }),
+  Object.freeze({ license: 'son généré par le commanditaire', scope: 'public/assets/audio/sfx/' }),
 ]);
 
 /**
@@ -54,8 +60,17 @@ export const SCOPED_LICENSES = Object.freeze([
  * @returns {string | null}
  */
 export function licenseScope(cell) {
+  return licenseScopes(cell)[0] ?? null;
+}
+
+/**
+ * Tous les dossiers où une licence à portée limitée est admise (aucun : liste vide).
+ * @param {string} cell
+ * @returns {string[]}
+ */
+export function licenseScopes(cell) {
   const key = cellKey(cell);
-  return SCOPED_LICENSES.find((item) => cellKey(item.license) === key)?.scope ?? null;
+  return SCOPED_LICENSES.filter((item) => cellKey(item.license) === key).map((item) => item.scope);
 }
 const FILE_HEADERS = ['fichier', 'chemin', 'motif', 'file', 'path'];
 const LICENSE_HEADERS = ['licence', 'license'];
@@ -272,7 +287,7 @@ export function checkLicenseCoverage({ files, credits, rule }) {
       );
     }
     for (const row of rows) {
-      if (row.allowed || (row.scope !== null && rel.startsWith(row.scope))) continue;
+      if (row.allowed || licenseScopes(row.license).some((scope) => rel.startsWith(scope))) continue;
       const hits = refused.get(row) ?? [];
       hits.push(rel);
       refused.set(row, hits);
@@ -285,7 +300,7 @@ export function checkLicenseCoverage({ files, credits, rule }) {
         row.line,
         rule,
         (row.scope !== null
-          ? `licence « ${row.license} » admise sous ${row.scope} seulement : `
+          ? `licence « ${row.license} » admise sous ${licenseScopes(row.license).join(' et ')} seulement : `
           : `licence « ${row.license || 'vide'} » hors de la liste admise dans un dépôt public (${allowed}) : `) +
           `elle couvre ${countLabel(hits.length, 'fichier')}, par exemple ${hits[0]}`,
       ),

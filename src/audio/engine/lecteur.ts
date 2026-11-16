@@ -41,6 +41,8 @@ type Loaded = { manifest: EngineSoundManifest; buffers: Map<string, AudioBuffer>
 export class EngineSoundPlayer {
   private ctx: AudioContext | null = null;
   private bus: GainNode | null = null;
+  /** Sortie commune (limiteur vers les haut-parleurs) : le moteur et les bruitages de route y passent. */
+  private master: DynamicsCompressorNode | null = null;
   private readonly cache = new Map<string, Promise<Loaded | null>>();
   private current: Loaded | null = null;
   private voices: LoopVoice[] = [];
@@ -94,8 +96,17 @@ export class EngineSoundPlayer {
       bus.connect(limiter).connect(ctx.destination);
       this.ctx = ctx;
       this.bus = bus;
+      this.master = limiter;
     }
     return this.ctx;
+  }
+
+  /**
+   * Contexte audio et sortie commune, une fois le contexte né (premier démarrage) : les bruitages
+   * de route (src/audio/sfx/) s'y branchent, à côté du bus du moteur. Null avant.
+   */
+  get audio(): { ctx: AudioContext; sortie: AudioNode } | null {
+    return this.ctx && this.master ? { ctx: this.ctx, sortie: this.master } : null;
   }
 
   /** Télécharge le manifeste et les sons d'une famille (une fois), puis les décode. */
@@ -351,6 +362,7 @@ export class EngineSoundPlayer {
     void this.ctx?.close();
     this.ctx = null;
     this.bus = null;
+    this.master = null;
     this.cache.clear();
   }
 

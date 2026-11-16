@@ -108,9 +108,17 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: start;
-  gap: 0.5rem;
+  gap: 0.375rem;
   padding: calc(0.5rem + var(--safe-t)) calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
   pointer-events: none;
+}
+
+/* Plusieurs doigts à la fois : aucun geste du navigateur (zoom à deux doigts, défilement) ne vient
+   reprendre un doigt posé sur l'écran de conduite. */
+.drive-top,
+.drive-bar,
+.drive-mid {
+  touch-action: none;
 }
 
 /* ── Compte-tours (src/ui/drive/CompteTours.tsx) ── */
@@ -120,7 +128,8 @@
   grid-column: 2;
   grid-row: 1;
   flex: none;
-  width: clamp(6.25rem, 30vw, 7.5rem);
+  /* 148 px en 390 de large, 137 en 360. */
+  width: clamp(8.25rem, 38vw, 9.5rem);
   padding: 0.125rem 0.125rem 0;
   border-radius: 50% 50% 14px 14px;
   background: radial-gradient(circle at 50% 46%, rgba(10, 9, 17, 0.82) 58%, rgba(10, 9, 17, 0.55) 72%, rgba(10, 9, 17, 0) 74%);
@@ -170,16 +179,16 @@
 }
 
 .ct-chiffre {
-  fill: var(--mute);
+  fill: rgba(233, 230, 242, 0.86);
   font-family: var(--body);
-  font-size: 7px;
+  font-size: 10px;
   font-weight: 700;
 }
 
 .ct-unite {
   fill: var(--mute);
   font-family: var(--body);
-  font-size: 5px;
+  font-size: 5.5px;
   letter-spacing: 0.06em;
 }
 
@@ -223,9 +232,10 @@
   filter: drop-shadow(0 0 3px var(--rouge));
 }
 
+/* Sous les chiffres du bas du cadran (l'unité du régime est sous le rapport, au centre). */
 .drive-speed {
   position: absolute;
-  bottom: 0.875rem;
+  bottom: 0.125rem;
   left: 50%;
   display: flex;
   align-items: baseline;
@@ -259,20 +269,19 @@
   gap: 0.3rem;
   min-width: 0;
   margin-top: 0.25rem;
-  padding: 0.375rem 0.5rem 0.5rem;
+  padding: 0.375rem 0.375rem 0.5rem;
   border-left: 2px solid var(--ambre);
   background: rgba(10, 9, 17, 0.55);
 }
 
+/* Le nom de la carte en entier, sur deux ou trois lignes s'il le faut (jamais coupé d'une ellipse). */
 .drive-map {
-  overflow: hidden;
   color: var(--chrome);
   font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  overflow-wrap: break-word;
 }
 
 .drive-progress {
@@ -306,12 +315,14 @@
   color: var(--ambre);
 }
 
-/* À droite : radio et pause. */
+/* À droite : radio et pause, l'une sous l'autre en portrait (le nom de la carte garde la place de
+   tenir en entier à gauche du compte-tours), côte à côte en paysage. */
 .drive-top-droite {
   display: flex;
   grid-column: 3;
   grid-row: 1;
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 0.5rem;
 }
 
@@ -510,8 +521,14 @@
   transition: opacity 400ms ease-out;
 }
 
+/* Le fondu ne prend plus aucun appui : les enfants du voile sont cliquables d'office (.drive-veil > *),
+   et « Rentrer au garage », devenu invisible, renvoyait au garage au premier appui sur la route. */
 .drive-chargement[data-fini] {
   opacity: 0;
+}
+
+.drive-chargement[data-fini],
+.drive-chargement[data-fini] * {
   pointer-events: none;
 }
 
@@ -709,7 +726,9 @@
 
 .drive-acts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Autant de colonnes que de boutons, sur une ligne : un bouton de plus s'y range de lui-même. */
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   gap: 6px;
 }
 
@@ -760,7 +779,21 @@
 /* Dernière ligne, au pouce : le son du moteur, puis « Rentrer au garage ». */
 .drive-foot {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
+}
+
+.drive-manette {
+  flex: none;
+  width: 4.5rem;
+  min-height: var(--tap);
+}
+
+.drive-refus {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ambre);
+  font-size: 0.75rem;
 }
 
 .drive-engine {
@@ -773,5 +806,218 @@
 @media (max-width: 379px) {
   .drive-tab span {
     display: none;
+  }
+}
+
+/* ───────── Le manche virtuel (src/ui/drive/Manche.tsx) ───────── */
+
+/* Posé sous le pouce (left, top : la base) ; le bouton suit le doigt (--bx, --by) dans le rayon. */
+.drive-manche {
+  position: absolute;
+  z-index: 1;
+  width: calc(var(--rayon) * 2);
+  height: calc(var(--rayon) * 2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: opacity 260ms ease;
+}
+
+.drive-manche[data-actif='true'] {
+  opacity: 1;
+  transition: none;
+}
+
+.drive-manche-anneau {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(233, 230, 242, 0.55);
+  border-radius: 50%;
+  background:
+    linear-gradient(to bottom, rgba(57, 217, 138, 0.18), transparent 38% 62%, rgba(255, 45, 63, 0.18)),
+    rgba(10, 9, 17, 0.28);
+}
+
+.drive-manche-bouton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3rem;
+  height: 3rem;
+  margin: -1.5rem 0 0 -1.5rem;
+  border: 2px solid var(--chrome);
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(233, 230, 242, 0.55), rgba(233, 230, 242, 0.18) 70%);
+  box-shadow: 0 0 14px rgba(0, 0, 0, 0.5);
+  transform: translate(var(--bx, 0px), var(--by, 0px));
+}
+
+.drive-manche[data-gaz]:not([data-gaz='0.00']) .drive-manche-bouton {
+  border-color: #7ff0b5;
+}
+
+.drive-manche[data-frein]:not([data-frein='0.00']) .drive-manche-bouton {
+  border-color: #ff8a95;
+}
+
+.drive-manche-repere {
+  position: absolute;
+  left: 50%;
+  font-family: var(--display);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  text-shadow: 0 1px 3px #000;
+}
+
+.drive-manche-repere[data-repere='gaz'] {
+  bottom: calc(100% + 0.25rem);
+  color: #7ff0b5;
+}
+
+.drive-manche-repere[data-repere='frein'] {
+  top: calc(100% + 0.25rem);
+  color: #ff8a95;
+}
+
+/* Amorce : où poser le pouce, tant qu'on ne roule pas (en bas au milieu, au-dessus de la barre). */
+.drive-amorce {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  pointer-events: none;
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 0 1px 3px #000;
+}
+
+.drive-amorce-rond {
+  width: 5.5rem;
+  height: 5.5rem;
+  border: 2px dashed rgba(233, 230, 242, 0.6);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(233, 230, 242, 0.32) 0 1.2rem, rgba(10, 9, 17, 0.35) 1.25rem);
+}
+
+.drive-amorce b {
+  font-family: var(--display);
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.drive-amorce small {
+  color: var(--mute);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drive-manche {
+    transition: none;
+  }
+}
+
+/* ───────── Manette en paysage : manche à gauche, GAZ, FREIN et NOS à droite ───────── */
+
+.drive-pave {
+  display: none;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  /* Bandeau réduit : le nom sur une ligne à gauche, le compte-tours au milieu, radio et pause à droite. */
+  .drive-top {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    padding-top: calc(0.25rem + var(--safe-t));
+  }
+
+  .drive-dial {
+    width: 7.25rem;
+  }
+
+  .drive-top-droite {
+    flex-direction: row;
+  }
+
+  .drive-where {
+    justify-self: start;
+    max-width: 17rem;
+    margin-top: 0;
+  }
+
+  .drive-bar {
+    padding-top: 0.25rem;
+    padding-bottom: calc(0.375rem + var(--safe-b));
+  }
+
+  .drive-pave {
+    position: absolute;
+    right: calc(var(--gutter) + var(--safe-r));
+    bottom: 0.5rem;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: auto auto;
+    grid-template-rows: auto auto;
+    align-items: end;
+    gap: 0.5rem 0.75rem;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  .drive-pave .drive-nos {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+    margin: 0;
+  }
+
+  .drive-pave-btn {
+    display: grid;
+    grid-column: 1;
+    grid-row: 2;
+    place-items: center;
+    width: 4.75rem;
+    height: 4.75rem;
+    border: 2px solid rgba(255, 45, 63, 0.8);
+    border-radius: 16px;
+    background: rgba(10, 9, 17, 0.55);
+    color: #ff8a95;
+    font-family: var(--display);
+    font-size: 0.9375rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    -webkit-touch-callout: none;
+  }
+
+  .drive-pave-btn[data-appui='true'] {
+    background: rgba(255, 45, 63, 0.38);
+  }
+
+  .drive-pave-gaz {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: 6.25rem;
+    height: 9.5rem;
+    border-color: rgba(57, 217, 138, 0.85);
+    color: #7ff0b5;
+    font-size: 1.25rem;
+  }
+
+  .drive-pave-gaz[data-appui='true'] {
+    background: rgba(57, 217, 138, 0.34);
+  }
+
+  /* L'amorce sous le pouce gauche. */
+  .drive-amorce {
+    top: 50%;
+    bottom: auto;
+    left: 22%;
+    transform: translate(-50%, -50%);
   }
 }

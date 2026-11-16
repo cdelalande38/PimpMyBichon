@@ -65,7 +65,8 @@ test.describe('sortie de nuit', () => {
     await bar(page).getByRole('button', { name: 'Caméra suivante' }).tap();
     await expect(stage(page)).not.toHaveAttribute('data-camera', camera ?? '');
 
-    // À la main : appui maintenu à gauche, on freine ; à droite, on repart.
+    // À la main, au manche (le pouce posé n'importe où) : tiré vers le bas, on freine ; poussé vers le
+    // haut, on repart.
     // Le mode se lit en permanence ; à la main, la barre des commandes s'abaisse.
     const mode = page.getByRole('switch', { name: 'Conduite à la main' });
     await expect(mode).toHaveAttribute('aria-checked', 'false');
@@ -77,14 +78,18 @@ test.describe('sortie de nuit', () => {
     const box = await zone.boundingBox();
     if (!box) throw new Error('zone des gestes introuvable');
     const before = await numberAttr(page, 'data-vitesse');
-    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.6);
+    const cx = box.x + box.width * 0.5;
+    const cy = box.y + box.height * 0.5;
+    await page.mouse.move(cx, cy);
     await page.mouse.down();
+    await page.mouse.move(cx, cy + 70, { steps: 4 });
     await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 60_000 }).toBeLessThan(Math.max(1, before - 10));
-    await expect(page.locator('.drive-pedal[data-pedale="frein"]')).toHaveAttribute('data-appui', 'true');
+    await expect(page.locator('.drive-manche')).toHaveAttribute('data-frein', '1.00');
     await page.mouse.up();
     const stopped = await numberAttr(page, 'data-vitesse');
-    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.6);
+    await page.mouse.move(cx, cy);
     await page.mouse.down();
+    await page.mouse.move(cx, cy - 70, { steps: 4 });
     await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 60_000 }).toBeGreaterThan(stopped + 5);
     await capture(page, 'sortie-main');
     await page.mouse.up();

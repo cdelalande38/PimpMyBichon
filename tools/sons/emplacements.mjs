@@ -1,7 +1,9 @@
 // @ts-check
 // Familles de sons et emplacements nommés (§ 9 du cahier des charges, LISEZ-MOI.md du dossier
 // privé). Une famille de moteur est jouée par src/audio/engine/ ; une famille de bruitages
-// (route, atelier, interface) est fabriquée de la même façon, sans être encore branchée.
+// (route, atelier, interface) est fabriquée de la même façon. Les bruitages de route sont joués en
+// sortie de nuit par src/audio/sfx/ (qui joue quoi : src/data/bruitages.ts) ; ceux de l'atelier et
+// de l'interface ne sont pas encore branchés.
 //
 // Un emplacement est une « boucle » (régime tenu, ambiance : bouclée sans clic) ou un « ponctuel »
 // (démarrage, coup de gaz, bruitage court : début et fin adoucis). `variantes` : nombre de prises
@@ -55,7 +57,7 @@ export const FAMILLES = Object.freeze([
     genre: 'bruitage',
     dossier: 'sfx/route',
     emplacements: bruitages(
-      ['derapage-long', 'burnout', 'roulement-sec', 'roulement-mouille', 'pluie', 'vent', 'tunnel'],
+      ['derapage-long', 'burnout', 'roulement-sec', 'roulement-mouille', 'pluie', 'vent', 'tunnel', 'nos'],
       ['derapage-court', 'freinage', 'passage-1', 'passage-2', 'rapport', 'klaxon-1', 'klaxon-2', 'klaxon-3', 'essuie-glaces', 'clignotant', 'backfire'],
       -20,
     ),

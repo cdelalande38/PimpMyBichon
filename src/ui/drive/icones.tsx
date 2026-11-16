@@ -19,12 +19,39 @@ export type DriveIconName =
   | 'moteurCoupe'
   | 'nos'
   | 'monter'
-  | 'descendre';
+  | 'descendre'
+  | 'manche'
+  | 'pedales'
+  | 'manette';
 
 // Bloc moteur vu de côté : carter, bouchon de remplissage, échappement à droite, ventilateur à gauche.
 const BLOC = 'M6 9h2.5l1.5-2h5l1.5 2H18v8.5h-1.5L15 19H9l-1.5-1.5H6Z M10 7V4.5h4V7 M18 12h2.5v3H18 M6 12.25H3.5 M3.5 10v4.5';
 
 const SHAPES: Record<DriveIconName, ReactNode> = {
+  // Manche : l'anneau, le bouton au milieu, les quatre repères.
+  manche: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1.5v2M12 20.5v2M1.5 12h2M20.5 12h2" />
+    </>
+  ),
+  // Deux pédales striées, côte à côte.
+  pedales: (
+    <>
+      <rect x="3.5" y="6" width="7" height="13" rx="1.5" />
+      <rect x="13.5" y="4" width="7" height="15" rx="1.5" />
+      <path d="M5.5 10h3M5.5 13h3M5.5 16h3M15.5 8h3M15.5 11h3M15.5 14h3" />
+    </>
+  ),
+  // Manette tenue à deux mains, en travers : un manche à gauche, deux boutons à droite.
+  manette: (
+    <>
+      <path d="M7 7h10a5 5 0 0 1 4.8 6.4l-1 3.3a2.4 2.4 0 0 1-4.1.9L14.5 15h-5l-2.2 2.6a2.4 2.4 0 0 1-4.1-.9l-1-3.3A5 5 0 0 1 7 7Z" />
+      <circle cx="8" cy="11" r="1.8" />
+      <path d="M15.5 10.5h.01M18 12.5h.01" />
+    </>
+  ),
   // Caméra de tournage : boîtier et pare-soleil.
   camera: (
     <>

@@ -59,6 +59,12 @@ export interface DriveInput {
   /** Placement demandé sur la chaussée : −1 à gauche de sa voie, 0 au milieu, 1 à droite. */
   lane: -1 | 0 | 1;
   /**
+   * Placement progressif (le manche) : de −1 (à fond à gauche) à 1 (à fond à droite), 0 lâché. Présent,
+   * il remplace `lane` : le véhicule se déplace à une allure proportionnelle, tient sa place au lâcher,
+   * puis revient doucement sur la trajectoire (src/drive/pilote.ts, `pasPlacement`).
+   */
+  steer?: number;
+  /**
    * NOS : compteur des appuis sur le bouton. Chaque nouvelle valeur demande une poussée (à la main,
    * réserve suffisante) ; absent ou inchangé : rien.
    */
@@ -95,6 +101,19 @@ export interface DriveMotion {
   pull?: number;
   /** Poussée du NOS, de 0 à 1, adoucie (champ de la caméra, lueur à l'échappement). */
   boost?: number;
+  /**
+   * Braquage des roues avant, en radians, positif à gauche : angle d'Ackermann (atan de l'empattement
+   * du genre de véhicule × la courbure de la trajectoire réellement suivie : la route, plus le
+   * changement de place), lissé, nul à l'arrêt. Valeur physique : la scène l'amplifie pour l'image
+   * (src/drive/scene/roues.ts, `wheelSteer`) ; le volant du conducteur la suit.
+   */
+  steer?: number;
+  /**
+   * Cap ajouté par le changement de place, en radians, positif vers la gauche (rotation autour de Y,
+   * comme `RailPose.heading`) : atan(vitesse latérale / vitesse), borné à quelques degrés, nul à
+   * l'arrêt. Le véhicule pivote au lieu de glisser de côté ; la scène et les caméras l'ajoutent au cap.
+   */
+  yaw?: number;
 }
 
 /**
@@ -194,6 +213,11 @@ export interface CameraShot {
   target: Vec3;
   /** Champ vertical, en degrés. */
   fov: number;
+  /**
+   * Inclinaison de l'image autour de l'axe de visée, en radians, appliquée après la visée
+   * (`camera.rotateZ`) : positive, la caméra penche vers sa gauche. Absente : droite.
+   */
+  roll?: number;
 }
 
 /**

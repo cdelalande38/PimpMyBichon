@@ -117,8 +117,19 @@ function pageHidden(): boolean {
   return typeof document !== 'undefined' && document.visibilityState === 'hidden';
 }
 
+/**
+ * Baisse de la radio pendant la sortie de nuit (src/drive/son.ts) : un facteur de 0 à 1 multiplié
+ * au volume de l'autoradio, qui n'est jamais réécrit dans les préférences. `baisse` suit la rampe,
+ * `baisseVisee` est la valeur demandée.
+ */
+let baisse = 1;
+let baisseVisee = 1;
+let baisseMinuterie: ReturnType<typeof setInterval> | null = null;
+/** Pas de la rampe de la baisse (ms) : l'élément audio n'a pas de rampe à lui. */
+const PAS_BAISSE = 40;
+
 function master(): number {
-  return useRadio.getState().volume;
+  return useRadio.getState().volume * baisse;
 }
 
 function applyGain(deck: Deck): void {
@@ -547,6 +558,42 @@ export function seekTo(seconds: number): void {
 export function seekBy(step: number): void {
   const deck = activeDeck();
   if (deck?.track) seekTo(deck.el.currentTime + step);
+}
+
+/**
+ * Baisse (ou rend) la radio : `facteur` de 0 à 1 multiplié au volume réglé, en rampe de `rampe`
+ * secondes. Le volume de l'autoradio reste tel que le joueur l'a réglé.
+ */
+export function baisserRadio(facteur: number, rampe = 0.4): void {
+  const cible = Number.isFinite(facteur) ? Math.min(1, Math.max(0, facteur)) : 1;
+  if (cible === baisseVisee) return;
+  baisseVisee = cible;
+  if (baisseMinuterie !== null) clearInterval(baisseMinuterie);
+  baisseMinuterie = null;
+  const appliquer = () => {
+    if (decks) for (const deck of decks) applyGain(deck);
+  };
+  if (!(rampe > 0)) {
+    baisse = cible;
+    appliquer();
+    return;
+  }
+  const depart = baisse;
+  const debut = performance.now();
+  baisseMinuterie = setInterval(() => {
+    const k = Math.min(1, (performance.now() - debut) / (rampe * 1000));
+    baisse = depart + (cible - depart) * k;
+    appliquer();
+    if (k >= 1 && baisseMinuterie !== null) {
+      clearInterval(baisseMinuterie);
+      baisseMinuterie = null;
+    }
+  }, PAS_BAISSE);
+}
+
+/** Facteur de baisse demandé (1 : la radio à son volume). */
+export function baisseRadio(): number {
+  return baisseVisee;
 }
 
 export function setVolume(volume: number): void {

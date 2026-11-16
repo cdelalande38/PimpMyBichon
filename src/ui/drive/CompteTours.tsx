@@ -90,11 +90,11 @@ function Cadran({ zones }: { zones: Zones }) {
         const a = angleOf(rpm, zones.max);
         const [x0, y0] = point(a, C.r - 7);
         const [x1, y1] = point(a, C.r - 2);
-        const [tx, ty] = point(a, C.r - 14);
+        const [tx, ty] = point(a, C.r - 15.5);
         return (
           <g key={rpm}>
             <line className="ct-trait" x1={x0} y1={y0} x2={x1} y2={y1} />
-            <text className="ct-chiffre" x={tx} y={ty + 2.5} textAnchor="middle">
+            <text className="ct-chiffre" x={tx} y={ty + 3.5} textAnchor="middle">
               {rpm / 1000}
             </text>
           </g>
@@ -170,7 +170,7 @@ export function CompteTours() {
           <line className="ct-aiguille" x1={C.x - 8} y1={C.y} x2={C.x + C.r - 4} y2={C.y} />
         </g>
         <circle className="ct-moyeu" cx={C.x} cy={C.y} r={3} />
-        <text className="ct-unite" x={C.x} y={98} textAnchor="middle">
+        <text className="ct-unite" x={C.x} y={C.y + 16} textAnchor="middle">
           tr/min × 1000
         </text>
       </svg>

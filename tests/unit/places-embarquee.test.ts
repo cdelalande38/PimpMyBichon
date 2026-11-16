@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MapRoute } from '../../src/data/mapTypes.ts';
 import type { DriveMotion, VehicleFrame } from '../../src/drive/contrat.ts';
-import { cameraShot, cockpit, createShot, DEFAULT_ORBIT } from '../../src/drive/cameras.ts';
+import { cameraShot, CHASE, cockpit, createShot, DEFAULT_ORBIT } from '../../src/drive/cameras.ts';
 import { createRail } from '../../src/drive/rail.ts';
 
 /** Route droite et plate de 200 m vers +X. */
@@ -48,6 +48,7 @@ describe('caméra embarquée à la place du conducteur', () => {
     expect(up.position[0]).toBeCloseTo(50 - 1.2 * Math.sin(0.1), 9);
     expect(up.position[1]).toBeCloseTo(1.2 * Math.cos(0.1), 9);
     const bike = cameraShot('embarquee', frame('bike'), MOTION, createRail(ROUTE), 0, DEFAULT_ORBIT, createShot());
-    expect(bike.position[1]).toBeCloseTo(1.4 + 0.3, 9);
+    // Au-dessus du casque du motard (CHASE.bikeEyeLift), droit en ligne droite.
+    expect(bike.position[1]).toBeCloseTo(1.4 + 0.3 + CHASE.bikeEyeLift, 9);
   });
 });

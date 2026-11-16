@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_ROOT } from '../lib/cli.mjs';
-import { CHOIX, DOSSIER_PRIVE, licence, lireCatalogue, lireChoix, privePresent, problemesChoix } from './catalogue.mjs';
+import { CHOIX, DOSSIER_PRIVE, licence, ligneCredit, lireCatalogue, lireChoix, privePresent, problemesChoix } from './catalogue.mjs';
 import { FAMILLES } from './emplacements.mjs';
 import { fabriquer } from './fabriquer.mjs';
 import { echantillonsDecodes, encoder, ffmpegPresent, TAUX } from './signal.mjs';
@@ -28,6 +28,8 @@ const SORTIE_MOTEURS = join(REPO_ROOT, 'public', 'assets', 'audio', 'engines');
 const SORTIE_BRUITAGES = join(REPO_ROOT, 'public', 'assets', 'audio', 'sfx');
 const INDEX_APP = join(REPO_ROOT, 'src', 'audio', 'engine', 'familles.json');
 const CREDITS = join(REPO_ROOT, 'CREDITS.md');
+/** Familles de bruitages lues par l'app à chaque sortie (src/audio/sfx/route.ts) : index toujours présent. */
+const INDEX_TOUJOURS = new Set(['route']);
 const DEBUT_SECTION = '<!-- sons:debut (écrit par npm run sons:build) -->';
 const FIN_SECTION = '<!-- sons:fin -->';
 
@@ -81,12 +83,21 @@ for (const fam of FAMILLES) {
   const dossier = join(fam.genre === 'moteur' ? SORTIE_MOTEURS : SORTIE_BRUITAGES, fam.id);
   if (!contenu || Object.keys(contenu.emplacements).length === 0) {
     if (existsSync(dossier)) rmSync(dossier, { recursive: true });
+    // Une famille que l'app lit à chaque sortie garde un index vide : une requête qui aboutit, aucun
+    // son, plutôt qu'une 404 à chaque session.
+    if (INDEX_TOUJOURS.has(fam.id)) {
+      mkdirSync(dossier, { recursive: true });
+      writeFileSync(
+        join(dossier, 'sfx.json'),
+        `${JSON.stringify({ format: 'pmb-sfx-sons', version: 1, famille: fam.id, nom: fam.nom, provisoire: false, boucles: [], ponctuels: [], credits: [] }, null, 2)}\n`,
+      );
+    }
     continue;
   }
   mkdirSync(dossier, { recursive: true });
   /** @type {Map<string, number>} */
   const creditIndex = new Map();
-  /** @type {{ auteur: string, licence: string, source: string, prise: string, citer: boolean }[]} */
+  /** @type {{ auteur: string, licence: string, source: string, prise: string, citer: boolean, generee: boolean }[]} */
   const credits = [];
   /** @type {Record<string, unknown>[]} */
   const boucles = [];
@@ -105,7 +116,12 @@ for (const fam of FAMILLES) {
       const lic = licence(prise.licence);
       if (!creditIndex.has(prise.id)) {
         creditIndex.set(prise.id, credits.length);
-        credits.push({ auteur: prise.auteur, licence: lic.code, source: prise.source.replace(/^Wikimedia Commons.*/, 'Wikimedia Commons'), prise: prise.id, citer: lic.citer });
+        // Une prise générée n'a pas d'auteur tiers : le commanditaire l'a fabriquée et en a les droits d'usage.
+        credits.push(
+          lic.generee
+            ? { auteur: 'le commanditaire', licence: lic.code, source: 'son généré par le commanditaire', prise: prise.id, citer: false, generee: true }
+            : { auteur: prise.auteur, licence: lic.code, source: prise.source.replace(/^Wikimedia Commons.*/, 'Wikimedia Commons'), prise: prise.id, citer: lic.citer, generee: false },
+        );
       }
       const fichier = empl.variantes > 1 ? `${empl.id}-${rang + 1}.ogg` : `${empl.id}.ogg`;
       const fait = fabriquer(retenue, empl, prise);
@@ -167,9 +183,7 @@ for (const fam of FAMILLES) {
   for (const credit of credits) {
     const fichiers = fichiersParPrise.get(credit.prise) ?? [];
     if (credit.citer) attributions.push({ famille: fam.id, nom: fam.nom, auteur: credit.auteur, licence: credit.licence, source: credit.source, emplacements: fichiers.map((f) => f.replace(/\.ogg$/, '')) });
-    lignesCredits.push(
-      `| ${fichiers.map((f) => `\`${base}/${fam.id}/${f}\``).join(', ')} | ${credit.source}, découpé, ${fam.genre === 'moteur' ? 'bouclé ou adouci' : 'adouci'} et mis à niveau par \`npm run sons:build\` (Opus) | ${credit.auteur} | ${credit.licence} | ${aujourdhui} | ${fam.nom}${provisoire ? ', choix provisoire' : ''} |`,
-    );
+    lignesCredits.push(ligneCredit({ fichiers: fichiers.map((f) => `${base}/${fam.id}/${f}`), credit, moteur: fam.genre === 'moteur', date: aujourdhui, note: `${fam.nom}${provisoire ? ', choix provisoire' : ''}` }));
   }
 }
 

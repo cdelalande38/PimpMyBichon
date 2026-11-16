@@ -152,6 +152,15 @@ Les régimes sont des ordres de grandeur : estimés au spectre par la collecte (
 
 `engines/quatre-en-ligne-moto/brut_zx6r-2014-demo-echappement.ogg` (Wikimedia Commons, CC BY 3.0) : l'auteur à citer est un équipementier, ce que les règles du projet interdisent. Elle figure dans `accordRequis` du choix : la page d'écoute la propose, marquée « demande l'accord du commanditaire », sans pouvoir la retenir ; la fabrication la refuse. Son auteur n'est cité nulle part dans le dépôt.
 
+## Sons générés
+
+Décision du commanditaire (16 novembre 2026) : les emplacements que les prises libres ne couvrent pas (régimes tenus, montées, retours de flamme, bruitages de route) peuvent être **fabriqués par lui-même avec un outil de génération sonore**, dont il a les droits d'usage. Le code n'en synthétise toujours aucun : un emplacement vide reste muet.
+
+- **La liste de courses** : `npm run sons:manque` (`tools/sons/manque.mjs`) liste, pour chaque moteur et pour la route, les emplacements encore vides, avec leur genre (boucle ou ponctuel), la durée et le niveau visés, et une phrase en français et en anglais à donner au générateur (son seul, sans musique ni voix, régime tenu pour une boucle, aucune marque ni aucun modèle : la mécanique seulement). `-- --json` pour la sortie brute, `-- --sortie <fichier>` pour l'écrire. Un astérisque marque ce que l'app joue déjà dès que le fichier existe.
+- **Dans le dossier privé** : le fichier généré va sous `engines/<famille>/` ou `sfx/<famille>/` comme une prise ordinaire, avec sa ligne dans `sources.csv` : licence `genere-commanditaire`, auteur `commanditaire`, source `généré`. Puis découpe, écoute et choix comme d'habitude (`npm run sons:ecoute`).
+- **À la fabrication** (`npm run sons:build`) : la prise est créditée dans `CREDITS.md` par une ligne honnête, sans auteur tiers (« son généré par le commanditaire avec un outil de génération sonore, dont il a les droits d'usage »), licence « son généré par le commanditaire ». Cette licence n'est admise que sous `public/assets/audio/engines/` et `public/assets/audio/sfx/` (`tools/lib/credits.mjs`) ; partout ailleurs, `npm run assets:check` la refuse. Elle ne demande pas de citer d'auteur dans l'app.
+- **Règles inchangées** : pas de son extrait d'un jeu ou du commerce, pas de voix, pas de musique dans un bruitage, pas de nom de marque dans un nom de fichier ni dans une description. Garder hors du dépôt la preuve de l'abonnement à l'outil.
+
 ## Musique
 
 Rien n'est présélectionné. D'après leurs conditions publiées, les formules standard d'Epidemic Sound couvrent des contenus publiés en ligne (vidéos, podcasts) et renvoient les jeux vers une formule Enterprise ; la musique d'Envato Elements doit être synchronisée dans une œuvre plus large et exclut la diffusion de type radio. **Obtenir un accord écrit avant d'en mettre un titre dans la radio de l'app.** Les morceaux personnels passent par « Ma playlist », sur le téléphone.

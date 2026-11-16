@@ -154,8 +154,9 @@ registerRoute(
     cacheName: SOUNDS_CACHE,
     plugins: [
       new CacheableResponsePlugin({ statuses: [200] }),
-      // Cinq moteurs d'une douzaine de sons, et leurs versions passées qui finissent par partir.
-      new ExpirationPlugin({ maxEntries: 120 }),
+      // Cinq moteurs d'une douzaine de sons, les bruitages de route (une quarantaine de fichiers
+      // au plus, ≈ 1 Mo), et leurs versions passées qui finissent par partir.
+      new ExpirationPlugin({ maxEntries: 200 }),
     ],
   }),
 );

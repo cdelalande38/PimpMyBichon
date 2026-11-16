@@ -76,20 +76,48 @@ export function lisserAccel(precedente: number, vitesseAvantKmh: number, vitesse
   return precedente + (mesure - precedente) * k;
 }
 
-/** Volume du moteur en sortie sans radio, relatif à celui du garage. */
-export const NIVEAU_SEUL = 0.8;
-/** Sous la radio : le moteur reste sous la musique, d'autant plus bas que la musique est basse. */
-export const NIVEAU_SOUS_RADIO = 0.5;
-/** Plancher sous la radio, pour qu'on l'entende encore musique basse. */
-export const NIVEAU_PLANCHER = 0.12;
-/** Au ralenti d'image : le son baisse (sans changer de hauteur). */
+/** Réglages du joueur (panneau « Son », src/state/mixage.ts), en pour cent de 0 à 100. */
+export interface ReglagesMixage {
+  /** Part du volume de l'autoradio gardée quand la sortie roule moteur voulu. */
+  radio: number;
+  /** Niveau du moteur. */
+  moteur: number;
+  /** Niveau des bruitages de route (roulement, vent, pluie, freinage, rapports…). */
+  route: number;
+}
+
+/** Valeurs d'origine : la radio derrière (45 %), le moteur à plein, la route devant la radio. */
+export const MIXAGE_ORIGINE: Readonly<ReglagesMixage> = Object.freeze({ radio: 45, moteur: 100, route: 70 });
+
+/** Rampe de la baisse de la radio, à l'aller comme au retour, en secondes. */
+export const RAMPE_RADIO = 0.4;
+/** Au ralenti d'image : le moteur et la route baissent (sans changer de hauteur). */
 export const NIVEAU_RALENTI_IMAGE = 0.35;
 
+/** Le mélange appliqué, de 0 à 1 pour chacun. */
+export interface Melange {
+  /** Facteur multiplié au volume de l'autoradio (1 : la radio à son volume). */
+  radio: number;
+  /** Volume d'ensemble du moteur. */
+  moteur: number;
+  /** Volume d'ensemble des bruitages de route. */
+  route: number;
+}
+
+const pourCent = (value: number) => unite(value / 100);
+
 /**
- * Volume d'ensemble du moteur en sortie, de 0 à 1 : plein quand la radio se tait, sous la musique
- * quand elle joue (au plus la moitié du volume de la radio), baissé au ralenti d'image.
+ * Mélange de la sortie (§ 5.5 « Son ») : quand elle roule moteur voulu (`roule`, voir
+ * `moteurVoulu`), le moteur et la route sont devant, la radio derrière, baissée au réglage
+ * « Radio » ; en pause, au bout du parcours et au garage, la radio reprend son volume. Le curseur
+ * de l'autoradio n'est pas touché : la baisse s'y multiplie. Au ralenti d'image, moteur et route
+ * baissent.
  */
-export function niveauSortie(o: { radioJoue: boolean; volumeRadio: number; ralentiImage: boolean }): number {
-  const base = o.radioJoue ? Math.max(NIVEAU_PLANCHER, NIVEAU_SOUS_RADIO * unite(o.volumeRadio)) : NIVEAU_SEUL;
-  return base * (o.ralentiImage ? NIVEAU_RALENTI_IMAGE : 1);
+export function melangeSortie(o: { roule: boolean; ralentiImage: boolean; reglages: ReglagesMixage }): Melange {
+  const ralenti = o.ralentiImage ? NIVEAU_RALENTI_IMAGE : 1;
+  return {
+    radio: o.roule ? pourCent(o.reglages.radio) : 1,
+    moteur: pourCent(o.reglages.moteur) * ralenti,
+    route: pourCent(o.reglages.route) * ralenti,
+  };
 }

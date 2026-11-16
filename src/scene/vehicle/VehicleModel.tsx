@@ -218,10 +218,12 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   scene.traverse((object) => {
     if (object instanceof Mesh) meshes.push(object);
   });
-  // Roues et pièces au sol : jamais fusionnées avec la caisse, qui bouge sans elles.
+  // Roues et pièces au sol : jamais fusionnées avec la caisse, qui bouge sans elles. Le volant
+  // d'origine d'un vrai modèle (manifeste, `interior.steeringNode`) non plus : il tourne en roulant.
   const loose = looseNodes(scene, vehicle);
   const apart = new Set<Mesh>();
-  for (const node of [...loose.wheels, ...loose.grounded]) {
+  const steeringNode = vehicle.interior?.steeringNode ? scene.getObjectByName(vehicle.interior.steeringNode) : undefined;
+  for (const node of [...loose.wheels, ...loose.grounded, ...(steeringNode ? [steeringNode] : [])]) {
     node.traverse((object) => {
       if (object instanceof Mesh) apart.add(object);
     });

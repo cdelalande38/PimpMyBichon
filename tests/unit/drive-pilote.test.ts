@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MapRoute, RailSection } from '../../src/data/mapTypes.ts';
 import type { DriveInput, DriveMotion, Pilot, Rail } from '../../src/drive/contrat.ts';
-import { createPilot, cruiseSpeed, laneBound, laneCenter, PILOT, sampleLine } from '../../src/drive/pilote.ts';
+import { createPilot, createPlacementManche, cruiseSpeed, laneBound, laneCenter, pasPlacement, PILOT, sampleLine } from '../../src/drive/pilote.ts';
 import { createPose, createRail } from '../../src/drive/rail.ts';
 
 type Segment = { line: number } | { arc: number; turn: number };
@@ -353,5 +353,73 @@ describe.skipIf(!existsSync(REAL))('la première carte, de bout en bout', () => 
     // 15 km entre 25 et 90 km/h : entre 10 et 25 minutes.
     expect(time).toBeGreaterThan(600);
     expect(time).toBeLessThan(1500);
+  });
+});
+
+describe('placement au manche (progressif)', () => {
+  const h = 1 / 120;
+  const run = (state: ReturnType<typeof createPlacementManche>, seconds: number, steer: number, speed: number, line = 0, lo = -2, hi = 2) => {
+    let target = 0;
+    for (let t = 0; t < seconds - 1e-9; t += h) target = pasPlacement(state, steer, line, lo, hi, speed, h);
+    return target;
+  };
+
+  it('signe : à droite, l’écart baisse ; à gauche, il monte ; toute la largeur en une bonne seconde', () => {
+    const right = createPlacementManche();
+    expect(run(right, 0.5, 1, 20)).toBeLessThan(-1.5);
+    expect(run(right, 0.6, 1, 20)).toBeCloseTo(-2, 6);
+    const left = createPlacementManche();
+    expect(run(left, 0.25, -0.4, 20)).toBeGreaterThan(0.3);
+    expect(run(left, 0.25, -0.4, 20)).toBeLessThan(1);
+  });
+
+  it('bornes : jamais au-delà des limites de la chaussée', () => {
+    const state = createPlacementManche();
+    expect(run(state, 5, -1, 30, 0, -1.2, 1.7)).toBeCloseTo(1.7, 6);
+    expect(run(state, 5, 1, 30, 0, -1.2, 1.7)).toBeCloseTo(-1.2, 6);
+  });
+
+  it('au lâcher, la place tient, puis revient doucement sur la trajectoire', () => {
+    const state = createPlacementManche();
+    run(state, 0.4, 1, 20, 0.5);
+    const held = state.target;
+    expect(run(state, PILOT.lane.steerHold * 0.9, 0, 20, 0.5)).toBeCloseTo(held, 6);
+    const soon = run(state, 1, 0, 20, 0.5);
+    expect(soon).toBeGreaterThan(held);
+    expect(soon).toBeLessThan(0.5);
+    expect(run(state, 6 * PILOT.lane.steerReturn, 0, 20, 0.5)).toBeCloseTo(0.5, 2);
+    expect(state.weight).toBeLessThan(0.01);
+  });
+
+  it('à l’arrêt rien ne bouge ; au pas, moins vite', () => {
+    const still = createPlacementManche();
+    expect(run(still, 2, 1, 0)).toBeCloseTo(0, 9);
+    const slow = createPlacementManche();
+    const fast = createPlacementManche();
+    expect(Math.abs(run(slow, 0.3, 1, 1.5))).toBeLessThan(Math.abs(run(fast, 0.3, 1, 20)) * 0.5);
+    // Lâché à l'arrêt : la place ne revient pas non plus.
+    run(fast, 3, 0, 0);
+    expect(fast.weight).toBe(1);
+  });
+
+  it('dans le pilote : continu, borné, et à l’arrêt le véhicule ne se déplace pas', () => {
+    const rail = createRail(makeRoute([{ line: 1500 }]));
+    const pilot = createPilot(rail);
+    // À l'arrêt, manche à fond à gauche : rien ne bouge.
+    const start = pilot.motion.offset;
+    drive(pilot, rail, 1, () => ({ auto: false, throttle: 0, brake: 0, lane: 0, steer: -1 }));
+    expect(pilot.motion.offset).toBeCloseTo(start, 9);
+    // En roulant, à droite : l'écart descend jusqu'à la borne, sans saut.
+    const trace = drive(pilot, rail, 8, (_m, t) => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, steer: t > 4 ? 1 : 0 }));
+    const bound = laneBound({ width: 7 }, 'car');
+    expect(pilot.motion.offset).toBeLessThan(-bound + 0.05);
+    expect(pilot.motion.offset).toBeGreaterThanOrEqual(-bound - 1e-6);
+    for (let i = 1; i < trace.samples.length; i += 1) expect(Math.abs(trace.samples[i]!.offset - trace.samples[i - 1]!.offset)).toBeLessThan(0.1);
+    // Lâché : la place tient un moment, puis revient vers la trajectoire (au milieu de la ligne droite).
+    const held = pilot.motion.offset;
+    drive(pilot, rail, 0.8, () => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, steer: 0 }));
+    expect(Math.abs(pilot.motion.offset - held)).toBeLessThan(0.1);
+    drive(pilot, rail, 15, () => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, steer: 0 }));
+    expect(Math.abs(pilot.motion.offset)).toBeLessThan(0.3);
   });
 });

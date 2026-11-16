@@ -1,7 +1,8 @@
 // État de la sortie de nuit (§ 5.5), conforme au contrat (src/drive/contrat.ts, DriveStore).
 // L'interface écrit les commandes ; la scène les lit à chaque image par `useDrive.getState()` et
-// publie la télémétrie par `setTelemetry`. Seules la météo et la caméra préférées sont sauvegardées
-// (IndexedDB, lecture tolérante, partagées entre les pages de l'app) ; le reste dure la sortie.
+// publie la télémétrie par `setTelemetry`. Seules la météo, la caméra et la commande (manche ou
+// pédales) préférées sont sauvegardées (IndexedDB, lecture tolérante, partagées entre les pages de
+// l'app) ; le reste dure la sortie.
 // Le choix fait dans le menu (carte, départ) dure la séance : « Sortir » part de là.
 
 import { create } from 'zustand';
@@ -30,13 +31,25 @@ export const CAMERA_LABELS: Record<CameraId, string> = {
   orbite: 'Orbite',
 };
 
-/** Ce qui est sauvegardé : la météo et la caméra préférées. */
+/**
+ * Commande à la main, en portrait : le manche virtuel (par défaut ; haut le gaz, bas le frein, côtés
+ * le placement), ou les deux pédales (appui à droite, appui à gauche, glissé pour se placer).
+ */
+export type DriveCommande = 'manche' | 'pedales';
+
+export const COMMANDES: readonly { id: DriveCommande; label: string }[] = [
+  { id: 'manche', label: 'Manche' },
+  { id: 'pedales', label: 'Pédales' },
+];
+
+/** Ce qui est sauvegardé : la météo, la caméra et la commande préférées. */
 export interface DrivePrefs {
   weather: Weather;
   camera: CameraId;
+  commande: DriveCommande;
 }
 
-export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ weather: 'pluie', camera: 'poursuite' });
+export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ weather: 'pluie', camera: 'poursuite', commande: 'manche' });
 
 export const AUTO_INPUT: Readonly<DriveInput> = Object.freeze({ auto: true, throttle: 0, brake: 0, lane: 0 });
 
@@ -61,7 +74,8 @@ export function sanitizeDrivePrefs(raw: unknown): DrivePrefs {
   const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
   const weather = WEATHERS.some((item) => item.id === source.weather) ? (source.weather as Weather) : DEFAULT_DRIVE_PREFS.weather;
   const camera = CAMERA_IDS.includes(source.camera as CameraId) ? (source.camera as CameraId) : DEFAULT_DRIVE_PREFS.camera;
-  return { weather, camera };
+  const commande = COMMANDES.some((item) => item.id === source.commande) ? (source.commande as DriveCommande) : DEFAULT_DRIVE_PREFS.commande;
+  return { weather, camera, commande };
 }
 
 /** Caméra suivante dans l'ordre du contrat (après l'orbite, on revient à la poursuite). */
@@ -76,6 +90,8 @@ function sameTelemetry(a: DriveTelemetry, b: DriveTelemetry): boolean {
 
 export interface DriveState extends DriveStore {
   hydrated: boolean;
+  /** Commande préférée à la main, en portrait : le manche ou les pédales. */
+  commande: DriveCommande;
   /** Essai de la sortie en cours : « Réessayer » et « Repartir » remontent la scène (clé de montage). */
   attempt: number;
   /** Remonte la scène sur la même carte et le même départ : après une erreur, ou au bout de la route. */
@@ -104,6 +120,13 @@ export interface DriveState extends DriveStore {
   setThrottle: (throttle: number) => void;
   setBrake: (brake: number) => void;
   setLane: (lane: DriveInput['lane']) => void;
+  /**
+   * Le manche (et les boutons de la manette) : gaz, frein et placement progressif écrits d'un coup ;
+   * `steer` absent : le placement revient aux bords demandés (`lane`). Sans effet en pilote auto.
+   */
+  setManual: (manual: { throttle: number; brake: number; steer?: number }) => void;
+  /** Commande préférée à la main, en portrait (gardée). */
+  setCommande: (commande: DriveCommande) => void;
   /** Un appui sur « NOS » (à la main) : le pilote envoie une poussée si la réserve le permet. */
   fireNos: () => void;
   setOrbit: (orbit: Partial<OrbitView>) => void;
@@ -112,6 +135,7 @@ export interface DriveState extends DriveStore {
 }
 
 const unit = (value: number) => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0);
+const signed = (value: number) => (Number.isFinite(value) ? Math.min(1, Math.max(-1, value)) : 0);
 
 export const useDrive = create<DriveState>()(
   persist(
@@ -174,6 +198,20 @@ export const useDrive = create<DriveState>()(
       setThrottle: (throttle) => set((state) => (state.input.auto ? state : { input: { ...state.input, throttle: unit(throttle) } })),
       setBrake: (brake) => set((state) => (state.input.auto ? state : { input: { ...state.input, brake: unit(brake) } })),
       setLane: (lane) => set((state) => (state.input.auto || state.input.lane === lane ? state : { input: { ...state.input, lane } })),
+      setManual: ({ throttle, brake, steer }) =>
+        set((state) => {
+          if (state.input.auto) return state;
+          const t = unit(throttle);
+          const b = unit(brake);
+          const st = steer === undefined ? undefined : signed(steer);
+          const input = state.input;
+          if (input.throttle === t && input.brake === b && input.steer === st) return state;
+          const next: DriveInput = { ...input, throttle: t, brake: b };
+          if (st === undefined) delete next.steer;
+          else next.steer = st;
+          return { input: next };
+        }),
+      setCommande: (commande) => set((state) => (state.commande === commande ? state : { commande })),
       fireNos: () => set((state) => (state.input.auto ? state : { input: { ...state.input, nos: (state.input.nos ?? 0) + 1 } })),
       setOrbit: (orbit) => set((state) => ({ orbit: clampOrbit({ ...state.orbit, ...orbit }) })),
       setSlow: (slow) => set((state) => (state.slow === slow ? state : { slow })),
@@ -183,7 +221,7 @@ export const useDrive = create<DriveState>()(
       name: DRIVE_KEY,
       version: DRIVE_VERSION,
       storage: createJSONStorage(() => idbStorage),
-      partialize: ({ weather, camera }) => ({ weather, camera }),
+      partialize: ({ weather, camera, commande }) => ({ weather, camera, commande }),
       migrate: (persisted) => sanitizeDrivePrefs(persisted),
       merge: (persisted, current) => ({ ...current, ...sanitizeDrivePrefs(persisted) }),
       onRehydrateStorage: () => () => {
