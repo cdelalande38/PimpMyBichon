@@ -20,6 +20,48 @@
         0,
         5.978875
       ]
+    },
+    {
+      "emplacement": "low",
+      "fichier": "low.ogg",
+      "empreinte": "83fb8e758f",
+      "duree": 5.7679583333333335,
+      "gain": 0,
+      "gainFabrication": -0.4,
+      "credit": 2,
+      "regime": 1800,
+      "boucle": [
+        0,
+        5.7679583333333335
+      ]
+    },
+    {
+      "emplacement": "mid",
+      "fichier": "mid.ogg",
+      "empreinte": "7408675eaa",
+      "duree": 5.776895833333334,
+      "gain": 0,
+      "gainFabrication": -2.9,
+      "credit": 3,
+      "regime": 3000,
+      "boucle": [
+        0,
+        5.776895833333334
+      ]
+    },
+    {
+      "emplacement": "high",
+      "fichier": "high.ogg",
+      "empreinte": "0e7ac88bbe",
+      "duree": 4.788833333333334,
+      "gain": 0,
+      "gainFabrication": -3.4,
+      "credit": 4,
+      "regime": 4200,
+      "boucle": [
+        0,
+        4.788833333333334
+      ]
     }
   ],
   "ponctuels": [
@@ -67,6 +109,24 @@
       "gain": 0,
       "gainFabrication": -4.6,
       "credit": 0
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-1.ogg",
+      "empreinte": "04ce64b5da",
+      "duree": 0.9,
+      "gain": 0,
+      "gainFabrication": -6.1,
+      "credit": 5
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-2.ogg",
+      "empreinte": "c12c1ddfbf",
+      "duree": 0.9,
+      "gain": 0,
+      "gainFabrication": -6.9,
+      "credit": 6
     }
   ],
   "credits": [
@@ -80,6 +140,36 @@
       "auteur": "be_a_hero_not_a_patriot",
       "licence": "CC0-1.0",
       "source": "Freesound 331707",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
       "citer": false
     }
   ]

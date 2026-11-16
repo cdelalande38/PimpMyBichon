@@ -110,6 +110,14 @@ describe('jeux de sons de moteur', () => {
       it('crédits : auteur, source et licence admise pour chaque prise', () => {
         expect(manifest.credits.length).toBeGreaterThan(0);
         for (const credit of manifest.credits) {
+          if (credit.licence === 'son généré par le commanditaire') {
+            // Son fabriqué par le commanditaire avec un outil de génération sonore (docs/SOURCING_AUDIO.md,
+            // « Sons générés ») : ni auteur tiers, ni source en ligne, ni citation dans l'app.
+            expect(credit.auteur).toBe('le commanditaire');
+            expect(credit.source).toBe('son généré par le commanditaire');
+            expect(credit.citer).toBe(false);
+            continue;
+          }
           expect(ALLOWED_LICENSES).toContain(credit.licence);
           expect(credit.auteur.trim()).not.toBe('');
           expect(credit.source).toMatch(/^(Freesound \d+|Wikimedia Commons)$/);

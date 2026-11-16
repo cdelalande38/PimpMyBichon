@@ -74,6 +74,74 @@
             "provisoire": true,
             "pourquoi": "fin de la prise de démarrage : le niveau retombe à zéro vers 18,5 s"
           }
+        ],
+        "backfire": [
+          {
+            "prise": "prise-cf775728ae",
+            "debut": 0,
+            "fin": 0.9,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-8926c023a1",
+            "debut": 0,
+            "fin": 0.9,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          }
+        ],
+        "high": [
+          {
+            "prise": "prise-671133f4de",
+            "debut": 0,
+            "fin": 5,
+            "regime": 4200,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,72 dB) ; régime annoncé au générateur, non mesuré",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 4.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "low": [
+          {
+            "prise": "prise-5e88a625a2",
+            "debut": 0,
+            "fin": 6,
+            "regime": 1800,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,73 dB) ; régime annoncé au générateur, non mesuré",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 5.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "mid": [
+          {
+            "prise": "prise-840c580b52",
+            "debut": 0,
+            "fin": 6,
+            "regime": 3000,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,66 dB) ; régime annoncé au générateur, non mesuré",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 5.9
+            },
+            "fondu": 0.12
+          }
         ]
       }
     },
@@ -159,6 +227,38 @@
             "boucle": {
               "debut": 3.3,
               "fin": 9.302
+            },
+            "fondu": 0.12
+          }
+        ],
+        "high": [
+          {
+            "prise": "prise-bf94e7c104",
+            "debut": 0,
+            "fin": 5,
+            "regime": 3500,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,75 dB) ; régime annoncé au générateur, non mesuré",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 4.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "low": [
+          {
+            "prise": "prise-fcf3d12481",
+            "debut": 0,
+            "fin": 6,
+            "regime": 1500,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,62 dB) ; régime annoncé au générateur, non mesuré",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 5.9
             },
             "fondu": 0.12
           }
@@ -287,6 +387,42 @@
             "gain": 0,
             "provisoire": true,
             "pourquoi": "descente, même prise"
+          }
+        ],
+        "backfire": [
+          {
+            "prise": "prise-7883ee254b",
+            "debut": 0,
+            "fin": 1,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-5150efaf82",
+            "debut": 0,
+            "fin": 0.9,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          }
+        ],
+        "high": [
+          {
+            "prise": "prise-5490582a97",
+            "debut": 0,
+            "fin": 5,
+            "regime": 4500,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,83 dB) ; régime annoncé au générateur, non mesuré",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 4.9
+            },
+            "fondu": 0.12
           }
         ]
       }
@@ -508,6 +644,218 @@
             "gain": 0,
             "provisoire": true,
             "pourquoi": "salve"
+          }
+        ],
+        "high": [
+          {
+            "prise": "prise-c585b565ae",
+            "debut": 0,
+            "fin": 5,
+            "regime": 5500,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,84 dB) ; régime annoncé au générateur, non mesuré",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 4.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "mid": [
+          {
+            "prise": "prise-e6a987dcf4",
+            "debut": 0,
+            "fin": 6,
+            "regime": 3500,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,25 dB) ; régime annoncé au générateur, non mesuré",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 5.9
+            },
+            "fondu": 0.12
+          }
+        ]
+      }
+    },
+    "route": {
+      "emplacements": {
+        "backfire": [
+          {
+            "prise": "prise-8ed9cb830e",
+            "debut": 0,
+            "fin": 0.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-c070957132",
+            "debut": 0,
+            "fin": 0.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          }
+        ],
+        "derapage-court": [
+          {
+            "prise": "prise-1e21163133",
+            "debut": 0,
+            "fin": 0.7,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-49741068b4",
+            "debut": 0,
+            "fin": 0.7,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          }
+        ],
+        "freinage": [
+          {
+            "prise": "prise-5fe7485beb",
+            "debut": 0,
+            "fin": 1.7,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-bf46b4a0ab",
+            "debut": 0,
+            "fin": 1.6,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          }
+        ],
+        "nos": [
+          {
+            "prise": "prise-c159553e74",
+            "debut": 0,
+            "fin": 4,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,73 dB)",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 3.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "pluie": [
+          {
+            "prise": "prise-2961c14c5e",
+            "debut": 0,
+            "fin": 8,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±1,33 dB)",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 7.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "rapport": [
+          {
+            "prise": "prise-00d2b69e61",
+            "debut": 0,
+            "fin": 0.4,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-a0cf03c070",
+            "debut": 0,
+            "fin": 0.4,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          }
+        ],
+        "roulement-mouille": [
+          {
+            "prise": "prise-56395bef58",
+            "debut": 0,
+            "fin": 6,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±0,78 dB)",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 5.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "roulement-sec": [
+          {
+            "prise": "prise-e415651b6e",
+            "debut": 0,
+            "fin": 6,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 4 (±0,93 dB)",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 5.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "tunnel": [
+          {
+            "prise": "prise-9c282a984f",
+            "debut": 0,
+            "fin": 8,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 4 (±1,7 dB)",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 7.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "vent": [
+          {
+            "prise": "prise-44d7ad9acd",
+            "debut": 0,
+            "fin": 8,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±2,44 dB)",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 7.9
+            },
+            "fondu": 0.12
           }
         ]
       }

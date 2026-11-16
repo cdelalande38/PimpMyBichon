@@ -48,6 +48,20 @@
         0,
         5.985979166666667
       ]
+    },
+    {
+      "emplacement": "high",
+      "fichier": "high.ogg",
+      "empreinte": "0f4ce1f380",
+      "duree": 4.7807916666666666,
+      "gain": 0,
+      "gainFabrication": -10.3,
+      "credit": 2,
+      "regime": 4500,
+      "boucle": [
+        0,
+        4.7807916666666666
+      ]
     }
   ],
   "ponctuels": [
@@ -113,6 +127,24 @@
       "gain": 0,
       "gainFabrication": -5.5,
       "credit": 1
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-1.ogg",
+      "empreinte": "bf36a077c6",
+      "duree": 1,
+      "gain": 0,
+      "gainFabrication": -10.5,
+      "credit": 3
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-2.ogg",
+      "empreinte": "dbc564a311",
+      "duree": 0.9,
+      "gain": 0,
+      "gainFabrication": -9.6,
+      "credit": 4
     }
   ],
   "credits": [
@@ -126,6 +158,24 @@
       "auteur": "BranCorvus",
       "licence": "CC0-1.0",
       "source": "Freesound 743981",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
       "citer": false
     }
   ]

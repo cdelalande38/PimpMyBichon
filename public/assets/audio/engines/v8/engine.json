@@ -34,6 +34,34 @@
         0,
         5.26675
       ]
+    },
+    {
+      "emplacement": "mid",
+      "fichier": "mid.ogg",
+      "empreinte": "f6ac207aee",
+      "duree": 5.7618125,
+      "gain": 0,
+      "gainFabrication": -16.8,
+      "credit": 5,
+      "regime": 3500,
+      "boucle": [
+        0,
+        5.7618125
+      ]
+    },
+    {
+      "emplacement": "high",
+      "fichier": "high.ogg",
+      "empreinte": "a1a18bcfbf",
+      "duree": 4.7825,
+      "gain": 0,
+      "gainFabrication": -15.4,
+      "credit": 6,
+      "regime": 5500,
+      "boucle": [
+        0,
+        4.7825
+      ]
     }
   ],
   "ponctuels": [
@@ -80,7 +108,7 @@
       "duree": 0.73,
       "gain": 0,
       "gainFabrication": 4,
-      "credit": 5
+      "credit": 7
     },
     {
       "emplacement": "backfire",
@@ -89,7 +117,7 @@
       "duree": 1.57,
       "gain": 0,
       "gainFabrication": 7.1,
-      "credit": 5
+      "credit": 7
     },
     {
       "emplacement": "backfire",
@@ -98,7 +126,7 @@
       "duree": 0.97,
       "gain": 0,
       "gainFabrication": 4.9,
-      "credit": 5
+      "credit": 7
     }
   ],
   "credits": [
@@ -130,6 +158,18 @@
       "auteur": "cr4sht3st",
       "licence": "CC0-1.0",
       "source": "Freesound 157144",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
       "citer": false
     },
     {

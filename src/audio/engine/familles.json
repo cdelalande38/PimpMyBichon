@@ -6,22 +6,22 @@
       "nom": "4 cylindres à plat (la Cox)",
       "genre": "moteur",
       "provisoire": true,
-      "boucles": 1,
-      "ponctuels": 5
+      "boucles": 4,
+      "ponctuels": 7
     },
     "diesel-turbo": {
       "nom": "4 cylindres turbo diesel (le van)",
       "genre": "moteur",
       "provisoire": true,
-      "boucles": 2,
+      "boucles": 4,
       "ponctuels": 5
     },
     "bicylindre-v": {
       "nom": "Bicylindre en V (le bobber)",
       "genre": "moteur",
       "provisoire": true,
-      "boucles": 3,
-      "ponctuels": 7
+      "boucles": 4,
+      "ponctuels": 9
     },
     "quatre-en-ligne-moto": {
       "nom": "4 cylindres en ligne de moto (la sportive)",
@@ -34,11 +34,19 @@
       "nom": "V8 (le concept, plus tard le fastback)",
       "genre": "moteur",
       "provisoire": true,
-      "boucles": 2,
+      "boucles": 4,
       "ponctuels": 7
     }
   },
-  "bruitages": {},
+  "bruitages": {
+    "route": {
+      "nom": "Route (sortie de nuit)",
+      "genre": "bruitage",
+      "provisoire": true,
+      "boucles": 6,
+      "ponctuels": 8
+    }
+  },
   "attributions": [
     {
       "famille": "diesel-turbo",

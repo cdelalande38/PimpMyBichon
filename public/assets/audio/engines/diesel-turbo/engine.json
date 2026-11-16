@@ -22,17 +22,45 @@
       ]
     },
     {
+      "emplacement": "low",
+      "fichier": "low.ogg",
+      "empreinte": "5c52af5f45",
+      "duree": 5.7965,
+      "gain": 0,
+      "gainFabrication": -7.5,
+      "credit": 2,
+      "regime": 1500,
+      "boucle": [
+        0,
+        5.7965
+      ]
+    },
+    {
       "emplacement": "mid",
       "fichier": "mid.ogg",
       "empreinte": "026509e3c3",
       "duree": 6.002354166666667,
       "gain": 0,
       "gainFabrication": 3,
-      "credit": 2,
+      "credit": 3,
       "regime": 2000,
       "boucle": [
         0,
         6.002354166666667
+      ]
+    },
+    {
+      "emplacement": "high",
+      "fichier": "high.ogg",
+      "empreinte": "e0a30a3546",
+      "duree": 4.783458333333333,
+      "gain": 0,
+      "gainFabrication": -4.5,
+      "credit": 4,
+      "regime": 3500,
+      "boucle": [
+        0,
+        4.783458333333333
       ]
     }
   ],
@@ -97,9 +125,21 @@
       "citer": false
     },
     {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
       "auteur": "DangerLaef",
       "licence": "CC0-1.0",
       "source": "Freesound 690388",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
       "citer": false
     }
   ]

@@ -3,8 +3,251 @@
   "version": 1,
   "famille": "route",
   "nom": "Route (sortie de nuit)",
-  "provisoire": false,
-  "boucles": [],
-  "ponctuels": [],
-  "credits": []
+  "provisoire": true,
+  "boucles": [
+    {
+      "emplacement": "roulement-sec",
+      "fichier": "roulement-sec.ogg",
+      "empreinte": "3f502cf8e6",
+      "duree": 5.763520833333334,
+      "gain": 0,
+      "gainFabrication": -8,
+      "credit": 8,
+      "regime": null,
+      "boucle": [
+        0,
+        5.763520833333334
+      ]
+    },
+    {
+      "emplacement": "roulement-mouille",
+      "fichier": "roulement-mouille.ogg",
+      "empreinte": "b4b7fc9b48",
+      "duree": 5.770125,
+      "gain": 0,
+      "gainFabrication": -10.8,
+      "credit": 9,
+      "regime": null,
+      "boucle": [
+        0,
+        5.770125
+      ]
+    },
+    {
+      "emplacement": "pluie",
+      "fichier": "pluie.ogg",
+      "empreinte": "87cf8740d9",
+      "duree": 7.781583333333334,
+      "gain": 0,
+      "gainFabrication": 5.8,
+      "credit": 10,
+      "regime": null,
+      "boucle": [
+        0,
+        7.781583333333334
+      ]
+    },
+    {
+      "emplacement": "vent",
+      "fichier": "vent.ogg",
+      "empreinte": "7115401345",
+      "duree": 7.77175,
+      "gain": 0,
+      "gainFabrication": -6.5,
+      "credit": 11,
+      "regime": null,
+      "boucle": [
+        0,
+        7.77175
+      ]
+    },
+    {
+      "emplacement": "tunnel",
+      "fichier": "tunnel.ogg",
+      "empreinte": "0758a55bbb",
+      "duree": 7.760083333333333,
+      "gain": 0,
+      "gainFabrication": -15.4,
+      "credit": 12,
+      "regime": null,
+      "boucle": [
+        0,
+        7.760083333333333
+      ]
+    },
+    {
+      "emplacement": "nos",
+      "fichier": "nos.ogg",
+      "empreinte": "89c743094a",
+      "duree": 3.8,
+      "gain": 0,
+      "gainFabrication": -13.8,
+      "credit": 13,
+      "regime": null,
+      "boucle": [
+        0,
+        3.8
+      ]
+    }
+  ],
+  "ponctuels": [
+    {
+      "emplacement": "derapage-court",
+      "fichier": "derapage-court-1.ogg",
+      "empreinte": "9cbc61c598",
+      "duree": 0.7,
+      "gain": 0,
+      "gainFabrication": -11,
+      "credit": 0
+    },
+    {
+      "emplacement": "derapage-court",
+      "fichier": "derapage-court-2.ogg",
+      "empreinte": "9c8d9ec2fc",
+      "duree": 0.7,
+      "gain": 0,
+      "gainFabrication": -12,
+      "credit": 1
+    },
+    {
+      "emplacement": "freinage",
+      "fichier": "freinage-1.ogg",
+      "empreinte": "37e415eae0",
+      "duree": 1.7,
+      "gain": 0,
+      "gainFabrication": -12,
+      "credit": 2
+    },
+    {
+      "emplacement": "freinage",
+      "fichier": "freinage-2.ogg",
+      "empreinte": "d29a574d01",
+      "duree": 1.6,
+      "gain": 0,
+      "gainFabrication": -10.7,
+      "credit": 3
+    },
+    {
+      "emplacement": "rapport",
+      "fichier": "rapport-1.ogg",
+      "empreinte": "43f5f83599",
+      "duree": 0.4,
+      "gain": 0,
+      "gainFabrication": -1.9,
+      "credit": 4
+    },
+    {
+      "emplacement": "rapport",
+      "fichier": "rapport-2.ogg",
+      "empreinte": "8012eba8b4",
+      "duree": 0.4,
+      "gain": 0,
+      "gainFabrication": -1.1,
+      "credit": 5
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-1.ogg",
+      "empreinte": "a0acf79825",
+      "duree": 0.5,
+      "gain": 0,
+      "gainFabrication": -6.3,
+      "credit": 6
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-2.ogg",
+      "empreinte": "368a518873",
+      "duree": 0.5,
+      "gain": 0,
+      "gainFabrication": -4,
+      "credit": 7
+    }
+  ],
+  "credits": [
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    }
+  ]
 }
