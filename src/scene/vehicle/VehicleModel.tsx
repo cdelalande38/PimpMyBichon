@@ -20,7 +20,7 @@ import {
   WebGLRenderTarget,
   type BufferGeometry,
   type Material,
-  type Object3D,
+  Object3D,
   type WebGLRenderer,
 } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -162,6 +162,28 @@ function looseNodes(scene: Object3D, vehicle: VehicleManifest): { wheels: Object
   return found;
 }
 
+/**
+ * Retire du modèle une pièce fusionnée sans emporter ce qui pend sous elle. Une pièce peut porter
+ * d'autres nœuds : le concept a toutes ses pièces, roues comprises, sous son soubassement, qui se
+ * fusionne avec le moteur. Retirée seule, elle emportait ses enfants hors de la scène : les pièces
+ * d'un matériau unique disparaissaient, et les roues, posées ensuite à côté de la caisse sans la
+ * rotation ni le recentrage du modèle (étape 6), sortaient de leurs passages. Un nœud vide, à la
+ * même place, garde ses enfants.
+ */
+function removeMerged(part: Mesh): void {
+  const parent = part.parent;
+  if (parent && part.children.length > 0) {
+    const stand = new Object3D();
+    stand.name = part.name;
+    stand.position.copy(part.position);
+    stand.quaternion.copy(part.quaternion);
+    stand.scale.copy(part.scale);
+    for (const child of [...part.children]) stand.add(child);
+    parent.add(stand);
+  }
+  part.removeFromParent();
+}
+
 /** Copie le modèle, pose peinture, rôles et adaptation, le pose au sol, centré, longueur sur X. */
 export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   const scene = source.clone(true);
@@ -269,7 +291,7 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
     const mesh = new Mesh(geometry, first.material);
     mesh.name = `fusion_${(first.material as Material).name}`;
     merged.add(mesh);
-    for (const part of parts) part.removeFromParent();
+    for (const part of parts) removeMerged(part);
   }
 
   // 6. Pose : longueur sur X, au sol, centré. Orientation mesurée, jamais supposée.
