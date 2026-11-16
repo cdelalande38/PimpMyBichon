@@ -97,11 +97,51 @@ export interface EngineSpec {
 /** Point en mètres, dans le repère du véhicule (avant vers +X, haut vers +Y, droite vers +Z). */
 export type VehiclePoint = readonly [number, number, number];
 
-/** Un point de vue de la vue intérieure. */
+/** Places assises de la vue intérieure : conducteur (à gauche : conduite à gauche), passager, arrière. */
+export type PlaceId = 'conducteur' | 'passager' | 'arriere';
+
+/**
+ * Œil d'une place, posé par rapport aux sièges du modèle chargé (résolu par la scène, src/scene/
+ * fit.ts, placeEye) : les habitacles changent de pavillon, de planche ou de banquette sans qu'on
+ * réécrive une coordonnée.
+ */
+export interface SeatEye {
+  /**
+   * Ancres des sièges (nœuds du modèle, `siege_avant_*`) : une pour un siège avant, les deux pour
+   * l'arrière (l'œil se recule derrière elles).
+   */
+  anchors: readonly string[];
+  /** Hauteur de l'œil au-dessus de l'assise du siège posé, en mètres (0,80 à 0,90 pour un adulte). */
+  up: number;
+  /** Siège avant : l'œil en avant de la face du dossier (ou de l'appuie-tête) à hauteur de tête, en mètres. */
+  ahead?: number;
+  /** Arrière : l'œil en arrière du dos des sièges avant, en mètres. */
+  behind?: number;
+  /** Décalage de côté depuis le milieu des ancres, vers la droite (+Z), en mètres. */
+  side?: number;
+  /** Écart gardé sous le pavillon mesuré au-dessus de l'œil, en mètres (0,12 par défaut). */
+  headroom?: number;
+}
+
+/** Regard par défaut d'une place, en degrés : lacet vers la droite (+Z), tangage vers le haut. */
+export interface PlaceLook {
+  yaw: number;
+  pitch: number;
+}
+
+/**
+ * Une place de la vue intérieure. L'œil est soit posé sur les sièges du modèle (`seat`), soit, pour
+ * un vrai modèle sans ancres, mesuré dans son GLB (`eye`) ; le regard soit un cap (`look`), soit un
+ * point (`target`).
+ */
 export interface InteriorView {
-  eye: VehiclePoint;
-  target: VehiclePoint;
-  /** Nom court, dit par le bouton rond qui y mène : « Entre les sièges », « Au volant ». */
+  /** Place assise ; absente : un point de vue sans place (ancien format), traité comme le conducteur. */
+  place?: PlaceId;
+  seat?: SeatEye;
+  eye?: VehiclePoint;
+  target?: VehiclePoint;
+  look?: PlaceLook;
+  /** Nom court, dit par la commande qui y mène : « Conducteur », « Passager », « Arrière ». */
   label?: string;
   /** Champ vertical en portrait, en degrés (60 à 110) ; absent : celui de l'app (90). */
   fov?: number;
@@ -268,16 +308,11 @@ export interface VehicleManifest {
   /** Moteur d'origine ; absent : pas de fiche de préparation pour ce véhicule. */
   engine?: EngineSpec;
   /**
-   * Point de vue intérieur (§ 5.1), celui qui s'ouvre quand on entre : position de l'œil et point
-   * regardé, en mètres, dans le repère du véhicule (avant vers +X, haut vers +Y, droite vers +Z).
-   * Absent : pas de vue intérieure.
+   * Première place de la vue intérieure (§ 5.1), le conducteur : œil et regard dans le repère du
+   * véhicule (avant vers +X, haut vers +Y, droite vers +Z), en mètres. Absent : pas de vue intérieure.
    */
   interiorView?: InteriorView;
-  /**
-   * Points de vue suivants, dans l'ordre des appuis sur le bouton rond : chaque appui passe au
-   * suivant, l'appui sur le dernier rend l'atelier. Absent : un seul point de vue, un appui pour
-   * entrer, un pour sortir.
-   */
+  /** Places suivantes (passager, arrière), chacune une fois au plus ; on les choisit par leur nom. */
   interiorViews?: readonly InteriorView[];
   /** Ce que l'habitacle allume en vue intérieure (§ 5.10) : ciel étoilé, lumière d'habitacle. */
   cabin?: CabinLighting;

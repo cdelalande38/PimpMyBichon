@@ -47,8 +47,11 @@
     "power": 102,
     "sound": "diesel-turbo"
   },
-  "interiorView": { "label": "Sous le ciel étoilé", "eye": [-0.75, 1.44, 0.3], "target": [1.4, 1.46, -0.42], "fov": 100 },
-  "interiorViews": [{ "label": "Au volant", "eye": [0.56, 1.4, -0.36], "target": [1.15, 1.02, -0.27], "fov": 95, "volets": ["volant", "pommeau"] }],
+  "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -14 }, "fov": 95, "volets": ["volant", "pommeau"] },
+  "interiorViews": [
+    { "place": "passager", "label": "Passager", "seat": { "anchors": ["siege_avant_droit"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": -14, "pitch": -12 }, "fov": 95 },
+    { "place": "arriere", "label": "Arrière", "seat": { "anchors": ["siege_avant_gauche", "siege_avant_droit"], "up": 0.75, "behind": 0.95, "side": 0.25 }, "look": { "yaw": -8, "pitch": -2 }, "fov": 100, "volets": ["sieges", "ciel"] }
+  ],
   "interior": {
     "steering": { "default": "moyeu_large" },
     "knob": { "default": "boule" },
@@ -82,6 +85,6 @@
       "aspect": [30, 75]
     },
     "gap": [0.05, 0.05],
-    "floor": 0.221
+    "floor": 0.213
   }
 }

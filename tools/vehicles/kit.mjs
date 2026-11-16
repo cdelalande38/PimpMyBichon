@@ -1059,7 +1059,7 @@ const ROLE_PBR = /** @type {Record<string, Required<Pick<MaterialOverride, 'colo
   alu: { color: '#d6d8dc', metallic: 1, roughness: 0.32 },
   black: { color: '#0b0b0d', metallic: 0, roughness: 0.55 },
   rubber: { color: '#121212', metallic: 0, roughness: 0.9 },
-  glass: { color: '#10141a', metallic: 0, roughness: 0.05, alpha: 0.45 },
+  glass: { color: '#0c0e14', metallic: 0, roughness: 0.04, alpha: 0.36 },
   leather: { color: '#1d1512', metallic: 0, roughness: 0.6 },
   lamp: { color: '#f4f4f0', metallic: 0, roughness: 0.15, emissive: '#fff6e8', emissiveStrength: 1 },
   tail: { color: '#7a0808', metallic: 0, roughness: 0.2, emissive: '#ff1a10', emissiveStrength: 1 },

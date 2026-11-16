@@ -63,49 +63,39 @@ export function ancres(k) {
  *   rwZ: number,
  *   xDoorFront: (y: number) => number,
  *   xQtrRear: (y: number) => number,
- *   windows: P3[][],
  *   onDome: (x: number, z: number, out?: number) => P3,
+ *   glassAt: (q: P3, margin: number) => boolean,
+ *   frames: { loop: P3[], mirror: boolean }[],
  * }} c
  * @returns {Parts}
  */
 export default function interieur(k, c) {
   // --- Doublure ----------------------------------------------------------------------------------
-  // Section de caisse resserrée : 3,5 cm en dedans sur les flancs, 4 cm sous le pavillon.
+  // Section de caisse resserrée : 3,5 cm en dedans sur les flancs, 4 cm sous le pavillon. Percée
+  // devant chaque vitre : une face de la doublure saute quand le point de caisse qu'elle regarde
+  // (4,5 cm dehors, le long de sa normale) est une vitre ou à moins de 2 cm de son bord. Ainsi rien
+  // ne passe derrière le verre, ni le ciel de toit (que la doublure resserrée descend sous le haut
+  // des vitres), ni les montants, quel que soit l'angle d'où l'on regarde.
   const SZ = 0.945;
   const SY = 0.965;
   const Y0 = 0.2;
   const X0 = -1.62;
   const X1 = 0.68;
-  const toBodyY = (/** @type {number} */ y) => Y0 + (y - Y0) / SY;
+  const GAP = 0.045;
+  const MARGIN = 0.02;
   /** @param {Face} f */
   const region = (f) => {
     if (f.cap) return 'black';
-    const p = c.band(f);
-    const y = toBodyY(f.y);
-    const az = Math.abs(f.z) / SZ;
-    // Lunette ovale (sur le dessus de l'arrière).
-    if (f.x > c.xRw[0] && f.x < c.xRw[1] && p >= c.I.belt + 2) {
-      const ex = (f.x - (c.xRw[0] + c.xRw[1]) / 2) / ((c.xRw[1] - c.xRw[0]) / 2);
-      if (ex * ex + (az / c.rwZ) ** 2 < 1) return HOLE;
-    }
-    if (p >= c.I.e) {
-      if (f.x > c.xWs[0] + 0.01 && f.x < c.xWs[1] - 0.005) return HOLE; // pare-brise
-      return 'black'; // ciel de toit
-    }
-    if (p >= c.I.glass) {
-      if (f.x > c.xDoor[0] + 0.01 && f.x < c.xDoorFront(y) - 0.01) return HOLE;
-      if (f.x < c.xQtr[1] - 0.01 && f.x > c.xQtrRear(y) + 0.01) return HOLE;
-      return 'black'; // montants et pourtour des vitres
-    }
-    if (p >= c.I.belt) return 'black';
-    return 'black'; // flancs, garnitures de portes et plancher
+    // La normale de la doublure regarde l'habitacle : la caisse est de l'autre côté.
+    const q = /** @type {P3} */ ([f.x - f.nx * GAP, f.y - f.ny * GAP, f.z - f.nz * GAP]);
+    return c.glassAt(q, MARGIN) ? HOLE : 'black';
   };
   const breaks = [...c.xWs, ...c.xDoor, ...c.xQtr, ...c.xRw].filter((x) => x > X0 && x < X1);
   const lining = k
     .loft({
       sectionAt: (x) => k.mirrorSection(c.half(x).map(([z, y]) => /** @type {P2} */ ([z * SZ, Y0 + (y - Y0) * SY]))),
-      xs: k.sampleX(X0, X1, { step: 0.04, endZone: 0.04, endCount: 2, breaks }),
-      around: 1,
+      xs: k.sampleX(X0, X1, { step: 0.03, endZone: 0.04, endCount: 2, breaks }),
+      around: 2,
       material: region,
       inward: true,
       capRows: 3,
@@ -116,16 +106,12 @@ export default function interieur(k, c) {
 
   /** @type {Parts} */
   const parts = [...lining];
-  // Joncs noirs autour des ouvertures de la doublure : ils cachent le bord en escalier de la grille.
-  const inside = (/** @type {P3} */ [x, y, z]) => /** @type {P3} */ ([x, Y0 + (y - Y0) * SY - 0.004, z * SZ]);
-  // Les contours des vitres latérales sont donnés côté droit ; celui du pare-brise est complet.
-  c.windows.forEach((loop, i) => {
-    const pts = loop.map(inside);
-    const ws = i === c.windows.length - 1;
-    const sides = ws ? [pts] : [pts, pts.map(([x, y, z]) => /** @type {P3} */ ([x, y, -z]))];
-    // Jonc du pare-brise plus fin : il se voit de face, à travers le verre.
-    for (const side of sides) parts.push(...k.tube(side, { material: 'black', radius: ws ? 0.008 : 0.017, closed: true, segments: 64, radial: 5 }));
-  });
+  // Joncs noirs autour des ouvertures : posés juste au-delà du bord du verre, 1,2 cm sous la tôle,
+  // ils cachent le bord en escalier de la doublure sans passer derrière la vitre.
+  for (const { loop, mirror } of c.frames) {
+    const sides = mirror ? [loop, loop.map(([x, y, z]) => /** @type {P3} */ ([x, y, -z]))] : [loop];
+    for (const side of sides) parts.push(...k.tube(side, { material: 'black', radius: 0.013, closed: true, segments: 72, radial: 6 }));
+  }
   const box = (/** @type {number} */ l, /** @type {number} */ h, /** @type {number} */ r, /** @type {number} */ depth, /** @type {string} */ material, /** @type {number} */ bevel = 0.02) =>
     k.roundedExtrude(k.roundedRect(l, h, r, 6), { material, depth, bevel });
 
@@ -134,10 +120,11 @@ export default function interieur(k, c) {
 
   // --- Planche de bord -----------------------------------------------------------------------
   // Panneau plat, face vers le conducteur (−X), sur toute la largeur, et son bourrelet.
-  const DASH_X = 0.575;
+  const DASH_X = 0.53;
   const FACE = DASH_X - 0.002;
-  parts.push(...k.place(box(0.1, 0.25, 0.03, 1.2, 'black', 0.02), { position: [DASH_X + 0.05, 0.835, 0] }));
-  parts.push(...k.place(box(0.17, 0.05, 0.024, 1.18, 'black', 0.02), { position: [DASH_X + 0.02, 0.965, 0] }));
+  parts.push(...k.place(box(0.08, 0.23, 0.03, 1.14, 'black', 0.02), { position: [DASH_X + 0.04, 0.825, 0] }));
+  // Bourrelet à arêtes vives sous le pied du pare-brise : il ne double pas le verre.
+  parts.push(...k.place(box(0.16, 0.04, 0.008, 1.12, 'black', 0.006), { position: [DASH_X - 0.03, 0.935, 0] }));
   /** Pose sur la face de la planche : (u, v) = (z, y), normale vers le conducteur. @param {Parts} p @param {number} z @param {number} y @param {number} [dx] */
   const onDash = (p, z, y, dx = 0) => k.orient(p, { position: [FACE - dx, y, z], normal: [-1, 0, 0], up: [0, 1, 0] });
   /** Plaque à coins arrondis posée à plat sur la planche (épaisseur vers le conducteur). @param {number} w @param {number} h @param {number} r @param {number} t @param {string} material */
@@ -260,7 +247,21 @@ export default function interieur(k, c) {
     parts.push(...k.rod([-0.12, 0.6, s * 0.585], [-0.07, 0.56, s * 0.585], 0.006, { material: 'black', radial: 6 }));
   }
   // Rétroviseur intérieur au haut du pare-brise.
-  parts.push(...k.place(box(0.04, 0.06, 0.02, 0.2, 'black', 0.012), { position: [0.2, 1.27, 0] }));
+  parts.push(...k.place(box(0.04, 0.06, 0.02, 0.2, 'black', 0.012), { position: [0.29, 1.285, 0] }));
+  // Pare-soleil rabattus contre le ciel de toit, au haut du pare-brise.
+  for (const s of [-1, 1]) {
+    // Suivent la pente du pavillon en travers : 2 cm sous le ciel de toit.
+    parts.push(...k.orient(k.roundedExtrude(k.roundedRect(0.13, 0.28, 0.03, 4), { material: 'black', depth: 0.012, bevel: 0.004, bevelSegments: 1 }), { position: [0.21, 1.295, s * 0.22], normal: [0.2, -0.96, -s * 0.17], up: [0, -0.17 * s, 0.96 * s] }));
+  }
+
+  // --- Pédalier : embrayage et frein suspendus, accélérateur à rouleau, devant le conducteur ----
+  const PEDAL_X = 0.43;
+  for (const [z, len] of /** @type {const} */ ([[-0.43, 0.07], [-0.33, 0.07]])) {
+    parts.push(...k.rod([PEDAL_X + 0.09, 0.14, z], [PEDAL_X, 0.29, z], 0.008, { material: 'black', radial: 6 }));
+    parts.push(...k.orient(k.roundedExtrude(k.roundedRect(len, 0.06, 0.012, 3), { material: 'rubber', depth: 0.014, bevel: 0.004, bevelSegments: 1 }), { position: [PEDAL_X - 0.008, 0.3, z], normal: [-0.85, 0.53, 0], up: [0.53, 0.85, 0] }));
+  }
+  parts.push(...k.orient(k.roundedExtrude(k.roundedRect(0.05, 0.16, 0.012, 3), { material: 'rubber', depth: 0.014, bevel: 0.004, bevelSegments: 1 }), { position: [PEDAL_X + 0.04, 0.17, -0.2], normal: [-0.6, 0.8, 0], up: [0.8, 0.6, 0] }));
+  parts.push(...k.rod([PEDAL_X + 0.09, 0.13, -0.2], [PEDAL_X + 0.09, 0.13, -0.2 + 0.001], 0.012, { material: 'black', radial: 8 }));
 
   // --- Essuie-glaces : deux balais au repos au bas du pare-brise, couchés vers la droite -------
   const xWiper = c.xWs[1] - 0.03;

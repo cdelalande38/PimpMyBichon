@@ -63,6 +63,7 @@ export function ancres(k) {
  *   xWs: readonly [number, number],
  *   xFwin: readonly [number, number],
  *   xSwin: readonly [number, number],
+ *   rear: { win: readonly [number, number], winZ: number },
  * }} c
  * @returns {Parts}
  */
@@ -77,7 +78,7 @@ export default function interieur(k, c) {
   const half = (x) => {
     const d = c.dims(x);
     const zl = (/** @type {number} */ y) => c.flankZ(d, y) - IN_Z;
-    const ys = [FLOOR, 0.7, 1.0, c.gy(d, 1.08), c.gy(d, 1.35), c.gy(d, 1.62), c.gy(d, 1.72)];
+    const ys = [FLOOR, 0.7, 1.0, c.gy(d, 1.12), c.gy(d, 1.43), c.gy(d, 1.74), c.gy(d, 1.77)];
     for (let i = 1; i < ys.length; i += 1) ys[i] = Math.max(/** @type {number} */ (ys[i]), /** @type {number} */ (ys[i - 1]) + 0.004);
     /** @type {P2[]} */
     const pts = [[0, FLOOR], [zl(FLOOR) * 0.5, FLOOR]];
@@ -106,20 +107,21 @@ export default function interieur(k, c) {
   };
   /** @param {Face} f */
   const region = (f) => {
-    if (f.cap) return 'black';
+    // Bouchon arrière percé à la lunette du hayon ; bouchon avant : tablier, sous la planche.
+    if (f.cap) return f.x < 0 && Math.abs(f.z) < c.rear.winZ && f.y > c.rear.win[0] && f.y < c.rear.win[1] ? HOLE : 'black';
     const p = band(f);
     // Pare-brise : le dessus de la doublure entre le haut et le bas du vitrage.
-    if (p >= I_TOP - 1 && f.x > c.xWs[0] + 0.015 && f.x < c.xWs[1] - 0.02) return HOLE;
+    if (p >= I_TOP - 1 && f.x > c.xWs[0] + 0.005 && f.x < c.xWs[1] - 0.005) return HOLE;
     // Vitres latérales : entre les rangées du bas et du haut du vitrage.
     if (p > I_LO && p < I_HI + 0.5) {
-      if (f.x > c.xFwin[0] + 0.015 && f.x < c.xFwin[1] - 0.015) return HOLE;
-      if (f.x > c.xSwin[0] + 0.015 && f.x < c.xSwin[1] - 0.015) return HOLE;
+      if (f.x > c.xFwin[0] - 0.005 && f.x < c.xFwin[1] + 0.005) return HOLE;
+      if (f.z > 0 && f.x > c.xSwin[0] - 0.005 && f.x < c.xSwin[1] + 0.005) return HOLE;
     }
     return 'black';
   };
   const X0 = c.xRear + 0.1;
-  const X1 = 1.76;
-  const breaks = [...c.xWs, ...c.xFwin, ...c.xSwin].flatMap((x) => [x - 0.015, x + 0.015]).filter((x) => x > X0 && x < X1);
+  const X1 = 1.66;
+  const breaks = [...c.xWs.flatMap((x) => [x - 0.005, x + 0.005]), ...[...c.xFwin, ...c.xSwin].flatMap((x) => [x - 0.005, x + 0.005])].filter((x) => x > X0 && x < X1);
   const lining = k
     .loft({
       sectionAt: (x) => k.mirrorSection(half(x)),
@@ -129,6 +131,8 @@ export default function interieur(k, c) {
       inward: true,
       capRows: 2,
       capColumns: 4,
+      capY: [...c.rear.win],
+      capZ: [c.rear.winZ],
       crease: 70,
     })
     .filter((part) => part.material !== HOLE);
@@ -137,8 +141,16 @@ export default function interieur(k, c) {
   const box = (/** @type {number} */ l, /** @type {number} */ h, /** @type {number} */ r, /** @type {number} */ depth, /** @type {string} */ material, /** @type {number} */ bevel = 0.02) =>
     k.roundedExtrude(k.roundedRect(l, h, r, 4), { material, depth, bevel, bevelSegments: 2 });
 
-  // --- Planche de bord ; combiné et écran posés dessus, tournés vers le conducteur ------------------------------------
+  // --- Planche de bord à deux étages : bas (console, boîte à gants), haut (tablette profonde jusqu'au
+  //     pied du pare-brise, vide-poches) ; combiné et écran posés dessus, tournés vers le conducteur --
   parts.push(...k.place(box(0.45, 0.24, 0.08, 1.74, 'black', 0.04), { position: [1.45, 1.0, 0] }));
+  /** @type {P2[]} */
+  const upper = [[1.36, 1.1], [1.66, 1.1], [1.66, 1.3], [1.6, 1.315], [1.42, 1.235], [1.37, 1.205]];
+  parts.push(...k.roundedExtrude(upper, { material: 'black', depth: 1.7, bevel: 0.015, bevelSegments: 2, curveSegments: 2 }));
+  // Vide-poches : cadre posé sur la pente de la tablette, côté passager ; boîte à gants dessous.
+  const slope = /** @type {P3} */ ([-0.4, 0.92, 0]);
+  parts.push(...k.orient(k.roundedExtrude(k.roundedRect(0.34, 0.16, 0.03, 3), { material: 'black', depth: 0.012, bevel: 0.004, bevelSegments: 1, holes: [k.roundedRect(0.3, 0.12, 0.02, 3)] }), { position: [1.5, 1.272, 0.42], normal: slope, up: [1, 0, 0] }));
+  parts.push(...k.orient(box(0.4, 0.15, 0.02, 0.01, 'black', 0.004), { position: [1.222, 0.98, 0.45], normal: [-1, 0, 0], up: [0, 1, 0] }));
   /** Pose face au conducteur, normale `n`. @param {Parts} p @param {P3} at @param {readonly number[]} n */
   const facing = (p, at, n) => k.orient(p, { position: at, normal: /** @type {P3} */ ([...n]), up: [0, 1, 0] });
   // Combiné : fond noir, deux cadrans (graduations noires sur la lumière de l'app, aiguilles
@@ -174,6 +186,27 @@ export default function interieur(k, c) {
   // --- Levier court sur la console : soufflet et tige (le pommeau est posé sur l'ancre `pommeau`) --
   parts.push(...k.place(k.lathe([[0.045, 0], [0.042, 0.012], [0.03, 0.03], [0.02, 0.05], [0.009, 0.062]], { material: 'black', axis: 'y', segments: 20, crease: 70 }), { position: LEVER.base }));
   parts.push(...k.rod(LEVER.base, LEVER.top, 0.0065, { material: 'black', radial: 10 }));
+
+  // --- Garnitures des portes avant : panneau, accoudoir, bac de porte, tirette ----------------
+  for (const sz of [-1, 1]) {
+    const zIn = sz * 0.895;
+    parts.push(...k.place(box(0.8, 0.44, 0.05, 0.02, 'leather', 0.008), { position: [0.7, 0.83, zIn] }));
+    parts.push(...k.place(box(0.42, 0.05, 0.02, 0.07, 'black', 0.015), { position: [0.72, 0.97, sz * 0.86] }));
+    parts.push(...k.place(box(0.55, 0.12, 0.02, 0.05, 'black', 0.012), { position: [0.78, 0.68, sz * 0.865] }));
+    parts.push(...k.place(box(0.12, 0.025, 0.01, 0.02, 'chrome', 0.006), { position: [1.08, 1.02, sz * 0.875] }));
+  }
+
+  // --- Passage vers la cabine arrière : montants habillés, sans cloison ni traverse (le ciel étoilé
+  //     se voit d'un bout à l'autre) -------------------------------------------------------------
+  for (const sz of [-1, 1]) parts.push(...k.place(box(0.08, 1.38, 0.02, 0.07, 'black', 0.015), { position: [0.08, 1.13, sz * 0.85] }));
+
+  // --- Cabine arrière : plancher, passages de roue habillés, garnitures des flancs -------------
+  parts.push(...k.place(box(2.3, 0.016, 0.004, 1.3, 'leather', 0.004), { position: [-1.2, FLOOR + 0.009, 0] }));
+  for (const sz of [-1, 1]) {
+    parts.push(...k.place(box(0.66, 0.3, 0.12, 0.24, 'black', 0.04), { position: [-1.54, 0.58, sz * 0.78] }));
+    parts.push(...k.place(box(0.9, 0.32, 0.04, 0.02, 'leather', 0.008), { position: [-2.0, 0.94, sz * 0.9] }));
+    parts.push(...k.place(box(0.85, 0.32, 0.04, 0.02, 'leather', 0.008), { position: [-0.62, 0.94, sz * 0.9] }));
+  }
 
   // --- Banquette arrière (les sièges avant sont posés sur les ancres siege_avant_*) -------------
   parts.push(...k.place(box(0.5, 0.13, 0.05, 1.5, 'leather', 0.03), { position: [-0.95, 0.66, 0] }));

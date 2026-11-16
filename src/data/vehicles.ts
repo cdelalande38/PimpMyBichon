@@ -7,7 +7,7 @@
 import { FINISHES } from './finishes.ts';
 import { INTERIOR_CATALOGUE } from './habitacle.ts';
 import { WHEEL_CATALOGUE } from './wheels.ts';
-import type { EngineSpec, InteriorView, Paint, SkyMotif, VehicleId, VehicleManifest, Zone, ZoneGroup } from './vehicleTypes.ts';
+import type { EngineSpec, InteriorView, Paint, PlaceId, SkyMotif, VehicleId, VehicleManifest, Zone, ZoneGroup } from './vehicleTypes.ts';
 
 /** Dossier des véhicules, sous le socle de l'app. */
 export const VEHICLES_DIR = 'assets/vehicles/';
@@ -142,11 +142,36 @@ function point(value: unknown): boolean {
   return Array.isArray(value) && value.length === 3 && value.every((n) => typeof n === 'number' && Number.isFinite(n));
 }
 
+const PLACES: readonly PlaceId[] = ['conducteur', 'passager', 'arriere'];
+
 function checkView(view: unknown, where: string, problems: string[]): void {
-  if (!isObject(view) || !point(view.eye) || !point(view.target)) {
-    problems.push(`${where} doit porter eye et target, trois nombres chacun, en mètres`);
+  if (!isObject(view)) {
+    problems.push(`${where} doit être un objet`);
     return;
   }
+  if (view.place !== undefined && !PLACES.includes(view.place as PlaceId)) problems.push(`${where}.place doit valoir ${PLACES.join(', ')}`);
+  const seat = view.seat;
+  if (seat !== undefined) {
+    const ok =
+      isObject(seat) &&
+      Array.isArray(seat.anchors) &&
+      seat.anchors.length > 0 &&
+      seat.anchors.every((name) => typeof name === 'string' && name.length > 0) &&
+      typeof seat.up === 'number' &&
+      seat.up >= 0.5 &&
+      seat.up <= 1.2 &&
+      (typeof seat.ahead === 'number' ? seat.behind === undefined : typeof seat.behind === 'number') &&
+      ['ahead', 'behind', 'side', 'headroom'].every((key) => seat[key] === undefined || (typeof seat[key] === 'number' && Math.abs(seat[key] as number) <= 2));
+    if (!ok) problems.push(`${where}.seat doit porter anchors (noms d'ancres), up (0,5 à 1,2 m) et ahead ou behind, en mètres`);
+  }
+  if (seat === undefined && !point(view.eye)) problems.push(`${where} doit porter seat (place sur les sièges) ou eye (trois nombres, en mètres)`);
+  if (view.eye !== undefined && !point(view.eye)) problems.push(`${where}.eye doit porter trois nombres, en mètres`);
+  const look = view.look;
+  if (look !== undefined && !(isObject(look) && typeof look.yaw === 'number' && Math.abs(look.yaw) <= 90 && typeof look.pitch === 'number' && Math.abs(look.pitch) <= 60)) {
+    problems.push(`${where}.look doit porter yaw (−90 à 90°) et pitch (−60 à 60°)`);
+  }
+  if (look === undefined && !point(view.target)) problems.push(`${where} doit porter look (cap du regard) ou target (trois nombres, en mètres)`);
+  if (view.target !== undefined && !point(view.target)) problems.push(`${where}.target doit porter trois nombres, en mètres`);
   if (view.label !== undefined && !text(view.label)) problems.push(`${where}.label doit être un texte`);
   if (view.fov !== undefined && !(typeof view.fov === 'number' && view.fov >= 60 && view.fov <= 110)) problems.push(`${where}.fov doit être un angle de 60 à 110 degrés`);
   if (view.volets !== undefined && !(Array.isArray(view.volets) && view.volets.every((item) => ['volant', 'pommeau', 'sieges', 'ciel'].includes(item as string)))) {
@@ -161,6 +186,8 @@ function checkInterior(raw: Raw, problems: string[]): void {
     if (!Array.isArray(raw.interiorViews)) problems.push('interiorViews doit être une liste de points de vue');
     else if (raw.interiorView === undefined) problems.push('interiorViews demande un premier point de vue, interiorView');
     else raw.interiorViews.forEach((view: unknown, i) => checkView(view, `interiorViews[${i}]`, problems));
+    const places = [raw.interiorView, ...(Array.isArray(raw.interiorViews) ? raw.interiorViews : [])].map((view) => (isObject(view) ? view.place : undefined)).filter((place) => place !== undefined);
+    if (new Set(places).size !== places.length) problems.push('interiorView et interiorViews : chaque place une fois au plus');
   }
   if (raw.cabin === undefined) return;
   const cabin = raw.cabin;
@@ -256,12 +283,48 @@ function checkInteriorParts(raw: Raw, problems: string[]): void {
 }
 
 /**
- * Points de vue intérieurs d'un véhicule, dans l'ordre des appuis sur le bouton rond : le premier
- * s'ouvre en entrant. Vide : pas de vue intérieure.
+ * Places de la vue intérieure d'un véhicule : la première (le conducteur) s'ouvre en entrant. Vide :
+ * pas de vue intérieure. Un point de vue sans place (ancien format) compte comme le conducteur.
  */
 export function interiorViewsOf(vehicle: Pick<VehicleManifest, 'interiorView' | 'interiorViews'>): readonly InteriorView[] {
   if (!vehicle.interiorView) return [];
   return [vehicle.interiorView, ...(vehicle.interiorViews ?? [])];
+}
+
+/** Place d'un point de vue du manifeste ; sans place déclarée : le conducteur pour le premier. */
+export function placeIdOf(view: InteriorView, rank: number): PlaceId {
+  return view.place ?? (rank === 0 ? 'conducteur' : (PLACES[Math.min(rank, PLACES.length - 1)] ?? 'conducteur'));
+}
+
+/** Les places d'un véhicule, dans l'ordre du manifeste : identifiant, nom affiché, point de vue. */
+export function placesOf(vehicle: Pick<VehicleManifest, 'interiorView' | 'interiorViews'>): ReadonlyArray<{ id: PlaceId; label: string; view: InteriorView }> {
+  return interiorViewsOf(vehicle).map((view, rank) => {
+    const id = placeIdOf(view, rank);
+    return { id, label: view.label ?? PLACE_LABELS[id], view };
+  });
+}
+
+/** Noms des places, quand le manifeste n'en donne pas. */
+export const PLACE_LABELS: Readonly<Record<PlaceId, string>> = Object.freeze({ conducteur: 'Conducteur', passager: 'Passager', arriere: 'Arrière' });
+
+/**
+ * La place `id` d'un véhicule ; une place inconnue (ou que ce véhicule n'a pas) retombe sur le
+ * conducteur, la première. `null` : pas de vue intérieure.
+ */
+export function placeOf(vehicle: Pick<VehicleManifest, 'interiorView' | 'interiorViews'>, id: string | null | undefined): { id: PlaceId; label: string; view: InteriorView } | null {
+  const places = placesOf(vehicle);
+  return places.find((place) => place.id === id) ?? places.find((place) => place.id === 'conducteur') ?? places[0] ?? null;
+}
+
+/**
+ * Place d'où l'on voit le mieux un volet : celle dont le manifeste cite le volet (volets) ; sinon,
+ * pour les sièges, le passager ; sinon le conducteur.
+ */
+export function placeForVolet(places: ReadonlyArray<{ id: PlaceId; view: { volets?: readonly string[] } }>, volet: string | undefined): PlaceId {
+  const declared = places.find((place) => volet !== undefined && (place.view.volets ?? []).includes(volet));
+  if (declared) return declared.id;
+  if (volet === 'sieges' || volet === 'ciel') return places.find((place) => place.id === 'arriere')?.id ?? places.find((place) => place.id === 'passager')?.id ?? 'conducteur';
+  return 'conducteur';
 }
 
 /** Chemin du manifeste d'un dossier, tel qu'on le cite dans une erreur. */

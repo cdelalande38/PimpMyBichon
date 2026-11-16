@@ -8,20 +8,21 @@
 // décor qui passerait devant le véhicule quitte l'image (coupe caméra, src/scene/garage/cut.ts).
 // Chaque véhicule a son cadrage de départ (src/scene/fit.ts, fitVehicle : 80 % de la largeur,
 // centré dans la partie libre au-dessus du dock compact) et son côté de présentation (manifeste,
-// presentSide). Vue intérieure (useView, mode 'interieur') : l'un des points de vue du manifeste
-// (interiorView, puis interiorViews, un appui du bouton rond chacun), le regard qui tourne au
-// doigt, sans se déplacer ni zoomer ; l'habitacle y allume son ciel étoilé et sa lumière (cabin).
+// presentSide). Vue intérieure (useView, mode 'interieur') : assis à l'une des places du manifeste
+// (conducteur, passager, arrière), l'œil posé sur les sièges du modèle chargé (src/scene/fit.ts,
+// placeEye), le regard qui tourne au doigt, sans se déplacer ni zoomer ; l'habitacle y allume son
+// ciel étoilé et sa lumière (cabin).
 
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { VignetteEffect } from 'postprocessing';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
-import { CircleGeometry, Color, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera as Camera, PlaneGeometry, Quaternion, Vector3 } from 'three';
+import { Box3, CircleGeometry, Color, DoubleSide, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera as Camera, PlaneGeometry, Quaternion, Raycaster, Vector3, type Group, type Material, type Object3D } from 'three';
 import { SceneBoundary } from '../app/SceneBoundary.tsx';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
-import { interiorViewsOf, modelPresent, resolveVehicle } from '../data/vehicles.ts';
-import type { Build, CabinLighting, InteriorView } from '../data/vehicleTypes.ts';
+import { modelPresent, placeOf, resolveVehicle } from '../data/vehicles.ts';
+import type { Build, CabinLighting, InteriorView, PlaceId } from '../data/vehicleTypes.ts';
 import { cabinFor, INTERIOR_SLOTS, SKY_TUNE } from '../data/habitacle.ts';
 import { GARAGE } from '../data/garage.ts';
 import { CAMERA_LAYERS } from '../render/layers.ts';
@@ -45,6 +46,7 @@ import { starLayout } from './cabin.ts';
 import { SceneExtras } from './extras/SceneExtras.tsx';
 import {
   clampLook,
+  DEFAULT_SEAT,
   DOCK_SHIFT_MS,
   DOCK_TOP_MARGIN,
   dockShift,
@@ -57,10 +59,15 @@ import {
   INTERIOR,
   lookFrom,
   lookPoint,
+  lookTarget,
   orbitPosition,
+  placeEye,
   presentPose,
+  seatMetrics,
   type BoxSize,
+  type Cast,
   type Look,
+  type PlacedSeat,
 } from './fit.ts';
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
@@ -118,12 +125,115 @@ interface InteriorRig {
   savedTarget: Vector3;
   /** Véhicule à l'entrée : s'il a changé entre-temps, on sort sur la vue de départ du nouveau. */
   vehicle: string;
-  /** Point de vue visé (un appui du bouton rond passe au suivant, depuis la pose du moment). */
+  /** Place visée (manifeste) : en changer repart de la pose du moment. */
   view: InteriorView | null;
+  /** Sièges posés sous l'œil (modèle, pièces d'habitacle) : s'ils changent, l'œil se repose. */
+  signature: string;
+  /** Œil et point regardé de la place, dans le repère du véhicule, caisse au repos. */
+  rest: { eye: [number, number, number]; target: [number, number, number] } | null;
+  place: PlaceId | null;
+  /** Ancre visée par le regard (useView, focus) ; `null` : le regard par défaut de la place. */
+  focus: string | null;
   eye: Vector3;
   base: Look;
   look: Look;
   fov: number;
+}
+
+/** Pièces d'habitacle posées par l'atelier sur les ancres (src/scene/vehicle/habitacle.ts). */
+const POSED = 'habitacle_pose';
+
+function posedPiece(object: Object3D): boolean {
+  for (let node: Object3D | null = object; node; node = node.parent) if (node.name === POSED) return true;
+  return false;
+}
+
+/** Lancer de rayon qui voit les deux faces de chaque maillage (un pavillon vu d'en dessous, un dossier de dos). */
+function castOn(targets: readonly Object3D[], origin: Vector3, direction: Vector3, skip: (object: Object3D) => boolean): number | null {
+  const raycaster = new Raycaster(origin, direction);
+  const changed: Array<[Material, Material['side']]> = [];
+  for (const target of targets) {
+    target.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      for (const material of Array.isArray(object.material) ? (object.material as Material[]) : [object.material as Material]) {
+        if (material.side !== DoubleSide) {
+          changed.push([material, material.side]);
+          material.side = DoubleSide;
+        }
+      }
+    });
+  }
+  try {
+    const hit = raycaster.intersectObjects([...targets], true).find((item) => !skip(item.object));
+    return hit ? hit.distance : null;
+  } finally {
+    for (const [material, side] of changed) material.side = side;
+  }
+}
+
+/**
+ * Œil et regard d'une place, dans le repère du véhicule caisse au repos : posés sur les sièges du
+ * modèle chargé (ancres, pièces posées, pavillon mesuré au rayon), ou repris du manifeste pour un
+ * vrai modèle sans ancres. `null` : rien pour poser l'œil (modèle pas encore là).
+ */
+function resolvePlace(group: Object3D | null, rootName: string, view: InteriorView, focus: string | null): { eye: [number, number, number]; target: [number, number, number] } | null {
+  const root = group?.getObjectByName(rootName);
+  const body = root?.getObjectByName('caisse');
+  let eye: [number, number, number] | null = view.eye ? [view.eye[0], view.eye[1], view.eye[2]] : null;
+  if (view.seat && root && body) {
+    body.updateWorldMatrix(true, true);
+    const toBody = body.matrixWorld.clone().invert();
+    const quaternion = body.getWorldQuaternion(new Quaternion());
+    const toWorld = (point: readonly number[]) => new Vector3(point[0], point[1], point[2]).applyMatrix4(body.matrixWorld);
+    const toWorldDir = (dir: readonly number[]) => new Vector3(dir[0], dir[1], dir[2]).applyQuaternion(quaternion);
+    const seats: PlacedSeat[] = [];
+    for (const name of view.seat.anchors) {
+      const anchor = root.getObjectByName(name);
+      if (!anchor) continue;
+      const at = anchor.getWorldPosition(new Vector3()).applyMatrix4(toBody);
+      const pose = anchor.children.find((child) => child.name === POSED);
+      let metrics = DEFAULT_SEAT;
+      if (pose) {
+        // Boîte du siège posé, relative à son ancre, dans le repère de la caisse.
+        const box = new Box3();
+        const v = new Vector3();
+        pose.updateWorldMatrix(true, true);
+        pose.traverse((object) => {
+          if (!(object instanceof Mesh)) return;
+          const position = object.geometry.getAttribute('position');
+          if (!position) return;
+          const toAnchor = toBody.clone().multiply(object.matrixWorld);
+          for (let i = 0; i < position.count; i += 1) box.expandByPoint(v.fromBufferAttribute(position, i).applyMatrix4(toAnchor).sub(at));
+        });
+        const cast: Cast = (origin, direction) => castOn([pose], toWorld([at.x + origin[0], at.y + origin[1], at.z + origin[2]]), toWorldDir(direction), () => false);
+        if (!box.isEmpty()) metrics = seatMetrics(cast, { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] }, view.seat.up);
+      }
+      seats.push({ anchor: [at.x, at.y, at.z], metrics });
+    }
+    // Pavillon au-dessus de l'œil : le premier maillage de la caisse touché vers le haut, pièces posées exclues.
+    const roof = (x: number, z: number, from: number) => {
+      const d = castOn([body], toWorld([x, from, z]), toWorldDir([0, 1, 0]), posedPiece);
+      return d === null ? null : from + d;
+    };
+    eye = placeEye(view.seat, seats, roof) ?? eye;
+  }
+  if (!eye) return null;
+  // Regard visé (Custom › Intérieur : le pommeau) : droit sur l'ancre, si le modèle l'a.
+  const aim = focus && body ? root?.getObjectByName(focus) : undefined;
+  if (aim && body) {
+    const at = aim.getWorldPosition(new Vector3()).applyMatrix4(body.matrixWorld.clone().invert());
+    return { eye, target: [at.x, at.y, at.z] };
+  }
+  const target: [number, number, number] = view.look ? lookTarget(eye, view.look) : view.target ? [view.target[0], view.target[1], view.target[2]] : [eye[0] + 1, eye[1], eye[2]];
+  return { eye, target };
+}
+
+/** Ce dont dépend l'œil d'une place : le modèle posé et les pièces sur les ancres de ses sièges. */
+function placeSignature(group: Object3D | null, rootName: string, view: InteriorView | null): string {
+  const root = group?.getObjectByName(rootName);
+  if (!root || !view) return 'absent';
+  if (!view.seat) return root.uuid;
+  return [root.uuid, ...view.seat.anchors.map((name) => root.getObjectByName(name)?.children.find((child) => child.name === POSED)?.uuid ?? 'nu')].join('|');
 }
 
 function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, reducedMotion, stage, compactTop }: StageProps) {
@@ -222,7 +332,6 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // en cours ou un véhicule sans point de vue intérieur. `outside` : la caméra est revenue en orbite.
   const viewMode = useView((state) => state.mode);
   const setViewMode = useView((state) => state.setMode);
-  const views = interiorViewsOf(vehicle);
   // Habitacle allumé selon le build : ciel étoilé (couleur, densité, allumé ou éteint), lumière.
   const skyKey = useBuilds((state) => {
     const build = state.builds[vehicle.id];
@@ -239,8 +348,14 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // Caisse posée par l'assiette et les roues (src/scene/vehicle/wheels.ts) : la vue intérieure et
   // l'habitacle allumé la suivent.
   const body = useBodyPose((state) => state.poses[vehicle.id]) ?? STILL_BODY;
-  const seat = useView((state) => state.seat);
-  const interiorView = views[Math.min(seat, views.length - 1)];
+  // Place assise : celle de l'état de vue, ou le conducteur si ce véhicule ne l'a pas.
+  const place = placeOf(vehicle, useView((state) => state.place));
+  const interiorView = place?.view;
+  const placeId = place?.id ?? null;
+  const focus = useView((state) => state.focus);
+  const rootName = vehicle.placeholder ?? `vehicule_${vehicle.id}`;
+  // Groupe du véhicule dans la pièce : la scène y lit les ancres des sièges et le pavillon.
+  const vehicleGroup = useRef<Group>(null);
   const wantInside = viewMode === 'interieur' && interiorView !== undefined && !photo && !measuring;
   useEffect(() => {
     if (viewMode === 'interieur' && !wantInside) setViewMode('atelier');
@@ -264,6 +379,10 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     savedTarget: new Vector3(),
     vehicle: '',
     view: null,
+    signature: '',
+    rest: null,
+    place: null,
+    focus: null,
     eye: new Vector3(),
     base: { yaw: 0, pitch: 0 },
     look: { yaw: 0, pitch: 0 },
@@ -340,6 +459,9 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     const phase = rig.phase;
     putData(element, 'vue', phase === 'out' ? 'atelier' : phase === 'in' ? 'interieur' : 'transition');
     putData(element, 'regard', phase === 'in' ? `${Math.round(((rig.look.yaw - rig.base.yaw) * 180) / Math.PI)},${Math.round(((rig.look.pitch - rig.base.pitch) * 180) / Math.PI)}` : null);
+    // Place assise et œil (repère du véhicule, en centimètres), pour les parcours.
+    putData(element, 'place', phase === 'in' ? rig.place : null);
+    putData(element, 'oeil', phase === 'in' && rig.rest ? rig.rest.eye.map((v) => Math.round(v * 100)).join(',') : null);
     const p = state.camera.position;
     putData(element, 'camera', phase === 'out' ? `${Math.round(p.x * 100)},${Math.round(p.y * 100)},${Math.round(p.z * 100)}` : null);
     let frame: string | null = null;
@@ -382,23 +504,47 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // Entrée et sortie : on part de la caméra telle qu'elle est (même au milieu d'une transition).
   const instant = reducedMotion || photo;
   const getThree = useThree((state) => state.get);
+  // Œil de la place posé dans la pièce : `keepLook` garde l'écart du regard au doigt (siège changé).
+  const seatEye = useCallback(
+    (rig: InteriorRig, view: InteriorView, keepLook: boolean): boolean => {
+      const rest = resolvePlace(vehicleGroup.current, rootName, view, rig.focus) ?? rig.rest;
+      if (!rest) return false;
+      const pose = interiorPose({ eye: bodyPoint(rest.eye, body), target: bodyPoint(rest.target, body) }, turn);
+      const base = lookFrom(pose.eye, pose.target);
+      const look = keepLook ? { yaw: base.yaw + rig.look.yaw - rig.base.yaw, pitch: base.pitch + rig.look.pitch - rig.base.pitch } : { ...base };
+      rig.rest = rest;
+      rig.eye.set(...pose.eye);
+      rig.base = base;
+      rig.look = clampLook(base, look);
+      rig.signature = placeSignature(vehicleGroup.current, rootName, view);
+      return true;
+    },
+    [rootName, body, turn],
+  );
   useEffect(() => {
     const rig = interior.current;
     const view = getThree().camera as Camera;
     const now = performance.now();
-    const moving = rig.phase === 'out' || rig.phase === 'leaving' || rig.view !== interiorView;
+    const moving = rig.phase === 'out' || rig.phase === 'leaving' || rig.view !== interiorView || rig.focus !== focus;
     if (wantInside && interiorView && moving) {
+      rig.focus = focus;
       if (rig.phase === 'out') {
         rig.savedPosition.copy(view.position);
         if (controls.current) rig.savedTarget.copy(controls.current.target);
         else rig.savedTarget.set(...target);
         rig.vehicle = vehicle.id;
+        rig.rest = null;
       }
-      const pose = interiorPose({ ...interiorView, eye: bodyPoint(interiorView.eye, body), target: bodyPoint(interiorView.target, body) }, turn);
-      rig.eye.set(...pose.eye);
-      rig.base = lookFrom(pose.eye, pose.target);
-      rig.look = { ...rig.base };
+      // Modèle pas encore posé : un œil d'attente au-dessus du milieu de l'habitacle, reposé dès son arrivée.
+      if (!seatEye(rig, interiorView, false)) {
+        const waiting = interiorPose({ eye: bodyPoint([0, 1.2, 0], body), target: bodyPoint([1, 1.05, 0], body) }, turn);
+        rig.eye.set(...waiting.eye);
+        rig.base = lookFrom(waiting.eye, waiting.target);
+        rig.look = { ...rig.base };
+        rig.signature = '';
+      }
       rig.view = interiorView;
+      rig.place = placeId;
       rig.fov = interiorFov(width, height, interiorView.fov);
       rig.fromPosition.copy(view.position);
       rig.fromQuaternion.copy(view.quaternion);
@@ -418,9 +564,30 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       rig.duration = instant ? 0 : INTERIOR.transitionMs;
       rig.phase = 'leaving';
       rig.view = null;
+      rig.place = null;
+      invalidate();
+    } else if (wantInside && interiorView && rig.rest) {
+      // Même place, caisse reposée (assiette) ou écran tourné : l'œil suit, le regard au doigt reste.
+      seatEye(rig, interiorView, true);
       invalidate();
     }
-  }, [wantInside, interiorView, turn, width, height, instant, getThree, target, invalidate, vehicle.id, body]);
+  }, [wantInside, interiorView, placeId, focus, turn, width, height, instant, getThree, target, invalidate, vehicle.id, body, seatEye]);
+  // Siège changé dans Custom › Intérieur, ou modèle arrivé après l'entrée : l'œil se repose sur le
+  // siège posé (vérifié à chaque image dessinée dedans, qui suit chaque pose de pièce).
+  useFrame(() => {
+    const rig = interior.current;
+    if ((rig.phase !== 'in' && rig.phase !== 'entering') || !rig.view) return;
+    if (placeSignature(vehicleGroup.current, rootName, rig.view) === rig.signature) return;
+    const view = getThree().camera as Camera;
+    if (!seatEye(rig, rig.view, rig.rest !== null)) return;
+    rig.fromPosition.copy(view.position);
+    rig.fromQuaternion.copy(view.quaternion);
+    rig.fromFov = view.fov;
+    rig.start = performance.now();
+    rig.duration = instant ? 0 : INTERIOR.transitionMs;
+    rig.phase = 'entering';
+    invalidate();
+  }, -1);
   // Le champ de la vue intérieure suit la forme de l'écran.
   const viewFov = interiorView?.fov;
   useEffect(() => {
@@ -571,7 +738,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
           réseau), le garage reste et l'étiquette le dit. Un véhicule et un essai par clé : en changer
           libère l'ancien (modèle, peinture, ombre) et remet à zéro le garde-fou. */}
       {/* Pose du véhicule dans la pièce (nez à gauche, ou à droite selon presentSide) : on tourne son groupe, pas le modèle. */}
-      <group rotation-y={turn}>
+      <group ref={vehicleGroup} rotation-y={turn}>
         {buildsRead && present !== false && (
           <SceneBoundary key={`${vehicle.id}:${attempt}`} onFail={onFail}>
             <Suspense fallback={null}>

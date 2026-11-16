@@ -11,6 +11,7 @@ import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   Box3,
+  FrontSide,
   Group,
   Mesh,
   MeshPhysicalMaterial,
@@ -28,7 +29,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { BASIS_TRANSCODER_DIR } from '../../data/bench.ts';
 import { finish as findFinish } from '../../data/finishes.ts';
-import { materialRole, paintZoneOf } from '../../data/materialRoles.ts';
+import { glassLook, materialRole, paintZoneOf, type GlassLook } from '../../data/materialRoles.ts';
 import { modelUrl } from '../../data/vehicles.ts';
 import type { Paint, VehicleManifest } from '../../data/vehicleTypes.ts';
 import { primeCutDither, programsReady, type CutDitherProgram } from '../../render/cutDither.ts';
@@ -37,6 +38,7 @@ import { precompileSeen } from '../../render/ReflectionProbe.tsx';
 import { useRenderStats } from '../../render/renderStats.ts';
 import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
 import { useBench } from '../../state/bench.ts';
+import { useView } from '../../state/view.ts';
 import { resolvePaints, useBuilds } from '../../state/builds.ts';
 import { resolveWheels, TIRE_PAINT, WHEEL_SLOTS, wheelFiles } from '../../data/wheels.ts';
 import type { Build } from '../../data/vehicleTypes.ts';
@@ -78,6 +80,8 @@ export interface Prepared extends VehicleMeasure {
   zones: ReadonlyMap<string, MeshPhysicalMaterial>;
   /** Caisse, roues et ancres : ce que l'assiette et le choix des roues déplacent. */
   wheels: WheelRig;
+  /** Vitrages, avec leur réglage vu de dehors : la vue intérieure les éclaircit (setGlassInside). */
+  glass: GlassPane[];
   /**
    * Ce que la préparation a créé, à libérer quand le modèle change ou quitte la scène. Le reste
    * (géométries d'origine, matériaux, textures, dont les cartes de normales reprises par la
@@ -124,15 +128,38 @@ function removeLogos(meshes: readonly Mesh[], all: ReadonlySet<Material>, vehicl
   }
 }
 
-/** Vitrage transparent et teinté plutôt que réfractant (une passe de rendu complète de moins). */
-function makeGlass(material: Material, color: string, opacity: number): void {
+/** Un vitrage préparé et son réglage vu de dehors. */
+export interface GlassPane {
+  material: MeshStandardMaterial;
+  outside: GlassLook;
+}
+
+/**
+ * Vitrage transparent et teinté plutôt que réfractant (une passe de rendu complète de moins).
+ * Une seule face dessinée, celle qui regarde dehors : vue de l'habitacle, une vitre d'une seule
+ * peau n'est pas dessinée du tout, et l'on voit le garage ou la route au travers (un vitrage à deux
+ * faces ou épais est éclairci en vue intérieure, setGlassInside).
+ */
+function makeGlass(material: Material, color: string, look: GlassLook, panes: GlassPane[]): void {
   if (!(material instanceof MeshStandardMaterial)) return;
   if (material instanceof MeshPhysicalMaterial) material.transmission = 0;
   material.color.set(color);
   material.transparent = true;
-  material.opacity = opacity;
+  material.opacity = look.opacity;
+  material.envMapIntensity = look.envMapIntensity;
+  material.side = FrontSide;
   material.depthWrite = false;
   material.needsUpdate = true;
+  if (!panes.some((pane) => pane.material === material)) panes.push({ material, outside: { ...look } });
+}
+
+/** Vitrages vus de dedans (vue intérieure) ou de dehors : opacité et reflet (src/data/materialRoles.ts, glassLook). */
+export function setGlassInside(panes: readonly GlassPane[], inside: boolean): void {
+  for (const { material, outside } of panes) {
+    const look = glassLook(outside, inside);
+    material.opacity = look.opacity;
+    material.envMapIntensity = look.envMapIntensity;
+  }
 }
 
 function makeLamp(material: Material, color: string, intensity: number): void {
@@ -240,11 +267,12 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   owned.push(...paints);
 
   // 3. Rôles des matériaux aux conventions (chrome, alu, vitrage, optiques…).
+  const glass: GlassPane[] = [];
   for (const material of all) {
     const role = materialRole(material.name);
     if (!role || zoneOf(material) || !(material instanceof MeshStandardMaterial)) continue;
     if (role.opacity !== undefined) {
-      makeGlass(material, role.color, role.opacity);
+      makeGlass(material, role.color, { opacity: role.opacity, envMapIntensity: role.envMapIntensity }, glass);
       continue;
     }
     material.color.set(role.color);
@@ -256,8 +284,11 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
 
   // 4. Vitrages et optiques d'un modèle adapté.
   if (adapt?.glass) {
-    const { glass } = adapt;
-    for (const material of all) if (glass.materials.includes(material.name)) makeGlass(material, glass.color, glass.opacity);
+    // Reflet : celui du modèle (le concept garde son rendu d'atelier).
+    for (const material of all) {
+      if (!adapt.glass.materials.includes(material.name) || !(material instanceof MeshStandardMaterial)) continue;
+      makeGlass(material, adapt.glass.color, { opacity: adapt.glass.opacity, envMapIntensity: material.envMapIntensity }, glass);
+    }
   }
   for (const lamp of adapt?.lamps ?? []) {
     for (const material of all) if (lamp.materials.includes(material.name)) makeLamp(material, lamp.color, lamp.intensity);
@@ -358,6 +389,7 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
     halfWidth: size.z / 2,
     height: size.y,
     wheels: { body, ground, anchors },
+    glass,
     owned: { geometries: mergedGeometries, materials: owned },
   };
 }
@@ -548,6 +580,12 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
     paintZones(prepared.zones, paints, bodyEnv);
     invalidate();
   }, [prepared, paints, bodyEnv, invalidate]);
+  // Vue intérieure : vitrages presque incolores, pour voir dehors par toutes les vitres.
+  const inside = useView((state) => state.mode === 'interieur');
+  useLayoutEffect(() => {
+    setGlassInside(prepared.glass, inside);
+    invalidate();
+  }, [prepared, inside, invalidate]);
   // Programmes du véhicule peint lancés ensemble avant sa première image, au lieu de se compiler
   // un par un pendant celle-ci, fil principal bloqué (démarrage, changement de modèle).
   useLayoutEffect(() => {

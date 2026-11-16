@@ -118,7 +118,8 @@ export const TUTOS: readonly Tuto[] = [
     titre: 'L’intérieur',
     but: 'Ici, tu garnis l’habitacle : volant, pommeau, sièges et ciel étoilé, et tu les vois de l’intérieur.',
     etapes: [
-      { texte: 'Quatre volets : Volant, Pommeau, Sièges et Ciel. Chaque choix se voit aussitôt, depuis la place du passager.', cible: 'footer.dock .habitacle-volets' },
+      { texte: 'Quatre volets : Volant, Pommeau, Sièges et Ciel. Chaque volet t’assoit à la place d’où il se voit le mieux.', cible: 'footer.dock .habitacle-volets' },
+      { texte: 'Tu préfères une autre place ? Touche Conducteur, Passager ou Arrière, juste au-dessus du menu.', cible: '.places' },
       { texte: 'Les pastilles colorent la jante du volant, le pommeau ou les étoiles. Le « + » ouvre toutes les couleurs.' },
       { texte: 'Dans Ciel, allume ou éteins les étoiles et choisis leur densité. Glisse un doigt sur l’image pour lever les yeux.' },
       { texte: '« D’origine » remet l’habitacle comme avant. Quitte l’entrée et tu ressors dans l’atelier.' },
@@ -188,11 +189,11 @@ export const TUTOS: readonly Tuto[] = [
     id: 'interieur',
     ecrans: ['vue:interieur'],
     titre: 'La vue intérieure',
-    but: 'Ici, tu prends place au volant et tu regardes l’habitacle.',
+    but: 'Ici, tu t’assois dans le véhicule et tu regardes l’habitacle.',
     etapes: [
-      { texte: 'Tu vois le véhicule avec les yeux du conducteur.' },
-      { texte: 'Glisse un doigt pour regarder autour de toi.' },
-      { texte: 'Pour ressortir, touche de nouveau le bouton rond au volant : il s’appelle « Sortir ».', cible: 'nav.quick' },
+      { texte: 'Choisis ta place au pouce : Conducteur, Passager ou Arrière. L’atelier la garde pour ce véhicule.', cible: '.places' },
+      { texte: 'Glisse un doigt pour regarder autour de toi, et lève les yeux vers le ciel de toit.' },
+      { texte: 'Pour ressortir, touche « Sortir », ou le bouton rond au volant.', cible: '.places .place-sortir' },
     ],
   },
   {

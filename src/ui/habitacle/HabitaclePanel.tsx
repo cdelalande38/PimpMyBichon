@@ -1,5 +1,7 @@
 // Entrée « Intérieur » du dock (Custom) : le volant, le pommeau, les sièges avant et le ciel étoilé du
-// véhicule à l'écran. Ouvrir l'entrée fait entrer dans la vue intérieure, la quitter ramène à
+// véhicule à l'écran. Ouvrir l'entrée fait entrer dans la vue intérieure, assis à la place d'où l'on
+// voit le mieux le volet ouvert (manifeste, volets : volant et pommeau du conducteur, le regard sur le
+// pommeau ; sièges et ciel de l'arrière) ; on change de place à la main au-dessus du dock (PlacePicker). La quitter ramène à
 // l'atelier. Quatre volets dans le même cadre, un seul à la fois : le menu garde sa hauteur, chaque
 // choix se voit tout de suite. Pièces, teintes et crans viennent des données (src/data/habitacle.ts,
 // manifeste) : ajouter un volant ne touche pas à ce fichier. La sellerie se peint dans Peinture.
@@ -19,8 +21,8 @@ import {
   SKY_TUNE,
   type InteriorPiece,
 } from '../../data/habitacle.ts';
-import { interiorViewsOf, resolveVehicle } from '../../data/vehicles.ts';
-import type { Hex } from '../../data/vehicleTypes.ts';
+import { placeForVolet, placesOf, resolveVehicle } from '../../data/vehicles.ts';
+import type { Hex, PlaceId } from '../../data/vehicleTypes.ts';
 import { normalizeHex, resolvePaint, useBuilds } from '../../state/builds.ts';
 import { useDock } from '../../state/dock.ts';
 import { useView } from '../../state/view.ts';
@@ -76,18 +78,19 @@ function Swatches({ label, swatches, color, onPick }: { label: string; swatches:
 }
 
 /**
- * La vue intérieure tant que l'entrée est ouverte : on y entre à l'ouverture, au point de vue du
- * manifeste qui montre le mieux le volet ouvert (volets), on revient à l'atelier en la quittant
- * (retour, autre entrée, dock fermé).
+ * La vue intérieure tant que l'entrée est ouverte : on y entre à l'ouverture, à la place qui montre
+ * le mieux le volet ouvert, et on y repasse quand on change de volet (pas entre-temps : une place
+ * choisie à la main reste) ; on revient à l'atelier en quittant l'entrée (retour, autre entrée,
+ * dock fermé). Une place choisie ici n'est pas gardée pour le véhicule : seul le choix à la main l'est.
  */
-function useInsideWhileOpen(enabled: boolean, seat: number): void {
+function useInsideWhileOpen(enabled: boolean, vehicle: string, place: PlaceId, focus: string | null): void {
   useEffect(() => {
     if (!enabled) return undefined;
     return () => useView.getState().setMode('atelier');
   }, [enabled]);
   useEffect(() => {
-    if (enabled) useView.setState({ mode: 'interieur', seat });
-  }, [enabled, seat]);
+    if (enabled) useView.getState().sit(vehicle, place, false, focus);
+  }, [enabled, vehicle, place, focus]);
 }
 
 export function HabitaclePanel() {
@@ -110,8 +113,9 @@ export function HabitaclePanel() {
   );
   const [chosen, setVolet] = useState<Volet>('volant');
   const volet = volets.find((item) => item.id === chosen)?.id ?? volets[0]?.id;
-  const views = interiorViewsOf(vehicle);
-  useInsideWhileOpen(mode !== 'aucun' && views.length > 0, Math.max(0, views.findIndex((view) => volet !== undefined && (view.volets ?? []).includes(volet))));
+  const places = placesOf(vehicle);
+  // Le pommeau, bas sur la console, sort du champ étroit d'un écran en hauteur : le regard le vise.
+  useInsideWhileOpen(mode !== 'aucun' && places.length > 0, vehicle.id, placeForVolet(places, volet), volet === 'pommeau' ? INTERIOR_CATALOGUE.anchors.knob : null);
 
   if (mode === 'fixe' || mode === 'aucun' || !volet) {
     return (

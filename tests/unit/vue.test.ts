@@ -79,10 +79,15 @@ describe('côté de présentation', () => {
 describe('bornes du regard', () => {
   const base = { yaw: 1, pitch: -0.2 };
 
-  it('lacet ±110°, tangage ±35° autour de l’axe du manifeste', () => {
+  it('lacet ±110°, tangage 40° vers le bas et 75° vers le haut (le ciel étoilé) autour de l’axe de la place', () => {
+    expect((INTERIOR.yaw * 180) / Math.PI).toBeCloseTo(110, 9);
+    expect((INTERIOR.pitch * 180) / Math.PI).toBeCloseTo(40, 9);
+    expect((INTERIOR.pitchUp * 180) / Math.PI).toBeCloseTo(75, 9);
     const far = clampLook(base, { yaw: base.yaw + 3, pitch: base.pitch + 2 });
     expect(far.yaw - base.yaw).toBeCloseTo(INTERIOR.yaw, 9);
-    expect(far.pitch - base.pitch).toBeCloseTo(INTERIOR.pitch, 9);
+    expect(far.pitch - base.pitch).toBeCloseTo(INTERIOR.pitchUp, 9);
+    // Depuis un regard vers la route, on lève les yeux au-dessus de l'horizontale, vers le pavillon.
+    expect(far.pitch).toBeGreaterThan(1);
     const low = clampLook(base, { yaw: base.yaw - 3, pitch: base.pitch - 2 });
     expect(low.yaw - base.yaw).toBeCloseTo(-INTERIOR.yaw, 9);
     expect(low.pitch - base.pitch).toBeCloseTo(-INTERIOR.pitch, 9);
@@ -122,55 +127,50 @@ describe('bornes du regard', () => {
 });
 
 describe('bouton rond de la vue intérieure', () => {
-  it('un point de vue : un appui pour entrer, un pour sortir (comportement d’avant)', () => {
-    useView.getState().setMode('atelier');
-    useView.getState().next(1);
-    expect(useView.getState()).toMatchObject({ mode: 'interieur', seat: 0 });
-    useView.getState().next(1);
-    expect(useView.getState()).toMatchObject({ mode: 'atelier', seat: 0 });
+  it('entre à la place gardée du véhicule (le conducteur la première fois), et ressort ; plus de tour des places', () => {
+    useView.setState({ mode: 'atelier', place: 'conducteur', places: {} });
+    useView.getState().enterOrLeave('cox');
+    expect(useView.getState()).toMatchObject({ mode: 'interieur', place: 'conducteur' });
+    useView.getState().enterOrLeave('cox');
+    expect(useView.getState()).toMatchObject({ mode: 'atelier', place: 'conducteur' });
   });
 
-  it('deux points de vue : entrer, passer au second, ressortir', () => {
+  it('sortir par un autre chemin (photo, autre véhicule) garde la place choisie pour la prochaine entrée', () => {
+    useView.setState({ mode: 'atelier', place: 'conducteur', places: {} });
+    useView.getState().sit('cox', 'passager');
     useView.getState().setMode('atelier');
-    const seen: string[] = [];
-    for (let i = 0; i < 3; i += 1) {
-      useView.getState().next(2);
-      const { mode, seat } = useView.getState();
-      seen.push(`${mode}:${seat}`);
-    }
-    expect(seen).toEqual(['interieur:0', 'interieur:1', 'atelier:0']);
-  });
-
-  it('sortir par un autre chemin (photo, autre véhicule) remet au premier point de vue', () => {
-    useView.getState().setMode('atelier');
-    useView.getState().next(2);
-    useView.getState().next(2);
-    useView.getState().setMode('atelier');
-    expect(useView.getState().seat).toBe(0);
-    useView.getState().next(0);
     expect(useView.getState().mode).toBe('atelier');
+    useView.getState().enterOrLeave('cox');
+    expect(useView.getState()).toMatchObject({ mode: 'interieur', place: 'passager' });
   });
 });
 
 describe('vue intérieure dans les manifestes', () => {
   // On ne juge que les véhicules nommés ici et les motos : un autre fichier de tests dépose un
   // véhicule d'essai dans le même dossier pendant qu'il tourne (tests/unit/vehicules.test.ts).
-  it('la Cox, le concept et le van la déclarent (la vue intérieure du van est revenue) ; pas les motos', () => {
+  it('la Cox, le concept et le van la déclarent, par places nommées ; pas les motos', () => {
     for (const id of ['cox', 'concept', 'van']) expect(byId(id)?.interiorView, id).toBeDefined();
-    expect(interiorViewsOf(byId('cox')!).map((view) => view.label)).toEqual(['Entre les sièges', 'Au volant']);
-    // Le van : sous le ciel étoilé, puis au volant (volant et pommeau de Custom · Intérieur s'y voient).
-    expect(interiorViewsOf(byId('van')!).map((view) => view.label)).toEqual(['Sous le ciel étoilé', 'Au volant']);
+    expect(interiorViewsOf(byId('cox')!).map((view) => view.label)).toEqual(['Conducteur', 'Passager', 'Arrière']);
+    // Le van : l'arrière est la cabine sous le ciel étoilé.
+    expect(interiorViewsOf(byId('van')!).map((view) => view.label)).toEqual(['Conducteur', 'Passager', 'Arrière']);
+    expect(interiorViewsOf(byId('concept')!).map((view) => view.label)).toEqual(['Conducteur', 'Passager']);
     for (const manifest of MANIFESTS) {
       if (manifest.kind === 'bike') expect(interiorViewsOf(manifest), manifest.id).toHaveLength(0);
     }
   });
 
-  it('chaque point de vue a l’œil dans la boîte du véhicule et regarde vers l’avant', () => {
+  it('chaque place pose son œil (sur ses sièges, ou mesuré dans la boîte du véhicule) et regarde vers l’avant', () => {
+    // L'œil posé sur les sièges est vérifié sur le modèle chargé : tests/unit/places.test.ts.
     for (const manifest of MANIFESTS) {
       for (const view of interiorViewsOf(manifest)) {
-        expect(Math.abs(view.eye[0]), manifest.id).toBeLessThan(manifest.halfLengthHint);
-        expect(view.eye[1], manifest.id).toBeGreaterThan(0.6);
-        expect(view.target[0], manifest.id).toBeGreaterThan(view.eye[0]);
+        expect(view.seat !== undefined || view.eye !== undefined, manifest.id).toBe(true);
+        if (view.eye) {
+          expect(Math.abs(view.eye[0]), manifest.id).toBeLessThan(manifest.halfLengthHint);
+          expect(view.eye[1], manifest.id).toBeGreaterThan(0.6);
+        }
+        if (view.target && view.eye) expect(view.target[0], manifest.id).toBeGreaterThan(view.eye[0]);
+        if (view.look) expect(Math.abs(view.look.yaw), manifest.id).toBeLessThan(30);
+        expect(view.look !== undefined || view.target !== undefined, manifest.id).toBe(true);
       }
     }
   });

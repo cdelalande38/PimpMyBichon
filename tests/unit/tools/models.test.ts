@@ -114,7 +114,8 @@ describe('GLB — triangles et primitives', () => {
   });
 });
 
-describe('GLB — véhicules du catalogue, construits en mémoire', () => {
+// Construire un véhicule prend une à deux secondes sur un poste calme, bien plus sur un poste chargé.
+describe('GLB — véhicules du catalogue, construits en mémoire', { timeout: 60_000 }, () => {
   it.each(['cox', 'van'])('compte pour %s les mêmes appels et triangles que build.mjs', async (id) => {
     const { bytes, summary } = await buildVehicle(id);
     const parsed = parseGlb(bytes);

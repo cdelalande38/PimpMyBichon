@@ -139,10 +139,18 @@ function setView(name: string): void {
     camera.aspect = innerWidth / innerHeight;
     camera.near = 0.02;
     camera.up.set(0, 1, 0);
-    camera.position.set(...interior.eye);
-    camera.lookAt(new Vector3(...interior.target));
+    // Place posée sur ses sièges (seat) : l'œil au-dessus de la première ancre, à hauteur de tête
+    // d'un siège moyen (l'app, elle, mesure le siège posé et le pavillon : src/scene/fit.ts, placeEye).
+    const anchor = interior.seat ? scene.getObjectByName(interior.seat.anchors[0] ?? '')?.getWorldPosition(new Vector3()) : undefined;
+    const eye = interior.eye ? new Vector3(...interior.eye) : new Vector3(anchor?.x ?? 0, (anchor?.y ?? 0.3) + 0.33 + (interior.seat?.up ?? 0.85), anchor?.z ?? 0);
+    const look = interior.look ?? { yaw: 0, pitch: -10 };
+    const yaw = (look.yaw * Math.PI) / 180;
+    const pitch = (look.pitch * Math.PI) / 180;
+    const target = interior.target ? new Vector3(...interior.target) : eye.clone().add(new Vector3(Math.cos(yaw) * Math.cos(pitch), Math.sin(pitch), Math.sin(yaw) * Math.cos(pitch)));
+    camera.position.copy(eye);
+    camera.lookAt(target);
     camera.updateProjectionMatrix();
-    controls?.target.set(...interior.target);
+    controls?.target.copy(target);
     render();
     return;
   }

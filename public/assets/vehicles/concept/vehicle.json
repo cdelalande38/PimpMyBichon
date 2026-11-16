@@ -61,7 +61,8 @@
       { "material": "Tireside", "maps": ["map", "normalMap"], "color": "#1a1a1c" }
     ]
   },
-  "interiorView": { "eye": [0.2, 1.089, 0], "target": [1.3, 0.869, 0] },
+  "interiorView": { "place": "conducteur", "label": "Conducteur", "eye": [0.12, 0.93, 0], "look": { "yaw": 0, "pitch": -10 } },
+  "interiorViews": [{ "place": "passager", "label": "Passager", "eye": [-0.54, 0.99, 0.5], "look": { "yaw": -12, "pitch": -8 } }],
   "interior": { "fixed": true },
   "wheels": {
     "nodes": ["WheelFrontL", "WheelFrontR", "WheelRearL", "WheelRearR"],

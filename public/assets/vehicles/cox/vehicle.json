@@ -7,7 +7,7 @@
   "glb": "body.glb",
   "hint": "Ronde, posée bas, jantes 8 branches : la reine de l'atelier",
   "placeholder": "placeholder_cox",
-  "halfLengthHint": 2.04,
+  "halfLengthHint": 1.92,
   "zones": [
     {
       "id": "carrosserie",
@@ -74,16 +74,19 @@
     "power": 50,
     "sound": "quatre-a-plat"
   },
-  "interiorView": { "label": "Entre les sièges", "eye": [-0.64, 1.13, 0], "target": [0.6, 0.8, 0], "fov": 94 },
-  "interiorViews": [{ "label": "Au volant", "eye": [-0.15, 1.08, -0.32], "target": [0.6, 0.84, -0.14] }],
+  "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -12 }, "fov": 94, "volets": ["volant", "pommeau"] },
+  "interiorViews": [
+    { "place": "passager", "label": "Passager", "seat": { "anchors": ["siege_avant_droit"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": -14, "pitch": -10 }, "fov": 94 },
+    { "place": "arriere", "label": "Arrière", "seat": { "anchors": ["siege_avant_gauche", "siege_avant_droit"], "up": 0.85, "behind": 0.32 }, "look": { "yaw": 0, "pitch": -6 }, "fov": 94, "volets": ["sieges", "ciel"] }
+  ],
   "interior": {
     "steering": { "default": "sport" },
     "knob": { "default": "tete_de_mort", "zone": "pommeau" },
     "seats": { "default": "bas", "zone": "sellerie" },
-    "clearance": { "floor": 0.113, "dash": [0.575, 0.99] }
+    "clearance": { "floor": 0.113, "dash": [0.53, 0.97] }
   },
   "cabin": {
-    "sky": { "center": [-0.24, 1.335, 0], "size": [0.78, 0.66], "crown": 0.045, "count": 260, "color": "#ffd28a", "seed": 11, "on": false }
+    "sky": { "center": [-0.27, 1.32, 0], "size": [0.76, 0.6], "crown": 0.05, "count": 260, "color": "#ffd28a", "seed": 11, "on": false }
   },
   "wheels": {
     "fit": {

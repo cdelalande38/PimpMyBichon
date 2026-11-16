@@ -267,7 +267,7 @@ export function fitVehicle({ width, height, size, turn, azimuth, band }: Vehicle
   };
 }
 
-/** Point de vue intérieur du manifeste (repère du véhicule). */
+/** Point de vue intérieur résolu : œil et point regardé (repère du véhicule). */
 export interface InteriorView {
   eye: Vec3;
   target: Vec3;
@@ -282,9 +282,12 @@ export const INTERIOR = {
   fovPortrait: 90,
   fovLandscape: 70,
   near: 0.02,
-  /** Lacet et tangage au plus, de part et d'autre de l'axe du manifeste, en radians. */
+  /** Lacet au plus, de part et d'autre de l'axe de la place, en radians. */
   yaw: (110 * Math.PI) / 180,
-  pitch: (35 * Math.PI) / 180,
+  /** Tangage au plus vers le bas, depuis l'axe de la place, en radians. */
+  pitch: (40 * Math.PI) / 180,
+  /** Tangage au plus vers le haut : assez pour lever les yeux vers le ciel étoilé du pavillon. */
+  pitchUp: (75 * Math.PI) / 180,
   /** Gain du glissé : au-delà de 1, le regard tourne plus vite que l'image ne suit le doigt. */
   dragGain: 1.6,
   transitionMs: 420,
@@ -324,10 +327,13 @@ function wrap(angle: number): number {
   return turned <= -Math.PI ? turned + Math.PI * 2 : turned;
 }
 
-/** Borne le regard autour de l'axe `base` : ±`INTERIOR.yaw` en lacet, ±`INTERIOR.pitch` en tangage. */
+/**
+ * Borne le regard autour de l'axe `base` : ±`INTERIOR.yaw` en lacet, `INTERIOR.pitch` vers le bas et
+ * `INTERIOR.pitchUp` vers le haut (on lève les yeux vers le pavillon).
+ */
 export function clampLook(base: Look, look: Look): Look {
   const dyaw = Math.min(Math.max(wrap(look.yaw - base.yaw), -INTERIOR.yaw), INTERIOR.yaw);
-  const dpitch = Math.min(Math.max(look.pitch - base.pitch, -INTERIOR.pitch), INTERIOR.pitch);
+  const dpitch = Math.min(Math.max(look.pitch - base.pitch, -INTERIOR.pitch), INTERIOR.pitchUp);
   return { yaw: base.yaw + dyaw, pitch: Math.min(Math.max(base.pitch + dpitch, -1.45), 1.45) };
 }
 
@@ -346,4 +352,102 @@ export function dragLook(look: Look, dx: number, dy: number, width: number, heig
   const perPxV = (2 * vHalf) / Math.max(1, height);
   const perPxH = (2 * Math.atan(Math.tan(vHalf) * (width / Math.max(1, height)))) / Math.max(1, width);
   return { yaw: look.yaw + dx * perPxH * INTERIOR.dragGain, pitch: look.pitch + dy * perPxV * INTERIOR.dragGain };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Places assises (manifeste, interiorView.seat) : l'œil posé sur les sièges du modèle chargé.
+
+/** Ce qu'on mesure d'un siège posé, en mètres, relatif à son ancre (repère du véhicule). */
+export interface SeatMetrics {
+  /** Dessus de l'assise, au-dessus de l'ancre. */
+  cushion: number;
+  /** Face avant du dossier (ou de l'appuie-tête) des épaules au haut de la tête : x le plus en avant. */
+  backFront: number;
+  /** Dos du siège : x le plus en arrière. */
+  back: number;
+  /** Haut du siège. */
+  top: number;
+}
+
+/** Siège sans mesure (pièce pas encore chargée) : un siège moyen du catalogue. */
+export const DEFAULT_SEAT: Readonly<SeatMetrics> = Object.freeze({ cushion: 0.33, backFront: -0.24, back: -0.45, top: 1.05 });
+
+/**
+ * Lancer de rayon sur la pièce mesurée : distance du premier point touché depuis `origin` dans la
+ * direction `direction` (unitaire), ou `null`.
+ */
+export type Cast = (origin: Vec3, direction: Vec3) => number | null;
+
+/**
+ * Mesure un siège posé, au rayon (les faces comptent, pas seulement les sommets) : assise au milieu,
+ * face du dossier des épaules au haut de la tête d'une personne dont l'œil est à `up` au-dessus de
+ * l'assise. `box` : boîte du siège, relative à son ancre.
+ */
+export function seatMetrics(cast: Cast, box: { min: Vec3; max: Vec3 }, up = 0.85): SeatMetrics {
+  const above = box.max[1] + 0.1;
+  let cushion = -Infinity;
+  for (const x of [0.02, 0.1]) {
+    for (const z of [-0.06, 0, 0.06]) {
+      const d = cast([x, above, z], [0, -1, 0]);
+      if (d !== null) cushion = Math.max(cushion, above - d);
+    }
+  }
+  if (!Number.isFinite(cushion)) return { ...DEFAULT_SEAT, back: Math.min(DEFAULT_SEAT.back, box.min[0]), top: box.max[1] };
+  const ahead = Math.max(0.3, box.max[0] + 0.05);
+  let backFront = -Infinity;
+  for (let h = cushion + 0.35; h <= cushion + up + 0.1 + 1e-9; h += 0.05) {
+    for (const z of [-0.08, 0, 0.08]) {
+      const d = cast([ahead, h, z], [-1, 0, 0]);
+      if (d !== null && ahead - d < 0) backFront = Math.max(backFront, ahead - d);
+    }
+  }
+  return { cushion, backFront: Number.isFinite(backFront) ? backFront : DEFAULT_SEAT.backFront, back: box.min[0], top: box.max[1] };
+}
+
+/** Un siège posé : position de son ancre (repère du véhicule, caisse au repos) et sa mesure. */
+export interface PlacedSeat {
+  anchor: Vec3;
+  metrics: SeatMetrics;
+}
+
+/** Description d'une place sur ses sièges (manifeste, interiorView.seat). */
+export interface SeatEyeSpec {
+  up: number;
+  ahead?: number;
+  behind?: number;
+  side?: number;
+  headroom?: number;
+}
+
+/** Écart gardé sous le pavillon, par défaut. */
+export const HEADROOM = 0.12;
+
+/**
+ * Œil d'une place : `up` au-dessus de l'assise des sièges, `ahead` en avant de la face de leur dossier
+ * (siège avant) ou `behind` en arrière de leur dos (arrière), au milieu des ancres décalé de `side`,
+ * et jamais plus haut que `headroom` sous le pavillon (`roof` : hauteur du pavillon au-dessus d'un
+ * point, depuis la hauteur `from`, mesurée dans le modèle chargé ; `null` : rien au-dessus).
+ */
+export function placeEye(spec: SeatEyeSpec, seats: readonly PlacedSeat[], roof?: (x: number, z: number, from: number) => number | null): [number, number, number] | null {
+  if (seats.length === 0) return null;
+  const mean = (pick: (seat: PlacedSeat) => number) => seats.reduce((sum, seat) => sum + pick(seat), 0) / seats.length;
+  const cushion = mean((seat) => seat.anchor[1] + seat.metrics.cushion);
+  let y = cushion + spec.up;
+  const x =
+    spec.behind !== undefined
+      ? Math.min(...seats.map((seat) => seat.anchor[0] + seat.metrics.back)) - spec.behind
+      : mean((seat) => seat.anchor[0] + seat.metrics.backFront) + (spec.ahead ?? 0.15);
+  const z = mean((seat) => seat.anchor[2]) + (spec.side ?? 0);
+  // Pavillon cherché depuis les épaules : plus bas, le rayon toucherait la banquette arrière.
+  const ceiling = roof?.(x, z, cushion + 0.5);
+  if (ceiling !== null && ceiling !== undefined) y = Math.max(cushion + 0.3, Math.min(y, ceiling - (spec.headroom ?? HEADROOM)));
+  return [x, y, z];
+}
+
+/** Point regardé depuis `eye`, à un mètre, au cap d'une place (degrés ; lacet vers +Z, tangage vers le haut). */
+export function lookTarget(eye: Vec3, look: { yaw: number; pitch: number }): [number, number, number] {
+  const yaw = (look.yaw * Math.PI) / 180;
+  const pitch = (look.pitch * Math.PI) / 180;
+  const c = Math.cos(pitch);
+  return [eye[0] + Math.cos(yaw) * c, eye[1] + Math.sin(pitch), eye[2] + Math.sin(yaw) * c];
 }

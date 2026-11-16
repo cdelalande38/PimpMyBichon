@@ -57,16 +57,17 @@ describe('manifeste du van', () => {
 
   // Vue intérieure retirée le 15 novembre 2026 (habitacle presque noir), revenue avec un habitacle
   // percé aux vitres, un ciel étoilé, des cadrans clairs et une lumière d'habitacle (cabin).
-  it('la vue intérieure du van est revenue : derrière les sièges avant, sous le plafond, vers l’avant', () => {
-    const view = manifest.interiorView;
-    expect(view).toBeDefined();
-    const [ex, ey, ez] = view!.eye;
-    const [tx] = view!.target;
-    expect(Math.abs(ex)).toBeLessThan(2.3); // dans la caisse
-    expect(Math.abs(ez)).toBeLessThan(0.6);
-    expect(ey).toBeGreaterThan(1.2);
-    expect(ey).toBeLessThan(1.8); // sous le pavillon
-    expect(tx).toBeGreaterThan(ex); // regarde vers l'avant, le poste de conduite
+  it('la vue intérieure du van : conducteur, passager, et l’arrière sous le ciel étoilé, derrière les sièges avant', () => {
+    const views = [manifest.interiorView!, ...(manifest.interiorViews ?? [])];
+    expect(views.map((view) => view.place)).toEqual(['conducteur', 'passager', 'arriere']);
+    const rear = views[2]!;
+    expect([...rear.seat!.anchors].sort()).toEqual(['siege_avant_droit', 'siege_avant_gauche']);
+    expect(rear.seat!.behind).toBeGreaterThan(0.5); // dans la cabine arrière, sous le ciel
+    expect(rear.seat!.side).toBeGreaterThan(0); // derrière le passager
+    expect(rear.look!.yaw).toBeLessThan(0); // vers l'avant, entre les deux sièges
+    expect(rear.volets).toEqual(expect.arrayContaining(['ciel']));
+    expect(views[0]!.seat!.anchors).toEqual(['siege_avant_gauche']); // conducteur à gauche
+    expect(views[0]!.volets).toEqual(expect.arrayContaining(['volant', 'pommeau']));
   });
 
   it('allume en vue intérieure un ciel étoilé sous le pavillon, sa lumière et ses cadrans', () => {
@@ -76,7 +77,8 @@ describe('manifeste du van', () => {
     expect(cabin.sky!.center[1]).toBeLessThan(1.86); // sous la doublure du pavillon (1,90 − 4,5 cm)
     expect(cabin.light!.position[1]).toBeLessThan(cabin.sky!.center[1]);
     expect(cabin.light!.distance).toBeLessThan(4); // n'éclaire pas le garage
-    for (const panel of cabin.panels ?? []) expect(panel.center[0]).toBeGreaterThan(manifest.interiorView!.eye[0]);
+    // Cadrans au tableau de bord, devant le conducteur (face du tableau : interior.clearance.dash).
+    for (const panel of cabin.panels ?? []) expect(panel.center[0]).toBeGreaterThan(manifest.interior!.clearance!.dash[0]! - 0.05);
   });
 });
 

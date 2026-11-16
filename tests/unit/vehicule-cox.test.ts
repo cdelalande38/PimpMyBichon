@@ -11,6 +11,7 @@ import * as habitacle from '../../tools/vehicles/habitacle.mjs';
 import { outerRadius } from '../../src/data/wheels.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
+import { DEFAULT_SEAT, placeEye } from '../../src/scene/fit.ts';
 
 const manifest = JSON.parse(readFileSync(new URL('../../public/assets/vehicles/cox/vehicle.json', import.meta.url), 'utf8')) as VehicleManifest;
 
@@ -41,7 +42,7 @@ describe('manifeste de la Cox', () => {
     expect(manifest.placeholder).toBe('placeholder_cox');
     expect(manifest.hint).toBeTruthy();
     expect(manifest.hint).not.toContain('\n');
-    near(manifest.halfLengthHint, 4.08 / 2);
+    near(manifest.halfLengthHint, 3.84 / 2);
   });
 
   it('porte les zones de la fiche, peintes d’origine en sarcelle pailleté fin', () => {
@@ -73,29 +74,28 @@ describe('manifeste de la Cox', () => {
     expect(byId.sellerie!.paint.finish).toBe('satine');
   });
 
-  it('déclare deux points de vue : entre les sièges, reculé, puis à la place du conducteur, tournés vers l’avant', () => {
-    const first = manifest.interiorView!;
-    expect(first).toBeDefined();
-    expect(first.label).toBe('Entre les sièges');
-    const [ex, ey, ez] = first.eye;
-    expect(Math.abs(ez)).toBeLessThan(0.05); // au centre de l'habitacle
-    expect(ex).toBeLessThan(-0.4); // reculé, derrière le haut des dossiers avant
-    expect(ex).toBeGreaterThan(-1.0); // devant la banquette
-    expect(ey).toBeGreaterThan(1.0); // à hauteur du haut des dossiers
-    expect(ey).toBeLessThan(1.3); // sous le pavillon (1,44)
-    expect(first.target[0]).toBeGreaterThan(ex); // droit devant
-    expect(first.target[1]).toBeLessThan(ey); // très légèrement vers le bas
-    expect(Math.abs(first.target[2])).toBeLessThan(0.05);
-    expect(manifest.interiorViews).toHaveLength(1);
-    const driver = manifest.interiorViews![0]!;
-    expect(driver.label).toBe('Au volant');
-    const [dx, dy, dz] = driver.eye;
-    expect(dz).toBeLessThan(-0.15); // conducteur à gauche
-    expect(Math.abs(dx)).toBeLessThan(0.6); // entre les deux portes
-    expect(dy).toBeGreaterThan(0.9);
-    expect(dy).toBeLessThan(1.3);
-    expect(driver.target[0]).toBeGreaterThan(dx);
-    expect(driver.target[1]).toBeLessThan(dy); // volant, compteur, pommeau
+  it('déclare trois places, posées sur les ancres des sièges : conducteur à gauche, passager, arrière derrière eux', () => {
+    const views = [manifest.interiorView!, ...(manifest.interiorViews ?? [])];
+    expect(views.map((view) => [view.place, view.label])).toEqual([
+      ['conducteur', 'Conducteur'],
+      ['passager', 'Passager'],
+      ['arriere', 'Arrière'],
+    ]);
+    const [driver, passenger, rear] = views.map((view) => view.seat!);
+    expect(driver!.anchors).toEqual(['siege_avant_gauche']); // conduite à gauche
+    expect(passenger!.anchors).toEqual(['siege_avant_droit']);
+    expect([...rear!.anchors].sort()).toEqual(['siege_avant_droit', 'siege_avant_gauche']);
+    expect(rear!.side ?? 0).toBe(0); // entre les deux sièges avant, vers le pare-brise
+    for (const seat of [driver, passenger]) {
+      expect(seat!.up).toBeGreaterThanOrEqual(0.8); // tête d'une personne assise
+      expect(seat!.up).toBeLessThanOrEqual(0.9);
+      expect(seat!.ahead).toBeGreaterThan(0); // devant le dossier
+    }
+    expect(rear!.behind).toBeGreaterThan(0.2); // derrière le dos des sièges avant
+    for (const view of views) {
+      expect(view.look!.pitch).toBeLessThan(0); // volant, compteur, pommeau
+      expect(view.look!.pitch).toBeGreaterThan(-20);
+    }
   });
 
   it('donne le moteur de la fiche', () => {
@@ -187,8 +187,11 @@ describe('modèle de la Cox', () => {
       expect(anchor.translation[i]).toBeGreaterThan(cabin.min[i]!);
       expect(anchor.translation[i]).toBeLessThan(cabin.max[i]!);
     }
-    // Chaque œil est dans l'habitacle garni.
-    for (const { eye } of [manifest.interiorView!, ...(manifest.interiorViews ?? [])]) {
+    // Chaque œil, posé sur les ancres de ses sièges (siège moyen ; chaque siège du catalogue et le
+    // pavillon mesuré : tests/unit/places.test.ts), est dans l'habitacle garni.
+    for (const view of [manifest.interiorView!, ...(manifest.interiorViews ?? [])]) {
+      const seats = view.seat!.anchors.map((name) => ({ anchor: json.nodes.find((n: { name: string }) => n.name === name).translation as [number, number, number], metrics: DEFAULT_SEAT }));
+      const eye = placeEye(view.seat!, seats, () => cabin.max[1]!)!;
       for (let i = 0; i < 3; i += 1) {
         expect(eye[i]!).toBeGreaterThan(cabin.min[i]!);
         expect(eye[i]!).toBeLessThan(cabin.max[i]!);
@@ -221,17 +224,18 @@ describe('modèle de la Cox', () => {
     expect(fit.rear!.width).toBe(185);
   });
 
-  it('a les cotes de la fiche à 5 % près (caisse hors rétroviseur)', () => {
+  it('a les cotes du gabarit à 5 % près (caisse hors rétroviseur)', () => {
     const body = nodeBox('carrosserie');
-    near(body.max[0]! - body.min[0]!, 4.08);
+    // Caisse sans pare-chocs : 3,76 m (gabarit de profil, captures/notes-agents/vague-n-cox.md).
+    near(body.max[0]! - body.min[0]!, 3.76);
     near(body.max[2]! - body.min[2]!, 1.55);
     near(body.max[1]!, 1.44);
     expect(body.max[2]! + body.min[2]!).toBeCloseTo(0, 2); // symétrique gauche-droite
     // Garde au sol de 0,11 m, à 1 cm près.
     expect(Math.abs(body.min[1]! - 0.11)).toBeLessThan(0.01);
-    // Avant vers +X : le porte-à-faux avant (0,79 m) est plus court que l'arrière (0,89 m).
+    // Avant vers +X : le porte-à-faux avant (0,58 m) est plus court que l'arrière (0,77 m).
     expect(body.max[0]! - 1.2).toBeLessThan(-body.min[0]! - 1.2);
     // Longueur hors tout, échappements compris.
-    near(summary.max[0] - summary.min[0], 4.08);
+    near(summary.max[0] - summary.min[0], 3.84);
   });
 });

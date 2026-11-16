@@ -6,7 +6,8 @@
 // - rasante : au ras du sol (0,35 m), le long du flanc gauche (côté axe de la chaussée), regarde vers
 //   l'arrière du véhicule.
 // - avant : devant, sur le rail, regarde le véhicule arriver.
-// - embarquee : au-dessus du toit (de la tête du pilote d'une moto), regarde la route plus loin.
+// - embarquee : à la place du conducteur du manifeste (œil posé sur son siège par la scène, `cockpit`),
+//   sinon au-dessus du toit (de la tête du pilote d'une moto) ; regarde la route plus loin.
 // - travelling : un poste fixe sur le bas-côté, tous les TRAVELLING.spacing m, côté droit puis côté
 //   gauche ; le véhicule arrive de loin, passe devant, s'éloigne, puis on coupe au poste suivant. Le
 //   champ se resserre quand il est loin (téléobjectif) et s'ouvre quand il passe.
@@ -83,6 +84,14 @@ export function travellingAt(rail: Rail, index: number): number {
   return Math.min(rail.length, Math.max(0, at));
 }
 
+/**
+ * Œil du conducteur du véhicule de la sortie, dans son repère (avant +X, haut +Y, droite +Z, en
+ * mètres, caisse posée) : la place « conducteur » de son manifeste, résolue sur le siège du modèle
+ * chargé par la scène (src/drive/scene/vehicule.tsx), comme au garage. `null` : poste générique
+ * au-dessus du toit (moto, véhicule sans place, modèle pas encore posé).
+ */
+export const cockpit: { eye: Vec3 | null } = { eye: null };
+
 export function cameraShot(
   id: CameraId,
   frame: VehicleFrame,
@@ -129,12 +138,26 @@ export function cameraShot(
     }
     case 'embarquee': {
       const bike = frame.kind === 'bike';
-      const back = bike ? frame.halfLength * 0.9 : frame.halfLength * 0.15;
-      set(out.position, px - fx * back, py + frame.height + (bike ? 0.3 : 0.32), pz - fz * back);
+      const eye = bike ? null : cockpit.eye;
+      if (eye) {
+        // À la place du conducteur : l'œil suit la caisse en pente et en plongée (rotation autour du
+        // côté, comme le groupe du véhicule), à droite du véhicule pour un +Z positif.
+        const c = Math.cos(frame.pitch);
+        const s = Math.sin(frame.pitch);
+        const ahead = eye[0] * c - eye[1] * s;
+        const up = eye[0] * s + eye[1] * c;
+        set(out.position, px + fx * ahead - lx * eye[2], py + up, pz + fz * ahead - lz * eye[2]);
+      } else {
+        const back = bike ? frame.halfLength * 0.9 : frame.halfLength * 0.15;
+        set(out.position, px - fx * back, py + frame.height + (bike ? 0.3 : 0.32), pz - fz * back);
+      }
+      // Point visé gardé loin et au-dessus de la chaussée : la garde de la ligne de visée (guardShot)
+      // relèverait la caméra hors de l'habitacle pour un point visé au ras de la route.
       extendedPose(rail, motion.s + 28, scratch);
       lateralPoint(scratch, motion.offset, frame.height * 0.6, point);
       set(out.target, point[0], point[1], point[2]);
-      out.fov = 66 + 4 * speedFactor;
+      // Dans l'habitacle, un champ plus ouvert : le volant, la planche et la route.
+      out.fov = (eye ? 74 : 66) + 4 * speedFactor;
       return out;
     }
     case 'travelling': {

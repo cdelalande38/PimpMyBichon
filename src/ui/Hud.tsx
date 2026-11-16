@@ -3,7 +3,7 @@
 // La personnalisation (onglets et options) reste dans le dock, au pouce (§ 2).
 
 import { openSheet } from '../app/useRoute.ts';
-import { interiorViewsOf, resolveVehicle } from '../data/vehicles.ts';
+import { placeOf, resolveVehicle } from '../data/vehicles.ts';
 import { precachePercent, setInstallLater, usePwa } from '../pwa/pwaStore.ts';
 import { promptInstall } from '../pwa/register.ts';
 import { useBuilds } from '../state/builds.ts';
@@ -11,6 +11,7 @@ import { useDock } from '../state/dock.ts';
 import { useView } from '../state/view.ts';
 import { openAtelier } from './AtelierSwitcher.tsx';
 import { Icon } from './icons.tsx';
+import { PlacePicker } from './PlacePicker.tsx';
 import { offlineLabel } from './labels.ts';
 import { RadioButton } from './radio/RadioButton.tsx';
 
@@ -63,35 +64,21 @@ function OfflinePill() {
 }
 
 /**
- * Vue intérieure (§ 5.1) : seulement si le véhicule courant déclare un point de vue intérieur
- * dans son manifeste. Un appui ouvre le premier point de vue, chaque appui suivant passe au point
- * de vue suivant (interiorViews), l'appui sur le dernier rend la vue d'atelier. Le nom du bouton
- * dit ce que fera l'appui.
+ * Vue intérieure (§ 5.1) : seulement si le véhicule courant déclare des places dans son manifeste.
+ * Le bouton rond entre (à la place gardée pour ce véhicule, le conducteur la première fois) et
+ * ressort ; le choix de la place se fait par son nom, au pouce (PlacePicker).
  */
 function InteriorButton() {
   const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const inside = useView((state) => state.mode === 'interieur');
-  const seat = useView((state) => state.seat);
-  const next = useView((state) => state.next);
-  const views = interiorViewsOf(vehicle);
-  if (views.length === 0) return null;
-  const following = inside ? views[seat + 1] : undefined;
-  const label = !inside ? 'Intérieur' : following ? `Vue suivante : ${following.label ?? 'autre place'}` : 'Sortir';
-  const title = !inside
-    ? `Intérieur : ${(views[0]?.label ?? 'à la place du conducteur').toLowerCase()}`
-    : following
-      ? label
-      : 'Sortir : retour à l’atelier';
+  const enterOrLeave = useView((state) => state.enterOrLeave);
+  const remembered = useView((state) => state.places[vehicle.id]);
+  const place = placeOf(vehicle, remembered);
+  if (!place) return null;
+  const label = inside ? 'Sortir' : 'Intérieur';
+  const title = inside ? 'Sortir : retour à l’atelier' : `Intérieur : place ${place.label.toLowerCase()}`;
   return (
-    <button
-      type="button"
-      className="quick-btn"
-      aria-label={label}
-      title={title}
-      data-on={inside || undefined}
-      data-place={inside ? seat : undefined}
-      onClick={() => next(views.length)}
-    >
+    <button type="button" className="quick-btn" aria-label={label} title={title} data-on={inside || undefined} onClick={() => enterOrLeave(vehicle.id)}>
       <Icon name="volant" />
     </button>
   );
@@ -143,6 +130,8 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
           {!sceneFailed && <InteriorButton />}
         </nav>
       </div>
+      {/* Choix de la place en vue intérieure : au pouce, au-dessus du dock (posé en bas de l'écran). */}
+      {!sceneFailed && <PlacePicker covered={covered} />}
     </header>
   );
 }
