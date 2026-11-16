@@ -1,6 +1,9 @@
 // Entrée « Sortie de nuit » du menu (section Garage) : la carte (liste lue dans le catalogue), le
 // départ parmi ceux de la carte, les crédits des données (obligation de licence ; redits à l'écran
 // de chargement de la sortie), la météo et « Sortir », collé en bas sous le pouce.
+// Rien n'est choisi à l'ouverture : on ne voit que les cartes. Les départs, les crédits, la météo
+// et « Sortir » n'apparaissent qu'une fois la carte touchée (retour du 16 novembre 2026 : pas de
+// troisième niveau tant que la région n'est pas choisie).
 // Chaque carte montre la miniature de son tracé (src/ui/pictos/carte.ts, fabriquée avec la carte).
 // Les départs vivent dans la route de la carte (route.json) : elle se charge ici une fois, et sert
 // encore à la scène. Sans réseau à la première fois, on part du premier départ.
@@ -40,14 +43,44 @@ export function SortieEntree() {
   const chooseMap = useDrive((state) => state.chooseMap);
   const chooseStart = useDrive((state) => state.chooseStart);
   const setWeather = useDrive((state) => state.setWeather);
-  const map = resolveMap(choice.map);
+  // La carte touchée dans ce panneau ; `null` tant qu'on n'a rien touché (le choix gardé ne compte pas ici).
+  const [picked, setPicked] = useState<string | null>(null);
+  const map = picked ? resolveMap(picked) : undefined;
   const starts = useStarts(map);
   const start = starts?.list.find((item) => item.id === choice.start) ?? starts?.list[0];
   const mapRow = useRevealPressed<HTMLDivElement>(map?.id ?? '');
   const startRow = useRevealPressed<HTMLDivElement>(start?.id ?? '');
 
-  if (!map) {
+  if (MAPS.length === 0) {
     return <p className="drive-empty">Aucune carte de sortie dans cette version. Elles arrivent avec la prochaine.</p>;
+  }
+
+  const pick = (id: string) => {
+    chooseMap(id);
+    setPicked(id);
+  };
+
+  const mapChips = (
+    <div ref={mapRow} className="chips" role="group" aria-label="Carte">
+      {MAPS.map((item) => (
+        <button key={item.id} type="button" className="chip chip-picto" aria-pressed={item.id === map?.id} onClick={() => pick(item.id)}>
+          <PictoCarte id={item.id} />
+          <span className="chip-text">
+            <b>{item.name}</b>
+            {item.hint && <small>{item.hint}</small>}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!map) {
+    return (
+      <div className="drive-entry" data-etape="carte">
+        {mapChips}
+        <p className="drive-note drive-pick">Touche une carte : ses départs s’affichent ensuite.</p>
+      </div>
+    );
   }
 
   const go = () => {
@@ -57,18 +90,8 @@ export function SortieEntree() {
   };
 
   return (
-    <div className="drive-entry">
-      <div ref={mapRow} className="chips" role="group" aria-label="Carte">
-        {MAPS.map((item) => (
-          <button key={item.id} type="button" className="chip chip-picto" aria-pressed={item.id === map.id} onClick={() => chooseMap(item.id)}>
-            <PictoCarte id={item.id} />
-            <span className="chip-text">
-              <b>{item.name}</b>
-              {item.hint && <small>{item.hint}</small>}
-            </span>
-          </button>
-        ))}
-      </div>
+    <div className="drive-entry" data-etape="depart">
+      {mapChips}
       <div ref={startRow} className="chips" role="group" aria-label="Départ">
         {starts?.status === 'chargement' && <span className="drive-note">Départs en route…</span>}
         {starts?.status === 'erreur' && <span className="drive-note">Départs indisponibles hors ligne : tu pars du début.</span>}

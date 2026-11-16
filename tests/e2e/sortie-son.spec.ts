@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, reloadSaved } from './helpers.ts';
+import { openApp, openEntry, pickMap, reloadSaved } from './helpers.ts';
 
 // Son du moteur en sortie de nuit (§ 5.5, § 9) : au départ le moteur démarre et tourne, le régime
 // publié monte avec la vitesse et passe des rapports, le bouton « Moteur » coupe et remet (choix
@@ -66,6 +66,7 @@ async function shot(page: Page, name: string): Promise<void> {
 
 async function goOut(page: Page): Promise<void> {
   await openEntry(page, 'Sortie de nuit');
+  await pickMap(page);
   await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
   await expect(page).toHaveURL(/#\/sortie$/);
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 90_000 });

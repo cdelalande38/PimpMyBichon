@@ -15,7 +15,11 @@ test('le bouton rond « Sortie de nuit » ouvre le choix de la carte, prêt à s
   await button.tap();
   const dock = page.locator('footer.dock');
   await expect(dock.locator('.dock-crumb-here')).toHaveText('Sortie de nuit');
-  await expect(dock.getByRole('group', { name: 'Carte' })).toBeVisible();
+  const maps = dock.getByRole('group', { name: 'Carte' });
+  await expect(maps).toBeVisible();
+  // « Sortir » n'apparaît qu'une fois la carte touchée.
+  await expect(dock.getByRole('button', { name: 'Sortir', exact: true })).toHaveCount(0);
+  await maps.getByRole('button').first().tap();
   await expect(dock.getByRole('button', { name: 'Sortir', exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/sortie-raccourci.png' });
 });

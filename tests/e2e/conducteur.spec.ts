@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, waitForBench, waitForScene } from './helpers.ts';
+import { openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
 
 // Le conducteur à bord en sortie de nuit (demande du 16 novembre 2026 : « il manque un pilote au
 // volant », « les motos il faut bien retirer la béquille pendant les sorties ») : il s'assoit dans la
@@ -19,6 +19,7 @@ async function sortie(page: Page, vehicle: string): Promise<void> {
   await expect(page.locator('.stage')).toHaveAttribute('data-vehicle', vehicle);
   await waitForBench(page);
   await openEntry(page, 'Sortie de nuit');
+  await pickMap(page);
   await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
 }

@@ -24,10 +24,18 @@ test.describe('sortie de nuit', () => {
     // Le menu : la carte (lue dans le catalogue), ses crédits, le départ, la météo, « Sortir ».
     await openEntry(page, 'Sortie de nuit');
     const dock = page.locator('footer.dock');
+    // Rien n'est choisi à l'ouverture : ni départs, ni météo, ni « Sortir » tant qu'une carte n'est pas touchée.
     const maps = dock.getByRole('group', { name: 'Carte' });
+    await expect(maps.getByRole('button').first()).toBeVisible();
+    await expect(maps.locator('[aria-pressed="true"]')).toHaveCount(0);
+    const starts = dock.getByRole('group', { name: 'Départ' });
+    await expect(starts).toHaveCount(0);
+    await expect(dock.getByRole('group', { name: 'Météo' })).toHaveCount(0);
+    await expect(dock.getByRole('button', { name: 'Sortir', exact: true })).toHaveCount(0);
+    await capture(page, 'sortie-menu-cartes');
+    await maps.getByRole('button').first().tap();
     await expect(maps.getByRole('button').first()).toHaveAttribute('aria-pressed', 'true');
     await expect(dock.locator('.drive-credits')).toContainText('Licence Ouverte');
-    const starts = dock.getByRole('group', { name: 'Départ' });
     await expect(starts.getByRole('button').first()).toBeVisible();
     await starts.getByRole('button').nth(1).tap();
     await expect(starts.getByRole('button').nth(1)).toHaveAttribute('aria-pressed', 'true');

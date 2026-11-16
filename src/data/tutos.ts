@@ -202,9 +202,9 @@ export const TUTOS: readonly Tuto[] = [
     titre: 'La sortie de nuit',
     but: 'Ici, tu prépares la balade : tu sors ton véhicule du garage pour le regarder rouler, de nuit, sur une vraie route.',
     etapes: [
-      { texte: 'Choisis la carte : une vraie route, redessinée de nuit. D’où viennent ses données, c’est écrit juste dessous.', cible: 'footer.dock [aria-label="Carte"][role="group"]' },
-      { texte: 'Choisis d’où tu pars : chaque départ est un coin de la route.', cible: 'footer.dock [aria-label="Départ"][role="group"]' },
-      { texte: 'Sec ou pluie : sous la pluie, la chaussée fait miroir et les néons s’y reflètent.', cible: 'footer.dock [aria-label="Météo"][role="group"]' },
+      { texte: 'Touche d’abord une carte : une vraie route, redessinée de nuit. Ses départs et l’origine de ses données s’affichent ensuite.', cible: 'footer.dock [aria-label="Carte"][role="group"]' },
+      { texte: 'Une fois la carte choisie, dis d’où tu pars : chaque départ est un coin de la route.', cible: 'footer.dock [aria-label="Départ"][role="group"]' },
+      { texte: 'Sec, pluie ou neige : sous la pluie la chaussée brille, sous la neige elle garde les traces des roues.', cible: 'footer.dock [aria-label="Météo"][role="group"]' },
       { texte: 'Touche « Sortir » : la porte se lève et c’est parti.', cible: 'footer.dock .drive-go' },
     ],
   },

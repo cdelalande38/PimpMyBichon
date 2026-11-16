@@ -244,3 +244,13 @@ export async function reloadSaved(page: Page): Promise<void> {
   await settleStorage(page);
   await page.reload();
 }
+
+/**
+ * Menu « Sortie de nuit » : touche une carte (la première par défaut). Rien n'est choisi à
+ * l'ouverture du panneau ; les départs, la météo et « Sortir » n'apparaissent qu'ensuite.
+ */
+export async function pickMap(page: Page, index = 0): Promise<void> {
+  const chip = page.locator('footer.dock').getByRole('group', { name: 'Carte' }).getByRole('button').nth(index);
+  await chip.tap();
+  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+}
