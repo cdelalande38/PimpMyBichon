@@ -1,9 +1,10 @@
 // Son du moteur en sortie de nuit (§ 5.5 « Son », § 9 « Sur la route ») : le lecteur des sons
 // moteur (src/state/engineSound.ts, src/audio/engine/) branché sur l'état de la sortie
-// (src/state/drive.ts). Rien ne touche à la boucle de rendu : on lit les commandes et la télémétrie
-// que la scène publie quatre fois par seconde, on en tire le régime par une boîte fictive
-// (src/drive/boite.ts, src/data/boites.ts) et la charge (src/drive/mixage.ts), et le lecteur glisse
-// d'une mesure à l'autre en rampes Web Audio.
+// (src/state/drive.ts). Rien ne touche à la boucle de rendu : dix fois par seconde (et à chaque
+// télémétrie), on lit le régime, le rapport et la charge que le pilote tient (src/drive/pilote.ts,
+// `train`, avancé à chaque image : la même vérité que le compte-tours), et le lecteur glisse d'une
+// mesure à l'autre en rampes Web Audio. Sans pilote posé (scène pas encore prête), on retombe sur la
+// boîte du véhicule (src/data/boites.ts) d'après la télémétrie et la charge (src/drive/mixage.ts).
 //
 // - Démarrage enregistré au départ (scène prête), ralenti à l'arrêt, régime qui suit la vitesse avec
 //   des rapports, charge qui suit l'accélérateur (en pilote automatique : l'accélération), relâchée
@@ -17,10 +18,10 @@
 // - Une famille sans sons reste muette, sans erreur.
 
 import { create } from 'zustand';
-import { boiteDe } from '../data/boites.ts';
+import { boiteDuVehicule } from '../data/boites.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
 import { useBuilds } from '../state/builds.ts';
-import { useDrive } from '../state/drive.ts';
+import { livePilot, useDrive } from '../state/drive.ts';
 import { soundFamilyOf, useEngineSound, useEngineSoundPrefs } from '../state/engineSound.ts';
 import { useRadio } from '../state/radio.ts';
 import { etatInitial, pasBoite, regimeJoue, type EtatBoite } from './boite.ts';
@@ -45,6 +46,9 @@ export const useSonSortie = create<SonSortie>(() => ({ ...REPOS }));
 
 /** Glissé du régime entre deux mesures : l'intervalle de la télémétrie (quatre par seconde), en s. */
 const GLISSE = 0.25;
+/** Mesures lues sur le pilote : intervalle (ms) et glissé (s), assez courts pour entendre les passages. */
+const PAS_PILOTE = 100;
+const GLISSE_PILOTE = 0.1;
 /** Au-dessus de cette vitesse (km/h), on remet le moteur en marche sans le démarreur. */
 const VITESSE_LANCEE = 2;
 /** Un appui sur « Moteur » dans cette fenêtre après le premier geste de la page ne compte pas (ms). */
@@ -129,6 +133,15 @@ export function brancherSonSortie(): () => void {
     const moteur = useEngineSound.getState();
     const plage = moteur.plage();
     if (!plage || (moteur.state !== 'demarrage' && moteur.state !== 'ralenti' && moteur.state !== 'charge')) return;
+    const train = livePilot.current?.train;
+    if (train) {
+      // Une seule vérité : le régime et le rapport du pilote, comme au compte-tours.
+      moteur.piloter(regimeJoue(train.rpm, train.idle, train.redline, plage), train.load, GLISSE_PILOTE);
+      const regime = Math.round(train.rpm);
+      const etat = useSonSortie.getState();
+      if (etat.regime !== regime || etat.rapport !== train.gear) useSonSortie.setState({ regime, rapport: train.gear });
+      return;
+    }
     const drive = useDrive.getState();
     const now = performance.now();
     const dt = dernier > 0 ? Math.min(0.5, (now - dernier) / 1000) : 0;
@@ -136,7 +149,7 @@ export function brancherSonSortie(): () => void {
     const vitesse = drive.telemetry.speedKmh;
     accel = lisserAccel(accel, vitesseAvant, vitesse, dt);
     vitesseAvant = vitesse;
-    const spec = boiteDe(moteur.famille);
+    const spec = boiteDuVehicule(resolveVehicle(useBuilds.getState().current));
     const { charge, frein } = chargeDe(drive.input, accel);
     const sortie = pasBoite(boite ?? etatInitial(plage.min), { vitesseKmh: vitesse, charge, frein }, spec, plage.min, dt);
     boite = { rapport: sortie.rapport, regime: sortie.regime, passage: sortie.passage };
@@ -170,6 +183,10 @@ export function brancherSonSortie(): () => void {
   const offRadio = useRadio.subscribe((state, previous) => {
     if (state.volume !== previous.volume || state.now?.playing !== previous.now?.playing) evaluer();
   });
+  // Entre deux télémétries, le pilote est relu : les passages de rapport s'entendent.
+  const minuterie = window.setInterval(() => {
+    if (livePilot.current?.train && !useDrive.getState().paused) mesurer();
+  }, PAS_PILOTE);
 
   // Ouverture sans geste : le premier appui ou la première touche réveille le son. Le contexte
   // audio naît dans ce geste (le navigateur l'exige).
@@ -192,6 +209,7 @@ export function brancherSonSortie(): () => void {
   evaluer();
 
   return () => {
+    window.clearInterval(minuterie);
     offDrive();
     offMoteur();
     offPrefs();

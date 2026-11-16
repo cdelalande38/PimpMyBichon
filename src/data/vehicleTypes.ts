@@ -94,6 +94,23 @@ export interface EngineSpec {
   sound?: string;
 }
 
+/**
+ * Performances sur la route (sortie de nuit, § 5.5) : avec `engine.power` et la boîte (celle que
+ * nomme `gearbox`, sinon celle de la famille de sons, src/data/boites.ts), elles font l'accélération
+ * et la vitesse de pointe du véhicule (src/drive/pilote.ts). Des chiffres plausibles pour le genre de
+ * véhicule, pas relevés sur un modèle réel. Absentes : valeurs moyennes d'une voiture ou d'une moto.
+ */
+export interface PerformanceSpec {
+  /** Masse en ordre de marche, pilote compris, en kg. */
+  mass: number;
+  /** Vitesse de pointe en ligne droite, en km/h (la boîte doit la permettre). */
+  topKmh: number;
+  /** Adhérence en courbe : accélération latérale la plus forte, en m/s² (la vitesse dans les virages, à la main). */
+  grip: number;
+  /** Boîte nommée de src/data/boites.ts (BOITES_NOMMEES) ; absente : celle de la famille de sons. */
+  gearbox?: string;
+}
+
 /** Point en mètres, dans le repère du véhicule (avant vers +X, haut vers +Y, droite vers +Z). */
 export type VehiclePoint = readonly [number, number, number];
 
@@ -307,6 +324,8 @@ export interface VehicleManifest {
   zones: readonly Zone[];
   /** Moteur d'origine ; absent : pas de fiche de préparation pour ce véhicule. */
   engine?: EngineSpec;
+  /** Performances sur la route ; absentes : celles d'un véhicule moyen de son genre. */
+  performance?: PerformanceSpec;
   /**
    * Première place de la vue intérieure (§ 5.1), le conducteur : œil et regard dans le repère du
    * véhicule (avant vers +X, haut vers +Y, droite vers +Z), en mètres. Absent : pas de vue intérieure.

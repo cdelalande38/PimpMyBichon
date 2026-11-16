@@ -15,7 +15,10 @@ export type DriveIconName =
   | 'lecture'
   | 'garage'
   | 'moteur'
-  | 'moteurCoupe';
+  | 'moteurCoupe'
+  | 'nos'
+  | 'monter'
+  | 'descendre';
 
 // Bloc moteur vu de côté : carter, bouchon de remplissage, échappement à droite, ventilateur à gauche.
 const BLOC = 'M6 9h2.5l1.5-2h5l1.5 2H18v8.5h-1.5L15 19H9l-1.5-1.5H6Z M10 7V4.5h4V7 M18 12h2.5v3H18 M6 12.25H3.5 M3.5 10v4.5';
@@ -74,6 +77,16 @@ const SHAPES: Record<DriveIconName, ReactNode> = {
       <path d="m3.5 4 17 16" />
     </>
   ),
+  // NOS : la bouteille, son robinet, et la flamme qui sort.
+  nos: (
+    <>
+      <rect x="4" y="8" width="7" height="12.5" rx="3" />
+      <path d="M6.5 8V5.5h2V8M8.5 5.5H12M15 14.5c1.5-1.3 1.7-3 1-5 2.6 1.4 4 3.5 4 6a4.5 4.5 0 0 1-9 0c0-1 .3-1.8.8-2.6.4 1.4 1.4 2 3.2 1.6Z" />
+    </>
+  ),
+  // Chevrons : rappeler la barre, la replier.
+  monter: <path d="m6 15 6-6 6 6" />,
+  descendre: <path d="m6 9 6 6 6-6" />,
   // Porte de garage : le linteau et les lames.
   garage: (
     <>

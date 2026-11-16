@@ -4,6 +4,7 @@
 // Les manifestes sont validés ici (erreur claire, chemin du fichier compris) et triés par `order` :
 // le premier est le véhicule de départ. Aucun identifiant de véhicule n'est écrit dans le code.
 
+import { BOITES_NOMMEES } from './boites.ts';
 import { FINISHES } from './finishes.ts';
 import { INTERIOR_CATALOGUE } from './habitacle.ts';
 import { WHEEL_CATALOGUE } from './wheels.ts';
@@ -85,6 +86,22 @@ function checkEngine(raw: unknown, problems: string[]): void {
   if (!FEEDS.includes(raw.feed as EngineSpec['feed'])) problems.push(`engine.feed doit valoir ${FEEDS.join(' ou ')}`);
   if (!BOOSTS.includes(raw.boost as EngineSpec['boost'])) problems.push(`engine.boost doit valoir ${BOOSTS.join(', ')}`);
   if (!positive(raw.power)) problems.push('engine.power doit être un nombre de chevaux positif');
+}
+
+/** Performances sur la route : masse, vitesse de pointe et adhérence dans des bornes plausibles ; boîte connue. */
+function checkPerformance(raw: unknown, problems: string[]): void {
+  if (raw === undefined) return;
+  if (!isObject(raw)) {
+    problems.push('performance doit être un objet');
+    return;
+  }
+  const within = (value: unknown, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+  if (!within(raw.mass, 80, 5000)) problems.push('performance.mass doit être une masse en kg, de 80 à 5 000');
+  if (!within(raw.topKmh, 40, 420)) problems.push('performance.topKmh doit être une vitesse en km/h, de 40 à 420');
+  if (!within(raw.grip, 2, 15)) problems.push('performance.grip doit être une accélération latérale en m/s², de 2 à 15');
+  if (raw.gearbox !== undefined && (typeof raw.gearbox !== 'string' || !(raw.gearbox in BOITES_NOMMEES))) {
+    problems.push(`performance.gearbox doit valoir ${Object.keys(BOITES_NOMMEES).join(' ou ')}`);
+  }
 }
 
 function range(value: unknown, min: number, max: number): value is [number, number] {
@@ -357,6 +374,7 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
     if (!positive(raw.halfLengthHint)) problems.push('halfLengthHint doit être une demi-longueur positive, en mètres');
     checkZones(raw.zones, problems);
     checkEngine(raw.engine, problems);
+    checkPerformance(raw.performance, problems);
     if (raw.adapt !== undefined && !isObject(raw.adapt)) problems.push('adapt doit être un objet');
     if (raw.presentSide !== undefined && raw.presentSide !== 'gauche' && raw.presentSide !== 'droite') {
       problems.push('presentSide doit valoir « gauche » ou « droite »');

@@ -31,10 +31,11 @@ import type { SurfaceUniforms } from '../../render/floor.ts';
 import { ATMOSPHERE_LAYER, CAMERA_LAYERS, PROBE_ONLY_LAYER } from '../../render/layers.ts';
 import { PlanarReflection } from '../../render/planarReflection.ts';
 import type { QualityLevel } from '../../render/quality.ts';
-import { useDrive } from '../../state/drive.ts';
+import { useBuilds } from '../../state/builds.ts';
+import { livePilot, useDrive } from '../../state/drive.ts';
 import { cameraShot, guardShot } from '../cameras.ts';
 import type { CameraId, CameraShot, Director, DriveTelemetry, Pilot, Rail, RailPose, VehicleFrame } from '../contrat.ts';
-import { createPilot } from '../pilote.ts';
+import { createPilot, performanceDe } from '../pilote.ts';
 import { createPose, createRail } from '../rail.ts';
 import { createDirector } from '../realisateur.ts';
 import { createFarLights, createProbeBand, createRain, createSky, createTownGlow, SKY } from './ciel.ts';
@@ -52,6 +53,9 @@ const LAMP_CANDELA = 380;
 
 /** Feux arrière : intensité au repos et au freinage, en candelas (lueur rouge sur la chaussée). */
 const TAIL_CANDELA = { rest: 5, brake: 18 } as const;
+
+/** NOS : lueur bleue à l'échappement (le feu arrière vire au bleu), en candelas au plus fort. */
+const NOS_GLOW = { candela: 40, color: new Color('#3b7bff') } as const;
 
 /** Force de la bande d'horizon vue par la sonde (reflet clair qui dessine la caisse). */
 const PROBE_BAND_GAIN = 0.5;
@@ -153,6 +157,8 @@ export class DriveEngine {
   private readonly lastCamera = new Vector3();
   private lastCameraId: CameraId | null = null;
   private mistBase = Number.NaN;
+  /** Couleur d'origine du feu arrière, gardée à la première poussée du NOS. */
+  private tailColor: Color | null = null;
   /** Mouvement réduit (réglage du système) : pas de traînées lumineuses (§ 5.5). */
   private readonly reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** Bande d'horizon de la sonde (src/drive/scene/ciel.ts, createProbeBand). */
@@ -204,7 +210,10 @@ export class DriveEngine {
     this.hidden = [this.rig.group];
     this.frameOf = { kind: vehicle.kind, position: [0, 0, 0], heading: 0, pitch: 0, roll: 0, halfLength: vehicle.halfLengthHint, halfWidth: 0.9, height: 1.4 };
     this.rail = createRail(route);
-    this.pilot = createPilot(this.rail);
+    // Performances du véhicule (manifeste, préparation du build) ; le pilote est publié pour le
+    // compte-tours et le son (src/state/drive.ts, livePilot).
+    this.pilot = createPilot(this.rail, performanceDe(vehicle, useBuilds.getState().builds[vehicle.id]));
+    livePilot.current = this.pilot;
     this.director = createDirector();
     // Lumières lointaines : les lampadaires de toute la carte, la lueur des villages.
     this.farLights = createFarLights(routeLampHeads(route), this.uniforms.pmbLampColor.value);
@@ -267,6 +276,7 @@ export class DriveEngine {
       rig.headLocal.copy(model.head);
       rig.headSpread = model.headSpread;
       rig.measure = withWheels(model, rig);
+      this.pilot.setSize?.(rig.measure.halfWidth, rig.measure.halfLength);
     }
   }
 
@@ -302,7 +312,12 @@ export class DriveEngine {
     rollWheels(rig, motion.speed * dt);
     const brake = motion.braking ? 3.2 : 1;
     for (let i = 0; i < rig.tails.length; i += 1) (rig.tails[i] as { emissiveIntensity: number }).emissiveIntensity = rig.tailBase * brake;
-    if (rig.tailLight) rig.tailLight.intensity = motion.braking ? TAIL_CANDELA.brake : TAIL_CANDELA.rest;
+    if (rig.tailLight) {
+      const boost = motion.boost ?? 0;
+      if (boost > 0.01 && !this.tailColor) this.tailColor = rig.tailLight.color.clone();
+      if (this.tailColor) rig.tailLight.color.copy(this.tailColor).lerp(NOS_GLOW.color, boost);
+      rig.tailLight.intensity = (motion.braking ? TAIL_CANDELA.brake : TAIL_CANDELA.rest) + boost * NOS_GLOW.candela;
+    }
     rig.group.updateMatrixWorld();
 
     // Plan de la caméra.
@@ -525,6 +540,7 @@ export class DriveEngine {
   }
 
   dispose(): void {
+    if (livePilot.current === this.pilot) livePilot.current = null;
     this.detach();
     this.decor.dispose();
     this.kit.dispose();

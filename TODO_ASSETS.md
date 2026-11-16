@@ -22,6 +22,7 @@ Claude Code tient ce fichier à jour : chaque substitut encore en place y figure
 |---|---|---|
 | Prénoms et textes des amis pour les briefs | 10 | à collecter |
 | Modèles de la vague 2 (berline 90, pick-up, 4x4, coupé) | 12 | à sourcer |
+| Son du NOS en sortie de nuit (souffle de la bouteille à l'ouverture, une prise sous licence libre, à jouer sous le moteur) : sans prise, l'emplacement reste muet et la poussée ne s'entend que par le moteur qui monte (src/drive/pilote.ts) | 8 | à sourcer |
 
 ## Substituts en place
 

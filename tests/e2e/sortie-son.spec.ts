@@ -73,7 +73,7 @@ async function goOut(page: Page): Promise<void> {
 
 test.describe('son du moteur en sortie', () => {
   test('démarre au départ, suit la vitesse, se coupe et se remet ; pause et garage coupent', async ({ page }) => {
-    test.setTimeout(300_000);
+    test.setTimeout(420_000);
     const errors = watchErrors(page);
     const sounds = watchSounds(page);
     await openApp(page);
@@ -108,7 +108,8 @@ test.describe('son du moteur en sortie', () => {
           });
           return Math.max(...samples.map((sample) => sample.rapport));
         },
-        { timeout: 60_000, intervals: [250] },
+        // La deuxième passe vers 4 s de route ; en rendu logiciel la scène avance d'un dixième de seconde par image.
+        { timeout: 150_000, intervals: [250] },
       )
       .toBeGreaterThanOrEqual(2);
     const slow = samples.filter((sample) => sample.kmh < 8);

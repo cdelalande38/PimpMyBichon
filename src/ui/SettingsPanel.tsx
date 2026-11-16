@@ -103,7 +103,7 @@ export function SettingsPanel() {
       <p className="note">
         {active === 'autoRotate' && reducedMotion
           ? 'Ton téléphone demande moins de mouvement\u00a0: la rotation reste coupée, quel que soit ce réglage.'
-          : 'Les volumes et le pilote automatique arriveront avec le son et la sortie de nuit.'}
+          : 'Le volume de la musique se règle dans l’autoradio\u00a0; le pilote automatique et le son du moteur, sur la route, en sortie de nuit.'}
       </p>
 
       <nav className="tabs" aria-label="Réglages">

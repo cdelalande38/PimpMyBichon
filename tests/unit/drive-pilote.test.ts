@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MapRoute, RailSection } from '../../src/data/mapTypes.ts';
 import type { DriveInput, DriveMotion, Pilot, Rail } from '../../src/drive/contrat.ts';
-import { createPilot, cruiseSpeed, laneBound, laneCenter, PILOT } from '../../src/drive/pilote.ts';
+import { createPilot, cruiseSpeed, laneBound, laneCenter, PILOT, sampleLine } from '../../src/drive/pilote.ts';
 import { createPose, createRail } from '../../src/drive/rail.ts';
 
 type Segment = { line: number } | { arc: number; turn: number };
@@ -94,10 +94,10 @@ function drive(pilot: Pilot, rail: Rail, seconds: number, input: (motion: DriveM
 }
 
 describe('croisière et courbes', () => {
-  it('croisière : 50 en agglomération, 60 à 90 hors agglomération selon la chaussée', () => {
+  it('croisière : 50 en agglomération, 70 à 90 hors agglomération selon la chaussée', () => {
     expect(kmh(cruiseSpeed({ urban: true, width: 12, lanes: 3 }))).toBeCloseTo(50, 6);
     expect(kmh(cruiseSpeed({ urban: false, width: 7, lanes: 2 }))).toBeCloseTo(90, 6);
-    expect(kmh(cruiseSpeed({ urban: false, width: 3.5, lanes: 1 }))).toBeCloseTo(60, 6);
+    expect(kmh(cruiseSpeed({ urban: false, width: 3.5, lanes: 1 }))).toBeCloseTo(70, 6);
     expect(kmh(cruiseSpeed({ urban: false, width: 6, lanes: 2 }))).toBeCloseTo(80, 6);
   });
 
@@ -218,7 +218,7 @@ describe('à la main', () => {
     expect(trace.maxLateral).toBeLessThan(PILOT.manual.lateral * 1.15);
   });
 
-  it('placement : à gauche ou à droite de sa voie, jamais hors de la chaussée', () => {
+  it('placement : route dégagée, à gauche ou à droite de toute la chaussée, jamais hors d’elle', () => {
     const sections: RailSection[] = [
       { from: 0, to: 300, ground: 'sol', urban: false, lanes: 2, width: 7 },
       { from: 300, to: 400, ground: 'pont', urban: false, lanes: 1, width: 3.5 },
@@ -229,10 +229,14 @@ describe('à la main', () => {
     const pose = createPose();
     const center = laneCenter({ width: 7, lanes: 2 });
     expect(center).toBeCloseTo(-1.75, 6);
+    // Toute la chaussée : bien au-delà de la voie de droite, à gauche comme à droite.
     drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: -1 }));
-    expect(pilot.motion.offset).toBeGreaterThan(center + 0.3);
+    expect(pilot.motion.offset).toBeGreaterThan(1.5);
     drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: 1 }));
-    expect(pilot.motion.offset).toBeLessThan(center - 0.3);
+    expect(pilot.motion.offset).toBeLessThan(-1.5);
+    // Sans demande : la trajectoire du pilote, au milieu d'une ligne droite.
+    drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: 0 }));
+    expect(Math.abs(pilot.motion.offset)).toBeLessThan(0.3);
     for (const lane of [-1, 1] as const) {
       const trace = drive(pilot, rail, 60, () => ({ auto: false, throttle: 0.5, brake: 0, lane }));
       for (const item of trace.samples) {
@@ -303,12 +307,13 @@ describe('déterminisme', () => {
     expect(pilot.motion.s).toBeLessThan(0.05);
   });
 
-  it('reset : repart d’une abscisse, à l’arrêt, dans sa voie', () => {
+  it('reset : repart d’une abscisse, à l’arrêt, sur sa trajectoire (au milieu d’une ligne droite)', () => {
     const rail = createRail(makeRoute([{ line: 500 }]));
     const pilot = createPilot(rail);
     drive(pilot, rail, 10, () => AUTO);
     pilot.reset(120);
-    expect(pilot.motion).toMatchObject({ s: 120, speed: 0, accel: 0, finished: false, offset: -1.75 });
+    expect(pilot.motion).toMatchObject({ s: 120, speed: 0, accel: 0, finished: false });
+    expect(pilot.motion.offset).toBeCloseTo(0, 1);
     pilot.reset(9999);
     expect(pilot.motion.finished).toBe(true);
   });
@@ -332,7 +337,8 @@ describe.skipIf(!existsSync(REAL))('la première carte, de bout en bout', () => 
       const motion = pilot.step(1 / 30, AUTO, 'car');
       time += 1 / 30;
       rail.poseAt(motion.s, pose);
-      maxLateral = Math.max(maxLateral, motion.speed * motion.speed * Math.abs(pose.curvature));
+      // Accélération latérale sur la trajectoire suivie (plus tendue que la route).
+      maxLateral = Math.max(maxLateral, motion.speed * motion.speed * Math.abs(sampleLine(pilot.line.curvature, pilot.line, motion.s)));
       // En agglomération : 50 km/h, sauf vitesse limite connue (OpenStreetMap), que le pilote suit.
       if (pose.urban && !pose.limit) maxUrban = Math.max(maxUrban, motion.speed);
       if (pose.limit) overLimit = Math.max(overLimit, kmh(motion.speed) - pose.limit);

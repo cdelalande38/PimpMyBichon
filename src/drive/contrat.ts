@@ -11,6 +11,7 @@
 // Repère : celui de la carte (src/data/mapTypes.ts) : le mètre, X vers l'est, Y vers le haut, Z vers
 // le sud. Un véhicule a l'avant vers +X dans son propre repère (src/data/vehicleTypes.ts).
 
+import type { BoiteSpec } from '../data/boites.ts';
 import type { MapId, MapRoute, RailGround } from '../data/mapTypes.ts';
 
 export type Vec3 = [number, number, number];
@@ -57,6 +58,11 @@ export interface DriveInput {
   brake: number;
   /** Placement demandé sur la chaussée : −1 à gauche de sa voie, 0 au milieu, 1 à droite. */
   lane: -1 | 0 | 1;
+  /**
+   * NOS : compteur des appuis sur le bouton. Chaque nouvelle valeur demande une poussée (à la main,
+   * réserve suffisante) ; absent ou inchangé : rien.
+   */
+  nos?: number;
 }
 
 /** Mouvement du véhicule sur le rail, avancé par le pilote. */
@@ -85,18 +91,73 @@ export interface DriveMotion {
   braking: boolean;
   /** Bout d'un parcours ouvert atteint : le véhicule s'arrête. */
   finished: boolean;
+  /** Accélération lissée (≈ 0,5 s), en m/s² : ce que les caméras ressentent, sans les à-coups des passages. */
+  pull?: number;
+  /** Poussée du NOS, de 0 à 1, adoucie (champ de la caméra, lueur à l'échappement). */
+  boost?: number;
+}
+
+/**
+ * Le moteur et sa boîte, avancés par le pilote à chaque sous-pas (src/drive/boite.ts) : une seule
+ * vérité pour le compte-tours, le son du moteur et la coupure de poussée aux passages.
+ */
+export interface DriveTrain {
+  /** Régime du moteur réel, en tr/min. */
+  rpm: number;
+  /** Rapport engagé, de 1 à `gears`. */
+  gear: number;
+  gears: number;
+  /** Passage de rapport en cours (la poussée est coupée, l'aiguille retombe). */
+  shifting: boolean;
+  /** Charge du moteur, de 0 à 1 (l'accélérateur ; relâchée au frein et pendant un passage). */
+  load: number;
+  /** Ralenti et rupteur, en tr/min. */
+  idle: number;
+  redline: number;
+  /** Zones du cadran, en tr/min (début du vert, de l'orange, du rouge ; fin du cadran). */
+  zones: Readonly<{ vert: number; orange: number; rouge: number; max: number }>;
+  /** NOS envoyé. */
+  nos: boolean;
+  /** Réserve de NOS, de 0 à 1 : se vide pendant la poussée, se recharge seule, lentement. */
+  nosReserve: number;
 }
 
 /** Fait avancer le véhicule. Fourni par `createPilot` (src/drive/pilote.ts). */
 export interface Pilot {
   readonly motion: DriveMotion;
+  /** Moteur et boîte (pilote de src/drive/pilote.ts) ; absent d'un pilote qui n'en tient pas. */
+  readonly train?: DriveTrain;
+  /** Demi-largeur et demi-longueur hors tout du véhicule posé, en mètres (marge au bord de la chaussée). */
+  setSize?(halfWidth: number, halfLength: number): void;
   /** Repart d'une abscisse, à l'arrêt. */
   reset(s: number): void;
   /** Avance de `dt` secondes (borné par l'appelant à 0,1 s). */
   step(dt: number, input: DriveInput, kind: 'car' | 'bike'): DriveMotion;
 }
 
-export type CreatePilot = (rail: Rail) => Pilot;
+/**
+ * Ce que le pilote sait du véhicule (src/drive/pilote.ts, `performanceDe`) : tiré du manifeste
+ * (engine.power, performance) et de la boîte ; rien n'est écrit par véhicule dans le code.
+ */
+export interface DrivePerformance {
+  kind: 'car' | 'bike';
+  /** Masse en ordre de marche, en kg. */
+  mass: number;
+  /** Puissance, en chevaux. */
+  power: number;
+  /** Vitesse de pointe en ligne droite, en km/h. */
+  topKmh: number;
+  /** Accélération latérale la plus forte à la main, en m/s². */
+  grip: number;
+  gearbox: BoiteSpec;
+  /** Demi-largeur et demi-longueur hors tout, en mètres (avant que le modèle soit posé : celles du genre de véhicule). */
+  halfWidth: number;
+  halfLength: number;
+  /** Puissance ajoutée par le NOS, en part de la puissance (un kit nitro monté la grossit). */
+  nosBoost?: number;
+}
+
+export type CreatePilot = (rail: Rail, performance?: DrivePerformance) => Pilot;
 
 /** Les six caméras du § 5.5. */
 export type CameraId = 'poursuite' | 'rasante' | 'avant' | 'embarquee' | 'travelling' | 'orbite';

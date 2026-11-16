@@ -1,5 +1,6 @@
 // Réglages de l'app (§ 5.9). Module pur : types, valeurs d'origine et lecture tolérante.
-// Les volumes et le pilote automatique arriveront avec le son et la sortie de nuit.
+// Le volume de la musique vit dans l'autoradio (src/state/radio.ts) ; le pilote automatique et le son du
+// moteur, dans la sortie de nuit (src/state/drive.ts).
 
 export const QUALITY_SETTINGS = ['auto', 'eco', 'standard', 'max'] as const;
 export type QualitySetting = (typeof QUALITY_SETTINGS)[number];

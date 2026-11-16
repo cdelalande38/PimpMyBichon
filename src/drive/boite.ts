@@ -1,8 +1,10 @@
 // Boîte de vitesses fictive de la sortie de nuit (§ 5.5, § 9 « Sur la route ») : régime du moteur
-// d'après la vitesse, avec des rapports. Fonctions pures, sans allocation cachée, testées par
-// tests/unit/drive-son-boite.test.ts ; les boîtes sont des données (src/data/boites.ts), une par
-// famille de sons. Le régime rendu est celui du moteur réel ; `regimeJoue` le ramène à ce que les
-// enregistrements savent jouer.
+// d'après la vitesse, avec des rapports. Fonctions pures, sans allocation cachée (avec `out`),
+// testées par tests/unit/drive-son-boite.test.ts et drive-compte-tours.test.ts ; les boîtes sont
+// des données (src/data/boites.ts). Une seule vérité : le pilote (src/drive/pilote.ts) fait avancer
+// la boîte à chaque sous-pas ; le compte-tours et le son du moteur lisent son régime et son rapport.
+// Le régime rendu est celui du moteur réel ; `regimeJoue` le ramène à ce que les enregistrements
+// savent jouer.
 
 import type { BoiteSpec } from '../data/boites.ts';
 
@@ -57,9 +59,14 @@ export function regimeRoues(vitesseKmh: number, boite: BoiteSpec, rapport: numbe
   return (Math.max(0, vitesseKmh) / Math.max(0.1, k)) * 1000;
 }
 
-/** Régime de passage au rapport supérieur : en croisière tôt, à plein gaz tard. */
+/**
+ * Régime de passage au rapport supérieur : en croisière tôt, à plein gaz tard. La courbe est au carré
+ * de la charge : sur un filet de gaz on passe tout près du régime de croisière (une moto qui tient
+ * 50 km/h en ville ne reste pas en première à mi-régime), et le plein gaz garde son passage tardif.
+ */
 export function seuilPassage(boite: BoiteSpec, charge: number): number {
-  return boite.passageCroisiere + (boite.passagePleinGaz - boite.passageCroisiere) * unite(charge);
+  const c = unite(charge);
+  return boite.passageCroisiere + (boite.passagePleinGaz - boite.passageCroisiere) * c * c;
 }
 
 /**
@@ -67,7 +74,15 @@ export function seuilPassage(boite: BoiteSpec, charge: number): number {
  * seuil), passage qui fait tomber la charge et rejoindre au régime le rapport suivant, embrayage qui
  * patine au départ, ralenti à l'arrêt, rupteur.
  */
-export function pasBoite(etat: EtatBoite, entree: EntreeBoite, boite: BoiteSpec, ralenti: number, dt: number): SortieBoite {
+export function pasBoite(etat: EtatBoite, entree: EntreeBoite, boite: BoiteSpec, ralenti: number, dt: number, out?: SortieBoite): SortieBoite {
+  const r = out ?? { rapport: 1, regime: ralenti, passage: 0, charge: 0 };
+  const rendre = (rapport: number, regime: number, passage: number, charge: number): SortieBoite => {
+    r.rapport = rapport;
+    r.regime = regime;
+    r.passage = passage;
+    r.charge = charge;
+    return r;
+  };
   const n = Math.max(1, boite.kmhPar1000.length);
   const v = Math.max(0, Number.isFinite(entree.vitesseKmh) ? entree.vitesseKmh : 0);
   const charge = entree.frein ? 0 : unite(entree.charge);
@@ -79,14 +94,14 @@ export function pasBoite(etat: EtatBoite, entree: EntreeBoite, boite: BoiteSpec,
   // À l'arrêt : premier rapport, débrayé ; un coup d'accélérateur fait monter un peu le régime.
   if (v < VITESSE_ARRET) {
     const cible = ralenti + (Math.max(ralenti, boite.embrayage) - ralenti) * charge * 0.5;
-    return { rapport: 1, regime: suivre(regime, cible, pas, 0.15), passage: 0, charge };
+    return rendre(1, suivre(regime, cible, pas, 0.15), 0, charge);
   }
 
   // Passage en cours : la charge tombe, le régime rejoint celui du nouveau rapport.
   if (passage > 0) {
     passage = Math.max(0, passage - pas);
     const cible = Math.min(boite.rupteur, Math.max(ralenti, regimeRoues(v, boite, rapport)));
-    return { rapport, regime: suivre(regime, cible, pas, boite.dureePassage / 3), passage, charge: Math.min(charge, CHARGE_PASSAGE) };
+    return rendre(rapport, suivre(regime, cible, pas, boite.dureePassage / 3), passage, Math.min(charge, CHARGE_PASSAGE));
   }
 
   // Choix du rapport.
@@ -96,7 +111,7 @@ export function pasBoite(etat: EtatBoite, entree: EntreeBoite, boite: BoiteSpec,
     regimeRoues(v, boite, rapport + 1) >= boite.retrograde * MARGE_POMPAGE
   ) {
     // Le passage commence : le régime reste en haut cet instant, la charge tombe.
-    return { rapport: rapport + 1, regime, passage: boite.dureePassage, charge: Math.min(charge, CHARGE_PASSAGE) };
+    return rendre(rapport + 1, regime, boite.dureePassage, Math.min(charge, CHARGE_PASSAGE));
   }
   if (rapport > 1 && regimeRoues(v, boite, rapport) < boite.retrograde) {
     rapport -= 1;
@@ -108,7 +123,35 @@ export function pasBoite(etat: EtatBoite, entree: EntreeBoite, boite: BoiteSpec,
   let cible = Math.max(ralenti, roues);
   if (rapport === 1 && roues < boite.embrayage) cible = Math.max(cible, ralenti + (boite.embrayage - ralenti) * charge);
   cible = Math.min(boite.rupteur, cible);
-  return { rapport, regime: suivre(regime, cible, pas, passage > 0 ? boite.dureePassage / 3 : TAU_REGIME), passage, charge };
+  return rendre(rapport, suivre(regime, cible, pas, passage > 0 ? boite.dureePassage / 3 : TAU_REGIME), passage, charge);
+}
+
+/** Zones du compte-tours, en tr/min : début du vert, de l'orange (il est temps de passer), du rouge ; fin du cadran. */
+export interface ZonesCadran {
+  vert: number;
+  orange: number;
+  rouge: number;
+  max: number;
+}
+
+/**
+ * Zones du cadran d'après la boîte : vert du rétrogradage jusqu'un peu avant le passage à plein gaz
+ * (la plage utile), orange jusqu'au passage (le témoin s'allume, la boîte passe au bout), rouge du
+ * passage au rupteur ; le cadran finit un peu au-delà du rupteur.
+ */
+export function zonesCadran(boite: BoiteSpec): ZonesCadran {
+  const orange = boite.passagePleinGaz - 0.22 * (boite.passagePleinGaz - boite.retrograde);
+  const rouge = boite.passagePleinGaz + 0.35 * (boite.rupteur - boite.passagePleinGaz);
+  const pas = boite.rupteur > 9000 ? 2000 : 1000;
+  return { vert: boite.retrograde, orange, rouge, max: Math.ceil((boite.rupteur * 1.04) / pas) * pas };
+}
+
+/** Zone du cadran où se trouve un régime. */
+export function zoneDe(regime: number, zones: ZonesCadran): 'bas' | 'vert' | 'orange' | 'rouge' {
+  if (regime >= zones.rouge) return 'rouge';
+  if (regime >= zones.orange) return 'orange';
+  if (regime >= zones.vert) return 'vert';
+  return 'bas';
 }
 
 /**

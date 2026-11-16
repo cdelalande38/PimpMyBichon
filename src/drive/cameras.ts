@@ -13,6 +13,13 @@
 //   champ se resserre quand il est loin (téléobjectif) et s'ouvre quand il passe.
 // - orbite : autour du véhicule, réglée au doigt (OrbitView), bornée au-dessus du sol.
 // Au-delà des bouts d'un parcours ouvert, les points du rail se prolongent en ligne droite.
+//
+// Impression de vitesse (CAMERA_FEEL), bornée pour ne jamais donner le mal de mer : le champ s'ouvre
+// avec la vitesse (≈ 3° à 90 km/h, davantage au-delà, plafonné) et pendant le NOS ; la poursuite
+// descend avec la vitesse (le bord de route défile plus vite à l'écran), recule à l'accélération (le véhicule s'éloigne dans le cadre) et se
+// rapproche au freinage, d'après l'accélération lissée du pilote (`motion.pull`, sans les à-coups des
+// passages de rapport) ; un léger tremblement à haute vitesse, fonction du temps (déterministe), coupé
+// si le téléphone demande moins de mouvement.
 
 import type { CameraId, CameraShot, DriveMotion, OrbitView, Rail, RailPose, Vec3, VehicleFrame } from './contrat.ts';
 import { createPose, lateralPoint } from './rail.ts';
@@ -30,6 +37,47 @@ export const TRAVELLING = {
   fovMax: 58,
   frame: 7,
 } as const;
+
+/** Impression de vitesse : réglages et bornes. */
+export const CAMERA_FEEL = {
+  /** Champ ajouté : degrés à 90 km/h (25 m/s), plafond, vitesse du plafond (m/s) ; pendant le NOS. */
+  fovAt90: 3,
+  fovMax: 14,
+  fovFull: 70,
+  fovBoost: 7,
+  /** Poursuite : recul par m/s² d'accélération ressentie (m), recul et rapprochement les plus forts (m). */
+  pullBack: 0.25,
+  pullBackMax: 1.4,
+  pullFwdMax: 0.9,
+  /** Poursuite : abaissement à pleine vitesse (m, atteint à fovFull) et à l'accélération (m par m/s², plafond). */
+  speedLower: 0.55,
+  lower: 0.05,
+  lowerMax: 0.3,
+  /** Tremblement : vitesse où il commence et où il plafonne (m/s), amplitude au plafond (m). */
+  shakeFrom: 22,
+  shakeFull: 75,
+  shakeMax: 0.03,
+} as const;
+
+/** Mouvement réduit demandé par le téléphone : pas de tremblement. Réglable par les tests. */
+export const cameraFeel = {
+  reducedMotion: typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches,
+};
+
+/** Champ ajouté par la vitesse (m/s), en degrés : ≈ 3° à 90 km/h, plafonné. */
+export function speedFov(speed: number): number {
+  const F = CAMERA_FEEL;
+  const v = Math.max(0, Number.isFinite(speed) ? speed : 0);
+  if (v <= 25) return (F.fovAt90 * v) / 25;
+  return Math.min(F.fovMax, F.fovAt90 + ((F.fovMax - F.fovAt90) * (v - 25)) / (F.fovFull - 25));
+}
+
+/** Amplitude du tremblement à cette vitesse (m), nulle en mouvement réduit. */
+export function shakeAmplitude(speed: number): number {
+  if (cameraFeel.reducedMotion) return 0;
+  const F = CAMERA_FEEL;
+  return F.shakeMax * Math.min(1, Math.max(0, (speed - F.shakeFrom) / (F.shakeFull - F.shakeFrom)));
+}
 
 /** Bornes de l'orbite au doigt. */
 export const ORBIT_LIMITS = { pitchMin: 0.06, pitchMax: 1.25, distanceMin: 3, distanceMax: 18 } as const;
@@ -101,7 +149,6 @@ export function cameraShot(
   orbit: OrbitView,
   out: CameraShot,
 ): CameraShot {
-  void time;
   const [px, py, pz] = frame.position;
   const fx = Math.cos(frame.heading);
   const fz = -Math.sin(frame.heading);
@@ -109,23 +156,36 @@ export function cameraShot(
   const lx = fz;
   const lz = -fx;
   const size = Math.max(frame.halfLength, frame.halfWidth * 2);
-  const speedFactor = Math.min(1, motion.speed / 30);
+  const F = CAMERA_FEEL;
+  const boost = Math.min(1, Math.max(0, motion.boost ?? 0));
+  const extraFov = speedFov(motion.speed) + F.fovBoost * boost;
+  const pull = Number.isFinite(motion.pull) ? (motion.pull as number) : 0;
+  // Tremblement : trois sinus de périodes premières entre elles, en mètres.
+  const shake = shakeAmplitude(motion.speed);
+  const shakeY = shake * (0.6 * Math.sin(time * 31.3) + 0.4 * Math.sin(time * 17.9));
+  const shakeX = shake * 0.5 * Math.sin(time * 23.7);
 
   switch (id) {
     case 'poursuite': {
-      const back = frame.halfLength * 2 + 4;
+      // Recul à l'accélération, rapprochement au freinage ; plus bas avec la vitesse et la poussée.
+      const swing = Math.max(-F.pullFwdMax, Math.min(F.pullBackMax, pull * F.pullBack));
+      const back = frame.halfLength * 2 + 4 + swing;
+      const lower = F.speedLower * Math.min(1, motion.speed / F.fovFull) + Math.min(F.lowerMax, Math.max(0, pull) * F.lower);
       extendedPose(rail, motion.s - back, scratch);
-      lateralPoint(scratch, motion.offset, frame.height + 1.1, out.position);
+      lateralPoint(scratch, motion.offset, frame.height + 1.1 - lower + shakeY, out.position);
+      out.position[0] += lx * shakeX;
+      out.position[2] += lz * shakeX;
       set(out.target, px + fx * frame.halfLength * 0.6, py + frame.height * 0.75, pz + fz * frame.halfLength * 0.6);
-      out.fov = 50 + 6 * speedFactor;
+      out.fov = 50 + extraFov;
       return out;
     }
     case 'rasante': {
       const side = frame.halfWidth + 0.45;
       const fore = frame.halfLength * 0.95;
-      set(out.position, px + fx * fore + lx * side, py + 0.35, pz + fz * fore + lz * side);
+      set(out.position, px + fx * fore + lx * side, py + 0.35 + shakeY * 0.6, pz + fz * fore + lz * side);
       set(out.target, px - fx * frame.halfLength * 1.2 + lx * frame.halfWidth * 0.2, py + frame.height * 0.35, pz - fz * frame.halfLength * 1.2 + lz * frame.halfWidth * 0.2);
-      out.fov = 62;
+      // Au ras du sol, le champ ne s'ouvre qu'au NOS : ouvert avec la vitesse, il ralentirait le défilement.
+      out.fov = 62 + F.fovBoost * boost * 0.8;
       return out;
     }
     case 'avant': {
@@ -133,7 +193,7 @@ export function cameraShot(
       extendedPose(rail, motion.s + lead, scratch);
       lateralPoint(scratch, motion.offset, Math.max(1.1, frame.height * 0.9), out.position);
       set(out.target, px, py + frame.height * 0.5, pz);
-      out.fov = 46;
+      out.fov = 46 + extraFov * 0.5;
       return out;
     }
     case 'embarquee': {
@@ -157,7 +217,8 @@ export function cameraShot(
       lateralPoint(scratch, motion.offset, frame.height * 0.6, point);
       set(out.target, point[0], point[1], point[2]);
       // Dans l'habitacle, un champ plus ouvert : le volant, la planche et la route.
-      out.fov = (eye ? 74 : 66) + 4 * speedFactor;
+      out.position[1] += shakeY * 0.5;
+      out.fov = (eye ? 74 : 66) + extraFov * 0.6;
       return out;
     }
     case 'travelling': {

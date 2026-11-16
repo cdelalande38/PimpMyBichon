@@ -58,8 +58,13 @@ test.describe('sortie de nuit', () => {
     await expect(stage(page)).not.toHaveAttribute('data-camera', camera ?? '');
 
     // À la main : appui maintenu à gauche, on freine ; à droite, on repart.
-    await bar(page).getByRole('button', { name: 'Conduite à la main' }).tap();
-    await expect(bar(page).getByRole('button', { name: 'Pilote automatique' })).toBeVisible();
+    // Le mode se lit en permanence ; à la main, la barre des commandes s'abaisse.
+    const mode = page.getByRole('switch', { name: 'Conduite à la main' });
+    await expect(mode).toHaveAttribute('aria-checked', 'false');
+    await mode.tap();
+    await expect(mode).toHaveAttribute('aria-checked', 'true');
+    await expect(mode).toContainText('À la main');
+    await expect(bar(page)).toHaveAttribute('data-replie', 'true');
     const zone = page.locator('.drive-mid');
     const box = await zone.boundingBox();
     if (!box) throw new Error('zone des gestes introuvable');
@@ -76,7 +81,9 @@ test.describe('sortie de nuit', () => {
     await capture(page, 'sortie-main');
     await page.mouse.up();
 
-    // Rentrer au garage en un geste : l'atelier revient tel qu'on l'avait laissé.
+    // Rentrer au garage en deux gestes à la main (la languette rappelle la barre) : l'atelier revient
+    // tel qu'on l'avait laissé.
+    await bar(page).getByRole('button', { name: 'Afficher les commandes' }).tap();
     await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
     await expect(page).not.toHaveURL(/#\/sortie/);
     await expect(stage(page)).toHaveCount(0);
@@ -98,6 +105,10 @@ test.describe('sortie de nuit', () => {
     const veil = page.locator('.drive-veil[data-etat="chargement"]');
     await expect(veil).toBeVisible({ timeout: 30_000 });
     await expect(veil).toContainText('Licence Ouverte');
+    // Écran de chargement plein : la carte nommée, ses étapes, « Rentrer au garage » atteignable.
+    await expect(veil.locator('.tuto-marque b')).not.toBeEmpty();
+    await expect(veil.locator('.tuto-etapes li')).toHaveCount(4);
+    await expect(veil.getByRole('button', { name: 'Rentrer au garage' })).toBeVisible();
     await capture(page, 'sortie-chargement');
     release();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });

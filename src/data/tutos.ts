@@ -214,11 +214,11 @@ export const TUTOS: readonly Tuto[] = [
     titre: 'Sur la route',
     but: 'Ici, tu regardes ton véhicule rouler. Il se débrouille tout seul : pose le téléphone et profite.',
     etapes: [
-      { texte: 'Le pilote automatique et le réalisateur font tout : la vitesse, les virages et les plans de caméra.', cible: '.drive-acts' },
-      { texte: '« Caméra suivante » pour choisir ton plan. « Réalisateur » lui rend la main.', cible: '.drive-acts [aria-label="Caméra suivante"], .drive-acts [aria-label="Réalisateur"]' },
-      { texte: 'À la main : maintiens à droite pour accélérer, à gauche pour freiner, et glisse pour te placer dans ta voie.', cible: '.drive-acts [data-conduite]' },
-      { texte: 'Garde le doigt sur « Ralenti » pour savourer un virage. La météo se change en roulant.', cible: '.drive-acts [aria-label="Ralenti"]' },
-      { texte: '« Rentrer au garage » te ramène à l’atelier, tel que tu l’as laissé.', cible: '.drive-home' },
+      { texte: '« Pilote auto » ou « À la main » : le bouton du bas dit qui conduit. Touche-le pour prendre le volant.', cible: '.drive-mode' },
+      { texte: 'À la main : maintiens à droite pour accélérer, à gauche pour freiner, glisse pour te placer.', cible: '.drive-mid' },
+      { texte: '« NOS » envoie une poussée, l’anneau dit la réserve. La languette rappelle la barre des commandes.', cible: '.drive-pilot' },
+      { texte: 'Compte-tours : vert, ça tire ; orange, le témoin s’allume et ça passe la vitesse ; rouge, zone rouge.', cible: '.drive-dial' },
+      { texte: 'Caméras, réalisateur, ralenti, météo et « Rentrer au garage » sont dans la barre du bas.', cible: '.drive-acts' },
     ],
   },
 ];

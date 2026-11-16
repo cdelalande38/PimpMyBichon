@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { CAMERA_IDS, type CameraId, type DriveInput, type DriveStore, type DriveTelemetry, type OrbitView, type Weather } from '../drive/contrat.ts';
+import { CAMERA_IDS, type CameraId, type DriveInput, type DriveStore, type DriveTelemetry, type OrbitView, type Pilot, type Weather } from '../drive/contrat.ts';
 import { clampOrbit, DEFAULT_ORBIT } from '../drive/cameras.ts';
 import { mapById, MAPS } from '../data/maps.ts';
 import type { MapId } from '../data/mapTypes.ts';
@@ -38,6 +38,13 @@ export interface DrivePrefs {
 export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ weather: 'pluie', camera: 'poursuite' });
 
 export const AUTO_INPUT: Readonly<DriveInput> = Object.freeze({ auto: true, throttle: 0, brake: 0, lane: 0 });
+
+/**
+ * Le pilote de la sortie en cours, posé par la scène (src/drive/scene/moteur.ts) et retiré quand
+ * elle se démonte : le compte-tours et le NOS le lisent à chaque image (sans faire rendre React),
+ * le son du moteur à chaque télémétrie. Jamais sauvegardé.
+ */
+export const livePilot: { current: Pilot | null } = { current: null };
 
 export const IDLE_TELEMETRY: Readonly<DriveTelemetry> = Object.freeze({
   ready: false,
@@ -96,6 +103,8 @@ export interface DriveState extends DriveStore {
   setThrottle: (throttle: number) => void;
   setBrake: (brake: number) => void;
   setLane: (lane: DriveInput['lane']) => void;
+  /** Un appui sur « NOS » (à la main) : le pilote envoie une poussée si la réserve le permet. */
+  fireNos: () => void;
   setOrbit: (orbit: Partial<OrbitView>) => void;
   setSlow: (slow: boolean) => void;
   setPaused: (paused: boolean) => void;
@@ -155,10 +164,16 @@ export const useDrive = create<DriveState>()(
       nextCamera: () => set((state) => ({ camera: nextCameraOf(state.camera), director: false })),
       setDirector: (director) => set({ director }),
       setWeather: (weather) => set({ weather }),
-      setAuto: (auto) => set({ input: auto ? { ...AUTO_INPUT } : { auto: false, throttle: 0, brake: 0, lane: 0 } }),
+      // Le compteur du NOS suit d'un mode à l'autre : le pilote ne compte que les nouveaux appuis.
+      setAuto: (auto) =>
+        set((state) => {
+          const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
+          return { input: auto ? { ...AUTO_INPUT, ...nos } : { auto: false, throttle: 0, brake: 0, lane: 0 as const, ...nos } };
+        }),
       setThrottle: (throttle) => set((state) => (state.input.auto ? state : { input: { ...state.input, throttle: unit(throttle) } })),
       setBrake: (brake) => set((state) => (state.input.auto ? state : { input: { ...state.input, brake: unit(brake) } })),
       setLane: (lane) => set((state) => (state.input.auto || state.input.lane === lane ? state : { input: { ...state.input, lane } })),
+      fireNos: () => set((state) => (state.input.auto ? state : { input: { ...state.input, nos: (state.input.nos ?? 0) + 1 } })),
       setOrbit: (orbit) => set((state) => ({ orbit: clampOrbit({ ...state.orbit, ...orbit }) })),
       setSlow: (slow) => set((state) => (state.slow === slow ? state : { slow })),
       setPaused: (paused) => set((state) => (state.paused === paused ? state : { paused })),

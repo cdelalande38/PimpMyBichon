@@ -84,6 +84,7 @@
     "power": 172,
     "sound": "quatre-en-ligne-moto"
   },
+  "performance": { "mass": 265, "topKmh": 285, "grip": 8.5 },
   "wheels": {
     "fit": {
       "zone": "jantes",

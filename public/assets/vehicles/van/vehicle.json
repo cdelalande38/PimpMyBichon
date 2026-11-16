@@ -47,6 +47,7 @@
     "power": 102,
     "sound": "diesel-turbo"
   },
+  "performance": { "mass": 1800, "topKmh": 170, "grip": 5 },
   "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -14 }, "fov": 95, "volets": ["volant", "pommeau"] },
   "interiorViews": [
     { "place": "passager", "label": "Passager", "seat": { "anchors": ["siege_avant_droit"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": -14, "pitch": -12 }, "fov": 95 },

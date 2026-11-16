@@ -99,39 +99,146 @@
   touch-action: none;
 }
 
+/* Haut : carte et progression à gauche, compte-tours au milieu (le coin gauche est au bouton
+   « ? » de l'aide), radio et pause à droite. */
 .drive-top {
   position: relative;
   z-index: 2;
   grid-row: 1;
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: start;
   gap: 0.5rem;
   padding: calc(0.5rem + var(--safe-t)) calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
   pointer-events: none;
 }
 
-.drive-band {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  padding: 0.25rem 0.75rem 0.375rem;
-  border-left: 2px solid var(--ambre);
-  background: rgba(10, 9, 17, 0.55);
+/* ── Compte-tours (src/ui/drive/CompteTours.tsx) ── */
+.drive-dial {
+  --ct-vert: #39d98a;
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  flex: none;
+  width: clamp(6.25rem, 30vw, 7.5rem);
+  padding: 0.125rem 0.125rem 0;
+  border-radius: 50% 50% 14px 14px;
+  background: radial-gradient(circle at 50% 46%, rgba(10, 9, 17, 0.82) 58%, rgba(10, 9, 17, 0.55) 72%, rgba(10, 9, 17, 0) 74%);
+}
+
+.drive-dial svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.ct-fond {
+  fill: none;
+  stroke: rgba(233, 230, 242, 0.12);
+  stroke-width: 6;
+}
+
+.ct-zone {
+  fill: none;
+  stroke-width: 6;
+  opacity: 0.45;
+}
+
+.ct-zone[data-zone='vert'] {
+  stroke: var(--ct-vert);
+}
+
+.ct-zone[data-zone='orange'] {
+  stroke: var(--ambre);
+}
+
+.ct-zone[data-zone='rouge'] {
+  stroke: var(--rouge);
+}
+
+/* La zone où se trouve l'aiguille s'allume. */
+.drive-dial[data-zone='vert'] .ct-zone[data-zone='vert'],
+.drive-dial[data-zone='orange'] .ct-zone[data-zone='orange'],
+.drive-dial[data-zone='rouge'] .ct-zone[data-zone='rouge'] {
+  opacity: 1;
+}
+
+.ct-trait {
+  stroke: rgba(233, 230, 242, 0.7);
+  stroke-width: 1.2;
+}
+
+.ct-chiffre {
+  fill: var(--mute);
+  font-family: var(--body);
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.ct-unite {
+  fill: var(--mute);
+  font-family: var(--body);
+  font-size: 5px;
+  letter-spacing: 0.06em;
+}
+
+.ct-rapport {
+  fill: var(--chrome);
+  font-family: var(--display);
+  font-size: 28px;
+}
+
+.drive-dial[data-passage='true'] .ct-rapport {
+  fill: var(--ambre);
+}
+
+.ct-aiguille {
+  stroke: #ff5a3c;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.drive-dial[data-nos='true'] .ct-aiguille {
+  stroke: #7fb0ff;
+  filter: drop-shadow(0 0 2px var(--bleu));
+}
+
+.ct-moyeu {
+  fill: var(--chrome);
+}
+
+/* Témoin de passage : éteint, ambre en zone orange, rouge en zone rouge. */
+.ct-temoin {
+  fill: rgba(233, 230, 242, 0.12);
+}
+
+.drive-dial[data-temoin='true'] .ct-temoin {
+  fill: var(--ambre);
+  filter: drop-shadow(0 0 3px var(--ambre));
+}
+
+.drive-dial[data-temoin='true'][data-zone='rouge'] .ct-temoin {
+  fill: var(--rouge);
+  filter: drop-shadow(0 0 3px var(--rouge));
 }
 
 .drive-speed {
+  position: absolute;
+  bottom: 0.875rem;
+  left: 50%;
   display: flex;
   align-items: baseline;
-  gap: 0.25rem;
+  gap: 0.2rem;
   margin: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .drive-speed b {
   min-width: 2.2ch;
   font-family: var(--display);
-  font-size: 1.75rem;
+  font-size: 1rem;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -139,17 +246,22 @@
 
 .drive-speed small {
   color: var(--mute);
-  font-size: 0.6875rem;
-  letter-spacing: 0.1em;
+  font-size: 0.5625rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .drive-where {
   display: flex;
-  flex: 1;
+  grid-column: 1;
+  grid-row: 1;
   flex-direction: column;
   gap: 0.3rem;
   min-width: 0;
+  margin-top: 0.25rem;
+  padding: 0.375rem 0.5rem 0.5rem;
+  border-left: 2px solid var(--ambre);
+  background: rgba(10, 9, 17, 0.55);
 }
 
 .drive-map {
@@ -194,8 +306,43 @@
   color: var(--ambre);
 }
 
+/* À droite : radio et pause. */
+.drive-top-droite {
+  display: flex;
+  grid-column: 3;
+  grid-row: 1;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* Radio en sortie : le bouton rond du garage ; le mini-lecteur se déploie sous le haut de l'écran,
+   sur toute la largeur, sans quitter la route. */
+.drive-top .radio-quick {
+  position: static;
+  pointer-events: auto;
+}
+
+.drive-top .radio-mini {
+  /* Sous le haut de l'écran et sous le bouton « ? » de l'aide (src/ui/tuto/tuto.css). */
+  top: max(calc(100% + 0.375rem), calc(8.25rem + var(--safe-t)));
+  right: calc(var(--gutter) + var(--safe-r));
+  left: calc(var(--gutter) + var(--safe-l));
+  width: auto;
+  transform: none;
+  pointer-events: auto;
+}
+
+.drive-top .radio-mini-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0.25rem 0;
+}
+
 /* Zone des gestes : toute la hauteur libre, au-dessus de la scène. */
 .drive-mid {
+  position: relative;
   z-index: 1;
   grid-row: 2;
   justify-content: flex-end;
@@ -205,6 +352,7 @@
   touch-action: none;
 }
 
+/* Pédales dessinées, sous les pouces : franches à l'arrêt, estompées une fois qu'on roule. */
 .drive-pedals {
   display: flex;
   align-items: flex-end;
@@ -218,15 +366,37 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 6.5rem;
-  min-height: 4.5rem;
-  border: 1px dashed var(--edge);
-  border-radius: 6px;
-  background: rgba(10, 9, 17, 0.4);
+  gap: 0.2rem;
+  width: 40%;
+  min-height: 7.5rem;
+  border: 1.5px dashed var(--edge);
+  border-radius: 12px;
+  background: rgba(10, 9, 17, 0.42);
   font-family: var(--display);
   font-size: 1rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  transition: opacity 300ms ease;
+}
+
+.drive-pedal[data-pedale='frein'] {
+  border-color: rgba(255, 45, 63, 0.75);
+  color: #ff8a95;
+}
+
+.drive-pedal[data-pedale='gaz'] {
+  border-color: rgba(57, 217, 138, 0.75);
+  color: #7ff0b5;
+}
+
+/* La pédale : une plaque striée. */
+.drive-pedal-plaque {
+  width: 2.25rem;
+  height: 2.75rem;
+  border: 2px solid currentColor;
+  border-radius: 6px 6px 10px 10px;
+  background: repeating-linear-gradient(to bottom, currentColor 0 2px, transparent 2px 7px);
+  opacity: 0.8;
 }
 
 .drive-pedal small {
@@ -237,22 +407,70 @@
   text-transform: none;
 }
 
+.drive-pedals[data-estompe='true'] .drive-pedal {
+  opacity: 0.22;
+}
+
+.drive-pedal[data-appui='true'] {
+  opacity: 1 !important;
+  border-style: solid;
+}
+
 .drive-pedal[data-pedale='frein'][data-appui='true'] {
-  border: 1px solid var(--rouge);
   background: rgba(255, 45, 63, 0.35);
 }
 
 .drive-pedal[data-pedale='gaz'][data-appui='true'] {
-  border: 1px solid var(--ok);
-  background: rgba(34, 211, 182, 0.3);
+  background: rgba(57, 217, 138, 0.3);
 }
 
 .drive-lane {
   flex: 1;
   padding-bottom: 0.25rem;
   color: var(--mute);
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
   text-align: center;
+}
+
+/* « Ralenti » maintenu, dit à l'écran. */
+.drive-badge {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  margin: 0;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--ambre);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ambre);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* Pilote automatique : un appui propose de reprendre la main. */
+.drive-offer {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.375rem 0.375rem 0.75rem;
+  border-left: 2px solid var(--bleu);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.drive-offer-btn {
+  flex: none;
+  gap: 0.375rem;
 }
 
 .drive-veil {
@@ -268,10 +486,6 @@
   pointer-events: none;
 }
 
-.drive-veil[data-etat='chargement'] {
-  background: radial-gradient(ellipse at 50% 60%, rgba(59, 123, 255, 0.12), transparent 70%);
-}
-
 .drive-veil > * {
   pointer-events: auto;
 }
@@ -284,32 +498,43 @@
   margin: 0;
 }
 
-.drive-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  margin: 0;
-  text-align: center;
+/* Chargement plein écran, du même air que celui du lancement (src/ui/tuto/tuto.css). */
+.drive-chargement {
+  z-index: 5;
+  justify-content: flex-end;
+  padding: 0 calc(1.5rem + var(--safe-r)) calc(6vh + var(--safe-b)) calc(1.5rem + var(--safe-l));
+  background: var(--night);
+  color: var(--chrome);
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 400ms ease-out;
 }
 
-.drive-loading b {
-  font-family: var(--display);
-  font-size: 1.125rem;
-  font-weight: 400;
-  letter-spacing: 0.05em;
+.drive-chargement[data-fini] {
+  opacity: 0;
+  pointer-events: none;
 }
 
-.drive-loading small {
+.drive-chargement .tuto-marque b {
+  font-size: clamp(1.75rem, 9vw, 2.5rem);
+  line-height: 1;
+}
+
+.drive-chargement-sous {
+  margin: -0.5rem 0 0;
   color: var(--mute);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
 }
 
-.drive-loading .drive-credits {
-  max-width: 22rem;
-  margin-top: 0.75rem;
+.drive-chargement .drive-credits {
+  margin-top: 0.25rem;
 }
 
+.drive-chargement-garage {
+  margin-top: 0.5rem;
+}
+
+/* Bas : le mode de conduite et le NOS, puis la barre des commandes (abaissée à la main). */
 .drive-bar {
   position: relative;
   z-index: 2;
@@ -340,9 +565,151 @@
   flex: none;
 }
 
+.drive-pilot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap);
+}
+
+/* Mode de conduite : un interrupteur toujours visible, bleu en pilote auto, ambre à la main. */
+.drive-mode {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 48px;
+  min-height: var(--tap);
+  padding: 0 0.875rem 0 0.625rem;
+  border: 1.5px solid var(--bleu);
+  border-radius: 999px;
+  background: rgba(59, 123, 255, 0.2);
+  color: var(--chrome);
+  text-align: left;
+}
+
+.drive-mode[data-conduite='main'] {
+  border-color: var(--ambre);
+  background: rgba(255, 178, 36, 0.22);
+  color: var(--ambre);
+}
+
+.drive-mode-texte {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.drive-mode-texte b {
+  font-family: var(--display);
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.drive-mode-texte small {
+  color: var(--mute);
+  font-size: 0.625rem;
+}
+
+/* Languette : rappelle (ou replie) la barre des commandes. */
+.drive-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 48px;
+  min-height: var(--tap);
+  margin: 0 auto;
+  padding: 0 0.75rem;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--panel);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* NOS : sous le pouce droit ; l'anneau dit la réserve. */
+.drive-nos {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  width: 4.25rem;
+  height: 4.25rem;
+  margin-left: auto;
+  border: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(16, 14, 26, 0.95) 0 66%, transparent 67%),
+    conic-gradient(var(--bleu) var(--reserve, 100%), rgba(233, 230, 242, 0.14) 0);
+  color: #a9c6ff;
+  font-family: var(--display);
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+  -webkit-touch-callout: none;
+}
+
+.drive-nos .drive-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.drive-nos[data-nos='envoye'] {
+  color: #fff;
+  box-shadow: 0 0 18px rgba(59, 123, 255, 0.9);
+}
+
+.drive-nos[data-nos='vide'] {
+  color: var(--mute);
+}
+
+.drive-tab + .drive-nos {
+  margin-left: 0;
+}
+
+/* La barre des commandes : repliée en hauteur (grille 1fr → 0fr), courte et douce. */
+.drive-panel {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 220ms ease,
+    opacity 220ms ease;
+}
+
+.drive-panel-in {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.drive-bar[data-replie='true'] .drive-panel {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 220ms ease,
+    opacity 220ms ease,
+    visibility 0s 220ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drive-panel,
+  .drive-bar[data-replie='true'] .drive-panel,
+  .drive-chargement,
+  .drive-pedal {
+    transition: none;
+  }
+}
+
 .drive-acts {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -385,11 +752,6 @@
   color: var(--mute);
 }
 
-.drive-act[data-conduite='main'] {
-  border-color: var(--ambre);
-  color: var(--ambre);
-}
-
 .drive-home {
   flex: 1;
   gap: 0.5rem;
@@ -405,4 +767,11 @@
   flex: none;
   width: 4.5rem;
   min-height: var(--tap);
+}
+
+/* Petit téléphone : la languette garde sa flèche, son nom reste pour le lecteur d'écran. */
+@media (max-width: 379px) {
+  .drive-tab span {
+    display: none;
+  }
 }

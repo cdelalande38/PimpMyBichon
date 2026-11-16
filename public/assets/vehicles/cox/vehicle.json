@@ -74,6 +74,7 @@
     "power": 50,
     "sound": "quatre-a-plat"
   },
+  "performance": { "mass": 840, "topKmh": 140, "grip": 5.5 },
   "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -12 }, "fov": 94, "volets": ["volant", "pommeau"] },
   "interiorViews": [
     { "place": "passager", "label": "Passager", "seat": { "anchors": ["siege_avant_droit"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": -14, "pitch": -10 }, "fov": 94 },
