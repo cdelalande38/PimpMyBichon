@@ -117,13 +117,31 @@ export function DriveScene({ map, vehicle, level, floatTargets, stage }: DriveSc
   const onModel = useCallback((model: DriveModel | null) => engine?.setModel(model), [engine]);
   const onVehicleFail = useCallback(() => engine?.vehicleFailedNow(), [engine]);
 
+  // Temps arrêté (diagnostic) : l'image est rendue, rien ne bouge.
+  const frozenAt = useRef(-1);
   useFrame((state, delta) => {
-    engine?.frame(state.gl, state.scene, state.camera as PerspectiveCamera, delta, state.clock.elapsedTime, stage.current);
+    const frozen = driveDebug.figer === true;
+    if (frozen && frozenAt.current < 0) frozenAt.current = state.clock.elapsedTime;
+    if (!frozen) frozenAt.current = -1;
+    engine?.frame(state.gl, state.scene, state.camera as PerspectiveCamera, frozen ? 0 : delta, frozen ? frozenAt.current : state.clock.elapsedTime, stage.current);
   });
+  // Avant la boucle de la scène (priorité négative) : chronomètre du processeur graphique (diagnostic).
+  useFrame((state) => driveDebug.beforeFrame?.(state.gl), -1);
+  // Après l'image composée (priorité 2, après la chaîne d'image) : lecture des pixels (diagnostic).
+  useFrame((state) => driveDebug.afterFrame?.(state.gl), 2);
 
   const accumulate = useMemo(() => new AccumulatePass(), []);
   useEffect(() => () => accumulate.dispose(), [accumulate]);
   const vignette = useRef<VignetteEffect>(null);
+  // Impression de vitesse : les bords de l'image s'assombrissent un peu avec la vitesse (un uniforme
+  // de la passe déjà là, aucun coût).
+  useFrame(() => {
+    const v = vignette.current;
+    if (!v || !engine) return;
+    const f = engine.speedFactor;
+    const darkness = 0.42 + 0.22 * f * f;
+    if (Math.abs(v.darkness - darkness) > 0.002) v.darkness = darkness;
+  });
 
   return (
     <>

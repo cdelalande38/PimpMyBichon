@@ -10,7 +10,10 @@ export interface DriveProfile {
   ahead: number;
   /** Un arbre sur `treeEvery` est posé (1 : tous). */
   treeEvery: number;
-  /** Réflexion planaire de la chaussée : fraction de la taille de l'image (0 : aucune). */
+  /**
+   * Réflexion planaire de la chaussée mouillée, sous la pluie seulement : fraction de la taille de
+   * l'image (0 : aucune), rendue une image sur deux.
+   */
   reflection: number;
   /** Côté d'une face de la sonde de réflexion mobile, en pixels. */
   probeSize: number;
@@ -20,7 +23,7 @@ export interface DriveProfile {
   fogFar: number;
   /** Cônes de lumière des phares, visibles dans l'air. */
   beams: boolean;
-  /** Gouttes de pluie affichées. */
+  /** Gouttes de pluie (ou flocons, ou grains de poussière) affichées : un seul appel de dessin. */
   rainDrops: number;
   /** Lampadaires dont la flaque de lumière et le reflet sont calculés au sol, au plus (deux de plus sont de vraies lumières). */
   lampLights: number;
@@ -30,9 +33,21 @@ export const DRIVE_PROFILES: Readonly<Record<QualityLevel, DriveProfile>> = Obje
   // Économie : pas de reflet planaire (§ 8), moins de tronçons et d'arbres, sonde petite et lente.
   // La brume reste : à la nuit, c'est elle qui ferme l'horizon et cache le chargement.
   eco: { behind: 1, ahead: 1, treeEvery: 3, reflection: 0, probeSize: 128, probeEvery: 3, fogFar: 520, beams: false, rainDrops: 900, lampLights: 6 },
-  standard: { behind: 1, ahead: 2, treeEvery: 1, reflection: 0.5, probeSize: 256, probeEvery: 1, fogFar: 820, beams: true, rainDrops: 2400, lampLights: 12 },
-  max: { behind: 1, ahead: 3, treeEvery: 1, reflection: 1, probeSize: 256, probeEvery: 1, fogFar: 1150, beams: true, rainDrops: 4000, lampLights: 14 },
+  standard: { behind: 1, ahead: 2, treeEvery: 1, reflection: 0.35, probeSize: 256, probeEvery: 1, fogFar: 820, beams: true, rainDrops: 2400, lampLights: 12 },
+  max: { behind: 1, ahead: 3, treeEvery: 1, reflection: 0.5, probeSize: 256, probeEvery: 1, fogFar: 1150, beams: true, rainDrops: 4000, lampLights: 14 },
 });
+
+/**
+ * Fenêtre de tronçons d'un niveau : la chaussée chargée devant va jusqu'à `reach` mètres de route,
+ * au-delà de la brume pleine (fogFar, plus 40 m : la caméra suit le véhicule de quelques mètres) ;
+ * `near` : rayon autour de la caméra où les tronçons proches (lacets) sont chargés aussi ; `cap` :
+ * tronçons gardés au plus. Avec une fenêtre fixe (1 à 3 tronçons devant), la route s'arrêtait avant
+ * la brume (en économie, à 250 m pour une brume pleine à 520 m) : « la route est coupée ».
+ * Garanti sur toutes les cartes par tests/unit/drive-scene-lumieres.test.ts.
+ */
+export function chunkPlan(profile: Pick<DriveProfile, 'behind' | 'ahead' | 'fogFar'>): { reach: number; near: number; cap: number } {
+  return { reach: profile.fogFar + 40, near: profile.fogFar * 0.4, cap: profile.behind + profile.ahead + 3 };
+}
 
 /** Densité de FogExp2 pour qu'il ne reste que 2 % de la scène à `far` mètres. */
 export function fogDensity(far: number): number {
@@ -66,6 +81,52 @@ export function chunkWindow(chunks: ReadonlyArray<{ from: number; to: number }>,
     if (loop) i = ((i % n) + n) % n;
     else if (i < 0 || i >= n) continue;
     if (!out.includes(i)) out.push(i);
+  }
+  return out;
+}
+
+/**
+ * Tronçons voulus autour du véhicule, sans qu'ils surgissent dans le champ : la fenêtre de
+ * `chunkWindow`, prolongée devant jusqu'à `reach` mètres de route (la brume les cache au-delà), plus
+ * les tronçons dont la boîte passe à moins de `near` mètres de la caméra (lacets, boucles), au plus
+ * `cap` en tout. Remplit `out` et le rend ; `info.route` reçoit le nombre de tronçons pris sur la
+ * route (les premiers de `out`), les suivants ne sont là que par leur proximité.
+ */
+export function wantedChunks(
+  chunks: ReadonlyArray<{ from: number; to: number; box?: readonly number[] }>,
+  s: number,
+  behind: number,
+  ahead: number,
+  loop: boolean,
+  reach: number,
+  cx: number,
+  cz: number,
+  near: number,
+  cap: number,
+  out: number[],
+  info?: { route: number },
+): number[] {
+  chunkWindow(chunks, s, behind, ahead, loop, out);
+  const n = chunks.length;
+  const at = chunkAt(chunks, s);
+  if (at < 0) return out;
+  for (let k = 1; k < n && out.length < cap; k += 1) {
+    let i = at + k;
+    if (loop) i %= n;
+    else if (i >= n) break;
+    const c = chunks[i] as { from: number; to: number };
+    const ahead0 = loop && i < at ? c.from + ((chunks[n - 1] as { to: number }).to - s) : c.from - s;
+    if (ahead0 > reach) break;
+    if (!out.includes(i)) out.push(i);
+  }
+  if (info) info.route = out.length;
+  for (let i = 0; i < n && out.length < cap; i += 1) {
+    if (out.includes(i)) continue;
+    const b = (chunks[i] as { box?: readonly number[] }).box;
+    if (!b || b.length < 6) continue;
+    const dx = Math.max((b[0] ?? 0) - cx, 0, cx - (b[3] ?? 0));
+    const dz = Math.max((b[2] ?? 0) - cz, 0, cz - (b[5] ?? 0));
+    if (dx * dx + dz * dz < near * near) out.push(i);
   }
   return out;
 }
@@ -109,6 +170,33 @@ export function nearestLamps(lamps: Float32Array, count: number, x: number, z: n
     out[k * 3] = lamps[i * 3] ?? 0;
     out[k * 3 + 1] = lamps[i * 3 + 1] ?? 0;
     out[k * 3 + 2] = lamps[i * 3 + 2] ?? 0;
+  }
+  return n;
+}
+
+/**
+ * Poids des lumières proches, sans à-coup quand la liste change : `dist` (carrés des distances,
+ * croissants, tels que les laisse `nearestLamps`) en compte `found` ; les `keep` premières sont
+ * gardées. Une lumière s'éteint en fondu en approchant de la distance de la première écartée (rang
+ * `keep`) : elle vaut 0 à l'instant où elle sort de la liste. De même, les `real` premières sont de
+ * vraies lumières dont la part monte en fondu face à la suivante (rang `real`). Écrit, pour chacune
+ * des `keep` premières, son fondu et sa part de diffus calculé dans `out` (2 nombres), la part des
+ * vraies lumières dans `realOut` ; rend le nombre de lumières gardées.
+ */
+export function lampWeights(dist: Float32Array, found: number, keep: number, real: number, fade: number, out: Float32Array, realOut: Float32Array): number {
+  const n = Math.min(found, keep);
+  const edge = found > keep ? Math.sqrt(dist[keep] ?? 0) : Infinity;
+  const realEdge = found > real ? Math.sqrt(dist[real] ?? 0) : Infinity;
+  out.fill(0);
+  realOut.fill(0);
+  for (let i = 0; i < n; i += 1) {
+    const d = Math.sqrt(dist[i] ?? 0);
+    const w = edge === Infinity ? 1 : Math.min(1, Math.max(0, (edge - d) / Math.max(1e-3, fade * edge)));
+    let r = 0;
+    if (i < real) r = realEdge === Infinity ? 1 : Math.min(1, Math.max(0, (realEdge - d) / Math.max(1e-3, fade * realEdge)));
+    out[i * 2] = w;
+    out[i * 2 + 1] = w * (1 - r);
+    if (i < realOut.length) realOut[i] = w * r;
   }
   return n;
 }

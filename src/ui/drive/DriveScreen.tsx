@@ -389,7 +389,8 @@ function DriveBar() {
   const [raisedFor, setRaisedFor] = useState<{ auto: boolean; up: boolean }>({ auto, up: false });
   const raised = raisedFor.auto === auto && raisedFor.up;
   const drive = useDrive.getState;
-  const nextWeather = weather === 'pluie' ? 'sec' : 'pluie';
+  // Un appui passe au temps suivant : sec, pluie, neige, puis sec.
+  const nextWeather = WEATHERS[(WEATHERS.findIndex((item) => item.id === weather) + 1) % WEATHERS.length]?.id ?? 'sec';
   const weatherLabel = WEATHERS.find((item) => item.id === weather)?.label ?? weather;
 
   // À la main, la barre s'abaisse d'elle-même ; elle remonte en pilote automatique.

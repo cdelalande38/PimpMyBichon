@@ -12,8 +12,9 @@ describe('niveaux de qualité de la sortie', () => {
     for (const level of QUALITY_LEVELS) expect(DRIVE_PROFILES[level]).toBeDefined();
     expect(DRIVE_PROFILES.eco.reflection).toBe(0);
     expect(DRIVE_PROFILES.eco.beams).toBe(false);
-    expect(DRIVE_PROFILES.standard.reflection).toBe(0.5);
-    expect(DRIVE_PROFILES.max.reflection).toBe(1);
+    // Pluie allégée : reflet planaire à 35 % de l'image en standard, à moitié en max (une image sur deux).
+    expect(DRIVE_PROFILES.standard.reflection).toBe(0.35);
+    expect(DRIVE_PROFILES.max.reflection).toBe(0.5);
   });
 
   it('garde moins de tronçons, d’arbres et de lampadaires calculés en économie', () => {

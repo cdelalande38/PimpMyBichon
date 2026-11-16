@@ -27,7 +27,8 @@ beforeEach(() => {
 describe('préférences', () => {
   it('lecture tolérante : une valeur inconnue retombe sur l’origine', () => {
     expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ weather: 'sec', camera: 'orbite' });
-    for (const raw of [null, 42, 'pluie', [], {}, { weather: 'neige', camera: 'drone' }, { camera: '__proto__' }]) {
+    expect(sanitizeDrivePrefs({ weather: 'neige', camera: 'orbite' })).toEqual({ weather: 'neige', camera: 'orbite' });
+    for (const raw of [null, 42, 'pluie', [], {}, { weather: 'grele', camera: 'drone' }, { weather: '__proto__' }, { camera: '__proto__' }]) {
       expect(sanitizeDrivePrefs(raw), JSON.stringify(raw)).toEqual(DEFAULT_DRIVE_PREFS);
     }
   });

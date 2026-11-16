@@ -219,7 +219,7 @@ export interface Director {
 
 export type CreateDirector = () => Director;
 
-export type Weather = 'sec' | 'pluie';
+export type Weather = 'sec' | 'pluie' | 'neige';
 
 /** Ce que la scène publie pour l'interface, quatre fois par seconde au plus. */
 export interface DriveTelemetry {

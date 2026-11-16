@@ -125,7 +125,7 @@ test.describe('sortie de nuit', () => {
     }
   });
 
-  test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les deux météos', async ({ page }) => {
+  test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les trois météos', async ({ page }) => {
     test.setTimeout(300_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -136,11 +136,17 @@ test.describe('sortie de nuit', () => {
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     // Quelques secondes de route : enseignes, lumières lointaines, brume au sol, garde des caméras.
     await expect.poll(() => numberAttr(page, 'data-s'), { timeout: 120_000 }).toBeGreaterThan(20);
-    // L'autre météo (celle du joueur est enregistrée : pluie par défaut).
-    const before = await stage(page).getAttribute('data-meteo');
-    await bar(page).getByRole('button', { name: /^Météo/ }).tap();
-    await expect(stage(page)).toHaveAttribute('data-meteo', before === 'pluie' ? 'sec' : 'pluie');
-    await page.waitForTimeout(2_000);
+    // Les deux autres météos, par le bouton qui passe de l'une à l'autre (celle du joueur est
+    // enregistrée : pluie par défaut).
+    const seen = new Set([await stage(page).getAttribute('data-meteo')]);
+    for (let k = 0; k < 2; k += 1) {
+      const before = (await stage(page).getAttribute('data-meteo')) ?? '';
+      await bar(page).getByRole('button', { name: /^Météo/ }).tap();
+      await expect(stage(page)).not.toHaveAttribute('data-meteo', before);
+      seen.add(await stage(page).getAttribute('data-meteo'));
+      await page.waitForTimeout(2_000);
+    }
+    expect([...seen].sort()).toEqual(['neige', 'pluie', 'sec']);
     expect(errors).toEqual([]);
   });
 

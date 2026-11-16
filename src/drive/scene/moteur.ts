@@ -38,13 +38,14 @@ import type { CameraId, CameraShot, Director, DriveTelemetry, Pilot, Rail, RailP
 import { createPilot, performanceDe } from '../pilote.ts';
 import { createPose, createRail } from '../rail.ts';
 import { createDirector } from '../realisateur.ts';
+import { localWeather, nearestSpan, type WeatherAmounts } from './abri.ts';
 import { createFarLights, createProbeBand, createRain, createSky, createTownGlow, SKY } from './ciel.ts';
-import type { DriveMeasure } from './debug.ts';
+import { driveDebug, type DriveMeasure } from './debug.ts';
 import { Decor, DecorKit, LAMP_HEAD } from './decor.ts';
 import { createSignAtlas, createSignMaterial } from './enseignes.ts';
 import type { Relief } from './relief.ts';
-import { createNightUniforms, createRoleMaterials, MAX_LAMPS, MAX_NEONS, MIST, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
-import { DRIVE_PROFILES, due, fogDensity, nearestLamps, stepOf, type DriveProfile } from './profil.ts';
+import { createNightUniforms, createRoleMaterials, LAMP_FADE, MAX_LAMPS, MAX_NEONS, MIST, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
+import { DRIVE_PROFILES, due, fogDensity, lampWeights, nearestLamps, stepOf, type DriveProfile } from './profil.ts';
 import { MovingProbe } from './sonde.ts';
 import { createRig, rollWheels, type DriveModel, type DriveRig } from './vehicule.tsx';
 
@@ -56,6 +57,26 @@ const TAIL_CANDELA = { rest: 5, brake: 18 } as const;
 
 /** NOS : lueur bleue à l'échappement (le feu arrière vire au bleu), en candelas au plus fort. */
 const NOS_GLOW = { candela: 40, color: new Color('#3b7bff') } as const;
+
+/**
+ * Météo du ciel, par temps : part mouillée de la chaussée, pluie, neige (la neige laisse la chaussée
+ * sombre et humide, à reflets très doux). Elle passe de l'une à l'autre en deux secondes environ.
+ */
+const WEATHER_GOALS: Readonly<Record<string, WeatherAmounts>> = {
+  sec: { wet: 0, rain: 0, snow: 0 },
+  pluie: { wet: 1, rain: 1, snow: 0 },
+  neige: { wet: 0.55, rain: 0, snow: 1 },
+};
+
+/**
+ * Garde de cadence de la météo : en roulant, sous `fps` images par seconde pendant `seconds` s, la
+ * météo baisse d'un cran (gouttes éclaircies, reflet planaire plus rare puis coupé), en fondu.
+ */
+const WEATHER_GUARD = { fps: 30, seconds: 3, minSpeed: 3 } as const;
+const WEATHER_STEPS = ['completes', 'allegees', 'minimales'] as const;
+
+/** Plan proche de la caméra : 0,3 m (deux fois plus de précision de profondeur au loin) ; embarquée : 0,12 m. */
+const NEAR = { default: 0.3, cockpit: 0.12 } as const;
 
 /** Force de la bande d'horizon vue par la sonde (reflet clair qui dessine la caisse). */
 const PROBE_BAND_GAIN = 0.5;
@@ -176,14 +197,28 @@ export class DriveEngine {
   private readonly shot: CameraShot = { position: [0, 2, -6], target: [0, 0.5, 0], fov: 55 };
   private readonly probeAt = new Vector3();
   private readonly hidden: Object3D[];
-  private readonly order = new Int32Array(MAX_LAMPS);
-  private readonly dist = new Float32Array(MAX_LAMPS);
+  private readonly order = new Int32Array(MAX_LAMPS + 1);
+  private readonly dist = new Float32Array(MAX_LAMPS + 1);
+  private readonly nearWork = new Float32Array((MAX_LAMPS + 1) * 3);
+  private readonly realShare = new Float32Array(REAL_LAMPS);
+  private readonly neonShare = new Float32Array(2);
+  private readonly neonW2 = new Float32Array((MAX_NEONS + 1) * 2);
   private time = 0;
   private wet = -1;
+  /** Météo du ciel (montée en douceur) et météo locale au véhicule (nulle sous un tunnel). */
+  private readonly sky0: WeatherAmounts = { wet: 0, rain: 0, snow: 0 };
+  private readonly here: WeatherAmounts = { wet: 0, rain: 0, snow: 0 };
+  /** Cran de la garde de météo (0 : effets complets), sa durée sous le plancher, et le fondu en cours. */
+  private weatherStep = 0;
+  private guardFrames = 0;
+  private guardTime = 0;
+  private density = 1;
+  private reflectFade = 1;
+  /** Vitesse rapportée à 130 km/h (0 à 1) : vignettage et traînées. */
+  speedFactor = 0;
   private lastPub = -Infinity;
   private frames = 0;
   private primed = false;
-  private lampTick = 0;
   /** Cadence mesurée au début de la sortie : sous le plancher, la scène s'allège d'elle-même. */
   private slowFrames = 0;
   private readonly slowDeltas = new Float32Array(60);
@@ -232,7 +267,7 @@ export class DriveEngine {
     if (this.townGlow) scene.add(this.townGlow);
     scene.fog = new FogExp2(new Color(SKY.fog), fogDensity(this.profile.fogFar));
     scene.environment = this.probe.target.texture;
-    camera.near = 0.15;
+    camera.near = NEAR.default;
     camera.far = 24000;
     for (const layer of CAMERA_LAYERS) camera.layers.enable(layer);
     camera.updateProjectionMatrix();
@@ -357,15 +392,30 @@ export class DriveEngine {
 
     // Décor autour du véhicule.
     const now = performance.now();
-    decor.update(motion.s, now);
+    decor.update(motion.s, now, camera.position.x, camera.position.z);
+    // Plan proche : la profondeur garde sa précision au loin (marquage, fenêtres, relief).
+    const near = cameraId === 'embarquee' ? NEAR.cockpit : NEAR.default;
+    if (camera.near !== near) {
+      camera.near = near;
+      camera.updateProjectionMatrix();
+    }
 
     // Air : pluie qui monte et descend en douceur, phares, lampadaires proches.
-    const wetGoal = drive.weather === 'pluie' ? 1 : 0;
-    this.wet = this.wet < 0 ? wetGoal : this.wet + (wetGoal - this.wet) * Math.min(1, delta * 1.2);
-    const wet = this.wet;
+    const off = driveDebug.off;
+    const goal = WEATHER_GOALS[drive.weather] ?? (WEATHER_GOALS.sec as WeatherAmounts);
+    const sky0 = this.sky0;
+    const k = this.wet < 0 ? 1 : Math.min(1, delta * 1.2);
+    sky0.wet += (goal.wet - sky0.wet) * k;
+    sky0.rain += (goal.rain - sky0.rain) * k;
+    sky0.snow += (goal.snow - sky0.snow) * k;
+    this.wet = sky0.wet;
+    const wet = Math.max(sky0.rain, sky0.snow);
+    const here = localWeather(sky0, decor.spans, motion.s, this.here);
+    this.speedFactor = Math.min(1, motion.speed / 36);
     uniforms.pmbTime.value = elapsed;
-    uniforms.pmbWet.value = 0.2 + 0.8 * wet;
-    uniforms.pmbRain.value = wet;
+    uniforms.pmbWet.value = off?.mouille ? 0 : sky0.wet;
+    uniforms.pmbRain.value = off?.mouille ? 0 : sky0.rain;
+    uniforms.pmbSnow.value = off?.mouille ? 0 : sky0.snow;
     uniforms.pmbHeadPos.value.copy(rig.headLocal).applyMatrix4(rig.body.matrixWorld);
     uniforms.pmbHeadDir.value.copy(rig.headDirLocal).transformDirection(rig.body.matrixWorld);
     uniforms.pmbHeadUp.value.set(0, 1, 0).transformDirection(rig.body.matrixWorld);
@@ -381,27 +431,38 @@ export class DriveEngine {
     this.mistBase = Math.min(this.mistBase, py - 1.5);
     uniforms.pmbMistBase.value = this.mistBase;
     // Économie : pas de brume au sol (§ 8 : le niveau économie coupe la brume ; l'horizon garde la sienne).
-    uniforms.pmbMistDensity.value = this.level === 'eco' ? 0 : MIST.density * (1 + 0.3 * wet);
-    this.lampTick += 1;
-    if (this.lampTick % 4 === 1) {
-      // Les plus proches d'un point 10 m devant le véhicule. Les deux premiers sont aussi de vraies
-      // lumières (elles éclairent la caisse et font leur flaque) ; tous gardent leur reflet calculé.
+    uniforms.pmbMistDensity.value = this.level === 'eco' ? 0 : MIST.density * (1 + 0.3 * here.rain + 0.5 * here.snow);
+    {
+      // Les plus proches d'un point 10 m devant le véhicule, à chaque image. Les deux premiers sont
+      // aussi de vraies lumières (elles éclairent la caisse et font leur flaque) ; tous gardent leur
+      // reflet calculé. Chacun entre et sort de la liste en fondu (lampWeights) : aucune flaque ni
+      // aucun reflet ne s'allume ou ne s'éteint d'un coup à la limite de portée.
+      const keep = Math.min(MAX_LAMPS, profile.lampLights + REAL_LAMPS);
+      const sx = px + (tx / hl) * 10;
+      const sz = pz + (tz / hl) * 10;
+      const work = this.nearWork;
+      const found = nearestLamps(decor.lamps, decor.lampCount, sx, sz, keep + 1, work, this.order, this.dist);
+      const n = lampWeights(this.dist, found, keep, REAL_LAMPS, LAMP_FADE, uniforms.pmbLampW.value, this.realShare);
       const lamps = uniforms.pmbLamps.value;
-      const n = nearestLamps(decor.lamps, decor.lampCount, px + (tx / hl) * 10, pz + (tz / hl) * 10, Math.min(MAX_LAMPS, profile.lampLights + REAL_LAMPS), lamps, this.order, this.dist);
+      lamps.set(work.subarray(0, keep * 3));
       for (let i = 0; i < REAL_LAMPS; i += 1) {
         const light = this.lampLights[i] as PointLight;
-        light.intensity = i < n ? LAMP_CANDELA : 0;
+        light.intensity = i < n ? LAMP_CANDELA * (this.realShare[i] ?? 0) : 0;
         light.position.set(lamps[i * 3] ?? 0, (lamps[i * 3 + 1] ?? 0) - 0.3, lamps[i * 3 + 2] ?? 0);
       }
       uniforms.pmbLampCount.value = n;
-      // Enseignes les plus proches du même point : leur lumière colorée.
-      const m = nearestLamps(decor.neonPositions, decor.neonCount, px + (tx / hl) * 10, pz + (tz / hl) * 10, MAX_NEONS, uniforms.pmbNeons.value, this.order, this.dist);
+      // Enseignes les plus proches du même point : leur lumière colorée, en fondu de même.
+      const m0 = nearestLamps(decor.neonPositions, decor.neonCount, sx, sz, MAX_NEONS + 1, work, this.order, this.dist);
+      const m = lampWeights(this.dist, m0, MAX_NEONS, 0, LAMP_FADE, this.neonW2, this.neonShare);
+      uniforms.pmbNeons.value.set(work.subarray(0, MAX_NEONS * 3));
       const colors = uniforms.pmbNeonColors.value;
+      const nw = uniforms.pmbNeonW.value;
       for (let k = 0; k < m; k += 1) {
         const i = this.order[k] ?? 0;
         colors[k * 3] = decor.neonColors[i * 3] ?? 0;
         colors[k * 3 + 1] = decor.neonColors[i * 3 + 1] ?? 0;
         colors[k * 3 + 2] = decor.neonColors[i * 3 + 2] ?? 0;
+        nw[k] = this.neonW2[k * 2] ?? 0;
       }
       uniforms.pmbNeonCount.value = m;
     }
@@ -409,40 +470,63 @@ export class DriveEngine {
     this.sky.position.copy(camera.position);
     (sky.uTime as { value: number }).value = elapsed;
     (sky.uStars as { value: number }).value = 1 - 0.9 * wet;
-    (sky.uClouds as { value: number }).value = 1 + 0.6 * wet;
+    (sky.uClouds as { value: number }).value = 1 + 0.6 * wet + 0.3 * sky0.snow;
     const far = this.farLights.material.uniforms;
     (far.uTime as { value: number }).value = elapsed;
     (far.uPixel as { value: number }).value = gl.getPixelRatio();
-    this.rain.visible = wet > 0.03;
+    // Poussière au sec, en roulant vite : quelques grains qui filent dans les phares.
+    const dust = this.reducedMotion || this.level === 'eco' ? 0 : (1 - wet) * Math.min(1, Math.max(0, (motion.speed - 14) / 20)) * 0.6;
+    this.rain.visible = (wet > 0.03 || dust > 0.02) && !off?.gouttes && this.density > 0.02;
     if (this.rain.visible) {
       const rain = this.rain.material.uniforms;
       (rain.uTime as { value: number }).value = elapsed;
       (rain.uCenter as { value: Vector3 }).value.copy(camera.position);
-      (rain.uWind as { value: Vector3 }).value.set(-tx * motion.speed * 0.7, 0, -tz * motion.speed * 0.7);
+      (rain.uWind as { value: Vector3 }).value.set(-(tx / hl) * motion.speed * 0.7, 0, -(tz / hl) * motion.speed * 0.7);
+      (rain.uRain as { value: number }).value = sky0.rain;
+      (rain.uSnow as { value: number }).value = sky0.snow;
+      (rain.uDust as { value: number }).value = dust;
+      (rain.uDensity as { value: number }).value = this.density;
+      // Abri : le rail au véhicule et le tunnel le plus proche (rien ne tombe sous la voûte).
+      const span = nearestSpan(decor.spans, motion.s);
+      (rain.uShelterP as { value: { set: (x: number, y: number, z: number, w: number) => void } }).value.set(pose.position[0], py, pose.position[2], motion.s);
+      (rain.uShelterT as { value: Vector3 }).value.set(tx / hl, tz / hl, span ? span.halfWidth : 0);
+      (rain.uSpan as { value: { set: (x: number, y: number) => void } }).value.set(span ? span.from : 1, span ? span.to : 0);
     }
-    rig.beamGain.value = 0.012 + 0.022 * wet;
-    rig.glareGain.value = 1 + 0.6 * wet;
+    rig.beamGain.value = 0.012 + 0.022 * here.rain + 0.03 * here.snow;
+    rig.glareGain.value = 1 + 0.6 * here.rain + 0.4 * here.snow;
+    // Neige : la lueur des lampadaires prend dans l'air (halos plus larges).
+    (this.kit.haloMaterial.uniforms.uSize as { value: number }).value = 3.2 * (1 + 0.5 * here.snow);
+    (this.kit.haloMaterial.uniforms.uGain as { value: number }).value = 1.3 * (1 + 0.35 * here.snow + 0.2 * here.rain);
 
     // Sonde (une face par image) et reflet planaire de la chaussée.
     this.probeAt.set(px, py + 1.1, pz);
     this.band.position.set(px, py, pz);
     const primeNow = !this.primed && decor.status.complete;
-    this.probe.step(gl, scene, this.probeAt, this.hidden, this.degraded ? profile.probeEvery * 4 : profile.probeEvery, primeNow);
+    if (!off?.sonde || primeNow) this.probe.step(gl, scene, this.probeAt, this.hidden, this.degraded ? profile.probeEvery * 4 : profile.probeEvery, primeNow);
     if (primeNow) this.primed = true;
-    if (this.reflection && !this.degraded) {
-      this.floor.position.set(0, py, 0);
-      // La caméra du reflet est sous la chaussée : la brume au sol, calculée depuis elle, voilerait
-      // tout le reflet. Elle n'y est pas.
-      const mist = uniforms.pmbMistDensity.value;
-      uniforms.pmbMistDensity.value = 0;
-      this.reflection.update(gl, scene, camera, this.floor);
-      uniforms.pmbMistDensity.value = mist;
-      // Miroir de la chaussée : au plus un peu plus que le Fresnel (plus fort, le ciel clair de l'horizon
-      // y ferait une nappe blanche) ; les lampes et les néons, très lumineux, s'y lisent quand même.
-      uniforms.pmbReflectionStrength.value = 1.1 + 1.7 * wet;
-    }
+    // Reflet planaire : sous la pluie seulement (au sec, l'enrobé ne renvoie presque rien ; sous la
+    // neige, les reflets très doux des lampes suffisent), une image sur deux, et coupé en fondu par la
+    // garde de météo.
+    const reflectGoal = this.weatherStep >= 2 || this.degraded || off?.reflet ? 0 : 1;
+    this.reflectFade += (reflectGoal - this.reflectFade) * Math.min(1, delta * 2);
+    const reflectOn = this.reflection !== null && sky0.rain > 0.02 && this.reflectFade > 0.02;
+    if (reflectOn && this.reflection) {
+      const every = this.weatherStep >= 1 ? 3 : 2;
+      if (this.frames % every === 0 || uniforms.pmbReflectionStrength.value === 0) {
+        this.floor.position.set(0, py, 0);
+        // La caméra du reflet est sous la chaussée : la brume au sol, calculée depuis elle, voilerait
+        // tout le reflet. Elle n'y est pas.
+        const mist = uniforms.pmbMistDensity.value;
+        uniforms.pmbMistDensity.value = 0;
+        this.reflection.update(gl, scene, camera, this.floor);
+        uniforms.pmbMistDensity.value = mist;
+      }
+      // Miroir de la chaussée mouillée (le nuanceur le casse par le grain et les zones plus sèches).
+      uniforms.pmbReflectionStrength.value = (1.2 + 1.6 * sky0.rain) * this.reflectFade;
+    } else uniforms.pmbReflectionStrength.value = 0;
     this.frames += 1;
     this.watchCadence(delta);
+    if (!off?.garde) this.guardWeather(delta, motion.speed, wet, stage);
 
     // Télémétrie et attributs, quatre fois par seconde au plus.
     if (due(now, this.lastPub)) {
@@ -468,6 +552,7 @@ export class DriveEngine {
       putData(stage, 'camera', cameraId);
       putData(stage, 'troncons', String(decor.status.loaded));
       putData(stage, 'meteo', drive.weather);
+      putData(stage, 'abri', here.rain + here.snow + here.wet < 1e-3 && wet > 0 ? 'oui' : 'non');
     }
   }
 
@@ -492,6 +577,33 @@ export class DriveEngine {
       this.uniforms.pmbReflectionStrength.value = 0;
       this.onDegrade?.();
     } else this.slowFrames = Number.MAX_SAFE_INTEGER;
+  }
+
+  /**
+   * Garde de la météo (§ 8 : 30 i/s plancher) : en roulant sous la pluie ou la neige, si la cadence
+   * reste sous WEATHER_GUARD.fps pendant WEATHER_GUARD.seconds s, la météo baisse d'un cran : gouttes
+   * éclaircies et reflet planaire une image sur trois, puis reflet coupé et gouttes de moitié. Tout
+   * passe en fondu ; le cran est dit dans l'attribut data-meteo-effets.
+   */
+  private guardWeather(delta: number, speed: number, wet: number, stage: HTMLElement | null): void {
+    const densityGoal = this.weatherStep === 0 ? 1 : this.weatherStep === 1 ? 0.7 : 0.45;
+    this.density += (densityGoal - this.density) * Math.min(1, delta * 1.5);
+    // Fenêtres de WEATHER_GUARD.seconds s en roulant sous la pluie ou la neige, après la mise en route :
+    // si la cadence de la fenêtre (images comptées sur le temps écoulé) reste sous le plancher, un cran
+    // de plus. Un à-coup isolé (chargement d'un tronçon) n'y suffit pas.
+    if (delta > 0 && delta < 0.5 && this.primed && this.frames > 240 && wet > 0.3 && speed > WEATHER_GUARD.minSpeed && this.weatherStep < WEATHER_STEPS.length - 1) {
+      this.guardTime += delta;
+      this.guardFrames += 1;
+      if (this.guardTime >= WEATHER_GUARD.seconds) {
+        if (this.guardFrames / this.guardTime < WEATHER_GUARD.fps) this.weatherStep += 1;
+        this.guardFrames = 0;
+        this.guardTime = 0;
+      }
+    } else if (wet <= 0.3) {
+      this.guardFrames = 0;
+      this.guardTime = 0;
+    }
+    putData(stage, 'meteoEffets', WEATHER_STEPS[this.weatherStep] ?? 'completes');
   }
 
   /** Appelé une fois si la scène s'allège (la scène React baisse alors le pixel ratio). */
@@ -536,6 +648,7 @@ export class DriveEngine {
       lampLights: this.uniforms.pmbLampCount.value,
       wheels: this.rig.wheels.length,
       level: this.level,
+      buffers: { reflection: this.reflection && this.uniforms.pmbReflectionStrength.value > 0 ? [this.reflection.measured.width, this.reflection.measured.height] : [0, 0], probe: this.profile.probeSize },
     };
   }
 

@@ -14,6 +14,8 @@ export interface DriveMeasure {
   lampLights: number;
   wheels: number;
   level: string;
+  /** Tampons de la sortie : cible du reflet planaire (pixels, 0 s'il n'est pas rendu), face de la sonde. */
+  buffers?: { reflection: [number, number]; probe: number };
 }
 
 export interface DriveDebug {
@@ -28,6 +30,18 @@ export interface DriveDebug {
   /** La caméra de la scène et la sonde de terrain (garde au sol), pour un diagnostic. */
   camera?: unknown;
   relief?: unknown;
+  /**
+   * Postes de coût coupés pour la mesure (page d'aperçu) : « reflet » (reflet planaire), « sonde »
+   * (sonde de réflexion), « gouttes » (pluie ou neige qui tombe), « mouille » (matières mouillées),
+   * « garde » (garde de cadence de la météo : pour mesurer le coût entier de la pluie).
+   */
+  off?: Partial<Record<'reflet' | 'sonde' | 'gouttes' | 'mouille' | 'garde', boolean>>;
+  /** Temps arrêté (le véhicule ne bouge plus, l'image continue d'être rendue) : mesure du scintillement. */
+  figer?: boolean;
+  /** Appelé après chaque image composée (lecture des pixels de l'image, page d'aperçu). */
+  afterFrame?: (gl: unknown) => void;
+  /** Appelé avant chaque image, avant la boucle de la scène (chronomètre du processeur graphique). */
+  beforeFrame?: (gl: unknown) => void;
 }
 
 export const driveDebug: DriveDebug = {};

@@ -38,7 +38,8 @@ import { createPose } from '../rail.ts';
 import { SKY } from './ciel.ts';
 import { DECOR_SIGN_CELLS, placeSigns, shopSignCell, type PlacedSigns, type SignSpot } from './enseignes.ts';
 import { emitAttribute, isNoMirror, patchNight, type NightUniforms } from './materiaux.ts';
-import { chunkAt, chunkWindow, type DriveProfile } from './profil.ts';
+import { facadeAttribute, roadAttribute, tunnelLamps, tunnelSpans, type Span } from './abri.ts';
+import { chunkAt, chunkPlan, wantedChunks, type DriveProfile } from './profil.ts';
 import { addRoleMesh, createChunkRelief, Relief } from './relief.ts';
 
 /** Hauteur de la tête d'un lampadaire et longueur de sa crosse (vers +Z de l'instance, côté chaussée). */
@@ -77,6 +78,18 @@ function lampGeometry(): BufferGeometry {
 
 function baliseGeometry(): BufferGeometry {
   return new BoxGeometry(0.11, 1.05, 0.11).translate(0, 0.52, 0);
+}
+
+/** Panneau de signalisation sans texte : mât de 2,3 m et plaque ronde ou triangulaire, face à la route (+Z). */
+function panneauGeometry(triangle: boolean): BufferGeometry {
+  const mat = new CylinderGeometry(0.035, 0.035, 2.3, 5, 1, true).translate(0, 1.15, 0);
+  const plaque = (triangle ? new CircleGeometry(0.45, 3, Math.PI / 2) : new CircleGeometry(0.33, 14)).translate(0, 2.3, 0.04);
+  const dos = plaque.clone().rotateY(Math.PI).translate(0, 0, 0.0);
+  const parts = [mat.toNonIndexed(), plaque.toNonIndexed(), dos.toNonIndexed()];
+  for (const p of parts) p.deleteAttribute('uv');
+  const g = mergeGeometries(parts) as BufferGeometry;
+  for (const p of [mat, plaque, dos, ...parts]) p.dispose();
+  return g;
 }
 
 /** Palmier : stipe de 7,5 m et sept palmes retombantes, vues des deux faces (≈ 40 triangles). */
@@ -210,6 +223,7 @@ export class DecorKit {
   readonly tree = treeGeometry();
   readonly lamp = lampGeometry();
   readonly balise = baliseGeometry();
+  readonly panneaux = [panneauGeometry(false), panneauGeometry(true)] as const;
   readonly palm = palmGeometry();
   readonly feu = feuGeometry();
   readonly lens = new CircleGeometry(0.19, 12);
@@ -227,11 +241,11 @@ export class DecorKit {
 
   constructor(uniforms: NightUniforms, fogFar: number) {
     this.pole.setAttribute('pmbEmit', emitAttribute(this.pole.getAttribute('position').count, Infinity));
-    this.treeMaterial = patchNight(new MeshStandardMaterial({ color: '#16241a', roughness: 1, envMapIntensity: 0.05 }), uniforms, {});
+    this.treeMaterial = patchNight(new MeshStandardMaterial({ color: '#16241a', roughness: 1, envMapIntensity: 0 }), uniforms, { snow: 0.05 });
     this.treeMaterial.name = 'nuit_arbre';
-    this.lampMaterial = patchNight(new MeshStandardMaterial({ color: '#4a4d52', roughness: 0.5, metalness: 0.6, envMapIntensity: 0.5 }), uniforms, { emit: true });
+    this.lampMaterial = patchNight(new MeshStandardMaterial({ color: '#4a4d52', roughness: 0.5, metalness: 0.6, envMapIntensity: 0 }), uniforms, { emit: true, sky: { gain: 0.35, metal: 1 }, snow: 0.7 });
     this.lampMaterial.name = 'nuit_lampadaire';
-    this.baliseMaterial = patchNight(new MeshStandardMaterial({ color: '#d9d8d2', roughness: 0.6, envMapIntensity: 0.3 }), uniforms, { retro: 14 });
+    this.baliseMaterial = patchNight(new MeshStandardMaterial({ color: '#d9d8d2', roughness: 0.6, envMapIntensity: 0 }), uniforms, { retro: 14 });
     this.baliseMaterial.name = 'nuit_balise';
     this.lensMaterial.name = 'nuit_feu';
     this.haloMaterial = new ShaderMaterial({
@@ -256,6 +270,9 @@ export class DecorKit {
     // crête), qui s'éclaircit au loin vers la couleur de l'horizon (les crêtes se détachent l'une de
     // l'autre). Sa profondeur est repoussée au fond (au-delà d'environ 2 km de tout le reste) : grossier,
     // il dépasse par endroits la chaussée des tronçons (rampe du départ), et ne doit jamais la cacher.
+    // Dans sa tranche du tampon de profondeur, la profondeur suit le logarithme de la distance : avec
+    // la profondeur ordinaire, toutes ses crêtes y tombaient sur la même valeur et se battaient
+    // (crêtes lointaines qui clignotent en roulant).
     this.farMaterial = new MeshStandardMaterial({ color: '#0a0f1e', roughness: 1, envMapIntensity: 0 });
     this.farMaterial.fog = false;
     this.farMaterial.name = 'nuit_lointain';
@@ -265,7 +282,7 @@ export class DecorKit {
       shader.vertexShader = shader.vertexShader.replace(
         '#include <project_vertex>',
         `#include <project_vertex>
-        gl_Position.z = ( 0.99985 + 0.00014 * ( clamp( gl_Position.z / gl_Position.w, -1.0, 1.0 ) * 0.5 + 0.5 ) ) * gl_Position.w;`,
+        gl_Position.z = ( 0.99985 + 0.00014 * clamp( log2( max( gl_Position.w, 150.0 ) / 150.0 ) / 7.4, 0.0, 1.0 ) ) * gl_Position.w;`,
       );
       shader.fragmentShader = `uniform vec3 uHaze;\n${shader.fragmentShader}`.replace(
         '#include <opaque_fragment>',
@@ -277,7 +294,7 @@ export class DecorKit {
   }
 
   dispose(): void {
-    for (const g of [this.tree, this.lamp, this.balise, this.palm, this.feu, this.lens, this.halo, this.pole]) g.dispose();
+    for (const g of [this.tree, this.lamp, this.balise, ...this.panneaux, this.palm, this.feu, this.lens, this.halo, this.pole]) g.dispose();
     for (const m of [this.treeMaterial, this.lampMaterial, this.baliseMaterial, this.lensMaterial, this.haloMaterial, this.farMaterial]) m.dispose();
   }
 }
@@ -293,6 +310,8 @@ interface LoadedChunk {
   owned: BufferGeometry[];
   /** Enseignes : position et teinte (6 nombres chacune), dans le repère de la carte. */
   neons: Float32Array;
+  /** Petits objets (instances, bord de route) : masqués quand le tronçon est loin dans la brume. */
+  details: Object3D[];
 }
 
 const work = { m: new Matrix4(), q: new Quaternion(), p: new Vector3(), s: new Vector3(), y: new Vector3(0, 1, 0) };
@@ -357,6 +376,11 @@ export class Decor {
   private lastAt = -2;
   private disposed = false;
   private retryAt = 0;
+  private nextCheck = 0;
+  private readonly wantedInfo = { route: 0 };
+  private readonly nearOnly = new Set<number>();
+  /** Tunnels de la route (météo locale, lampes de voûte). */
+  readonly spans: Span[];
 
   private readonly base: string;
   private readonly route: MapRoute;
@@ -370,6 +394,7 @@ export class Decor {
     this.roles = roles;
     this.kit = kit;
     this.profile = profile;
+    this.spans = tunnelSpans(route.sections);
     this.root.name = 'sortie_decor';
   }
 
@@ -389,12 +414,24 @@ export class Decor {
     this.root.add(gltf.scene);
   }
 
-  /** Fenêtre de tronçons autour de l'abscisse `s` : charge ce qui manque, libère le reste. */
-  update(s: number, now: number): void {
+  /**
+   * Fenêtre de tronçons autour de l'abscisse `s` (caméra en `cx`, `cz`) : charge ce qui manque, libère
+   * le reste. La fenêtre va jusqu'où la brume a tout mangé, et prend les tronçons proches de la caméra
+   * (lacets) : aucun tronçon n'apparaît ni ne disparaît dans le champ.
+   */
+  update(s: number, now: number, cx = Number.NaN, cz = Number.NaN): void {
     const at = chunkAt(this.route.chunks, s);
-    if (at === this.lastAt && (this.status.complete || now < this.retryAt)) return;
+    if (at === this.lastAt && now < this.nextCheck && (this.status.complete || now < this.retryAt)) return;
     this.lastAt = at;
-    chunkWindow(this.route.chunks, s, this.profile.behind, this.profile.ahead, this.route.loop, this.wanted);
+    this.nextCheck = now + 400;
+    const p = this.profile;
+    const plan = chunkPlan(p);
+    wantedChunks(this.route.chunks, s, p.behind, p.ahead, this.route.loop, plan.reach, cx, cz, cx === cx ? plan.near : 0, plan.cap, this.wanted, this.wantedInfo);
+    // Tronçons pris par leur seule proximité (rue parallèle, lacet plus haut) : leur sol et leurs
+    // bâtiments, sans leurs petits objets (budget d'appels de dessin).
+    this.nearOnly.clear();
+    for (let k = this.wantedInfo.route; k < this.wanted.length; k += 1) this.nearOnly.add(this.wanted[k] as number);
+    const before = this.loaded.size;
     for (const [index, chunk] of this.loaded) if (!this.wanted.includes(index)) this.unload(chunk);
     let complete = true;
     for (const index of this.wanted) {
@@ -404,6 +441,27 @@ export class Decor {
     }
     this.status.complete = complete;
     this.status.loaded = this.loaded.size;
+    if (this.loaded.size !== before) this.collectLamps();
+    if (cx === cx) this.hideFogged(cx, cz, p.fogFar + 30, p.fogFar * 0.7);
+  }
+
+  /**
+   * Tronçons chargés mais entièrement au-delà de la brume pleine : gardés (la route ne s'arrête pas
+   * avant la brume) mais pas dessinés. Au-delà de `detail` mètres (il ne reste qu'environ 15 % de
+   * l'image sous la brume), leurs petits objets (arbres, lampadaires et halos, que les lumières
+   * lointaines relaient, enseignes, piquets) ne sont pas dessinés : budget d'appels de dessin (§ 8).
+   */
+  private hideFogged(cx: number, cz: number, far: number, detail: number): void {
+    for (const c of this.loaded.values()) {
+      const b = this.route.chunks[c.index]?.box;
+      if (!b) continue;
+      const dx = Math.max((b[0] ?? 0) - cx, 0, cx - (b[3] ?? 0));
+      const dz = Math.max((b[2] ?? 0) - cz, 0, cz - (b[5] ?? 0));
+      const d2 = dx * dx + dz * dz;
+      c.group.visible = d2 < far * far;
+      const near = d2 < detail * detail && !this.nearOnly.has(c.index);
+      for (let i = 0; i < c.details.length; i += 1) (c.details[i] as Object3D).visible = near;
+    }
   }
 
   private async load(index: number): Promise<void> {
@@ -441,24 +499,28 @@ export class Decor {
     const relief = createChunkRelief();
     const walls: Mesh[] = [];
     const [ox, oy, oz] = chunk.origin;
+    const meshes: Mesh[] = [];
     scene.traverse((o) => {
-      if (!(o instanceof Mesh)) return;
+      if (o instanceof Mesh) meshes.push(o);
+    });
+    for (const o of meshes) {
       const source = o.material as Material;
       const role = source.name || o.name.replace(/^fusion_/, '');
       const material = this.roles.get(role);
-      geometries.push(o.geometry);
       source.dispose();
+      this.prepare(o, role, chunk);
+      geometries.push(o.geometry);
       const geometry = o.geometry as BufferGeometry;
       const indices = geometry.getIndex();
       addRoleMesh(relief, role, geometry.getAttribute('position').array, indices ? indices.array : null, ox + o.position.x, oy + o.position.y, oz + o.position.z);
       if (role === 'mur') walls.push(o);
-      if (!material) {
+      if (!material || geometry.getAttribute('position').count === 0) {
         o.visible = false;
-        return;
+        continue;
       }
       o.material = material;
       if (isNoMirror(role)) o.layers.set(NO_MIRROR_LAYER);
-    });
+    }
     group.add(scene);
     this.relief.set(index, relief);
     const owned: BufferGeometry[] = [];
@@ -488,6 +550,15 @@ export class Decor {
       }
     }
     if (balise) put(instanced(balise, 1, this.kit.balise, this.kit.baliseMaterial));
+    // Piquets tous les 50 m et panneaux sans texte de loin en loin (ronds et triangles, un côté puis
+    // l'autre) : fondus en un seul maillage par tronçon, un seul appel de dessin.
+    const roadside = this.roadside(chunk);
+    const details: Object3D[] = [];
+    if (roadside) {
+      owned.push(roadside.geometry);
+      group.add(roadside);
+      details.push(roadside);
+    }
     const placed = this.signs ? this.placeSigns(chunk, group, walls) : null;
     if (placed?.signs) {
       owned.push(placed.signs.geometry);
@@ -501,7 +572,9 @@ export class Decor {
       poles.layers.set(NO_MIRROR_LAYER);
       put(poles);
     }
-    const lamps = new Float32Array(((lampadaire?.length ?? 0) / MAP_INSTANCE_STRIDE) * 3);
+    const vault = tunnelLamps(this.spans, chunk.from, chunk.to, this.route.rail, this.route.step);
+    const lamps = new Float32Array(((lampadaire?.length ?? 0) / MAP_INSTANCE_STRIDE) * 3 + vault.length);
+    lamps.set(vault, lamps.length - vault.length);
     for (let i = 0; i * MAP_INSTANCE_STRIDE < (lampadaire?.length ?? 0); i += 1) {
       const o = i * MAP_INSTANCE_STRIDE;
       const l = lampadaire as number[];
@@ -512,10 +585,116 @@ export class Decor {
       lamps[i * 3 + 2] = chunk.origin[2] + (l[o + 2] ?? 0) + Math.cos(cap) * LAMP_HEAD.reach * scale;
     }
     this.root.add(group);
-    this.loaded.set(index, { index, group, lamps, geometries, instanced: instancedMeshes, owned, neons: new Float32Array([...(placed?.lights ?? []), ...feuxLights]) });
+    details.push(...instancedMeshes);
+    this.loaded.set(index, { index, group, lamps, geometries, instanced: instancedMeshes, owned, neons: new Float32Array([...(placed?.lights ?? []), ...feuxLights]), details });
     this.status.loaded = this.loaded.size;
     this.status.complete = this.wanted.every((i) => this.loaded.has(i));
     this.collectLamps();
+  }
+
+  /**
+   * Piquets de bord de route (hors agglomération, hors ouvrages) : un tous les 50 m de chaque côté,
+   * à 1 m du bord de la chaussée, d'après le rail et la largeur des sections ; leur catadioptre
+   * s'allume dans les phares à cadence régulière (l'impression de vitesse en vient beaucoup).
+   */
+  private roadsidePosts(chunk: MapChunk, every: number, margin: number, shift: number, out: number[]): void {
+    const { rail, step, sections } = this.route;
+    const count = Math.floor(rail.length / 3);
+    const single = every > 100;
+    for (let s = Math.ceil((chunk.from - shift) / every) * every + shift; s < chunk.to; s += every) {
+      if (s < chunk.from) continue;
+      const sec = sections.find((x) => s >= x.from && s < x.to);
+      if (!sec || sec.urban || sec.ground !== 'sol') continue;
+      const i = Math.max(0, Math.min(count - 2, Math.round(s / step)));
+      const x = rail[i * 3] ?? 0;
+      const y = rail[i * 3 + 1] ?? 0;
+      const z = rail[i * 3 + 2] ?? 0;
+      const tx = (rail[(i + 1) * 3] ?? 0) - x;
+      const tz = (rail[(i + 1) * 3 + 2] ?? 0) - z;
+      const tl = Math.hypot(tx, tz) || 1;
+      const off = sec.width / 2 + margin;
+      for (const side of single ? [Math.round(s / every) % 2 === 0 ? -1 : 1] : [1, -1]) {
+        // Gauche de la marche : (tz, −tx) ; la face des panneaux regarde ceux qui arrivent.
+        out.push(x + (side * off * tz) / tl - chunk.origin[0], y - chunk.origin[1], z - (side * off * tx) / tl - chunk.origin[2], 1, Math.atan2(-tx, -tz));
+      }
+    }
+  }
+
+  /**
+   * Bord de route hors agglomération et hors ouvrages, d'après le rail et la largeur des sections :
+   * piquets tous les 50 m de chaque côté à 1 m du bord (leur catadioptre s'allume dans les phares à
+   * cadence régulière : l'impression de vitesse en vient beaucoup), panneaux sans texte de loin en
+   * loin. Un seul maillage par tronçon.
+   */
+  private roadside(chunk: MapChunk): Mesh | null {
+    const parts: BufferGeometry[] = [];
+    const kinds: Array<[number, number, number, BufferGeometry]> = [
+      [50, 1, 0, this.kit.balise],
+      [420, 1.6, 0, this.kit.panneaux[0]],
+      [610, 1.6, 230, this.kit.panneaux[1]],
+    ];
+    for (const [every, margin, shift, base] of kinds) {
+      const data: number[] = [];
+      this.roadsidePosts(chunk, every, margin, shift, data);
+      for (let o = 0; o + 4 < data.length; o += MAP_INSTANCE_STRIDE) {
+        work.q.setFromAxisAngle(work.y, data[o + 4] ?? 0);
+        work.p.set(data[o] ?? 0, data[o + 1] ?? 0, data[o + 2] ?? 0);
+        work.s.set(1, 1, 1);
+        const g = base.index ? base.toNonIndexed() : base.clone();
+        for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+        g.applyMatrix4(work.m.compose(work.p, work.q, work.s));
+        parts.push(g);
+      }
+    }
+    if (parts.length === 0) return null;
+    const merged = mergeGeometries(parts) as BufferGeometry | null;
+    for (const g of parts) g.dispose();
+    if (!merged) return null;
+    merged.computeBoundingSphere();
+    const mesh = new Mesh(merged, this.kit.baliseMaterial);
+    mesh.name = 'bord_de_route';
+    return mesh;
+  }
+
+  /**
+   * Attributs posés au chargement : chaussée et accotements (abscisse, écart à l'axe, part au sec,
+   * demi-largeur), murs (pied, sommet et graine du bâtiment : façades dessinées), fenêtres (seules
+   * restent les réglettes des tunnels ; les baies des façades sont dessinées par la matière des murs).
+   */
+  private prepare(o: Mesh, role: string, chunk: MapChunk): void {
+    const g = o.geometry as BufferGeometry;
+    const origin = [chunk.origin[0] + o.position.x, chunk.origin[1] + o.position.y, chunk.origin[2] + o.position.z];
+    if (role === 'chaussee' || role === 'voie' || role === 'accotement' || role === 'ouvrage') {
+      const attr = roadAttribute(g.getAttribute('position').array, origin, this.route.rail, this.route.step, chunk.from, chunk.to, this.route.sections, this.spans);
+      g.setAttribute('pmbRoad', new BufferAttribute(attr, 4));
+    } else if (role === 'mur') {
+      const flat = g.index ? g.toNonIndexed() : g;
+      if (flat !== g) {
+        g.dispose();
+        o.geometry = flat;
+      }
+      flat.setAttribute('pmbFacade', new BufferAttribute(facadeAttribute(flat.getAttribute('position').array, origin), 3));
+    } else if (role === 'fenetre') {
+      const flat = g.index ? g.toNonIndexed() : g;
+      const pos = flat.getAttribute('position');
+      const keep: number[] = [];
+      const a = new Vector3();
+      const b = new Vector3();
+      const c = new Vector3();
+      for (let t = 0; t + 2 < pos.count; t += 3) {
+        a.fromBufferAttribute(pos, t);
+        b.fromBufferAttribute(pos, t + 1);
+        c.fromBufferAttribute(pos, t + 2);
+        const n = b.sub(a).cross(c.sub(a));
+        if (Math.abs(n.y) > 0.5 * n.length()) for (let k = 0; k < 3; k += 1) keep.push(pos.getX(t + k), pos.getY(t + k), pos.getZ(t + k));
+      }
+      const out = new Geometry();
+      out.setAttribute('position', new BufferAttribute(new Float32Array(keep), 3));
+      out.computeVertexNormals();
+      if (flat !== g) flat.dispose();
+      g.dispose();
+      o.geometry = out;
+    }
   }
 
   /**

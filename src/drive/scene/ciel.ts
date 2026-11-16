@@ -19,7 +19,9 @@ import {
   Points,
   ShaderMaterial,
   SphereGeometry,
+  Vector2,
   Vector3,
+  Vector4,
 } from 'three';
 import { MOON, type NightUniforms } from './materiaux.ts';
 
@@ -124,42 +126,83 @@ export function createSky(): Mesh<SphereGeometry, ShaderMaterial> {
   return sky;
 }
 
+// Pluie, neige et poussière : une même nuée de quads autour de la caméra (un seul appel de dessin).
+// Pluie : traits qui tombent et filent avec la vitesse ; neige : flocons ronds, lents, qui dérivent ;
+// poussière (au sec, en roulant vite) : grains fins qui ne se voient que dans les phares. Sous un
+// tunnel (portée uSpan autour du rail local uShelterP, uShelterT), rien ne tombe : on voit le rideau
+// aux têtes. uDensity éclaircit la nuée en fondu (garde de cadence).
 const RAIN_VERTEX = /* glsl */ `
 attribute vec4 aSeed;
 attribute vec2 aCorner;
 uniform float uTime;
 uniform vec3 uCenter;
 uniform vec3 uWind;
+uniform float uRain;
+uniform float uSnow;
+uniform float uDust;
+uniform float uDensity;
+uniform vec4 uShelterP;
+uniform vec3 uShelterT;
+uniform vec2 uSpan;
 uniform vec3 pmbHeadPos;
 uniform vec3 pmbHeadDir;
 uniform float pmbHeadOn;
 varying float vAlpha;
+varying vec2 vCorner;
+varying float vRound;
 const vec3 BOX = vec3( 26.0, 14.0, 26.0 );
 void main() {
-  vec3 vel = vec3( 0.0, -11.0, 0.0 ) + uWind;
+  bool snow = uSnow > uRain;
+  float amount = max( max( uRain, uSnow ), uDust );
+  bool dust = uDust > max( uRain, uSnow );
+  vec3 vel = snow ? vec3( 0.6 * sin( uTime * 0.7 + aSeed.w * 6.28 ), -1.3 - 0.5 * aSeed.w, 0.6 * cos( uTime * 0.5 + aSeed.x * 6.28 ) ) + uWind * 0.8
+    : ( dust ? vec3( 0.0, -0.15, 0.0 ) + uWind : vec3( 0.0, -11.0, 0.0 ) + uWind );
   vec3 p = aSeed.xyz * BOX + vel * ( uTime * ( 0.8 + 0.4 * aSeed.w ) );
   // Boîte qui suit la caméra : chaque goutte reboucle dans la boîte autour d'elle.
   p = mod( p - uCenter + BOX * 0.5, BOX ) - BOX * 0.5 + uCenter;
-  vec3 dir = normalize( vel );
-  float len = 0.45 + 0.35 * aSeed.w;
   vec3 view = normalize( cameraPosition - p );
-  vec3 side = normalize( cross( dir, view ) ) * 0.009;
-  vec3 world = p + dir * aCorner.y * len + side * aCorner.x;
+  vec3 world;
+  if ( snow ) {
+    // Flocon : petit carré face à la caméra (arrondi dans le fragment).
+    vec3 right = normalize( cross( view, vec3( 0.0, 1.0, 0.0 ) ) );
+    vec3 up = cross( right, view );
+    float r = 0.018 + 0.02 * aSeed.w;
+    world = p + ( right * aCorner.x + up * ( aCorner.y * 2.0 - 1.0 ) ) * r;
+  } else {
+    vec3 dir = normalize( vel );
+    float len = dust ? 0.05 + 0.25 * clamp( length( uWind ) / 30.0, 0.0, 1.0 ) : 0.45 + 0.35 * aSeed.w;
+    vec3 side = normalize( cross( dir, view ) ) * ( dust ? 0.006 : 0.009 );
+    world = p + dir * aCorner.y * len + side * aCorner.x;
+  }
   vec3 Lh = pmbHeadPos - p;
   float dh = length( Lh );
   float lit = smoothstep( 0.8, 0.95, dot( -Lh / dh, pmbHeadDir ) ) * pmbHeadOn / ( 1.0 + dh * 0.08 );
   float dc = length( p - cameraPosition );
-  vAlpha = ( 0.10 + 1.4 * lit ) * smoothstep( 0.6, 2.5, dc ) * ( 1.0 - smoothstep( 9.0, 13.0, dc ) ) * ( 1.0 - aCorner.y * 0.6 );
+  // Sous la voûte d'un tunnel : rien.
+  vec3 d = p - uShelterP.xyz;
+  float along = uShelterP.w + dot( d.xz, uShelterT.xy );
+  float lat = abs( d.x * uShelterT.y - d.z * uShelterT.x );
+  float under = step( uSpan.x + 0.5, along ) * step( along, uSpan.y - 0.5 ) * step( lat, uShelterT.z + 2.5 ) * step( d.y, 7.5 );
+  float keep = smoothstep( aSeed.w - 0.05, aSeed.w + 0.05, uDensity );
+  float base = snow ? 0.55 + 2.2 * lit : ( dust ? 2.4 * lit : 0.10 + 1.4 * lit );
+  // Les plus proches (moins de 1,2 m) ne se dessinent pas : de grands traits flous qui coûtaient cher.
+  vAlpha = amount * keep * ( 1.0 - under ) * base * smoothstep( 1.2, 2.8, dc ) * ( 1.0 - smoothstep( 9.0, 13.0, dc ) ) * ( snow ? 1.0 : 1.0 - aCorner.y * 0.6 );
+  vCorner = vec2( aCorner.x, aCorner.y * 2.0 - 1.0 );
+  vRound = snow ? 1.0 : 0.0;
   gl_Position = projectionMatrix * viewMatrix * vec4( world, 1.0 );
+  if ( vAlpha <= 0.0 ) gl_Position = vec4( 2.0, 2.0, 2.0, 1.0 );
 }`;
 
 const RAIN_FRAGMENT = /* glsl */ `
 varying float vAlpha;
+varying vec2 vCorner;
+varying float vRound;
 void main() {
-  gl_FragColor = vec4( vec3( 0.62, 0.7, 0.85 ) * vAlpha, 1.0 );
+  float a = vAlpha;
+  if ( vRound > 0.5 ) a *= max( 0.0, 1.0 - dot( vCorner, vCorner ) );
+  gl_FragColor = vec4( mix( vec3( 0.62, 0.7, 0.85 ), vec3( 0.85, 0.88, 0.95 ), vRound ) * a, 1.0 );
 }`;
 
-/** Pluie : `count` traits fins, une seule géométrie, un seul appel de dessin. */
 export function createRain(count: number, uniforms: NightUniforms): Mesh<BufferGeometry, ShaderMaterial> {
   const seeds = new Float32Array(count * 4 * 4);
   const corners = new Float32Array(count * 4 * 2);
@@ -192,6 +235,13 @@ export function createRain(count: number, uniforms: NightUniforms): Mesh<BufferG
       uTime: { value: 0 },
       uCenter: { value: new Vector3() },
       uWind: { value: new Vector3() },
+      uRain: { value: 0 },
+      uSnow: { value: 0 },
+      uDust: { value: 0 },
+      uDensity: { value: 1 },
+      uShelterP: { value: new Vector4(0, -1e5, 0, 0) },
+      uShelterT: { value: new Vector3(1, 0, 0) },
+      uSpan: { value: new Vector2(1, 0) },
       pmbHeadPos: uniforms.pmbHeadPos,
       pmbHeadDir: uniforms.pmbHeadDir,
       pmbHeadOn: uniforms.pmbHeadOn,
@@ -314,8 +364,9 @@ void main() {
   vec4 mv = modelViewMatrix * vec4( position, 1.0 );
   float d = -mv.z;
   // Les lampadaires des tronçons chargés ont leurs vrais halos : ceux-ci prennent le relais au loin.
-  vGain = smoothstep( 380.0, 760.0, d ) * ( 1.0 - smoothstep( 7000.0, 11000.0, d ) ) * ( 0.85 + 0.15 * sin( uTime * 7.0 + aSeed * 40.0 ) );
-  gl_PointSize = clamp( 2600.0 / d, 1.6, 5.0 ) * uPixel;
+  vGain = smoothstep( 380.0, 760.0, d ) * ( 1.0 - smoothstep( 7000.0, 11000.0, d ) ) * ( 0.94 + 0.06 * sin( uTime * 3.0 + aSeed * 40.0 ) );
+  // Au moins 2,4 pixels : plus petits, les points sautent d'un pixel à l'autre et scintillent en roulant.
+  gl_PointSize = clamp( 2600.0 / d, 2.4, 5.0 ) * uPixel;
   gl_Position = projectionMatrix * mv;
 }`;
 

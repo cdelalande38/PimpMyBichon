@@ -18,6 +18,7 @@ export const DRIVE_VERSION = 1;
 export const WEATHERS: readonly { id: Weather; label: string }[] = [
   { id: 'sec', label: 'Sec' },
   { id: 'pluie', label: 'Pluie' },
+  { id: 'neige', label: 'Neige' },
 ];
 
 export const CAMERA_LABELS: Record<CameraId, string> = {
@@ -58,7 +59,7 @@ export const IDLE_TELEMETRY: Readonly<DriveTelemetry> = Object.freeze({
 /** Lecture tolérante : une valeur inconnue retombe sur celle d'origine. */
 export function sanitizeDrivePrefs(raw: unknown): DrivePrefs {
   const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-  const weather = source.weather === 'sec' || source.weather === 'pluie' ? source.weather : DEFAULT_DRIVE_PREFS.weather;
+  const weather = WEATHERS.some((item) => item.id === source.weather) ? (source.weather as Weather) : DEFAULT_DRIVE_PREFS.weather;
   const camera = CAMERA_IDS.includes(source.camera as CameraId) ? (source.camera as CameraId) : DEFAULT_DRIVE_PREFS.camera;
   return { weather, camera };
 }

@@ -11,6 +11,7 @@ export type DriveIconName =
   | 'ralenti'
   | 'sec'
   | 'pluie'
+  | 'neige'
   | 'pause'
   | 'lecture'
   | 'garage'
@@ -67,6 +68,8 @@ const SHAPES: Record<DriveIconName, ReactNode> = {
       <path d="m8.5 17-1.2 3M12.5 17l-1.2 3M16.5 17l-1.2 3" />
     </>
   ),
+  // Neige : un flocon à six branches.
+  neige: <path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9M10 4.5l2 2 2-2M10 19.5l2-2 2 2M4.6 10.2l2.7-.7-.7-2.7M19.4 13.8l-2.7.7.7 2.7M4.6 13.8l2.7.7-.7 2.7M19.4 10.2l-2.7-.7.7-2.7" />,
   pause: <path d="M8.5 5v14M15.5 5v14" />,
   lecture: <path d="M7.5 4.5v15l12-7.5Z" />,
   // Son du moteur : le bloc ; coupé, barré.
