@@ -7,6 +7,7 @@ import { interiorViewsOf, resolveVehicle } from '../data/vehicles.ts';
 import { precachePercent, setInstallLater, usePwa } from '../pwa/pwaStore.ts';
 import { promptInstall } from '../pwa/register.ts';
 import { useBuilds } from '../state/builds.ts';
+import { useDock } from '../state/dock.ts';
 import { useView } from '../state/view.ts';
 import { openAtelier } from './AtelierSwitcher.tsx';
 import { Icon } from './icons.tsx';
@@ -126,6 +127,19 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
             </button>
           )}
           <RadioButton />
+          {/* La sortie de nuit était introuvable au deuxième niveau du menu (retour du 16 novembre
+              2026) : son raccourci ouvre Garage › Sortie de nuit, où l'on choisit la carte. */}
+          {!sceneFailed && (
+            <button
+              type="button"
+              className="quick-btn"
+              aria-label="Sortie de nuit"
+              title="Sortie de nuit : choisir la carte et rouler"
+              onClick={() => useDock.getState().openEntry('sortie')}
+            >
+              <Icon name="route" />
+            </button>
+          )}
           {!sceneFailed && <InteriorButton />}
         </nav>
       </div>

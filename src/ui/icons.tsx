@@ -4,7 +4,7 @@
 
 import type { ReactNode } from 'react';
 
-export type IconName = 'radio' | 'photo' | 'atelier' | 'moteur' | 'outils' | 'neon' | 'volant';
+export type IconName = 'radio' | 'photo' | 'atelier' | 'moteur' | 'outils' | 'neon' | 'volant' | 'route';
 
 const SHAPES: Record<Exclude<IconName, 'radio'>, ReactNode> = {
   // Volant : jante, moyeu, trois branches. La vue intérieure, à l'œil du conducteur.
@@ -40,6 +40,14 @@ const SHAPES: Record<Exclude<IconName, 'radio'>, ReactNode> = {
   // Clé plate : l'établi et la servante.
   outils: (
     <path d="M14.5 3.5a4.5 4.5 0 0 0-4.2 6.1L3.5 16.4l4.1 4.1 6.8-6.8a4.5 4.5 0 0 0 6.1-4.2l-2.8 2.8-3.3-.8-.8-3.3z" />
+  ),
+  // Route qui file vers l'horizon sous un croissant de lune : la sortie de nuit.
+  route: (
+    <>
+      <path d="M6.5 21 10.3 9.5M17.5 21l-3.8-11.5" />
+      <path d="M12 20v-2.6M12 14.6v-2M12 10.2V9.5" />
+      <path d="M17.6 2.6a3.3 3.3 0 1 0 3.6 4.6 2.7 2.7 0 0 1-3.6-4.6z" />
+    </>
   ),
   // Tube néon tordu en éclair, et son halo.
   neon: (
