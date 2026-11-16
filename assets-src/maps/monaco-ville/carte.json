@@ -1,0 +1,167 @@
+{
+  "id": "monaco-ville",
+  "nom": "Monaco, la ville",
+  "fournisseur": "ign",
+  "note": "Traversée de la Principauté d'ouest en est : Fontvieille et son tunnel, la place d'Armes, le port par le boulevard Albert-Ier, la montée de l'avenue d'Ostende vers la place du Casino, la descente des Spélugues jusqu'au bord de mer, puis l'avenue Princesse-Grace jusqu'au Larvotto. Rues fermées à la circulation : les sens uniques ne détournent pas le parcours.",
+  "emprise": {
+    "lonMin": 7.4,
+    "latMin": 43.72,
+    "lonMax": 7.45,
+    "latMax": 43.76
+  },
+  "itineraire": {
+    "penalite": 4,
+    "sensIgnore": true,
+    "etapes": [
+      {
+        "nom": "Fontvieille",
+        "carrefour": [
+          "AV DE FONTVIEILLE",
+          "R DU GABIAN"
+        ]
+      },
+      {
+        "nom": "Place d'Armes",
+        "carrefour": [
+          "PL D'ARMES",
+          "AV DU PORT"
+        ],
+        "par": [
+          "AV DE FONTVIEILLE",
+          "PL D'ARMES"
+        ]
+      },
+      {
+        "nom": "Sainte-Dévote",
+        "carrefour": [
+          "BD ALBERT 1ER",
+          "R GRIMALDI"
+        ],
+        "par": [
+          "AV DU PORT",
+          "BD ALBERT 1ER"
+        ]
+      },
+      {
+        "nom": "Haut de l'avenue d'Ostende",
+        "carrefour": [
+          "AV D'OSTENDE",
+          "AV DE MONTE CARLO"
+        ],
+        "par": [
+          "AV D'OSTENDE"
+        ]
+      },
+      {
+        "nom": "Place du Casino",
+        "carrefour": [
+          "PL DU CASINO",
+          "AV DES SPELUGUES"
+        ],
+        "par": [
+          "AV DE MONTE CARLO",
+          "PL DU CASINO"
+        ]
+      },
+      {
+        "nom": "Bas des Spélugues",
+        "carrefour": [
+          "AV DES SPELUGUES",
+          "R DU PORTIER"
+        ],
+        "par": [
+          "AV DES SPELUGUES"
+        ]
+      },
+      {
+        "nom": "Larvotto",
+        "lon": 7.44014,
+        "lat": 43.75056,
+        "par": [
+          "AV PRINCESSE GRACE"
+        ]
+      }
+    ]
+  },
+  "mer": true,
+  "couloir": {
+    "demiLargeur": 110,
+    "pasRelief": 10
+  },
+  "lointain": {
+    "proche": {
+      "pas": 100,
+      "marge": 2500
+    },
+    "loin": {
+      "pas": 400,
+      "marge": 10000
+    }
+  },
+  "fabrication": {
+    "pasRail": 2,
+    "pasProfil": 2,
+    "lissagePlan": 6,
+    "lissageAltitude": 15,
+    "longueurTroncon": 250,
+    "hauteurMax": 180,
+    "pasLampadaires": 9,
+    "porteeEau": 1200
+  },
+  "departs": [
+    {
+      "id": "fontvieille",
+      "label": "Fontvieille",
+      "debut": true
+    },
+    {
+      "id": "port",
+      "label": "Le port",
+      "rue": "BD ALBERT 1ER"
+    },
+    {
+      "id": "casino",
+      "label": "Place du Casino",
+      "etape": 4,
+      "decalage": -150
+    },
+    {
+      "id": "bord-de-mer",
+      "label": "Bord de mer",
+      "rue": "AV PRINCESSE GRACE"
+    }
+  ],
+  "captures": [
+    {
+      "nom": "plan",
+      "vue": "dessus",
+      "s": 2240,
+      "regard": 0,
+      "hauteur": 3200
+    },
+    {
+      "nom": "port",
+      "vue": "oiseau",
+      "s": 1000,
+      "regard": -70
+    },
+    {
+      "nom": "casino",
+      "vue": "conducteur",
+      "s": 2080,
+      "regard": 0
+    },
+    {
+      "nom": "tunnel",
+      "vue": "conducteur",
+      "s": 250,
+      "regard": 0
+    },
+    {
+      "nom": "lacets",
+      "vue": "oiseau",
+      "s": 2420,
+      "regard": 0
+    }
+  ]
+}

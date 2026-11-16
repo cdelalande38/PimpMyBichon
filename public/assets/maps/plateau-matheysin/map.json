@@ -1,7 +1,7 @@
 {
   "id": "plateau-matheysin",
   "name": "Les lacs du plateau matheysin",
-  "hint": "De Laffrey à La Mure, le long des lacs",
+  "hint": "De la rampe de Laffrey à La Mure, le long des lacs",
   "kind": "route",
   "order": 1,
   "route": "route.json",

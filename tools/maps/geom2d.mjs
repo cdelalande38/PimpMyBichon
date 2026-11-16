@@ -169,3 +169,125 @@ export function hasard(a, b) {
   h ^= h >>> 16;
   return (h >>> 0) / 4294967296;
 }
+
+/**
+ * Met bout à bout des lignes dont les extrémités se touchent (à `tol` mètres près), dans un sens ou
+ * dans l'autre. Rend les lignes raccordées, la plus longue (en sommets) d'abord.
+ * @param {number[][][]} lignes @param {number} [tol]
+ */
+export function raccorder(lignes, tol = 1) {
+  const reste = lignes.filter((l) => l.length >= 2).map((l) => [...l]);
+  /** @type {number[][][]} */
+  const out = [];
+  const proche = (/** @type {number[]} */ a, /** @type {number[]} */ b) => Math.hypot((a[0] ?? 0) - (b[0] ?? 0), (a[1] ?? 0) - (b[1] ?? 0)) <= tol;
+  while (reste.length) {
+    let l = /** @type {number[][]} */ (reste.shift());
+    for (let ajout = true; ajout; ) {
+      ajout = false;
+      for (let i = 0; i < reste.length; i += 1) {
+        const m = /** @type {number[][]} */ (reste[i]);
+        const d0 = /** @type {number[]} */ (l[0]);
+        const d1 = /** @type {number[]} */ (l[l.length - 1]);
+        const m0 = /** @type {number[]} */ (m[0]);
+        const m1 = /** @type {number[]} */ (m[m.length - 1]);
+        if (proche(d1, m0)) l = [...l, ...m.slice(1)];
+        else if (proche(d1, m1)) l = [...l, ...[...m].reverse().slice(1)];
+        else if (proche(d0, m1)) l = [...m, ...l.slice(1)];
+        else if (proche(d0, m0)) l = [...[...m].reverse(), ...l.slice(1)];
+        else continue;
+        reste.splice(i, 1);
+        ajout = true;
+        break;
+      }
+    }
+    out.push(l);
+  }
+  return out.sort((a, b) => b.length - a.length);
+}
+
+/**
+ * Plus longue portion d'une ligne à l'intérieur d'un rectangle, bouts ramenés sur le bord.
+ * @param {number[][]} ligne @param {[number, number, number, number]} r minX, minZ, maxX, maxZ
+ */
+export function couperLigne(ligne, r) {
+  const dedans = (/** @type {number[]} */ p) => (p[0] ?? 0) >= r[0] && (p[0] ?? 0) <= r[2] && (p[1] ?? 0) >= r[1] && (p[1] ?? 0) <= r[3];
+  /** Point du segment a → b sur le bord (a dedans, b dehors, ou l'inverse). */
+  const bord = (/** @type {number[]} */ a, /** @type {number[]} */ b) => {
+    let t = 1;
+    const dx = (b[0] ?? 0) - (a[0] ?? 0);
+    const dz = (b[1] ?? 0) - (a[1] ?? 0);
+    for (const [v, d, o] of /** @type {Array<[number, number, number]>} */ ([
+      [r[0], dx, a[0] ?? 0],
+      [r[2], dx, a[0] ?? 0],
+    ]))
+      if (d !== 0) {
+        const u = (v - o) / d;
+        if (u > 0 && u < t) t = u;
+      }
+    for (const v of [r[1], r[3]])
+      if (dz !== 0) {
+        const u = (v - (a[1] ?? 0)) / dz;
+        if (u > 0 && u < t) t = u;
+      }
+    return [(a[0] ?? 0) + dx * t, (a[1] ?? 0) + dz * t];
+  };
+  /** @type {number[][][]} */
+  const morceaux = [];
+  /** @type {number[][]} */
+  let cur = [];
+  for (let i = 0; i < ligne.length; i += 1) {
+    const p = /** @type {number[]} */ (ligne[i]);
+    const q = ligne[i - 1];
+    if (dedans(p)) {
+      if (cur.length === 0 && q && !dedans(q)) cur.push(bord(p, q));
+      cur.push(p);
+    } else if (cur.length) {
+      cur.push(bord(/** @type {number[]} */ (q), p));
+      morceaux.push(cur);
+      cur = [];
+    }
+  }
+  if (cur.length) morceaux.push(cur);
+  return morceaux.sort((a, b) => b.length - a.length)[0] ?? [];
+}
+
+/**
+ * Referme une ligne qui traverse un rectangle (bouts sur le bord) en deux anneaux : l'un longe le
+ * bord dans un sens, l'autre dans l'autre. Sert à la mer : le trait de côte et le large.
+ * @param {number[][]} ligne @param {[number, number, number, number]} r minX, minZ, maxX, maxZ
+ * @returns {[number[][], number[][]]}
+ */
+export function fermerSurBoite(ligne, r) {
+  // Abscisse sur le périmètre, de 0 à 4 : haut (z min) vers l'est, droite, bas vers l'ouest, gauche.
+  const t = (/** @type {number[]} */ p) => {
+    const x = p[0] ?? 0;
+    const z = p[1] ?? 0;
+    const e = [Math.abs(z - r[1]), Math.abs(x - r[2]), Math.abs(z - r[3]), Math.abs(x - r[0])];
+    const c = e.indexOf(Math.min(...e));
+    if (c === 0) return (x - r[0]) / (r[2] - r[0]);
+    if (c === 1) return 1 + (z - r[1]) / (r[3] - r[1]);
+    if (c === 2) return 2 + (r[2] - x) / (r[2] - r[0]);
+    return 3 + (r[3] - z) / (r[3] - r[1]);
+  };
+  const coins = [
+    [r[2], r[1]],
+    [r[2], r[3]],
+    [r[0], r[3]],
+    [r[0], r[1]],
+  ];
+  const a = /** @type {number[]} */ (ligne[0]);
+  const b = /** @type {number[]} */ (ligne[ligne.length - 1]);
+  const ta = t(a);
+  const tb = t(b);
+  /** Coins rencontrés en allant de t0 à t1 dans le sens du périmètre. @param {number} t0 @param {number} t1 */
+  const parcours = (t0, t1) => {
+    const fin = t1 >= t0 ? t1 : t1 + 4;
+    /** @type {number[][]} */
+    const out = [];
+    for (let k = Math.floor(t0) + 1; k <= fin; k += 1) out.push(/** @type {number[]} */ (coins[(k - 1) % 4]));
+    return out;
+  };
+  const sens = [...ligne, ...parcours(tb, ta)];
+  const inverse = [...ligne, ...parcours(ta, tb).reverse()];
+  return [sens, inverse];
+}

@@ -10,7 +10,10 @@
 //   vue=conducteur    à hauteur de conducteur sur la voie de droite (défaut) ; oiseau ; dessus
 //   s=<m>             abscisse sur le parcours (0 par défaut)
 //   regard=<degrés>   rotation du regard vers la gauche (conducteur) ou cap de la vue d'oiseau
+//   hauteur=<m>       hauteur de la vue de dessus (1 400 m par défaut) : plan d'ensemble d'une ville
 //   orbite            caméra libre à la souris
+//   fenetre=<a>,<b>   ne charger que les tronçons que la sortie charge : a derrière, b devant celui de
+//                     l'abscisse (la sortie en qualité standard : 1,2) ; sinon tout à 1,6 km (3 km d'oiseau)
 // Prête : attribut data-carte-pret sur body (data-carte-info : tronçons, triangles) ; en cas
 // d'erreur, data-carte-erreur. window.pmbVue({ vue, s, regard }) déplace la caméra, charge les
 // tronçons utiles et redessine. Captures : node tools/captures/carte.mjs <id>.
@@ -87,7 +90,8 @@ document.body.appendChild(renderer.domElement);
 const scene = new Scene();
 const ciel = new Color('#5d6f8c');
 scene.background = ciel;
-scene.fog = new Fog(ciel, 300, 2600);
+const brume = new Fog(ciel, 300, 2600);
+scene.fog = brume;
 scene.add(new HemisphereLight('#b8c8e8', '#3a3328', 1.6));
 scene.add(new AmbientLight('#ffffff', 0.25));
 const lune = new DirectionalLight('#fff1dc', 1.6);
@@ -175,7 +179,7 @@ function railEn(s: number): Vector3 {
   return new Vector3(a(0) + (b(0) - a(0)) * t, a(1) + (b(1) - a(1)) * t, a(2) + (b(2) - a(2)) * t);
 }
 
-type Vue = { vue?: string; s?: number; regard?: number };
+type Vue = { vue?: string; s?: number; regard?: number; fenetre?: string; hauteur?: number };
 
 async function pmbVue(v: Vue) {
   const r = route as MapRoute;
@@ -183,14 +187,24 @@ async function pmbVue(v: Vue) {
   const vue = v.vue ?? 'conducteur';
   const regard = ((v.regard ?? 0) * Math.PI) / 180;
   // Tronçons à moins de 1,6 km (vue d'oiseau : 3 km), les autres libérés.
-  const portee = vue === 'conducteur' ? 1600 : 3000;
-  const utiles = r.chunks.filter((c) => c.to >= s - portee && c.from <= s + portee);
+  const portee = vue === 'conducteur' ? 1600 : vue === 'dessus' ? Math.max(3000, (v.hauteur ?? 0) * 1.4) : 3000;
+  const fenetre = (v.fenetre ?? params.get('fenetre') ?? '').split(',').map(Number);
+  const ici = r.chunks.findIndex((c) => s >= c.from && s <= c.to);
+  const n = r.chunks.length;
+  const dansFenetre = (i: number) => {
+    const [derriere = 0, devant = 0] = fenetre;
+    for (let k = -derriere; k <= devant; k += 1) if ((r.loop ? (((ici + k) % n) + n) % n : ici + k) === i) return true;
+    return false;
+  };
+  const utiles = r.chunks.filter((c, i) => (fenetre.length === 2 && fenetre.every(Number.isFinite) ? dansFenetre(i) : c.to >= s - portee && c.from <= s + portee));
   for (const [file, g] of charges)
     if (!utiles.some((c) => c.file === file)) {
       scene.remove(g);
       charges.delete(file);
     }
   await Promise.all(utiles.map(chargerChunk));
+  // Vue de dessus : pas de brume (le plan d'ensemble se regarde de haut, au-delà de sa portée).
+  scene.fog = vue === 'dessus' ? null : brume;
   const p = railEn(s);
   const devant = railEn(s + 30).sub(p).setY(0).normalize();
   const droite = new Vector3(-devant.z, 0, devant.x);
@@ -198,7 +212,7 @@ async function pmbVue(v: Vue) {
   const voie = (section?.width ?? 7) / 4;
   if (vue === 'oiseau' || vue === 'dessus') {
     const cap = devant.clone().applyAxisAngle(new Vector3(0, 1, 0), regard);
-    const haut = vue === 'dessus' ? 1400 : 260;
+    const haut = vue === 'dessus' ? v.hauteur || Number(params.get('hauteur')) || 1400 : 260;
     const recul = vue === 'dessus' ? 1 : 420;
     camera.position.copy(p).addScaledVector(cap, -recul).add(new Vector3(0, haut, 0));
     camera.lookAt(p.clone().addScaledVector(cap, vue === 'dessus' ? 0 : 500));

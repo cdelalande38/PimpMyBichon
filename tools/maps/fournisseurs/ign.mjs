@@ -82,6 +82,8 @@ function troncon(f) {
     id: String(f.id),
     points: /** @type {number[][]} */ (c),
     numero: String(p.cpx_numero ?? ''),
+    // Nom de la rue (nom collaboratif, à gauche ou à droite) : sert aux étapes et aux départs.
+    nom: String(p.nom_collaboratif_gauche || p.nom_collaboratif_droite || ''),
     importance: Number(p.importance ?? 6),
     nature: String(p.nature ?? ''),
     largeur: nombre(p.largeur_de_chaussee),
@@ -105,7 +107,7 @@ export default {
   /**
    * Contrôle de la projection : un même tronçon demandé en Lambert-93 et en longitude et latitude ;
    * rend l'écart le plus grand, en mètres, entre la conversion locale et le service.
-   * @param {Ctx} ctx @param {[number, number, number, number]} bbox @param {string} numero
+   * @param {Ctx} ctx @param {[number, number, number, number]} bbox @param {string} [numero] route numérotée ; sans numéro, un tronçon quelconque de l'emprise
    */
   async verifierProjection(ctx, bbox, numero) {
     const base = {
@@ -116,7 +118,7 @@ export default {
       OUTPUTFORMAT: 'application/json',
       COUNT: '1',
       PROPERTYNAME: 'cpx_numero,geometrie',
-      CQL_FILTER: `cpx_numero='${numero.replace(/'/g, '')}' AND BBOX(geometrie,${bbox.map((v) => v.toFixed(5)).join(',')},'EPSG:4326')`,
+      CQL_FILTER: `${numero ? `cpx_numero='${numero.replace(/'/g, '')}' AND ` : ''}BBOX(geometrie,${bbox.map((v) => v.toFixed(5)).join(',')},'EPSG:4326')`,
     };
     const l93 = await ctx.lire(`${WFS}?${new URLSearchParams({ ...base, SRSNAME: 'EPSG:2154' })}`);
     const geo = await ctx.lire(`${WFS}?${new URLSearchParams({ ...base, SRSNAME: 'EPSG:4326' })}`);
@@ -136,14 +138,14 @@ export default {
 
   /** Tronçons d'une route numérotée. @param {Ctx} ctx @param {[number, number, number, number]} bbox @param {string} numero */
   async routeNumerotee(ctx, bbox, numero) {
-    const props = ['cpx_numero', 'importance', 'nature', 'largeur_de_chaussee', 'nombre_de_voies', 'position_par_rapport_au_sol', 'urbain', 'sens_de_circulation'];
+    const props = ['cpx_numero', 'importance', 'nature', 'largeur_de_chaussee', 'nombre_de_voies', 'position_par_rapport_au_sol', 'urbain', 'sens_de_circulation', 'nom_collaboratif_gauche', 'nom_collaboratif_droite'];
     const feats = await wfs(ctx, 'BDTOPO_V3:troncon_de_route', props, bbox, `cpx_numero='${numero.replace(/'/g, '')}'`);
     return feats.flatMap(troncon);
   },
 
   /** Routes carrossables d'une emprise (importance 1 à 5). @param {Ctx} ctx @param {[number, number, number, number]} bbox */
   async routes(ctx, bbox) {
-    const props = ['cpx_numero', 'importance', 'nature', 'largeur_de_chaussee', 'nombre_de_voies', 'position_par_rapport_au_sol', 'urbain'];
+    const props = ['cpx_numero', 'importance', 'nature', 'largeur_de_chaussee', 'nombre_de_voies', 'position_par_rapport_au_sol', 'urbain', 'sens_de_circulation', 'nom_collaboratif_gauche', 'nom_collaboratif_droite'];
     const feats = await wfs(ctx, 'BDTOPO_V3:troncon_de_route', props, bbox, "importance IN ('1','2','3','4','5')");
     return feats.flatMap(troncon);
   },
@@ -178,6 +180,16 @@ export default {
         anneaux: /** @type {number[][][]} */ (poly),
       }));
     });
+  },
+
+  /**
+   * Trait de côte (limite terre-mer aux plus hautes eaux) : lignes en Lambert-93. La mer elle-même
+   * n'est pas un objet de la BD TOPO : l'outil la referme sur l'emprise (geom2d.fermerSurBoite).
+   * @param {Ctx} ctx @param {[number, number, number, number]} bbox
+   */
+  async cote(ctx, bbox) {
+    const feats = await wfs(ctx, 'BDTOPO_V3:limite_terre_mer', ['niveau'], bbox, "niveau='Plus hautes eaux'");
+    return feats.flatMap((f) => lignes(f.geometry).map((c) => ({ id: String(f.id), points: /** @type {number[][]} */ (c) })));
   },
 
   /** Zones boisées et haies. @param {Ctx} ctx @param {[number, number, number, number]} bbox */

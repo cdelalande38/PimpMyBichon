@@ -3,7 +3,7 @@
 // fusion_<rôle>), des budgets, du raccord chaussée-terrain, de l'orientation des faces et du
 // déterminisme. La vraie carte est contrôlée aussi si ses données sont là.
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -140,13 +140,107 @@ describe('fabrication d’une carte', () => {
   });
 
   it('ne connaît aucun identifiant de carte : il fabrique les dossiers qui ont carte.json', () => {
-    expect(listeCartes(dir)).toEqual(['essai']);
+    expect(listeCartes(dir)).toEqual(['boucle', 'essai']);
   });
 
   it('valide un manifeste', () => {
     const m = { id: 'essai', name: 'Essai', kind: 'route', order: 1, route: 'route.json', credits: [{ source: 'IGN, BD TOPO', licence: 'Licence Ouverte 2.0', date: '2026-11' }] };
     expect(validerManifeste(m, 'essai')).toEqual([]);
     expect(validerManifeste({ ...m, credits: [] }, 'essai').length).toBe(1);
+  });
+});
+
+/** Boucle synthétique : cercle de 150 m de rayon, un tunnel sous une colline, un bâtiment au-dessus. */
+function boucleSynthetique(id: string) {
+  const d = join(dir, id);
+  mkdirSync(d, { recursive: true });
+  const relief = (x: number, z: number) => 12 * Math.exp(-((x / 40) ** 2) - ((z - 150) / 40) ** 2);
+  const carte = {
+    id,
+    couloir: { demiLargeur: 60, pasRelief: 10 },
+    fabrication: { pasRail: 2, lissagePlan: 3, lissageAltitude: 10, longueurTroncon: 250, hauteurMax: 120, pasLampadaires: 10 },
+    departs: [{ id: 'debut', label: 'Début', debut: true }, { id: 'etape', label: 'Étape', etape: 1 }],
+  };
+  const pts: number[] = [];
+  const rang: number[] = [];
+  for (let i = 0; i <= 96; i += 1) {
+    const t = ((i % 96) / 96) * Math.PI * 2;
+    pts.push(150 * Math.cos(t), 0, 150 * Math.sin(t));
+    // Tunnel sous la colline (autour du quart de tour) : tronçon de rang 1, puis retour au rang 2.
+    rang.push(i < 20 ? 0 : i <= 28 ? 1 : 2);
+  }
+  const suites: number[][] = [];
+  const dm: number[] = [];
+  for (let j = -24; j <= 24; j += 1) {
+    suites.push([j, -24, 49]);
+    for (let i = -24; i < 25; i += 1) dm.push(Math.round(relief(i * 10, j * 10) * 10));
+  }
+  const grille = (pas: number, n: number) => {
+    const i0 = -Math.floor(n / 2);
+    const vals: number[] = [];
+    for (let j = 0; j < n; j += 1) for (let i = 0; i < n; i += 1) vals.push(Math.round(relief((i0 + i) * pas, (i0 + j) * pas) * 10));
+    return { pas, i0, j0: i0, nx: n, nz: n, dm: vals };
+  };
+  const donnees = {
+    format: 'pmb-carte-donnees',
+    version: 1,
+    id,
+    repere: { altitude: 10 },
+    axe: {
+      points: pts,
+      rang,
+      boucle: true,
+      etapes: [
+        [150, 0],
+        [-150, 0],
+      ],
+      troncons: [
+        { largeur: 8, voies: 2, sol: 'sol', urbain: true, nom: 'BOULEVARD' },
+        { largeur: 8, voies: 2, sol: 'tunnel', urbain: true, nom: 'TUNNEL' },
+        { largeur: 8, voies: 2, sol: 'sol', urbain: true, nom: 'BOULEVARD' },
+      ],
+    },
+    voisines: [],
+    lacs: [{ nom: 'La mer', nature: 'Mer', y: -1, anneaux: [[-40, -40, 40, -40, 40, 40, -40, 40], [-10, -10, 10, -10, 10, 10, -10, 10]] }],
+    batiments: [{ h: 30, e: 9, z: null, n: 'Indifférenciée', u: 'Résidentiel', a: [-15, 135, 15, 135, 15, 165, -15, 165] }],
+    arbres: [],
+    couloir: { pas: 10, suites, dm },
+    lointain: { proche: grille(100, 12), loin: grille(300, 8) },
+  };
+  writeFileSync(join(d, 'carte.json'), JSON.stringify(carte));
+  writeFileSync(join(d, 'donnees.json'), JSON.stringify(donnees));
+}
+
+describe('boucle, tunnel et bâtiment au-dessus', () => {
+  boucleSynthetique('boucle');
+  const b = buildMap('boucle', { srcDir: dir });
+  const r = b.route as MapRoute;
+
+  it('referme le rail à pas constant et tient le contrat', () => {
+    expect(r.loop).toBe(true);
+    expect(validerRoute(r, 'boucle').join(' ; ')).toBe('');
+    expect(validerRoute(r, 'boucle')).toEqual([]);
+    expect(r.rail.slice(0, 3)).toEqual(r.rail.slice(-3));
+    expect(r.length).toBeCloseTo(2 * Math.PI * 150, -1);
+    expect(r.sections.some((s) => s.ground === 'tunnel')).toBe(true);
+    expect(r.starts.find((s) => s.id === 'etape')?.at).toBeCloseTo(r.length / 2, -1);
+  });
+
+  it('habille le tunnel (piédroits, voûte, réglettes) sans terrain sur la chaussée, et garde le bâtiment posé dessus', () => {
+    const noms = new Set(r.chunks.flatMap((c) => (json(b.fichiers.get(c.file) as Uint8Array).meshes as Array<{ name: string }>).map((m) => m.name)));
+    for (const n of ['fusion_ouvrage', 'fusion_fenetre', 'fusion_mur', 'fusion_eau']) expect(noms).toContain(n);
+    expect(b.mesures.terrainSurRoute).toBe(0);
+    expect(b.mesures.tunnels).toBe(1);
+    expect(b.mesures.batiments).toBe(1);
+    // Aucun mur de bâtiment ne descend sous la voûte : le point le plus bas des murs est au-dessus de la chaussée + 7 m.
+    const c = r.chunks.find((x) => {
+      const j = json(b.fichiers.get(x.file) as Uint8Array);
+      return (j.meshes as Array<{ name: string }>).some((m) => m.name === 'fusion_mur');
+    });
+    const j = json(b.fichiers.get(c?.file ?? '') as Uint8Array);
+    const mi = (j.meshes as Array<{ name: string }>).findIndex((m) => m.name === 'fusion_mur');
+    const acc = j.accessors[j.meshes[mi].primitives[0].attributes.POSITION];
+    expect(acc.min[1] + (c?.origin[1] ?? 0)).toBeGreaterThan(7);
   });
 });
 
@@ -164,8 +258,14 @@ describe.skipIf(listeCartes(reelle).every((id) => !existsSync(join(reelle, id, '
         expect(poids).toBeLessThanOrEqual(BUDGETS.octetsCarte);
         const tri = r.chunks.map((c) => c.triangles);
         for (let i = 0; i < tri.length; i += 1) expect(tri.slice(i, i + 5).reduce((s, v) => s + v, 0)).toBeLessThanOrEqual(BUDGETS.trianglesVisibles);
-        expect(mesures.ecartBord).toBeLessThan(0.01);
-        expect(mesures.terrainSurRoute).toBe(0);
+        // Route de campagne : raccord exact, aucun terrain rabattu. En ville et sur circuit, le
+        // parcours se frôle lui-même (rues parallèles, épingles, carrefours) : quelques sommets du
+        // bord sont rabattus sous la chaussée voisine, moins de 1 % du terrain.
+        const kind = JSON.parse(readFileSync(join(process.cwd(), 'public', 'assets', 'maps', id, 'map.json'), 'utf8')).kind;
+        if (kind === 'route') {
+          expect(mesures.ecartBord).toBeLessThan(0.01);
+          expect(mesures.terrainSurRoute).toBe(0);
+        } else expect(mesures.terrainSurRoute / mesures.sommetsTerrain, id).toBeLessThan(0.01);
       }
     },
     120_000,

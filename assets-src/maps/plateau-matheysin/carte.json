@@ -2,23 +2,35 @@
   "id": "plateau-matheysin",
   "nom": "Les lacs du plateau matheysin",
   "fournisseur": "ign",
-  "note": "Route des lacs (D1085), de Laffrey au centre de La Mure, le long du Grand Lac de Laffrey, du lac de Pétichet et du lac de Pierre-Châtel.",
+  "note": "Rampe de Laffrey (N85) depuis la sortie de Vizille, puis route des lacs (D1085) de Laffrey au centre de La Mure, le long du Grand Lac de Laffrey, du lac de Pétichet et du lac de Pierre-Châtel.",
   "emprise": {
     "lonMin": 5.72,
     "latMin": 44.88,
     "lonMax": 5.84,
-    "latMax": 45.05
+    "latMax": 45.09
   },
-  "route": "D1085",
-  "depart": {
-    "nom": "Laffrey",
-    "lon": 5.767149,
-    "lat": 45.03726
-  },
-  "arrivee": {
-    "nom": "La Mure",
-    "lon": 5.784115,
-    "lat": 44.907563
+  "itineraire": {
+    "routes": [
+      "N85",
+      "D1085"
+    ],
+    "etapes": [
+      {
+        "nom": "Vizille, bas de la rampe",
+        "lon": 5.765,
+        "lat": 45.079
+      },
+      {
+        "nom": "Laffrey",
+        "lon": 5.767149,
+        "lat": 45.03726
+      },
+      {
+        "nom": "La Mure",
+        "lon": 5.784115,
+        "lat": 44.907563
+      }
+    ]
   },
   "couloir": {
     "demiLargeur": 150,
@@ -38,12 +50,18 @@
     "pasRail": 2,
     "lissagePlan": 6,
     "lissageAltitude": 30,
-    "longueurTroncon": 400
+    "longueurTroncon": 400,
+    "pasProfil": 3
   },
   "departs": [
     {
       "id": "laffrey",
       "label": "Laffrey",
+      "etape": 1
+    },
+    {
+      "id": "rampe",
+      "label": "Bas de la rampe de Laffrey",
       "debut": true
     },
     {
@@ -64,33 +82,39 @@
   ],
   "captures": [
     {
+      "nom": "rampe",
+      "vue": "conducteur",
+      "s": 2500,
+      "regard": 0
+    },
+    {
       "nom": "grand-lac",
       "vue": "conducteur",
-      "s": 3500,
+      "s": 9080,
       "regard": 24
     },
     {
       "nom": "petichet",
       "vue": "conducteur",
-      "s": 5050,
+      "s": 10630,
       "regard": 24
     },
     {
       "nom": "pierre-chatel",
       "vue": "conducteur",
-      "s": 7650,
+      "s": 13230,
       "regard": 24
     },
     {
       "nom": "la-mure",
       "vue": "conducteur",
-      "s": 13500,
+      "s": 19080,
       "regard": 0
     },
     {
       "nom": "oiseau",
       "vue": "oiseau",
-      "s": 3300,
+      "s": 8880,
       "regard": -20
     }
   ]

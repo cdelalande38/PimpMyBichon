@@ -1,0 +1,12 @@
+{
+  "id": "monaco-ville",
+  "name": "Monaco, la ville",
+  "hint": "De Fontvieille au Larvotto, par le port et la place du Casino",
+  "kind": "ville",
+  "order": 2,
+  "route": "route.json",
+  "credits": [
+    { "source": "IGN, BD TOPO (routes, bâtiments, trait de côte, végétation)", "licence": "Licence Ouverte 2.0", "date": "2026-11" },
+    { "source": "IGN, service d’altimétrie de la Géoplateforme (relief)", "licence": "Licence Ouverte 2.0", "date": "2026-11" }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "monaco-circuit",
+  "name": "Monaco, le circuit",
+  "hint": "Le tour du port : la montée du Casino, les lacets, le tunnel",
+  "kind": "circuit",
+  "order": 3,
+  "route": "route.json",
+  "credits": [
+    { "source": "IGN, BD TOPO (routes, bâtiments, trait de côte, végétation)", "licence": "Licence Ouverte 2.0", "date": "2026-11" },
+    { "source": "IGN, service d’altimétrie de la Géoplateforme (relief)", "licence": "Licence Ouverte 2.0", "date": "2026-11" }
+  ]
+}

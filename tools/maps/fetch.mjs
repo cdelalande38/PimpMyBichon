@@ -15,8 +15,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { repereCarte } from './geo.mjs';
-import { boite, dansPolygone, hasard, indexPolyligne, simplifier } from './geom2d.mjs';
-import { chainer } from './trace.mjs';
+import { aire, boite, couperLigne, dansPolygone, fermerSurBoite, hasard, indexPolyligne, raccorder, simplifier } from './geom2d.mjs';
+import { chainerEtapes } from './trace.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const SRC = join(ROOT, 'assets-src', 'maps');
@@ -104,7 +104,8 @@ export async function fetchMap(id) {
     });
     if (manquants.length) {
       const z = await fournisseur.altitudes(ctx, manquants);
-      manquants.forEach((p, i) => (connus[cle(p)] = z[i] ?? 0));
+      // Hors des terres, le service rend −99 999 (pas de donnée) : niveau de la mer.
+      manquants.forEach((p, i) => (connus[cle(p)] = (z[i] ?? 0) < -1000 ? 0 : (z[i] ?? 0)));
       writeFileSync(fichierPoints, JSON.stringify(connus));
     }
     return pts.map((p) => connus[cle(p)] ?? 0);
@@ -113,20 +114,34 @@ export async function fetchMap(id) {
   /** @type {[number, number, number, number]} */
   const emprise = [e.lonMin, e.latMin, e.lonMax, e.latMax];
 
+  // L'itinéraire : une route numérotée de son départ à son arrivée (forme historique de carte.json :
+  // route, depart, arrivee), ou des étapes reliées par le plus court chemin, sur des routes
+  // numérotées données ou sur toutes les rues carrossables de l'emprise, éventuellement en boucle.
+  const it = carte.itineraire ?? { routes: [carte.route], etapes: [carte.depart, carte.arrivee] };
+
   // 1. Contrôle de la projection locale contre le service.
-  const verif = await fournisseur.verifierProjection(ctx, emprise, carte.route);
+  const verif = await fournisseur.verifierProjection(ctx, emprise, it.routes?.[0]);
   console.log(`projection : écart ${verif.ecart.toFixed(3)} m sur ${verif.points} points`);
   if (verif.ecart > 0.5) throw new Error(`projection : écart de ${verif.ecart.toFixed(2)} m, conversion fausse`);
 
-  // 2. La route numérotée, chaînée du départ à l'arrivée.
-  const aretes = await fournisseur.routeNumerotee(ctx, emprise, carte.route);
-  const dep = proj.forward(carte.depart.lon, carte.depart.lat);
-  const arr2 = proj.forward(carte.arrivee.lon, carte.arrivee.lat);
-  const ch = chainer(aretes, dep, arr2);
+  // 2. Le réseau, puis le parcours chaîné d'étape en étape.
+  /** @type {any[]} */
+  let aretes = [];
+  if (it.routes?.length) for (const n of it.routes) aretes.push(...(await fournisseur.routeNumerotee(ctx, emprise, n)));
+  else aretes = await fournisseur.routes(ctx, emprise);
+  /** @type {Array<{ p: number[], par?: string[] }>} */
+  const etapes = it.etapes.map((/** @type {any} */ e, /** @type {number} */ k) => ({ p: pointEtape(e, aretes, proj, k), par: e.par }));
+  const ch = chainerEtapes(aretes, etapes, { boucle: Boolean(it.boucle), sensIgnore: Boolean(it.sensIgnore), penalite: it.penalite });
+  if (ch.demiTours.length) console.log(`  attention : demi-tours à ${ch.demiTours.join(', ')} m (étape mal placée ?)`);
+  // Altitude inconnue (−1 000 dans la BD TOPO, quais et bretelles) : interpolée le long du parcours
+  // entre les sommets connus les plus proches.
+  const inconnus = altitudesManquantes(ch.points);
+  if (inconnus) console.log(`  ${inconnus} sommets sans altitude, interpolés`);
   const p0 = /** @type {number[]} */ (ch.points[0]);
   const rep = repereCarte(proj, [p0[0] ?? 0, p0[1] ?? 0, p0[2] ?? 0]);
   const axe = ch.points.map((p) => rep.versCarte(p[0] ?? 0, p[1] ?? 0, p[2] ?? 0));
-  console.log(`${carte.route} : ${aretes.length} tronçons dans l'emprise, parcours de ${(ch.longueur / 1000).toFixed(2)} km en ${ch.troncons.length} tronçons`);
+  console.log(`${it.routes?.join(' + ') || 'rues de l’emprise'} : ${aretes.length} tronçons dans l'emprise, parcours de ${(ch.longueur / 1000).toFixed(2)} km en ${ch.troncons.length} tronçons${it.boucle ? ', en boucle' : ''}`);
+  console.log(`  ${resumeRues(ch.troncons)}`);
   const index = indexPolyligne(axe, { ix: 0, iz: 2, cellule: 100 });
   const dl = carte.couloir.demiLargeur;
   const pas = carte.couloir.pasRelief;
@@ -240,7 +255,8 @@ export async function fetchMap(id) {
   }
 
   // 7. Arbres candidats : grille de 7 m tirée au hasard (déterministe) dans la végétation du couloir,
-  //    et un arbre tous les 6 m le long des haies. Code : 0 feuillus, 1 conifères, 2 mixte et autres.
+  //    et un arbre tous les 4 à 9 m le long des haies (build.mjs les déplace et les éclaircit).
+  //    Code : 0 feuillus, 1 conifères, 2 mixte et autres.
   const zones = uniques(zonesBrutes, (z) => `${z.id}|${z.anneaux[0]?.length}`)
     .filter((z) => !/vigne/i.test(z.nature))
     .map((z) => {
@@ -265,12 +281,15 @@ export async function fetchMap(id) {
       const a = /** @type {number[]} */ (pts[i - 1]);
       const b = /** @type {number[]} */ (pts[i]);
       const L = Math.hypot((b[0] ?? 0) - (a[0] ?? 0), (b[1] ?? 0) - (a[1] ?? 0));
-      for (let t = reste; t < L; t += 6) {
+      // Espacement tiré entre 4 et 9 m : une haie n'est pas une rangée d'alignement.
+      let t = reste;
+      while (t < L) {
         const x = (a[0] ?? 0) + (((b[0] ?? 0) - (a[0] ?? 0)) * t) / L;
         const z = (a[1] ?? 0) + (((b[1] ?? 0) - (a[1] ?? 0)) * t) / L;
         if (index.proche(x, z, dl).d <= dl) arbres.push(arr(x, 1), arr(z, 1), 0);
-        reste = t + 6 - L;
+        t += 4 + 5 * hasard(Math.round(x * 10), Math.round(z * 10));
       }
+      reste = t - L;
     }
   }
 
@@ -351,6 +370,29 @@ export async function fetchMap(id) {
     vals.sort((a, b) => a - b);
     l.y = arr(vals[Math.floor(vals.length / 2)] ?? 0, 2);
   }
+  // 10. La mer, si la carte en a une : trait de côte raccordé, coupé à l'emprise et refermé par le
+  //     large (des deux anneaux possibles, celui où le parcours ne passe pas). Altitude 0.
+  if (carte.mer) {
+    const lignesCote = (await fournisseur.cote(ctx, emprise)).map((/** @type {{ points: number[][] }} */ l) => l.points.map(plan));
+    const coins = [
+      [emprise[0], emprise[1]],
+      [emprise[2], emprise[1]],
+      [emprise[2], emprise[3]],
+      [emprise[0], emprise[3]],
+    ].map(([lon, lat]) => plan(proj.forward(lon ?? 0, lat ?? 0)));
+    const xs = coins.map((c) => c[0] ?? 0);
+    const zs = coins.map((c) => c[1] ?? 0);
+    // Rectangle inscrit dans l'emprise (le repère de la carte est tourné de la convergence des méridiens).
+    /** @type {[number, number, number, number]} */
+    const r = [Math.max(xs[0] ?? 0, xs[3] ?? 0), Math.max(zs[2] ?? 0, zs[3] ?? 0), Math.min(xs[1] ?? 0, xs[2] ?? 0), Math.min(zs[0] ?? 0, zs[1] ?? 0)];
+    const cote = couperLigne(raccorder(lignesCote, 1)[0] ?? [], r);
+    if (cote.length < 2) throw new Error('mer : aucun trait de côte dans l’emprise');
+    const dedans = (/** @type {number[][]} */ an) => axe.filter((p, i) => i % 10 === 0 && dansPolygone(p[0] ?? 0, p[2] ?? 0, [an])).length;
+    const [a1, a2] = fermerSurBoite(cote, r);
+    const mer = simplifier([...(dedans(a1) <= dedans(a2) ? a1 : a2)], 1);
+    lacs.push({ nom: 'La mer', nature: 'Mer', y: arr(0 - (p0[2] ?? 0), 2), anneaux: [mer], b: boite([mer]) });
+    console.log(`mer : trait de côte de ${cote.length} sommets, ${(Math.abs(aire(mer)) / 1e6).toFixed(2)} km² dans l’emprise`);
+  }
   const lacsSortie = lacs.map((l) => ({ nom: l.nom, nature: l.nature, y: l.y, anneaux: l.anneaux.map((a) => a.flat()) }));
 
   const date = new Date().toISOString().slice(0, 7);
@@ -371,7 +413,12 @@ export async function fetchMap(id) {
     axe: {
       points: axe.flatMap((p) => [arr(p[0], 2), arr(p[1], 2), arr(p[2], 2)]),
       rang: ch.rang,
-      troncons: ch.troncons.map((t) => ({ largeur: t.largeur, voies: t.voies, sol: t.sol, urbain: t.urbain, nature: t.nature, importance: t.importance })),
+      troncons: ch.troncons.map((t) => ({ largeur: t.largeur, voies: t.voies, sol: t.sol, urbain: t.urbain, nature: t.nature, importance: t.importance, nom: t.nom || undefined })),
+      etapes: etapes.map((e) => {
+        const c = rep.versCarte(e.p[0] ?? 0, e.p[1] ?? 0, 0);
+        return [arr(c[0], 1), arr(c[2], 1)];
+      }),
+      boucle: Boolean(it.boucle),
     },
     voisines,
     lacs: lacsSortie,
@@ -388,6 +435,76 @@ export async function fetchMap(id) {
       `${arbres.length / 3} arbres candidats · ${(texte.length / 1e6).toFixed(2)} Mo · réseau ${ctx.stats.reseau} requêtes, cache ${ctx.stats.cache}`,
   );
   console.log(`  → ${relative(ROOT, out)}`);
+}
+
+/**
+ * Position d'une étape, en coordonnées projetées : longitude et latitude, ou carrefour de deux rues
+ * nommées (extrémité commune de deux tronçons, la plus proche de `pres` s'il est donné).
+ * @param {any} e @param {any[]} aretes @param {{ forward: (lon: number, lat: number) => [number, number] }} proj @param {number} k
+ * @returns {number[]}
+ */
+export function pointEtape(e, aretes, proj, k) {
+  if (typeof e.lon === 'number' && typeof e.lat === 'number') return proj.forward(e.lon, e.lat);
+  const [A, B] = e.carrefour ?? [];
+  if (!A || !B) throw new Error(`étape ${k} : lon et lat, ou carrefour de deux rues, attendus`);
+  const bouts = (/** @type {string} */ n) => aretes.filter((a) => a.nom === n).flatMap((a) => [a.points[0], a.points[a.points.length - 1]]);
+  const ba = bouts(A);
+  const bb = bouts(B);
+  if (!ba.length || !bb.length) throw new Error(`étape ${k} : rue « ${!ba.length ? A : B} » absente des données`);
+  const ref = e.pres ? proj.forward(e.pres.lon, e.pres.lat) : null;
+  /** @type {number[] | null} */
+  let best = null;
+  let bd = Infinity;
+  for (const p of ba)
+    for (const q of bb) {
+      if (Math.hypot(p[0] - q[0], p[1] - q[1]) > 1) continue;
+      const d = ref ? Math.hypot(p[0] - ref[0], p[1] - ref[1]) : 0;
+      if (d < bd) [bd, best] = [d, p];
+    }
+  if (!best) throw new Error(`étape ${k} : « ${A} » et « ${B} » ne se croisent pas`);
+  return best;
+}
+
+/**
+ * Remplace les altitudes inconnues (moins de −900 m) d'une polyligne [x, y, z] par l'interpolation
+ * linéaire, à la distance plane, entre les sommets connus voisins (ou le plus proche au bout).
+ * Modifie la polyligne ; rend le nombre de sommets corrigés.
+ * @param {number[][]} pts
+ */
+export function altitudesManquantes(pts) {
+  const ok = (/** @type {number[]} */ p) => (p[2] ?? -1000) > -900;
+  const cum = [0];
+  for (let i = 1; i < pts.length; i += 1) cum.push((cum[i - 1] ?? 0) + Math.hypot((pts[i]?.[0] ?? 0) - (pts[i - 1]?.[0] ?? 0), (pts[i]?.[1] ?? 0) - (pts[i - 1]?.[1] ?? 0)));
+  let n = 0;
+  for (let i = 0; i < pts.length; i += 1) {
+    const p = /** @type {number[]} */ (pts[i]);
+    if (ok(p)) continue;
+    let a = i - 1;
+    while (a >= 0 && !ok(/** @type {number[]} */ (pts[a]))) a -= 1;
+    let b = i + 1;
+    while (b < pts.length && !ok(/** @type {number[]} */ (pts[b]))) b += 1;
+    const za = a >= 0 ? (pts[a]?.[2] ?? 0) : null;
+    const zb = b < pts.length ? (pts[b]?.[2] ?? 0) : null;
+    const z = za !== null && zb !== null ? za + (zb - za) * (((cum[i] ?? 0) - (cum[a] ?? 0)) / Math.max(1e-6, (cum[b] ?? 0) - (cum[a] ?? 0))) : (za ?? zb ?? 0);
+    pts[i] = [p[0] ?? 0, p[1] ?? 0, z];
+    n += 1;
+  }
+  return n;
+}
+
+/** Rues traversées, dans l'ordre, avec leur longueur : contrôle du parcours. @param {Array<{ nom?: string, numero?: string, points: number[][], sol?: string }>} troncons */
+function resumeRues(troncons) {
+  /** @type {Array<[string, number]>} */
+  const out = [];
+  for (const t of troncons) {
+    let L = 0;
+    for (let i = 1; i < t.points.length; i += 1) L += Math.hypot((t.points[i]?.[0] ?? 0) - (t.points[i - 1]?.[0] ?? 0), (t.points[i]?.[1] ?? 0) - (t.points[i - 1]?.[1] ?? 0));
+    const nom = `${t.nom || t.numero || '?'}${t.sol && t.sol !== 'sol' ? ` (${t.sol})` : ''}`;
+    const last = out[out.length - 1];
+    if (last && last[0] === nom) last[1] += L;
+    else out.push([nom, L]);
+  }
+  return out.map(([n, L]) => `${n} ${Math.round(L)} m`).join(' → ');
 }
 
 async function main() {

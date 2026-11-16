@@ -21,13 +21,16 @@ export function longueurPlane(pts) {
  * nœud le plus proche d'`arrivee`. Rend les tronçons dans l'ordre, chacun orienté dans le sens du
  * parcours, et la polyligne continue (sommets communs non répétés) avec, par sommet, le rang du
  * tronçon qui le porte (celui qui commence au sommet).
+ * Options : `cout(e)` multiplie la longueur de l'arête e (préférer certaines rues) ; `sensIgnore`
+ * parcourt les sens uniques dans les deux sens (circuit sur routes fermées).
  * @template {Arete} T
  * @param {T[]} aretes
  * @param {number[]} depart x, y
  * @param {number[]} arrivee x, y
+ * @param {{ cout?: (e: number) => number, sensIgnore?: boolean }} [o]
  * @returns {{ troncons: T[], points: number[][], rang: number[], longueur: number }}
  */
-export function chainer(aretes, depart, arrivee) {
+export function chainer(aretes, depart, arrivee, o = {}) {
   /** @type {Map<string, { p: number[], voisins: Array<{ vers: string, e: number }> }>} */
   const noeuds = new Map();
   const longueurs = aretes.map((a) => longueurPlane(a.points));
@@ -39,8 +42,8 @@ export function chainer(aretes, depart, arrivee) {
     if (!noeuds.has(k0)) noeuds.set(k0, { p: p0, voisins: [] });
     if (!noeuds.has(k1)) noeuds.set(k1, { p: p1, voisins: [] });
     // Sens unique respecté (rond-points, chaussées séparées) : « direct » va du premier au dernier sommet.
-    if (a.sens !== 'inverse') noeuds.get(k0)?.voisins.push({ vers: k1, e });
-    if (a.sens !== 'direct') noeuds.get(k1)?.voisins.push({ vers: k0, e });
+    if (o.sensIgnore || a.sens !== 'inverse') noeuds.get(k0)?.voisins.push({ vers: k1, e });
+    if (o.sensIgnore || a.sens !== 'direct') noeuds.get(k1)?.voisins.push({ vers: k0, e });
   });
   /** @param {number[]} q */
   const plusProche = (q) => {
@@ -69,7 +72,7 @@ export function chainer(aretes, depart, arrivee) {
     if (!u || u === b) break;
     vus.add(u);
     for (const { vers, e } of noeuds.get(u)?.voisins ?? []) {
-      const d = du + (longueurs[e] ?? 0);
+      const d = du + (longueurs[e] ?? 0) * (o.cout ? o.cout(e) : 1);
       if (d < (dist.get(vers) ?? Infinity)) {
         dist.set(vers, d);
         prec.set(vers, { de: u, e });
@@ -101,7 +104,59 @@ export function chainer(aretes, depart, arrivee) {
       rang.push(i === pts.length - 1 && j < chemin.length - 1 ? j + 1 : j);
     });
   });
-  return { troncons, points, rang, longueur: dist.get(b) ?? 0 };
+  return { troncons, points, rang, longueur: longueurPlane(points) };
+}
+
+/**
+ * Itinéraire par étapes : plus court chemin d'une étape à la suivante (`chainer`), bouts mis bout à
+ * bout ; en boucle, la dernière étape rejoint la première et le dernier point répète le premier.
+ * Chaque étape peut préférer des rues (`par` : noms d'arêtes, les autres coûtent `penalite` fois
+ * leur longueur). Rend la même forme que `chainer`, plus les demi-tours (cap qui se retourne de plus
+ * de 150° d'un sommet au suivant, en mètres depuis le départ) pour contrôle.
+ * @template {Arete & { nom?: string }} T
+ * @param {T[]} aretes
+ * @param {Array<{ p: number[], par?: string[] }>} etapes points x, y ; `par` vaut pour le trajet qui arrive à l'étape
+ * @param {{ boucle?: boolean, sensIgnore?: boolean, penalite?: number }} [o]
+ */
+export function chainerEtapes(aretes, etapes, o = {}) {
+  const suite = o.boucle ? [...etapes, /** @type {{ p: number[], par?: string[] }} */ (etapes[0])] : etapes;
+  /** @type {T[]} */
+  const troncons = [];
+  /** @type {number[][]} */
+  const points = [];
+  /** @type {number[]} */
+  const rang = [];
+  for (let k = 1; k < suite.length; k += 1) {
+    const a = /** @type {{ p: number[] }} */ (suite[k - 1]);
+    const b = /** @type {{ p: number[], par?: string[] }} */ (suite[k]);
+    const par = b.par && b.par.length ? new Set(b.par) : null;
+    const pen = o.penalite ?? 4;
+    const ch = chainer(aretes, a.p, b.p, { sensIgnore: o.sensIgnore, cout: par ? (e) => (par.has(String(aretes[e]?.nom ?? '')) ? 1 : pen) : undefined });
+    const base = troncons.length;
+    troncons.push(...ch.troncons);
+    ch.points.forEach((p, i) => {
+      if (i === 0 && points.length > 0) return;
+      points.push(p);
+      rang.push(base + (ch.rang[i] ?? 0));
+    });
+  }
+  // Demi-tours : sommets où la route repart en arrière (étape mal placée sur une impasse).
+  /** @type {number[]} */
+  const demiTours = [];
+  let s = 0;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const p0 = /** @type {number[]} */ (points[i - 1]);
+    const p1 = /** @type {number[]} */ (points[i]);
+    const p2 = /** @type {number[]} */ (points[i + 1]);
+    const ux = (p1[0] ?? 0) - (p0[0] ?? 0);
+    const uz = (p1[1] ?? 0) - (p0[1] ?? 0);
+    const vx = (p2[0] ?? 0) - (p1[0] ?? 0);
+    const vz = (p2[1] ?? 0) - (p1[1] ?? 0);
+    s += Math.hypot(ux, uz);
+    const L = Math.hypot(ux, uz) * Math.hypot(vx, vz);
+    if (L > 0 && (ux * vx + uz * vz) / L < Math.cos((150 * Math.PI) / 180)) demiTours.push(Math.round(s));
+  }
+  return { troncons, points, rang, longueur: longueurPlane(points), demiTours };
 }
 
 /**
@@ -135,14 +190,17 @@ export function densifier(pts, etiquettes, pas = 1) {
 }
 
 /**
- * Lissage gaussien d'une série (bords répétés), écart type en nombre d'échantillons.
- * @param {number[]} v @param {number} sigma
+ * Lissage gaussien d'une série (bords répétés, ou périodique si `boucle`), écart type en nombre
+ * d'échantillons.
+ * @param {number[]} v @param {number} sigma @param {boolean} [boucle]
  */
-export function lisserSerie(v, sigma) {
+export function lisserSerie(v, sigma, boucle = false) {
   if (sigma <= 0) return [...v];
   const r = Math.ceil(sigma * 3);
   const w = Array.from({ length: 2 * r + 1 }, (_, k) => Math.exp(-((k - r) ** 2) / (2 * sigma * sigma)));
   const n = v.length;
+  // Boucle : série périodique dont le dernier point répète le premier (période n − 1).
+  const per = n - 1;
   return v.map((_, i) => {
     let s = 0;
     let ws = 0;
@@ -150,7 +208,8 @@ export function lisserSerie(v, sigma) {
       // Bords : réflexion impaire (2·v0 − v) pour garder les extrémités en place.
       const j = i + k;
       let x;
-      if (j < 0) x = 2 * (v[0] ?? 0) - (v[-j] ?? v[0] ?? 0);
+      if (boucle && per > 0) x = v[((j % per) + per) % per] ?? 0;
+      else if (j < 0) x = 2 * (v[0] ?? 0) - (v[-j] ?? v[0] ?? 0);
       else if (j >= n) x = 2 * (v[n - 1] ?? 0) - (v[2 * (n - 1) - j] ?? v[n - 1] ?? 0);
       else x = v[j] ?? 0;
       const wk = w[k + r] ?? 0;
@@ -193,6 +252,78 @@ export function reechantillonner(pts, pas) {
     source.push(j - 1 + u);
   }
   return { points: out, source, longueur: (n - 1) * pas };
+}
+
+/**
+ * Rééchantillonne une polyligne 3D à corde constante : chaque point est exactement à `pas` mètres
+ * (distance 3D) du précédent, même dans une épingle serrée où l'abscisse curviligne et la corde
+ * divergent. Rend les points, l'indice fractionnaire de chacun dans la polyligne d'entrée, et le pas.
+ * En boucle (le dernier point de l'entrée répète le premier), le pas est ajusté (à 1 % près au
+ * plus) pour que le dernier point retombe exactement sur le premier.
+ * @param {number[][]} pts @param {number} pas @param {{ boucle?: boolean }} [o]
+ */
+export function reechantillonnerCorde(pts, pas, o = {}) {
+  /** @param {number} h @param {number} [nMax] */
+  const marche = (h, nMax = Infinity) => {
+    const p0 = /** @type {number[]} */ (pts[0]);
+    /** @type {number[][]} */
+    const out = [[p0[0] ?? 0, p0[1] ?? 0, p0[2] ?? 0]];
+    /** @type {number[]} */
+    const source = [0];
+    let j = 0;
+    let t0 = 0;
+    while (out.length - 1 < nMax) {
+      const c = /** @type {number[]} */ (out[out.length - 1]);
+      let trouve = false;
+      for (; j < pts.length - 1; j += 1, t0 = 0) {
+        const A = /** @type {number[]} */ (pts[j]);
+        const B = /** @type {number[]} */ (pts[j + 1]);
+        const D = [0, 1, 2].map((k) => (B[k] ?? 0) - (A[k] ?? 0));
+        const E = [0, 1, 2].map((k) => (A[k] ?? 0) - (c[k] ?? 0));
+        const a = (D[0] ?? 0) ** 2 + (D[1] ?? 0) ** 2 + (D[2] ?? 0) ** 2;
+        const b = 2 * ((E[0] ?? 0) * (D[0] ?? 0) + (E[1] ?? 0) * (D[1] ?? 0) + (E[2] ?? 0) * (D[2] ?? 0));
+        const cc = (E[0] ?? 0) ** 2 + (E[1] ?? 0) ** 2 + (E[2] ?? 0) ** 2 - h * h;
+        if (a <= 0) continue;
+        const disc = b * b - 4 * a * cc;
+        if (disc < 0) continue;
+        const t = (-b + Math.sqrt(disc)) / (2 * a);
+        if (t >= t0 - 1e-12 && t <= 1) {
+          out.push([0, 1, 2].map((k) => (A[k] ?? 0) + (D[k] ?? 0) * t));
+          source.push(j + t);
+          t0 = t;
+          trouve = true;
+          break;
+        }
+      }
+      if (!trouve) break;
+    }
+    return { points: out, source };
+  };
+  if (!o.boucle) return { ...marche(pas), pas };
+  // Boucle : n cordes, n = arrondi de la longueur sur le pas ; dichotomie sur le pas pour que la
+  // n-ième corde finisse au bout de l'entrée.
+  let L = 0;
+  for (let i = 1; i < pts.length; i += 1) L += Math.hypot(...[0, 1, 2].map((k) => (pts[i]?.[k] ?? 0) - (pts[i - 1]?.[k] ?? 0)));
+  const n = Math.max(3, Math.round(L / pas));
+  const fin = pts.length - 1;
+  let lo = pas * 0.97;
+  let hi = (pas * L) / (n * pas) * 1.03;
+  for (let it = 0; it < 60; it += 1) {
+    const h = (lo + hi) / 2;
+    const m = marche(h, n);
+    const pos = m.points.length - 1 < n ? Infinity : (m.source[n] ?? 0);
+    if (pos >= fin - 1e-9) hi = h;
+    else lo = h;
+  }
+  const r = marche(hi, n);
+  // La dernière corde se termine sur le premier point (à la tolérance de la dichotomie près).
+  const p0 = /** @type {number[]} */ (pts[0]);
+  if (r.points.length - 1 === n) r.points[n] = [p0[0] ?? 0, p0[1] ?? 0, p0[2] ?? 0];
+  else {
+    r.points.push([p0[0] ?? 0, p0[1] ?? 0, p0[2] ?? 0]);
+    r.source.push(fin);
+  }
+  return { ...r, pas: hi };
 }
 
 /**

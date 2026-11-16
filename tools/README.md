@@ -345,8 +345,23 @@ Hors des trois contrôles ci-dessus.
 ## Cartes de sortie (`tools/maps/`)
 
 Une carte = un dossier `assets-src/maps/<id>/` avec sa définition écrite à la main, `carte.json`
-(fournisseur de données, emprise, route numérotée, départ et arrivée, couloir, pas du relief,
-départs proposés, points de vue des captures). Aucun identifiant de carte dans le code.
+(fournisseur de données, emprise, itinéraire, couloir, pas du relief, départs proposés, points de
+vue des captures). Aucun identifiant de carte dans le code.
+
+- **Itinéraire** : `route`, `depart` et `arrivee` (une route numérotée de bout en bout), ou
+  `itineraire` : des `etapes` (longitude et latitude, ou `carrefour` de deux rues nommées, avec
+  `par` : les rues préférées pour y arriver), reliées par le plus court chemin sur les `routes`
+  numérotées données ou, sans elles, sur toutes les rues carrossables de l'emprise ; `boucle` pour
+  un circuit refermé, `sensIgnore` pour une route fermée (sens uniques ignorés), `penalite` (4) :
+  coût des rues non préférées. Le relevé de `maps:fetch` liste les rues traversées et les demi-tours.
+- **Mer** : `"mer": true` referme le trait de côte (limite terre-mer) sur l'emprise, du côté où le
+  parcours ne passe pas ; altitude 0.
+- **Fabrication** : `pasRail`, `pasProfil` (un profil en travers tous les N points, 2 par défaut),
+  `lissagePlan`, `lissageAltitude`, `longueurTroncon`, `hauteurMax` des bâtiments (40 m par défaut),
+  `pasLampadaires` (15 m), `porteeEau` (1 200 m : l'eau visible depuis un tronçon y est entière),
+  `glissieres` (`"partout"` : un circuit en ville).
+- **Départs** : `debut`, `avantFin` (mètres avant la fin), `pres` (plan d'eau nommé), `etape` (rang
+  d'une étape de l'itinéraire) ou `rue` (première entrée dans la rue), plus `decalage` en mètres.
 
 - `npm run maps:fetch -- <id>` (`tools/maps/fetch.mjs`) : interroge le fournisseur déclaré
   (`tools/maps/fournisseurs/<nom>.mjs` ; aujourd'hui `ign` : WFS de la BD TOPO et calcul
@@ -361,5 +376,6 @@ départs proposés, points de vue des captures). Aucun identifiant de carte dans
   `fusion_<rôle>`, budgets du § 8 (25 000 triangles par tronçon, 150 000 pour cinq tronçons
   consécutifs, 12 Mo par carte, `donnees.json` de 3 Mo au plus) et crédits.
 - `node tools/maps/plan.mjs <id>` : plan vu de dessus et profil en long dans `captures/cartes/<id>/`.
-- `node tools/captures/carte.mjs <id>` : vues de la page `src/dev/carte/` (points de vue de
-  `carte.json`, ou `--vues nom=vue:s:regard,…`).
+- `node tools/captures/carte.mjs <id>` : vues de la page `src/dev/carte/` en 390 × 844 (points de
+  vue de `carte.json`, ou `--vues nom=vue:s:regard[:hauteur],…` ; `--fenetre 1,2` ne charge que
+  les tronçons que la sortie charge ; `--taille LxH`).

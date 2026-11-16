@@ -4,9 +4,10 @@
 // de conducteur le long du parcours et une vue d'oiseau. Lance le serveur de développement sur le
 // port demandé (4871 par défaut ; ou réutilise celui qui y tourne déjà), ouvre la page dans le
 // Chromium de Playwright (ANGLE sur OpenGL ES ; --logiciel : rendu logiciel SwiftShader), écrit une
-// image par vue (1000 × 640) et planche.png dans captures/cartes/<id>/, puis arrête le serveur.
+// image par vue (390 × 844 par défaut, --taille pour une autre) et planche.png dans captures/cartes/<id>/, puis arrête le serveur.
 //
-//   node tools/captures/carte.mjs <id> [--port <n>] [--out <dossier>] [--logiciel] [--vues nom=vue:s:regard,…]
+//   node tools/captures/carte.mjs <id> [--port <n>] [--out <dossier>] [--logiciel] [--taille <L>x<H>] [--fenetre <a>,<b>]
+//        [--vues nom=vue:s:regard[:hauteur],…]
 //
 // La carte doit être fabriquée : npm run maps:build d'abord.
 
@@ -21,9 +22,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PAGE = 'src/dev/carte/index.html';
 const GPU_ARGS = ['--use-angle=gl-egl', '--ignore-gpu-blocklist', '--enable-gpu'];
 const SOFT_ARGS = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
-const W = 1000;
-const H = 640;
-const USAGE = 'usage : node tools/captures/carte.mjs <id> [--port <n>] [--out <dossier>] [--logiciel] [--vues nom=vue:s:regard,…]';
+const USAGE =
+  'usage : node tools/captures/carte.mjs <id> [--port <n>] [--out <dossier>] [--logiciel] [--taille <L>x<H>] [--fenetre <a>,<b>] [--vues nom=vue:s:regard,…]';
 
 /** @param {string[]} argv */
 function parseArgs(argv) {
@@ -32,14 +32,19 @@ function parseArgs(argv) {
   let out = '';
   let soft = false;
   let vues = '';
+  // Gabarit de référence du cahier des charges : téléphone en portrait.
+  let taille = [390, 844];
+  let fenetre = '';
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i] ?? '';
-    const valued = /^--(port|out|vues)(?:=(.*))?$/.exec(arg);
+    const valued = /^--(port|out|vues|taille|fenetre)(?:=(.*))?$/.exec(arg);
     if (valued) {
       const value = valued[2] ?? argv[(i += 1)];
       if (!value) throw new Error(`option --${valued[1]} sans valeur\n${USAGE}`);
       if (valued[1] === 'port') port = Number(value);
       else if (valued[1] === 'vues') vues = value;
+      else if (valued[1] === 'taille') taille = value.split('x').map(Number);
+      else if (valued[1] === 'fenetre') fenetre = value;
       else out = value;
     } else if (arg === '--logiciel') soft = true;
     else if (arg.startsWith('--')) throw new Error(`option « ${arg} » inconnue\n${USAGE}`);
@@ -47,7 +52,9 @@ function parseArgs(argv) {
   }
   if (!/^[a-z0-9-]+$/.test(id)) throw new Error(USAGE);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error(`port invalide\n${USAGE}`);
-  return { id, port, soft, vues, out: out || join('captures', 'cartes', id) };
+  const [W = 390, H = 844] = taille;
+  if (!(W >= 100 && H >= 100)) throw new Error(`taille invalide\n${USAGE}`);
+  return { id, port, soft, vues, W, H, fenetre, out: out || join('captures', 'cartes', id) };
 }
 
 /** @param {string} url */
@@ -76,15 +83,15 @@ function startServer(port) {
 }
 
 async function main() {
-  const { id, port, soft, out, vues: vuesCli } = parseArgs(process.argv.slice(2));
+  const { id, port, soft, out, vues: vuesCli, W, H, fenetre } = parseArgs(process.argv.slice(2));
   if (!existsSync(join(ROOT, 'public', 'assets', 'maps', id, 'route.json'))) throw new Error(`public/assets/maps/${id}/route.json absent : npm run maps:build -- ${id}`);
   const carte = JSON.parse(readFileSync(join(ROOT, 'assets-src', 'maps', id, 'carte.json'), 'utf8'));
-  /** @type {Array<{ nom: string, vue: string, s: number, regard?: number }>} */
+  /** @type {Array<{ nom: string, vue: string, s: number, regard?: number, hauteur?: number }>} */
   const vues = vuesCli
     ? vuesCli.split(',').map((v) => {
         const [nom = 'vue', reste = ''] = v.split('=');
-        const [vue = 'conducteur', s = '0', regard = '0'] = reste.split(':');
-        return { nom, vue, s: Number(s), regard: Number(regard) };
+        const [vue = 'conducteur', s = '0', regard = '0', hauteur = '0'] = reste.split(':');
+        return { nom, vue, s: Number(s), regard: Number(regard), ...(Number(hauteur) > 0 ? { hauteur: Number(hauteur) } : {}) };
       })
     : carte.captures ?? [
     { nom: 'depart', vue: 'conducteur', s: 200 },
@@ -123,7 +130,8 @@ async function main() {
     });
     page.on('pageerror', (e) => errors.push(e.message));
     const v0 = /** @type {{ nom: string, vue: string, s: number, regard?: number }} */ (vues[0]);
-    await page.goto(`${base}${PAGE}?id=${id}&vue=${v0.vue}&s=${v0.s}&regard=${v0.regard ?? 0}`);
+    // La fenêtre de chargement de la sortie s'applique à chaque vue (paramètre de la page).
+    await page.goto(`${base}${PAGE}?id=${id}&vue=${v0.vue}&s=${v0.s}&regard=${v0.regard ?? 0}${fenetre ? `&fenetre=${fenetre}` : ''}`);
     await page.waitForSelector('body[data-carte-pret], body[data-carte-erreur]', { timeout: 120_000 });
     const erreur = await page.getAttribute('body', 'data-carte-erreur');
     if (erreur) throw new Error(`la page signale une erreur : ${erreur}`);
