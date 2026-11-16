@@ -1292,3 +1292,31 @@ button {
   text-transform: uppercase;
   color: var(--ambre);
 }
+
+/* Sections et entrées : l'icône au-dessus du mot (src/data/dockMenu.ts). Elle n'élargit pas le bouton
+   (plus étroite que le mot) et tient dans la hauteur de la rangée : le menu ne bouge pas. */
+.dock .dock-sections button,
+.dock .dock-entries button {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  line-height: 1.2;
+}
+
+.dock .dock-sections .icon {
+  width: 2rem;
+  height: 2rem;
+  stroke-width: 1.6;
+}
+
+.dock .dock-entries .icon {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+/* Onglet courant : son icône s'allume, halo bleu néon, au-dessus du trait bleu. */
+.dock .tabs button[aria-current='true'] .icon {
+  filter: drop-shadow(0 0 3px rgba(59, 123, 255, 0.9));
+}

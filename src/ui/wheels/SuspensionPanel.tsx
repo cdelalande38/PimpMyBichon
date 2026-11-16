@@ -1,12 +1,14 @@
 // Entrée « Suspension » du dock (Custom) : l'assiette du véhicule à l'écran. Trois préréglages
 // (origine, rabaissée, posée au sol) et un curseur fin, en part de la descente possible : la place
 // au-dessus des roues (passage de roue, garde-boue) et sous la caisse, déclarée par le manifeste et
-// réduite par de plus grandes roues (src/data/wheels.ts). Les roues restent au sol, la caisse descend.
+// réduite par de plus grandes roues (src/data/wheels.ts). Les roues restent au sol, la caisse descend :
+// chaque cran le montre en petit (src/ui/pictos/), tiré de sa valeur.
 
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { RIDE_PRESETS, resolveWheels, WHEEL_TUNE } from '../../data/wheels.ts';
 import { useBuilds } from '../../state/builds.ts';
 import { useDock } from '../../state/dock.ts';
+import { PictoAssiette } from '../pictos/Pictos.tsx';
 import './wheels.css';
 
 /** Espace fine insécable, entre un nombre et son unité. */
@@ -41,13 +43,16 @@ export function SuspensionPanel() {
           <button
             key={preset.id}
             type="button"
-            className="chip"
+            className="chip chip-picto"
             aria-pressed={Math.abs(wheels.ride - preset.value) < 0.005}
             data-assiette={preset.id}
             onClick={() => set(preset.value === 0 ? null : preset.value)}
           >
-            <b>{preset.label}</b>
-            <small>{preset.hint}</small>
+            <PictoAssiette part={preset.value} />
+            <span className="chip-text">
+              <b>{preset.label}</b>
+              <small>{preset.hint}</small>
+            </span>
           </button>
         ))}
       </div>

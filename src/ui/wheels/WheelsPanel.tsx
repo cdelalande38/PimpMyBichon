@@ -2,7 +2,8 @@
 // Trois volets dans le même cadre (Jantes, Pneus, Cotes), un seul à la fois : le menu garde sa
 // hauteur, chaque choix se voit tout de suite sur le véhicule. Dessins, pneus et bornes viennent des
 // données (src/data/wheels.ts, manifeste) : ajouter une jante ne touche pas à ce fichier. La couleur
-// et la finition des jantes restent dans Peinture (zone des jantes) : un bouton y mène.
+// et la finition des jantes restent dans Peinture (zone des jantes) : un bouton y mène. Chaque volet
+// porte son icône, chaque jante et chaque pneu son petit dessin, tiré de ses paramètres (src/ui/pictos/).
 
 import { useState } from 'react';
 import { resolveVehicle } from '../../data/vehicles.ts';
@@ -21,6 +22,8 @@ import {
 } from '../../data/wheels.ts';
 import { normalizeHex, useBuilds } from '../../state/builds.ts';
 import { useDock } from '../../state/dock.ts';
+import { Icon, type IconName } from '../icons.tsx';
+import { PictoJante, PictoPneu } from '../pictos/Pictos.tsx';
 import { useRevealPressed } from '../scroll.ts';
 import './wheels.css';
 
@@ -29,10 +32,10 @@ const NNBSP = '\u202f';
 
 type Volet = 'jantes' | 'pneus' | 'cotes';
 
-const VOLETS: ReadonlyArray<{ id: Volet; label: string }> = [
-  { id: 'jantes', label: 'Jantes' },
-  { id: 'pneus', label: 'Pneus' },
-  { id: 'cotes', label: 'Cotes' },
+const VOLETS: ReadonlyArray<{ id: Volet; label: string; icon: IconName }> = [
+  { id: 'jantes', label: 'Jantes', icon: 'jante' },
+  { id: 'pneus', label: 'Pneus', icon: 'pneu' },
+  { id: 'cotes', label: 'Cotes', icon: 'cote' },
 ];
 
 /** Teintes proposées pour la marque du pneu ; « Autre » ouvre le nuancier du téléphone. */
@@ -61,18 +64,22 @@ function RimChoices({ vehicle, wheels }: { vehicle: VehicleManifest; wheels: Res
           <button
             key={rim.id}
             type="button"
-            className="chip"
+            className="chip chip-picto"
             aria-pressed={current === rim.id}
             data-jante={rim.id}
             onClick={() => setPart(vehicle.id, WHEEL_SLOTS.rim, rim.id === vehicle.wheels?.fit?.rim ? null : rim.id)}
           >
-            <b>{rim.label}</b>
-            {rim.hint && <small>{rim.hint}</small>}
+            <PictoJante rim={rim} />
+            <span className="chip-text">
+              <b>{rim.label}</b>
+              {rim.hint && <small>{rim.hint}</small>}
+            </span>
           </button>
         ))}
       </div>
       <p className="wheels-note">
-        <span>La couleur et la finition des jantes se choisissent dans Peinture.</span>
+        {/* Court : sur deux lignes au plus en texte « très grand », le menu reste dans le tiers bas. */}
+        <span>Couleur et finition : dans Peinture.</span>
         {zone && (
           <button type="button" className="btn wheels-link" onClick={() => openEntry('peinture', zone)}>
             Peindre · {zoneLabel}
@@ -104,13 +111,16 @@ function TireChoices({ vehicle, wheels }: { vehicle: VehicleManifest; wheels: Re
           <button
             key={tire.id}
             type="button"
-            className="chip"
+            className="chip chip-picto"
             aria-pressed={current === tire.id}
             data-pneu={tire.id}
             onClick={() => setPart(vehicle.id, WHEEL_SLOTS.tire, tire.id === vehicle.wheels?.fit?.tire ? null : tire.id)}
           >
-            <b>{tire.label}</b>
-            {tire.hint && <small>{tire.hint}</small>}
+            <PictoPneu tire={tire} />
+            <span className="chip-text">
+              <b>{tire.label}</b>
+              {tire.hint && <small>{tire.hint}</small>}
+            </span>
           </button>
         ))}
       </div>
@@ -244,12 +254,14 @@ export function WheelsPanel() {
         <div className="wheels-volets" role="group" aria-label="Volets des roues">
           {VOLETS.map((item) => (
             <button key={item.id} type="button" className="wheels-volet" aria-pressed={volet === item.id} onClick={() => setVolet(item.id)}>
-              {item.label}
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
             </button>
           ))}
         </div>
         <button type="button" className="btn wheels-reset" disabled={!wheelsTouched(build, 'roues')} onClick={reset}>
-          D’origine
+          <Icon name="origine" />
+          <span>D’origine</span>
         </button>
       </div>
       {volet === 'jantes' && <RimChoices vehicle={vehicle} wheels={wheels} />}

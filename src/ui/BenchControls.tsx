@@ -4,7 +4,8 @@
 // son contenu (Véhicule) ; Garage montre Ambiance et Sortie de nuit. L'arbre vient de
 // src/data/dockMenu.ts ; section, niveau du menu, entrée et niveaux vivent dans le store du dock
 // (src/state/dock.ts) : ils se posent de l'extérieur. « Mécanique » n'apparaît que si le véhicule à l'écran déclare un moteur. Dock agrandi : les rangées passent à la
-// ligne. La poignée et « Retour » vivent dans la ligne de repère (src/ui/Dock.tsx).
+// ligne. La poignée et « Retour » vivent dans la ligne de repère (src/ui/Dock.tsx). Sections et entrées
+// portent leur icône au-dessus du mot (déclarée dans src/data/dockMenu.ts) ; le nom du bouton reste le mot.
 
 import { useRef, type ReactNode } from 'react';
 import { AMBIANCES } from '../data/ambiances.ts';
@@ -15,7 +16,9 @@ import { useBuilds } from '../state/builds.ts';
 import { useDock } from '../state/dock.ts';
 import { EnginePanel } from './engine/EnginePanel.tsx';
 import { HabitaclePanel } from './habitacle/HabitaclePanel.tsx';
+import { Icon } from './icons.tsx';
 import { PaintControls } from './paint/PaintControls.tsx';
+import { PictoAmbiance } from './pictos/Pictos.tsx';
 import { useLevelScroll, useRevealPressed } from './scroll.ts';
 import { SortieEntree } from './drive/SortieEntree.tsx';
 import { VehiclePicker } from './vehicles/VehiclePicker.tsx';
@@ -31,9 +34,12 @@ function AmbianceChoices() {
   return (
     <div ref={row} className="chips" role="group" aria-label="Ambiance">
       {AMBIANCES.map((choice) => (
-        <button key={choice.id} type="button" className="chip" aria-pressed={current === choice.id} onClick={() => choose('ambiance', choice.id)}>
-          <b>{choice.label}</b>
-          {choice.hint && <small>{choice.hint}</small>}
+        <button key={choice.id} type="button" className="chip chip-picto" aria-pressed={current === choice.id} onClick={() => choose('ambiance', choice.id)}>
+          <PictoAmbiance ambiance={choice} />
+          <span className="chip-text">
+            <b>{choice.label}</b>
+            {choice.hint && <small>{choice.hint}</small>}
+          </span>
         </button>
       ))}
     </div>
@@ -77,7 +83,8 @@ export function BenchControls() {
         <nav className="tabs dock-sections" aria-label="Onglets de l’atelier">
           {sections.map((item) => (
             <button key={item.id} type="button" aria-current={section?.id === item.id ? 'true' : undefined} onClick={() => setSection(item.id)}>
-              {item.label}
+              {item.icon && <Icon name={item.icon} />}
+              <span className="dock-label">{item.label}</span>
             </button>
           ))}
         </nav>
@@ -90,11 +97,13 @@ export function BenchControls() {
         {list.map((item) =>
           item.available ? (
             <button key={item.id} type="button" aria-current={entry?.id === item.id ? 'true' : undefined} onClick={() => setEntry(item.id)}>
-              {item.label}
+              {item.icon && <Icon name={item.icon} />}
+              <span className="dock-label">{item.label}</span>
             </button>
           ) : (
             <button key={item.id} type="button" className="dock-soon" disabled aria-label={`${item.label}, bientôt`}>
-              {item.label}
+              {item.icon && <Icon name={item.icon} />}
+              <span className="dock-label">{item.label}</span>
               <small aria-hidden="true">bientôt</small>
             </button>
           ),

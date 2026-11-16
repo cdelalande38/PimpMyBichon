@@ -34,6 +34,7 @@ import {
   relockLoses,
   relockQuestion,
 } from './paintLogic.ts';
+import { PictoFinition } from '../pictos/Pictos.tsx';
 import './paint.css';
 
 type Step = PaintStep;
@@ -360,14 +361,18 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
         <button
           key={item.id}
           type="button"
-          className="chip"
+          className="chip chip-picto"
           aria-pressed={paint.finish === item.id}
           {...disabled}
           // Nouvelle finition : sa taille de paillette d'origine revient ; la seconde teinte reste.
           onClick={choose(() => setPaint(vehicle, target, { finish: item.id, flake: undefined }))}
         >
-          <b>{item.label}</b>
-          <small>{item.hint}</small>
+          {/* Une sphère peinte de la teinte de la zone, avec le reflet de la finition. */}
+          <PictoFinition finish={item} color={paint.color} />
+          <span className="chip-text">
+            <b>{item.label}</b>
+            <small>{item.hint}</small>
+          </span>
         </button>
       ))}
     </div>

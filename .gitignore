@@ -47,5 +47,6 @@ public/assets/shared/habitacle/*.glb
 # par npm run maps:build depuis assets-src/maps/<id>/donnees.json. Le manifeste map.json reste versionné.
 assets-src/maps/*/brut/
 public/assets/maps/*/route.json
+public/assets/maps/*/apercu.json
 public/assets/maps/*/chunks/
 public/assets/maps/*/lointain.glb

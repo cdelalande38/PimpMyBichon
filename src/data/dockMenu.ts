@@ -2,6 +2,8 @@
 // la section). Ajouter une entrée, c'est une ligne ici ; le composant qui la dessine se branche
 // dans src/ui/BenchControls.tsx. Une entrée pas encore disponible s'affiche en fin de rangée,
 // estompée, avec la mention « bientôt », sans action ; SHOW_UPCOMING les masque toutes d'un coup.
+// Chaque section et chaque entrée nomme son icône (dessinée dans src/ui/icons.tsx), posée avec le mot ;
+// sans icône, le mot seul.
 
 export type SectionId = 'vehicule' | 'custom' | 'mecanique' | 'garage';
 
@@ -21,9 +23,31 @@ export type EntryId =
   | 'ambiance'
   | 'sortie';
 
+/** Icônes de src/ui/icons.tsx (IconName) que portent les sections et les entrées du menu. */
+export type MenuIcon =
+  | 'voiture'
+  | 'pistolet'
+  | 'outils'
+  | 'garage'
+  | 'bombe'
+  | 'jante'
+  | 'ressort'
+  | 'siege'
+  | 'sticker'
+  | 'portiere'
+  | 'phare'
+  | 'aileron'
+  | 'compteur'
+  | 'moteur'
+  | 'echappement'
+  | 'neon'
+  | 'route';
+
 export interface DockEntry {
   id: EntryId;
   label: string;
+  /** Icône posée au-dessus du mot ; absente, le mot seul. */
+  icon?: MenuIcon;
   /** Faux : affichée « bientôt », estompée, sans action. */
   available: boolean;
 }
@@ -31,6 +55,8 @@ export interface DockEntry {
 export interface DockSection {
   id: SectionId;
   label: string;
+  /** Icône posée au-dessus du mot ; absente, le mot seul. */
+  icon?: MenuIcon;
   /** « engine » : section absente si le véhicule à l'écran ne déclare pas de moteur. */
   requires?: 'engine';
   entries: readonly DockEntry[];
@@ -43,41 +69,45 @@ export const DOCK_MENU: readonly DockSection[] = [
   {
     id: 'vehicule',
     label: 'Véhicule',
-    entries: [{ id: 'vehicule', label: 'Véhicule', available: true }],
+    icon: 'voiture',
+    entries: [{ id: 'vehicule', label: 'Véhicule', icon: 'voiture', available: true }],
   },
   {
     id: 'custom',
     label: 'Custom',
+    icon: 'pistolet',
     entries: [
-      { id: 'peinture', label: 'Peinture', available: true },
+      { id: 'peinture', label: 'Peinture', icon: 'bombe', available: true },
       // Jantes, pneus et leurs cotes ; l'assiette (§ 5.4), dans Suspension.
-      { id: 'roues', label: 'Roues', available: true },
-      { id: 'suspension', label: 'Suspension', available: true },
+      { id: 'roues', label: 'Roues', icon: 'jante', available: true },
+      { id: 'suspension', label: 'Suspension', icon: 'ressort', available: true },
       // Volant, pommeau, sièges et ciel étoilé (§ 5.4) ; l'ouvrir fait entrer dans la vue intérieure.
-      { id: 'interieur', label: 'Intérieur', available: true },
-      { id: 'stickers', label: 'Stickers', available: false },
-      { id: 'carrosserie', label: 'Carrosserie', available: false },
-      { id: 'phares', label: 'Phares', available: false },
-      { id: 'ailerons', label: 'Ailerons', available: false },
+      { id: 'interieur', label: 'Intérieur', icon: 'siege', available: true },
+      { id: 'stickers', label: 'Stickers', icon: 'sticker', available: false },
+      { id: 'carrosserie', label: 'Carrosserie', icon: 'portiere', available: false },
+      { id: 'phares', label: 'Phares', icon: 'phare', available: false },
+      { id: 'ailerons', label: 'Ailerons', icon: 'aileron', available: false },
     ],
   },
   {
     id: 'mecanique',
     label: 'Mécanique',
+    icon: 'outils',
     requires: 'engine',
     entries: [
-      { id: 'preparation', label: 'Préparation', available: true },
-      { id: 'moteur', label: 'Moteur', available: false },
-      { id: 'echappement', label: 'Échappement', available: false },
+      { id: 'preparation', label: 'Préparation', icon: 'compteur', available: true },
+      { id: 'moteur', label: 'Moteur', icon: 'moteur', available: false },
+      { id: 'echappement', label: 'Échappement', icon: 'echappement', available: false },
     ],
   },
   {
     id: 'garage',
     label: 'Garage',
+    icon: 'garage',
     entries: [
-      { id: 'ambiance', label: 'Ambiance', available: true },
+      { id: 'ambiance', label: 'Ambiance', icon: 'neon', available: true },
       // La sortie de nuit (§ 5.5) : la carte, le départ, la météo et « Sortir ».
-      { id: 'sortie', label: 'Sortie de nuit', available: true },
+      { id: 'sortie', label: 'Sortie de nuit', icon: 'route', available: true },
     ],
   },
 ];

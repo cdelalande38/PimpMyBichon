@@ -1,6 +1,7 @@
 // Entrée « Sortie de nuit » du menu (section Garage) : la carte (liste lue dans le catalogue), le
 // départ parmi ceux de la carte, les crédits des données (obligation de licence ; redits à l'écran
 // de chargement de la sortie), la météo et « Sortir », collé en bas sous le pouce.
+// Chaque carte montre la miniature de son tracé (src/ui/pictos/carte.ts, fabriquée avec la carte).
 // Les départs vivent dans la route de la carte (route.json) : elle se charge ici une fois, et sert
 // encore à la scène. Sans réseau à la première fois, on part du premier départ.
 
@@ -9,6 +10,7 @@ import { openSheet } from '../../app/useRoute.ts';
 import { creditLine, loadRoute, MAPS, resolveMap } from '../../data/maps.ts';
 import type { MapManifest, MapStart } from '../../data/mapTypes.ts';
 import { useDrive, WEATHERS } from '../../state/drive.ts';
+import { PictoCarte } from '../pictos/Pictos.tsx';
 import { useRevealPressed } from '../scroll.ts';
 import { DriveIcon } from './icones.tsx';
 import './drive.css';
@@ -58,9 +60,12 @@ export function SortieEntree() {
     <div className="drive-entry">
       <div ref={mapRow} className="chips" role="group" aria-label="Carte">
         {MAPS.map((item) => (
-          <button key={item.id} type="button" className="chip" aria-pressed={item.id === map.id} onClick={() => chooseMap(item.id)}>
-            <b>{item.name}</b>
-            {item.hint && <small>{item.hint}</small>}
+          <button key={item.id} type="button" className="chip chip-picto" aria-pressed={item.id === map.id} onClick={() => chooseMap(item.id)}>
+            <PictoCarte id={item.id} />
+            <span className="chip-text">
+              <b>{item.name}</b>
+              {item.hint && <small>{item.hint}</small>}
+            </span>
           </button>
         ))}
       </div>

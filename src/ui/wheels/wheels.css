@@ -40,6 +40,32 @@
   color: var(--ambre);
 }
 
+/* Volet : son icône au-dessus du mot, dans la même hauteur de bouton. */
+.wheels-volet {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.0625rem;
+  line-height: 1.2;
+}
+
+.wheels-volet {
+  padding: 0 0.25rem;
+}
+
+.wheels-volet .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.wheels-volet > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .wheels-reset {
   flex: none;
   min-height: var(--tap);
@@ -174,4 +200,36 @@ footer.dock[data-taille='compact'] .wheels .chip:not(.wheels-cote) small {
   color: var(--mute);
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+/* « D'origine » se range comme les volets : son icône au-dessus du mot. */
+.wheels-head > .wheels-reset {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.0625rem;
+  padding: 0 0.5rem;
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-transform: none;
+}
+
+.wheels-reset .icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* Rangée sous les puces (note, pastilles du pneu, curseur des cotes) : une seule hauteur, celle d'une
+   commande, pour que le menu ne bouge pas d'un volet à l'autre. Le curseur perd ses marges par défaut
+   (2 px dessus, 2 px dessous), qui le rendaient plus haut que les autres rangées. */
+.wheels-note,
+.wheels-swatches,
+.wheels-slider {
+  min-height: var(--tap);
+}
+
+.wheels-slider input {
+  margin: 0;
 }

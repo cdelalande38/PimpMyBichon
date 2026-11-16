@@ -1,0 +1,47 @@
+/* Puces à dessin (src/ui/pictos/Pictos.tsx) : le dessin à gauche, le mot et sa ligne d'atelier à
+   droite. Le dessin n'est jamais plus haut que les deux lignes de texte : la puce garde sa hauteur,
+   et le menu ne bouge pas d'un volet à l'autre, à toutes les tailles de texte. */
+
+.chip.chip-picto {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  padding-left: 0.875rem;
+}
+
+.chip-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+/* Jamais plus haut que l'intérieur d'une puce (hauteur, moins ses marges et son bord) : en dock compact,
+   où la ligne d'atelier se tait, la puce ne grandit pas aux grandes tailles de texte. */
+.picto {
+  flex: none;
+  width: min(2.25rem, calc(var(--tap-chip) - 1rem - 2px));
+  height: min(2.25rem, calc(var(--tap-chip) - 1rem - 2px));
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Puce cochée (fond clair) : le dessin au trait suit le texte, sombre. La sphère et les ambiances
+   gardent leurs couleurs ; leur contour suit le texte. */
+.chip[aria-pressed='true'] .picto {
+  color: var(--night);
+}
+
+/* La miniature du tracé : un peu de netteté en plus, le tracé est fin. */
+.picto-carte {
+  stroke-width: 1.5;
+}
+
+/* Étoiles d'une densité du ciel, au-dessus du mot dans son bouton. */
+.picto-etoiles {
+  width: 1.125rem;
+  height: 1.125rem;
+}

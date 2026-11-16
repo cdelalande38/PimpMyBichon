@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ShapeUtils, Vector2 } from 'three';
+import { apercu } from './apercu.mjs';
 import { plafonner, semer } from './arbres.mjs';
 import { repartirEau } from './eau.mjs';
 import { chausseeCouverte, gardeChaussee, resumerCouverture } from './couverture.mjs';
@@ -1446,6 +1447,8 @@ async function main() {
       const texte = `${JSON.stringify(route)}\n`;
       writeFileSync(join(out, 'route.json'), texte);
       poids += texte.length;
+      // Miniature du tracé pour le choix de la carte (menu « Sortie de nuit »), lue par l'app à la construction.
+      writeFileSync(join(out, 'apercu.json'), `${JSON.stringify(apercu(route))}\n`);
       console.log(
         `${id} : ${(m.longueur / 1000).toFixed(2)} km · ${m.troncons} tronçons (triangles : ${m.trianglesMax.toLocaleString('fr-FR')} au plus, ${m.trianglesMoyens.toLocaleString('fr-FR')} en moyenne ; lointain ${m.trianglesLointain.toLocaleString('fr-FR')}) · ` +
           `${(poids / 1e6).toFixed(2)} Mo · ${((Date.now() - started) / 1000).toFixed(1)} s`,

@@ -5,8 +5,10 @@
 // l'atelier. Quatre volets dans le même cadre, un seul à la fois : le menu garde sa hauteur, chaque
 // choix se voit tout de suite. Pièces, teintes et crans viennent des données (src/data/habitacle.ts,
 // manifeste) : ajouter un volant ne touche pas à ce fichier. La sellerie se peint dans Peinture.
+// Chaque volet porte son icône ; chaque volant, pommeau et siège sa silhouette, tirée de son style
+// (src/ui/pictos/) ; chaque densité du ciel, ses étoiles.
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   INTERIOR_CATALOGUE,
   INTERIOR_SLOTS,
@@ -26,27 +28,49 @@ import type { Hex, PlaceId } from '../../data/vehicleTypes.ts';
 import { normalizeHex, resolvePaint, useBuilds } from '../../state/builds.ts';
 import { useDock } from '../../state/dock.ts';
 import { useView } from '../../state/view.ts';
+import { Icon, type IconName } from '../icons.tsx';
+import { PictoEtoiles, PictoPommeau, PictoSiege, PictoVolant } from '../pictos/Pictos.tsx';
 import { useRevealPressed } from '../scroll.ts';
 import './habitacle.css';
 
 type Volet = 'volant' | 'pommeau' | 'sieges' | 'ciel';
 
-const VOLETS: ReadonlyArray<{ id: Volet; label: string }> = [
-  { id: 'volant', label: 'Volant' },
-  { id: 'pommeau', label: 'Pommeau' },
-  { id: 'sieges', label: 'Sièges' },
-  { id: 'ciel', label: 'Ciel' },
+const VOLETS: ReadonlyArray<{ id: Volet; label: string; icon: IconName }> = [
+  { id: 'volant', label: 'Volant', icon: 'volant' },
+  { id: 'pommeau', label: 'Pommeau', icon: 'pommeau' },
+  { id: 'sieges', label: 'Sièges', icon: 'siege' },
+  { id: 'ciel', label: 'Ciel', icon: 'etoiles' },
 ];
 
-/** Rangée de pièces : une puce par pièce du catalogue, la pièce posée cochée. */
-function Pieces({ label, pieces, current, attribute, onPick }: { label: string; pieces: readonly InteriorPiece[]; current: string | undefined; attribute: string; onPick: (id: string) => void }) {
+/** Silhouette d'une pièce, selon son style ; null si le style n'a pas de dessin (le mot seul). */
+type Silhouette = (props: { style: string }) => ReactNode;
+
+/** Rangée de pièces : une puce par pièce du catalogue, sa silhouette et son nom, la pièce posée cochée. */
+function Pieces({
+  label,
+  pieces,
+  current,
+  attribute,
+  picto: Picto,
+  onPick,
+}: {
+  label: string;
+  pieces: readonly InteriorPiece[];
+  current: string | undefined;
+  attribute: string;
+  picto: Silhouette;
+  onPick: (id: string) => void;
+}) {
   const row = useRevealPressed<HTMLDivElement>(current ?? '');
   return (
     <div ref={row} className="chips" role="group" aria-label={label}>
       {pieces.map((piece) => (
-        <button key={piece.id} type="button" className="chip" aria-pressed={current === piece.id} {...{ [`data-${attribute}`]: piece.id }} onClick={() => onPick(piece.id)}>
-          <b>{piece.label}</b>
-          {piece.hint && <small>{piece.hint}</small>}
+        <button key={piece.id} type="button" className="chip chip-picto" aria-pressed={current === piece.id} {...{ [`data-${attribute}`]: piece.id }} onClick={() => onPick(piece.id)}>
+          <Picto style={piece.style} />
+          <span className="chip-text">
+            <b>{piece.label}</b>
+            {piece.hint && <small>{piece.hint}</small>}
+          </span>
         </button>
       ))}
     </div>
@@ -156,12 +180,14 @@ export function HabitaclePanel() {
         <div className="habitacle-volets" role="group" aria-label="Volets de l’intérieur">
           {volets.map((item) => (
             <button key={item.id} type="button" className="habitacle-volet" aria-pressed={volet === item.id} onClick={() => setVolet(item.id)}>
-              {item.label}
+              <Icon name={item.icon} />
+              <span>{item.label}</span>
             </button>
           ))}
         </div>
         <button type="button" className="btn habitacle-reset" disabled={!interiorTouched(build, knobZone)} onClick={reset}>
-          D’origine
+          <Icon name="origine" />
+          <span>D’origine</span>
         </button>
       </div>
       {volet === 'volant' && interior?.steering && (
@@ -171,6 +197,7 @@ export function HabitaclePanel() {
             pieces={INTERIOR_CATALOGUE.steering}
             current={interior.steering.id}
             attribute="volant"
+            picto={PictoVolant}
             onPick={(id) => setPart(vehicle.id, INTERIOR_SLOTS.steering, id === origin?.steering?.default ? null : id)}
           />
           <Swatches label="Couleur de la jante" swatches={INTERIOR_SWATCHES.volant} color={interior.steeringColor} onPick={(hex) => paint(INTERIOR_SLOTS.steering, hex)} />
@@ -183,6 +210,7 @@ export function HabitaclePanel() {
             pieces={INTERIOR_CATALOGUE.knobs}
             current={interior.knob.id}
             attribute="pommeau"
+            picto={PictoPommeau}
             onPick={(id) => setPart(vehicle.id, INTERIOR_SLOTS.knob, id === origin?.knob?.default ? null : id)}
           />
           <Swatches label="Couleur du pommeau" swatches={INTERIOR_SWATCHES.pommeau} color={knobColor} onPick={pickKnobColor} />
@@ -195,10 +223,11 @@ export function HabitaclePanel() {
             pieces={INTERIOR_CATALOGUE.seats}
             current={interior.seats.id}
             attribute="siege"
+            picto={PictoSiege}
             onPick={(id) => setPart(vehicle.id, INTERIOR_SLOTS.seats, id === origin?.seats?.default ? null : id)}
           />
           <p className="habitacle-note">
-            <span>{seatZone ? 'La couleur et la finition de la sellerie se choisissent dans Peinture.' : 'Sellerie en cuir sombre d’origine.'}</span>
+            <span>{seatZone ? 'Couleur et finition : dans Peinture.' : 'Sellerie en cuir sombre d’origine.'}</span>
             {seatZone && (
               <button type="button" className="btn habitacle-link" onClick={() => openEntry('peinture', seatZone)}>
                 Peindre · {seatZoneLabel}
@@ -238,7 +267,8 @@ export function HabitaclePanel() {
                   disabled={!sky.on}
                   onClick={() => setTune(vehicle.id, SKY_TUNE, rank === INTERIOR_CATALOGUE.sky.origin ? null : rank)}
                 >
-                  {item.label}
+                  <PictoEtoiles facteur={item.factor} />
+                  <span>{item.label}</span>
                 </button>
               ))}
             </div>
