@@ -229,6 +229,11 @@ export interface BuildsState extends BuildsData {
   rememberColor: (color: Hex) => void;
   /** Rend au véhicule son état d'origine : peintures, pièces, curseurs. */
   resetVehicle: (vehicle: VehicleId) => void;
+  /**
+   * Rend d'un coup des postes à leur origine (bouton « D'origine » d'une entrée) : pièces, couleurs
+   * de pièces, curseurs et peintures de zones nommés ; le reste du build ne bouge pas.
+   */
+  resetKeys: (vehicle: VehicleId, keys: { parts?: readonly string[]; partPaints?: readonly string[]; tune?: readonly string[]; paints?: readonly string[] }) => void;
 }
 
 function withChoice(
@@ -279,6 +284,21 @@ export const useBuilds = create<BuildsState>()(
           const hex = normalizeHex(color);
           if (!hex) return {};
           return { recents: [hex, ...state.recents.filter((item) => item !== hex)].slice(0, RECENT_COLORS) };
+        }),
+      resetKeys: (vehicle, keys) =>
+        set((state) => {
+          const build = state.builds[vehicle];
+          if (!build) return {};
+          const drop = <T>(map: Record<string, T> | undefined, ids: readonly string[] | undefined): Record<string, T> | undefined => {
+            if (!map) return undefined;
+            const next = Object.fromEntries(Object.entries(map).filter(([id]) => !(ids ?? []).includes(id)));
+            return Object.keys(next).length > 0 ? next : undefined;
+          };
+          let next: Build = { ...build, paints: drop(build.paints, keys.paints) ?? {} };
+          next = withField(next, 'parts', drop(build.parts, keys.parts));
+          next = withField(next, 'partPaints', drop(build.partPaints, keys.partPaints));
+          next = withField(next, 'tune', drop(build.tune, keys.tune));
+          return { builds: { ...state.builds, [vehicle]: next } };
         }),
       resetVehicle: (vehicle) =>
         set((state) => ({

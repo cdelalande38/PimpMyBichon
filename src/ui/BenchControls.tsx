@@ -14,6 +14,7 @@ import { useBench } from '../state/bench.ts';
 import { useBuilds } from '../state/builds.ts';
 import { useDock } from '../state/dock.ts';
 import { EnginePanel } from './engine/EnginePanel.tsx';
+import { HabitaclePanel } from './habitacle/HabitaclePanel.tsx';
 import { PaintControls } from './paint/PaintControls.tsx';
 import { useLevelScroll, useRevealPressed } from './scroll.ts';
 import { SortieEntree } from './drive/SortieEntree.tsx';
@@ -45,6 +46,7 @@ export const ENTRY_BODIES: Partial<Record<EntryId, () => ReactNode>> = {
   peinture: () => <PaintControls />,
   roues: () => <WheelsPanel />,
   suspension: () => <SuspensionPanel />,
+  interieur: () => <HabitaclePanel />,
   preparation: () => <EnginePanel />,
   ambiance: () => <AmbianceChoices />,
   sortie: () => <SortieEntree />,

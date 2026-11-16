@@ -105,6 +105,11 @@ export interface InteriorView {
   label?: string;
   /** Champ vertical en portrait, en degrés (60 à 110) ; absent : celui de l'app (90). */
   fov?: number;
+  /**
+   * Volets de l'entrée Intérieur (volant, pommeau, sieges, ciel) que ce point de vue montre le mieux :
+   * l'entrée s'y place quand on ouvre l'un d'eux. Absent : le premier point de vue.
+   */
+  volets?: readonly string[];
 }
 
 /** Motifs du médaillon du ciel étoilé : des dessins à nous, jamais un emblème de constructeur. */
@@ -127,6 +132,13 @@ export interface StarrySky {
   seed?: number;
   /** Médaillon central : rayon en mètres, motif dessiné en points de la couleur des étoiles. */
   medallion?: { radius: number; motif: SkyMotif };
+  /**
+   * Bombé du pavillon : les points du milieu montent de tant au-dessus de ceux du bord (mètres),
+   * pour rester collés à un ciel de toit cintré. Absent : un plafond plat.
+   */
+  crown?: number;
+  /** Allumé d'origine ; absent : vrai. L'utilisateur l'allume ou l'éteint (Custom · Intérieur). */
+  on?: boolean;
 }
 
 /** Lumière d'habitacle, allumée en vue intérieure seulement. */
@@ -160,6 +172,27 @@ export interface CabinLighting {
   sky?: StarrySky;
   light?: CabinLight;
   panels?: readonly CabinPanel[];
+}
+
+/**
+ * Pièces d'habitacle au choix (§ 5.4, demande du 15 novembre 2026) : volant, pommeau de levier et
+ * sièges avant, posés par l'app sur les ancres du modèle (`volant`, `pommeau`, `siege_avant_*`),
+ * depuis le catalogue partagé (src/data/habitacle.ts). Le ciel étoilé, lui, est `cabin.sky`.
+ */
+export interface VehicleInterior {
+  /** Vrai : un vrai modèle qui garde son intérieur ; l'atelier le dit au lieu de proposer des choix. */
+  fixed?: boolean;
+  /** Volant d'origine (identifiant du catalogue). */
+  steering?: { default: string };
+  /** Pommeau d'origine ; `zone` : zone de peinture qui le colore (sinon sa couleur propre). */
+  knob?: { default: string; zone?: string };
+  /** Sièges avant d'origine ; `zone` : zone de la sellerie ; `scale` : échelle des sièges posés. */
+  seats?: { default: string; zone?: string; scale?: number };
+  /**
+   * Plancher (hauteur, m) et tableau de bord (face en x et dessus en y, m) : aucune pièce posée ne les
+   * traverse (contrôlé par npm run vehicles:build et les tests).
+   */
+  clearance?: { floor: number; dash: readonly [number, number] };
 }
 
 /** Cote d'une roue : diamètre de jante (pouces), largeur du pneu (mm), série (hauteur du flanc, % de la largeur). */
@@ -256,6 +289,8 @@ export interface VehicleManifest {
   adapt?: VehicleAdapt;
   /** Roues (jantes, pneus, cotes) et assiette ; absent : ni l'un ni l'autre ne se règle. */
   wheels?: VehicleWheels;
+  /** Volant, pommeau et sièges au choix ; absent : pas d'habitacle à garnir. */
+  interior?: VehicleInterior;
 }
 
 /**

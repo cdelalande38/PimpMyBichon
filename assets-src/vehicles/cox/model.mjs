@@ -19,7 +19,7 @@
 // - Quatre ailes en pontons séparés, posées de chaque côté, qui sortent de la caisse jusqu'à
 //   z = ±0,775 ; marchepieds fins entre elles ; phares ronds dressés au bout des ailes avant.
 
-import interieur from './interieur.mjs';
+import interieur, { ancres } from './interieur.mjs';
 
 /** @typedef {typeof import('../../../tools/vehicles/kit.mjs')} Kit */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Parts} Parts */
@@ -555,6 +555,9 @@ export default function cox(k) {
     .material('paint_pommeau', { color: '#e9e0c8', roughness: 0.4 });
   m.add('carrosserie', [...body, ...fenders, ...k.symmetric(step)]);
   m.add('habitacle', cabin);
+  // Habitacle : ancres du volant, du pommeau et des sièges avant ; l'app y pose les pièces partagées
+  // choisies (tools/vehicles/habitacle.mjs ; d'origine : sport, tête de mort, baquets bas).
+  for (const { node, ...pose } of ancres(k)) m.anchor(node, pose);
   m.add('accessoires', [
     ...k.symmetric([...headlight, ...blinker, ...taillight, ...handle, ...trims]),
     ...wsTrim,

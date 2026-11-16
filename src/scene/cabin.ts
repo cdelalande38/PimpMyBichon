@@ -2,7 +2,8 @@
 // plafond, d'après le manifeste du véhicule (cabin.sky). Logique pure, sans three.js : la scène
 // (src/scene/GarageCanvas.tsx, CabinLights) en fait un seul maillage instancié.
 // Le semis est plus serré au centre, plus épars vers les bords ; les points sont de tailles
-// inégales (beaucoup de petits, quelques gros). Le médaillon central est un cercle de points et un
+// inégales (beaucoup de petits, quelques gros). Sous un pavillon bombé (crown), ils suivent sa
+// courbe. Couleur, densité, allumage : choix du build (src/data/habitacle.ts, cabinFor). Le médaillon central est un cercle de points et un
 // motif à nous (éclair, flamme), dessiné lui aussi en points, jamais un emblème de constructeur.
 
 import type { SkyMotif, StarrySky } from '../data/vehicleTypes.ts';
@@ -10,8 +11,22 @@ import type { SkyMotif, StarrySky } from '../data/vehicleTypes.ts';
 /** Un point du ciel : position sous le plafond (repère du véhicule) et rayon, en mètres. */
 export interface Star {
   x: number;
+  /** Hauteur : celle du centre du semis, plus le bombé du pavillon à cet endroit. */
+  y: number;
   z: number;
   radius: number;
+}
+
+/**
+ * Hauteur d'un point sous un pavillon bombé : le centre du semis au bord, `crown` de plus au milieu
+ * (une cloche douce dans la longueur et dans la largeur).
+ */
+export function skyHeight(sky: Pick<StarrySky, 'center' | 'size' | 'crown'>, x: number, z: number): number {
+  const crown = sky.crown ?? 0;
+  if (crown === 0) return sky.center[1];
+  const u = Math.min(1, Math.abs((x - sky.center[0]) / (sky.size[0] / 2)));
+  const v = Math.min(1, Math.abs((z - sky.center[2]) / (sky.size[1] / 2)));
+  return sky.center[1] + crown * (1 - u * u) * (1 - v * v);
 }
 
 /** Tirage pseudo-aléatoire reproductible (mulberry32) : un même manifeste, un même ciel. */
@@ -96,7 +111,7 @@ export function starLayout(sky: StarrySky): Star[] {
     const x = cx + (u * length) / 2;
     const z = cz + (v * width) / 2;
     if (keepOut > 0 && Math.hypot(x - cx, z - cz) < keepOut) continue;
-    stars.push({ x, z, radius: 0.0022 + rand() ** 3 * 0.0048 });
+    stars.push({ x, y: skyHeight(sky, x, z), z, radius: 0.0022 + rand() ** 3 * 0.0048 });
   }
   if (!medallion) return stars;
   // Médaillon : un cercle de points, et le motif dans les sept dixièmes du cercle. Le haut du motif
@@ -105,11 +120,15 @@ export function starLayout(sky: StarrySky): Star[] {
   const ring = Math.max(12, Math.round((2 * Math.PI * r) / MEDALLION_STEP));
   for (let i = 0; i < ring; i += 1) {
     const a = (2 * Math.PI * i) / ring;
-    stars.push({ x: cx + r * Math.cos(a), z: cz + r * Math.sin(a), radius: MEDALLION_DOT });
+    const x = cx + r * Math.cos(a);
+    const z = cz + r * Math.sin(a);
+    stars.push({ x, y: skyHeight(sky, x, z), z, radius: MEDALLION_DOT });
   }
   const scale = r * 0.72;
   for (const [mx, my] of alongLoop(MOTIFS[medallion.motif], MEDALLION_STEP / scale)) {
-    stars.push({ x: cx - my * scale, z: cz + mx * scale, radius: MEDALLION_DOT });
+    const x = cx - my * scale;
+    const z = cz + mx * scale;
+    stars.push({ x, y: skyHeight(sky, x, z), z, radius: MEDALLION_DOT });
   }
   return stars;
 }

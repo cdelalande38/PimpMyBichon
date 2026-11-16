@@ -48,6 +48,13 @@
     "sound": "diesel-turbo"
   },
   "interiorView": { "label": "Sous le ciel étoilé", "eye": [-0.75, 1.44, 0.3], "target": [1.4, 1.46, -0.42], "fov": 100 },
+  "interiorViews": [{ "label": "Au volant", "eye": [0.56, 1.4, -0.36], "target": [1.15, 1.02, -0.27], "fov": 95, "volets": ["volant", "pommeau"] }],
+  "interior": {
+    "steering": { "default": "moyeu_large" },
+    "knob": { "default": "boule" },
+    "seats": { "default": "confort" },
+    "clearance": { "floor": 0.42, "dash": [1.225, 1.12] }
+  },
   "cabin": {
     "sky": {
       "center": [-0.05, 1.835, 0],
@@ -57,7 +64,7 @@
       "seed": 7,
       "medallion": { "radius": 0.25, "motif": "eclair" }
     },
-    "light": { "position": [0, 1.3, 0], "intensity": 2, "distance": 3 },
+    "light": { "position": [0.1, 1.0, 0], "intensity": 1.6, "distance": 3 },
     "panels": [
       { "shape": "disque", "center": [1.317, 1.1904, -0.538], "normal": [-0.94, 0.34, 0], "size": [0.1, 0.1], "color": "#f4f1ea", "intensity": 0.9 },
       { "shape": "disque", "center": [1.317, 1.1904, -0.402], "normal": [-0.94, 0.34, 0], "size": [0.1, 0.1], "color": "#f4f1ea", "intensity": 0.9 },

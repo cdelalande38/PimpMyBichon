@@ -158,7 +158,8 @@ describe('vue intérieure dans les manifestes', () => {
   it('la Cox, le concept et le van la déclarent (la vue intérieure du van est revenue) ; pas les motos', () => {
     for (const id of ['cox', 'concept', 'van']) expect(byId(id)?.interiorView, id).toBeDefined();
     expect(interiorViewsOf(byId('cox')!).map((view) => view.label)).toEqual(['Entre les sièges', 'Au volant']);
-    expect(interiorViewsOf(byId('van')!)).toHaveLength(1);
+    // Le van : sous le ciel étoilé, puis au volant (volant et pommeau de Custom · Intérieur s'y voient).
+    expect(interiorViewsOf(byId('van')!).map((view) => view.label)).toEqual(['Sous le ciel étoilé', 'Au volant']);
     for (const manifest of MANIFESTS) {
       if (manifest.kind === 'bike') expect(interiorViewsOf(manifest), manifest.id).toHaveLength(0);
     }

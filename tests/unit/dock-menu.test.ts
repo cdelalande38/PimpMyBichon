@@ -25,13 +25,14 @@ describe('arbre du dock', () => {
     }
   });
 
-  it('les entrées prévues : Peinture, Roues et Suspension puis quatre « bientôt » ; Préparation puis Moteur et Échappement ; Ambiance et Sortie de nuit', () => {
+  it('les entrées prévues : Peinture, Roues, Suspension et Intérieur puis quatre « bientôt » ; Préparation puis Moteur et Échappement ; Ambiance et Sortie de nuit', () => {
     const custom = DOCK_MENU.find((section) => section.id === 'custom');
     const mecanique = DOCK_MENU.find((section) => section.id === 'mecanique');
     expect(custom && sectionEntries(custom).map((entry) => [entry.label, entry.available])).toEqual([
       ['Peinture', true],
       ['Roues', true],
       ['Suspension', true],
+      ['Intérieur', true],
       ['Stickers', false],
       ['Carrosserie', false],
       ['Phares', false],
@@ -45,7 +46,7 @@ describe('arbre du dock', () => {
       ['Sortie de nuit', true],
     ]);
     // Masquées d'un coup : il ne reste que les entrées disponibles.
-    expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture', 'roues', 'suspension']);
+    expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture', 'roues', 'suspension', 'interieur']);
   });
 
   it('« Mécanique » n’existe que pour un véhicule à moteur déclaré', () => {

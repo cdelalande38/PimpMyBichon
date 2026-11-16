@@ -7,8 +7,11 @@
 // - le ciel étoilé, son médaillon, les deux grands cadrans clairs et l'écran central allumé sont
 //   dessinés par l'app d'après le manifeste (cabin : sky, panels, light), sur les supports noirs
 //   posés ici (plafond, visière du combiné, cadre de l'écran) ;
-// - planche de bord, combiné à deux cadrans (aiguilles rouges), console à commandes rouges,
-//   volant à jante pleine, deux sièges avant enveloppants à appuie-tête, banquette arrière.
+// - planche de bord, combiné à deux cadrans (aiguilles rouges), console à commandes rouges et levier
+//   de vitesses court sur la console, banquette arrière ;
+// - ancres `volant` (colonne en place), `pommeau` (bout du levier) et siege_avant_* : volant, pommeau
+//   et sièges avant sont des pièces partagées posées par l'app (tools/vehicles/habitacle.mjs,
+//   manifeste interior ; d'origine : moyeu large, boule, sièges enveloppants à appuie-tête).
 
 /** @typedef {typeof import('../../../tools/vehicles/kit.mjs')} Kit */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Parts} Parts */
@@ -26,6 +29,29 @@ const FLOOR = 0.42;
 /** Points du combiné et de l'écran : le manifeste (cabin.panels) pose leur lumière au même endroit. */
 export const DIALS = /** @type {const} */ ({ x: 1.318, y: 1.19, z: -0.47, gap: 0.068, r: 0.05, normal: [-0.94, 0.34, 0] });
 export const SCREEN = /** @type {const} */ ({ x: 1.255, y: 1.21, z: 0, w: 0.22, h: 0.13, normal: [-0.94, 0.34, 0] });
+
+/** Centre du volant et sa normale (vers le conducteur). */
+const WHEEL = /** @type {P3} */ ([1.18, 1.2, -0.47]);
+const WHEEL_N = /** @type {P3} */ ([-0.82, 0.57, 0]);
+/** Levier court sur le dessus de la console : pied et bout de la tige. */
+const LEVER = /** @type {const} */ ({ base: /** @type {P3} */ ([1.1, 0.812, 0]), top: /** @type {P3} */ ([1.05, 0.965, 0]) });
+/** Sièges avant : au plancher, sous le milieu de l'assise ; ±z. */
+const SEAT = /** @type {const} */ ({ x: 0.72, y: FLOOR, z: 0.47 });
+
+/**
+ * Ancres des pièces d'habitacle partagées (public/assets/shared/habitacle/catalogue.json, anchors).
+ * @param {Kit} k
+ * @returns {{ node: string, position: P3, rotation?: P3 }[]}
+ */
+export function ancres(k) {
+  const tilt = Math.atan2(LEVER.base[0] - LEVER.top[0], LEVER.top[1] - LEVER.base[1]);
+  return [
+    { node: 'volant', ...k.anchorPose(WHEEL, WHEEL_N) },
+    { node: 'pommeau', position: LEVER.top, rotation: [0, -0.2, tilt] },
+    { node: 'siege_avant_gauche', position: [SEAT.x, SEAT.y, -SEAT.z] },
+    { node: 'siege_avant_droit', position: [SEAT.x, SEAT.y, SEAT.z] },
+  ];
+}
 
 /**
  * @param {Kit} k
@@ -142,28 +168,14 @@ export default function interieur(k, c) {
   parts.push(...k.place(box(0.6, 0.22, 0.05, 0.26, 'black', 0.03), { position: [0.95, 0.7, 0] }));
   for (let i = 0; i < 4; i += 1) parts.push(...k.place(box(0.018, 0.006, 0.002, 0.03, 'tail', 0.001), { position: [0.9 + i * 0.05, 0.813, 0] }));
 
-  // --- Volant à jante pleine ------------------------------------------------------------------
-  const WHEEL = /** @type {P3} */ ([1.18, 1.2, -0.47]);
-  /** @type {Parts} */
-  const sw = [...k.tube(k.circle(0, 0, 0.19, 24).map(([a, b]) => /** @type {P3} */ ([a, b, 0])), { material: 'black', radius: 0.022, closed: true, segments: 56, radial: 9 })];
-  sw.push(...k.lathe([[0.07, -0.03], [0.07, 0.01], [0.055, 0.03], [0, 0.034]], { material: 'black', segments: 24, crease: 50 }));
-  for (const a of [0, Math.PI, -Math.PI / 2]) {
-    sw.push(...k.place(box(0.13, 0.05, 0.02, 0.016, 'black', 0.006), { position: [0.125 * Math.cos(a), 0.125 * Math.sin(a), 0.004], rotation: [0, 0, a] }));
-  }
-  parts.push(...k.orient(sw, { position: WHEEL, normal: [-0.82, 0.57, 0], up: [0, 1, 0] }));
+  // --- Colonne de direction (le volant est posé par l'app sur l'ancre `volant`) ---------------
   parts.push(...k.rod([WHEEL[0] + 0.03, WHEEL[1] - 0.02, WHEEL[2]], [1.36, 1.06, WHEEL[2]], 0.035, { material: 'black', radial: 12 }));
 
-  // --- Sièges avant enveloppants à appuie-tête, banquette arrière -----------------------------
-  for (const z of [-0.47, 0.47]) {
-    parts.push(...k.place(box(0.5, 0.12, 0.05, 0.5, 'leather', 0.03), { position: [0.72, 0.68, z] }));
-    parts.push(...k.place(box(0.12, 0.72, 0.05, 0.5, 'leather', 0.03), { position: [0.44, 1.06, z], rotation: [0, 0, 0.16] }));
-    parts.push(...k.place(box(0.1, 0.2, 0.045, 0.3, 'leather', 0.03), { position: [0.37, 1.52, z], rotation: [0, 0, 0.16] }));
-    // Bourrelets latéraux marqués, sur l'assise et le dossier.
-    for (const s of [-1, 1]) {
-      parts.push(...k.place(box(0.46, 0.07, 0.03, 0.07, 'leather', 0.025), { position: [0.72, 0.76, z + s * 0.22] }));
-      parts.push(...k.place(box(0.13, 0.55, 0.04, 0.07, 'leather', 0.025), { position: [0.47, 1.02, z + s * 0.23], rotation: [0, 0, 0.16] }));
-    }
-  }
+  // --- Levier court sur la console : soufflet et tige (le pommeau est posé sur l'ancre `pommeau`) --
+  parts.push(...k.place(k.lathe([[0.045, 0], [0.042, 0.012], [0.03, 0.03], [0.02, 0.05], [0.009, 0.062]], { material: 'black', axis: 'y', segments: 20, crease: 70 }), { position: LEVER.base }));
+  parts.push(...k.rod(LEVER.base, LEVER.top, 0.0065, { material: 'black', radial: 10 }));
+
+  // --- Banquette arrière (les sièges avant sont posés sur les ancres siege_avant_*) -------------
   parts.push(...k.place(box(0.5, 0.13, 0.05, 1.5, 'leather', 0.03), { position: [-0.95, 0.66, 0] }));
   parts.push(...k.place(box(0.12, 0.7, 0.05, 1.5, 'leather', 0.03), { position: [-1.22, 1.04, 0], rotation: [0, 0, 0.18] }));
   for (const z of [-0.5, 0, 0.5]) parts.push(...k.place(box(0.1, 0.18, 0.04, 0.28, 'leather', 0.03), { position: [-1.3, 1.5, z], rotation: [0, 0, 0.18] }));

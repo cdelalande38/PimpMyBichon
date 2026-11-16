@@ -5,6 +5,7 @@
 // le premier est le véhicule de départ. Aucun identifiant de véhicule n'est écrit dans le code.
 
 import { FINISHES } from './finishes.ts';
+import { INTERIOR_CATALOGUE } from './habitacle.ts';
 import { WHEEL_CATALOGUE } from './wheels.ts';
 import type { EngineSpec, InteriorView, Paint, SkyMotif, VehicleId, VehicleManifest, Zone, ZoneGroup } from './vehicleTypes.ts';
 
@@ -148,6 +149,9 @@ function checkView(view: unknown, where: string, problems: string[]): void {
   }
   if (view.label !== undefined && !text(view.label)) problems.push(`${where}.label doit être un texte`);
   if (view.fov !== undefined && !(typeof view.fov === 'number' && view.fov >= 60 && view.fov <= 110)) problems.push(`${where}.fov doit être un angle de 60 à 110 degrés`);
+  if (view.volets !== undefined && !(Array.isArray(view.volets) && view.volets.every((item) => ['volant', 'pommeau', 'sieges', 'ciel'].includes(item as string)))) {
+    problems.push(`${where}.volets doit citer des volets de l'intérieur : volant, pommeau, sieges, ciel`);
+  }
 }
 
 /** Points de vue intérieurs, ciel étoilé et lumière d'habitacle. */
@@ -197,6 +201,10 @@ function checkInterior(raw: Raw, problems: string[]): void {
       !HEX.test(sky.color)
     ) {
       problems.push('cabin.sky doit porter center (trois nombres), size (deux longueurs), count (1 à 2 000 points) et color (#rrggbb)');
+    } else if (sky.crown !== undefined && !(typeof sky.crown === 'number' && sky.crown >= 0 && sky.crown <= 0.2)) {
+      problems.push('cabin.sky.crown doit être un bombé de 0 à 0,2 m');
+    } else if (sky.on !== undefined && typeof sky.on !== 'boolean') {
+      problems.push('cabin.sky.on doit valoir vrai ou faux');
     } else if (sky.medallion !== undefined) {
       const medallion = sky.medallion;
       if (!isObject(medallion) || !positive(medallion.radius) || !MOTIFS.includes(medallion.motif as SkyMotif)) {
@@ -213,6 +221,36 @@ function checkInterior(raw: Raw, problems: string[]): void {
       (light.color !== undefined && (typeof light.color !== 'string' || !HEX.test(light.color)))
     ) {
       problems.push('cabin.light doit porter position (trois nombres), intensity et distance positives, color facultative (#rrggbb)');
+    }
+  }
+}
+
+/** Pièces d'habitacle au choix (section interior) : origines connues du catalogue, zones du manifeste. */
+function checkInteriorParts(raw: Raw, problems: string[]): void {
+  const interior = raw.interior;
+  if (interior === undefined) return;
+  if (!isObject(interior)) {
+    problems.push('interior doit être un objet');
+    return;
+  }
+  if (interior.fixed !== undefined && typeof interior.fixed !== 'boolean') problems.push('interior.fixed doit valoir vrai ou faux');
+  const zones = Array.isArray(raw.zones) ? raw.zones.map((zone: unknown) => (isObject(zone) ? zone.id : undefined)) : [];
+  const lists = { steering: INTERIOR_CATALOGUE.steering, knob: INTERIOR_CATALOGUE.knobs, seats: INTERIOR_CATALOGUE.seats } as const;
+  for (const key of ['steering', 'knob', 'seats'] as const) {
+    const slot = interior[key];
+    if (slot === undefined) continue;
+    if (!isObject(slot) || typeof slot.default !== 'string' || !lists[key].some((item) => item.id === slot.default)) {
+      problems.push(`interior.${key}.default doit être une pièce du catalogue de l'habitacle`);
+      continue;
+    }
+    if (slot.zone !== undefined && !zones.includes(slot.zone)) problems.push(`interior.${key}.zone « ${String(slot.zone)} » : zone absente du manifeste`);
+    if (slot.scale !== undefined && !(typeof slot.scale === 'number' && slot.scale > 0.5 && slot.scale < 2)) problems.push(`interior.${key}.scale doit être une échelle de 0,5 à 2`);
+  }
+  const clearance = interior.clearance;
+  if (clearance !== undefined) {
+    const dash = isObject(clearance) ? clearance.dash : undefined;
+    if (!isObject(clearance) || typeof clearance.floor !== 'number' || !Array.isArray(dash) || dash.length !== 2 || !dash.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      problems.push('interior.clearance doit porter floor (hauteur) et dash (x de la face, y du dessus), en mètres');
     }
   }
 }
@@ -261,6 +299,7 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
       problems.push('presentSide doit valoir « gauche » ou « droite »');
     }
     checkInterior(raw, problems);
+    checkInteriorParts(raw, problems);
     checkWheels(raw, problems);
   }
   if (problems.length > 0) {

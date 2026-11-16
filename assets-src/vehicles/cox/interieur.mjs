@@ -8,11 +8,12 @@
 // - planche de bord plate : grille striée et gros compteur derrière le volant, panneau central
 //   (interrupteur sous capot rouge, gros bouton rouge, trois bascules polies sous leurs voyants),
 //   petit cadran poli dessous, grande boîte à gants à serrure ronde à droite ;
-// - volant à trois branches plates percées de fentes oblongues, jante épaisse, moyeu à six vis,
-//   sans aucun marquage ;
-// - levier long et fin sur un ressort à spires apparentes, pommeau tête de mort couleur os, langue
-//   rouge ;
-// - deux baquets bas sans appui-tête (zone `sellerie`), banquette arrière, garnitures de portes ;
+// - colonne de direction et ancre `volant` : le volant (sport à trois branches percées d'origine)
+//   est une pièce partagée posée par l'app (tools/vehicles/habitacle.mjs, manifeste interior) ;
+// - levier long et fin sur un ressort à spires apparentes, ancre `pommeau` au bout de la tige
+//   (tête de mort couleur os d'origine, pièce partagée) ;
+// - ancres siege_avant_* (baquets bas d'origine, pièces partagées, zone `sellerie`), banquette
+//   arrière, garnitures de portes ;
 // - deux balais d'essuie-glace au repos au bas du pare-brise, couchés vers la droite.
 
 /** @typedef {typeof import('../../../tools/vehicles/kit.mjs')} Kit */
@@ -23,6 +24,31 @@
 
 /** Matériau écarté de la doublure (ouverture d'une vitre) ; jamais écrit dans le GLB. */
 const HOLE = 'paint_vide';
+
+/** Centre du volant et sa normale (vers le conducteur). */
+const WHEEL = /** @type {P3} */ ([0.29, 0.9, -0.32]);
+const WHEEL_N = /** @type {P3} */ ([-0.85, 0.53, 0]);
+/** Pied et bout de la tige du levier : le pommeau se visse au bout. */
+const LEVER = /** @type {const} */ ({ base: /** @type {P3} */ ([0.34, 0.3, 0]), top: /** @type {P3} */ ([0.254, 0.705, 0]) });
+/** Sièges avant : au sol (doublure du plancher), sous le milieu de l'assise ; ±z. */
+const SEAT = /** @type {const} */ ({ x: -0.03, y: 0.113, z: 0.31 });
+
+/**
+ * Ancres des pièces d'habitacle partagées (public/assets/shared/habitacle/catalogue.json, anchors) :
+ * volant (face vers le conducteur), pommeau (+Y le long de la tige, face vers l'arrière, tournée un
+ * peu vers le conducteur), sièges avant.
+ * @param {Kit} k
+ * @returns {{ node: string, position: P3, rotation?: P3 }[]}
+ */
+export function ancres(k) {
+  const tilt = Math.atan2(LEVER.base[0] - LEVER.top[0], LEVER.top[1] - LEVER.base[1]);
+  return [
+    { node: 'volant', ...k.anchorPose(WHEEL, WHEEL_N) },
+    { node: 'pommeau', position: LEVER.top, rotation: [0, -0.3, tilt] },
+    { node: 'siege_avant_gauche', position: [SEAT.x, SEAT.y, -SEAT.z] },
+    { node: 'siege_avant_droit', position: [SEAT.x, SEAT.y, SEAT.z] },
+  ];
+}
 
 /**
  * @param {Kit} k
@@ -199,58 +225,13 @@ export default function interieur(k, c) {
   parts.push(...onDash(k.lathe([[0.011, -0.003], [0.011, 0.005], [0.008, 0.008], [0, 0.008]], { material: 'alu', segments: 14 }), BOX_Z, BOX_Y + 0.07, 0.012));
   parts.push(...k.rod([FACE - 0.02, BOX_Y + 0.07 - 0.005, BOX_Z], [FACE - 0.02, BOX_Y + 0.07 + 0.005, BOX_Z], 0.0015, { material: 'black', radial: 4 }));
 
-  // --- Volant : trois branches plates percées de fentes oblongues, jante épaisse, six vis ----
-  const WHEEL = /** @type {P3} */ ([0.29, 0.9, -0.32]);
-  const wheelN = /** @type {P3} */ ([-0.85, 0.53, 0]);
-  const ringR = 0.19;
-  /** @type {Parts} */
-  const sw = [];
-  sw.push(...k.tube(k.circle(0, 0, ringR, 24).map(([a, b]) => /** @type {P3} */ ([a, b, 0])), { material: 'black', radius: 0.02, closed: true, segments: 64, radial: 10 }));
-  // Moyeu rond, uni (aucun marquage), et ses six vis en cercle.
-  sw.push(...k.lathe([[0.05, -0.026], [0.05, 0.006], [0.044, 0.016], [0, 0.018]], { material: 'black', segments: 28, crease: 50 }));
-  for (let i = 0; i < 6; i += 1) {
-    const a = (2 * Math.PI * i) / 6 + Math.PI / 6;
-    sw.push(...k.place(k.lathe([[0.0042, 0], [0.0042, 0.002], [0.0028, 0.0035], [0, 0.004]], { material: 'alu', segments: 8 }), { position: [0.033 * Math.cos(a), 0.033 * Math.sin(a), 0.0125] }));
-  }
-  // Branches à 3 h, 9 h et 6 h : lame plate, deux fentes oblongues chacune.
-  const SPOKE_IN = 0.042;
-  const SPOKE_OUT = ringR - 0.008;
-  const spokeLen = SPOKE_OUT - SPOKE_IN;
-  /** @type {P2[]} */
-  const spokeOutline = [
-    [0, -0.022],
-    [spokeLen * 0.55, -0.02],
-    [spokeLen, -0.028],
-    [spokeLen, 0.028],
-    [spokeLen * 0.55, 0.02],
-    [0, 0.022],
-  ];
-  /** Fente oblongue de u0 à u1, demi-largeur w. @param {number} u0 @param {number} u1 @param {number} w @returns {P2[]} */
-  const slot = (u0, u1, w) => {
-    /** @type {P2[]} */
-    const pts = [];
-    for (let i = 0; i <= 5; i += 1) {
-      const a = -Math.PI / 2 + (Math.PI * i) / 5;
-      pts.push([u1 - w + w * Math.cos(a), w * Math.sin(a)]);
-    }
-    for (let i = 0; i <= 5; i += 1) {
-      const a = Math.PI / 2 + (Math.PI * i) / 5;
-      pts.push([u0 + w + w * Math.cos(a), w * Math.sin(a)]);
-    }
-    return pts;
-  };
-  const spoke = k.roundedExtrude(spokeOutline, { material: 'black', depth: 0.007, bevel: 0.0025, bevelSegments: 1, holes: [slot(0.018, 0.064, 0.0085), slot(0.076, 0.122, 0.0085)] });
-  for (const a of [0, Math.PI, -Math.PI / 2]) {
-    // Légère cuvette : la branche recule vers le moyeu.
-    sw.push(...k.place(spoke, { position: [SPOKE_IN * Math.cos(a), SPOKE_IN * Math.sin(a), 0.004], rotation: [0, 0, a] }));
-  }
-  parts.push(...k.orient(sw, { position: WHEEL, normal: wheelN, up: [0, 1, 0] }));
-  // Colonne de direction jusqu'à la planche.
+  // --- Volant (pièce partagée posée par l'app sur l'ancre `volant`) : colonne de direction seule ---
   parts.push(...k.rod([WHEEL[0] + 0.02, WHEEL[1] - 0.012, WHEEL[2]], [DASH_X + 0.02, WHEEL[1] - 0.17, WHEEL[2]], 0.022, { material: 'black', radial: 12 }));
 
-  // --- Levier : tige longue et fine sur un ressort à spires apparentes, pommeau tête de mort ---
-  const BASE = /** @type {P3} */ ([0.34, 0.3, 0]);
-  const KNOB = /** @type {P3} */ ([0.25, 0.74, 0]);
+  // --- Levier : tige longue et fine sur un ressort à spires apparentes ; le pommeau (pièce
+  //     partagée, tête de mort d'origine) est posé par l'app sur l'ancre `pommeau` -------------
+  const BASE = LEVER.base;
+  const KNOB = LEVER.top;
   const SPRING_H = 0.2;
   // Embase au plancher, ressort de neuf spires autour du pied de la tige.
   parts.push(...k.place(box(0.16, 0.025, 0.012, 0.13, 'black', 0.008), { position: [BASE[0], BASE[1] - 0.005, 0] }));
@@ -264,51 +245,10 @@ export default function interieur(k, c) {
     coil.push([BASE[0] + 0.024 * Math.cos(a) - 0.09 * t * SPRING_H, BASE[1] + 0.016 + t * SPRING_H, 0.024 * Math.sin(a)]);
   }
   parts.push(...k.tube(coil, { material: 'black', radius: 0.0034, segments: turns * 12, radial: 5, caps: false }));
-  parts.push(...k.rod([BASE[0], BASE[1] + 0.01, 0], [KNOB[0] + 0.004, KNOB[1] - 0.03, 0], 0.0055, { material: 'black', radial: 8 }));
-  // Crâne tourné vers l'arrière de l'habitacle (les deux points de vue) : boîte crânienne,
-  // orbites creuses, nez, mâchoire ouverte et dents, langue rouge tirée.
-  /** @type {Parts} */
-  const skull = [
-    ...k.ellipsoid([0.004, 0.008, 0], [0.034, 0.031, 0.029], { material: 'paint_pommeau', segments: 18 }),
-    ...k.ellipsoid([-0.01, -0.026, 0], [0.02, 0.012, 0.019], { material: 'paint_pommeau', segments: 14 }),
-    ...k.ellipsoid([-0.03, 0.004, -0.012], [0.0075, 0.0095, 0.009], { material: 'black', segments: 10 }),
-    ...k.ellipsoid([-0.03, 0.004, 0.012], [0.0075, 0.0095, 0.009], { material: 'black', segments: 10 }),
-    ...k.ellipsoid([-0.033, -0.01, 0], [0.004, 0.005, 0.0035], { material: 'black', segments: 8 }),
-    // Bouche ouverte : creux sombre entre les deux rangées de dents.
-    ...k.ellipsoid([-0.026, -0.021, 0], [0.008, 0.005, 0.013], { material: 'black', segments: 10 }),
-    // Langue rouge tirée, qui pend sur la mâchoire.
-    ...k.ellipsoid([-0.036, -0.03, 0], [0.008, 0.012, 0.0085], { material: 'tail', segments: 10 }),
-  ];
-  for (const z of [-0.012, -0.004, 0.004, 0.012]) {
-    skull.push(...k.ellipsoid([-0.03, -0.016, z], [0.0035, 0.004, 0.003], { material: 'paint_pommeau', segments: 6 }));
-    skull.push(...k.ellipsoid([-0.026, -0.03, z], [0.003, 0.0035, 0.003], { material: 'paint_pommeau', segments: 6 }));
-  }
-  parts.push(...k.place(skull, { position: KNOB, rotation: [0, -0.3, 0.12] }));
+  parts.push(...k.rod([BASE[0], BASE[1] + 0.01, 0], KNOB, 0.0055, { material: 'black', radial: 8 }));
 
-  // --- Sièges : deux baquets bas, sans appui-tête, dossiers arrondis en haut --------------------
-  // Dossier : contour (z, y) à haut en demi-cercle, extrudé dans son épaisseur (X).
-  /** @param {number} w @param {number} h @returns {P2[]} */
-  const archOutline = (w, h) => {
-    /** @type {P2[]} */
-    const pts = [[-w / 2, 0], [w / 2, 0]];
-    const r = w / 2;
-    for (let i = 0; i <= 10; i += 1) {
-      const a = (Math.PI * i) / 10;
-      pts.push([r * Math.cos(a), h - r + r * Math.sin(a) * 0.55]);
-    }
-    return pts;
-  };
-  for (const z of [-0.31, 0.31]) {
-    // Assise creusée par deux bourrelets.
-    parts.push(...k.place(box(0.5, 0.11, 0.05, 0.44, 'paint_sellerie', 0.035), { position: [-0.03, 0.42, z], rotation: [0, 0, 0.06] }));
-    for (const s of [-1, 1]) parts.push(...k.place(box(0.46, 0.06, 0.03, 0.07, 'paint_sellerie', 0.025), { position: [-0.03, 0.49, z + s * 0.19], rotation: [0, 0, 0.06] }));
-    // Dossier bas (haut vers 1,0 m), légèrement incliné, et ses bourrelets latéraux.
-    const back = k.roundedExtrude(archOutline(0.44, 0.56), { material: 'paint_sellerie', depth: 0.11, bevel: 0.03, bevelSegments: 2, axis: 'x' });
-    parts.push(...k.place(back, { position: [-0.33, 0.46, z], rotation: [0, 0, 0.17] }));
-    for (const s of [-1, 1]) parts.push(...k.place(box(0.09, 0.4, 0.035, 0.06, 'paint_sellerie', 0.022), { position: [-0.3, 0.7, z + s * 0.2], rotation: [0, 0, 0.17] }));
-    parts.push(...k.place(box(0.06, 0.12, 0.02, 0.36, 'black', 0.015), { position: [-0.06, 0.32, z] }));
-  }
-  // Banquette arrière.
+  // --- Sièges avant : pièces partagées posées par l'app sur les ancres siege_avant_* (baquets
+  //     bas d'origine) ; banquette arrière ----------------------------------------------------
   parts.push(...k.place(box(0.46, 0.13, 0.05, 1.08, 'paint_sellerie', 0.035), { position: [-0.88, 0.4, 0] }));
   parts.push(...k.place(box(0.12, 0.55, 0.05, 1.04, 'paint_sellerie', 0.035), { position: [-1.1, 0.72, 0], rotation: [0, 0, 0.32] }));
 

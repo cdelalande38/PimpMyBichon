@@ -37,6 +37,7 @@ import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
 import { disposePrepared, paintZones, prepare, useVehicleWheels, WHEEL_NODE, type Prepared } from '../../scene/vehicle/VehicleModel.tsx';
 import { resolvePaints, useBuilds } from '../../state/builds.ts';
 import { createBeam } from './ciel.ts';
+import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 
 export { WHEEL_NODE };
 
@@ -223,6 +224,8 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   // Jantes, pneus et assiette du build, posés comme au garage ; les roues tournent avec leur ancre.
   const invalidate = useThree((state) => state.invalidate);
   const { stamp, spins } = useVehicleWheels(drive.prepared, vehicle, invalidate, { merge: false });
+  // Volant, pommeau et sièges du build, posés comme au garage (sinon l'habitacle serait vide).
+  useHabitacle(drive.prepared, vehicle, invalidate);
   const wheels = useMemo(() => rollingWheels(drive.prepared, spins), [drive, spins]);
 
   const { halfLength, halfWidth, height } = drive.prepared;

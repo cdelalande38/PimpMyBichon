@@ -76,6 +76,15 @@
   },
   "interiorView": { "label": "Entre les sièges", "eye": [-0.64, 1.13, 0], "target": [0.6, 0.8, 0], "fov": 94 },
   "interiorViews": [{ "label": "Au volant", "eye": [-0.15, 1.08, -0.32], "target": [0.6, 0.84, -0.14] }],
+  "interior": {
+    "steering": { "default": "sport" },
+    "knob": { "default": "tete_de_mort", "zone": "pommeau" },
+    "seats": { "default": "bas", "zone": "sellerie" },
+    "clearance": { "floor": 0.113, "dash": [0.575, 0.99] }
+  },
+  "cabin": {
+    "sky": { "center": [-0.24, 1.335, 0], "size": [0.78, 0.66], "crown": 0.045, "count": 260, "color": "#ffd28a", "seed": 11, "on": false }
+  },
   "wheels": {
     "fit": {
       "zone": "jantes",

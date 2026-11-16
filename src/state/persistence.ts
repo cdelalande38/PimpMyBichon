@@ -55,6 +55,9 @@ export function sameJson(a: Json | undefined, b: Json | undefined): boolean {
  */
 export function mergeChanges(base: Json | undefined, local: Json | undefined, stored: Json | undefined): Json | undefined {
   if (sameJson(local, base)) return stored;
+  // Un objet que la page et une autre ont créé chacune de leur côté (un poste du build qui n'existait
+  // pas : `parts`, `partPaints`…) se fusionne aussi clé par clé, comme s'il était parti vide.
+  if (base === undefined && isRecord(local) && isRecord(stored)) return mergeChanges({}, local, stored);
   if (isRecord(base) && isRecord(local) && isRecord(stored)) {
     const merged: { [key: string]: Json } = {};
     for (const key of new Set([...Object.keys(stored), ...Object.keys(local)])) {

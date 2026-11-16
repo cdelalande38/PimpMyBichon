@@ -14,6 +14,7 @@ export type EntryId =
   | 'phares'
   | 'ailerons'
   | 'suspension'
+  | 'interieur'
   | 'preparation'
   | 'moteur'
   | 'echappement'
@@ -52,6 +53,8 @@ export const DOCK_MENU: readonly DockSection[] = [
       // Jantes, pneus et leurs cotes ; l'assiette (§ 5.4), dans Suspension.
       { id: 'roues', label: 'Roues', available: true },
       { id: 'suspension', label: 'Suspension', available: true },
+      // Volant, pommeau, sièges et ciel étoilé (§ 5.4) ; l'ouvrir fait entrer dans la vue intérieure.
+      { id: 'interieur', label: 'Intérieur', available: true },
       { id: 'stickers', label: 'Stickers', available: false },
       { id: 'carrosserie', label: 'Carrosserie', available: false },
       { id: 'phares', label: 'Phares', available: false },

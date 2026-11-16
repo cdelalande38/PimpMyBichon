@@ -166,6 +166,23 @@ export function orient(parts, t) {
   return parts.map((p) => ({ material: p.material, geometry: p.geometry.clone().applyMatrix4(m) }));
 }
 
+/**
+ * Pose d'une ancre tournée comme orient() : son +Z local vers `normal`, son +Y au mieux vers `up`.
+ * Rend { position, rotation } (angles d'Euler XYZ, radians) pour Model.anchor : une pièce partagée
+ * modelée « face vers +Z » s'y pose comme orient() l'aurait posée.
+ * @param {P3} position @param {P3} normal @param {P3} [up]
+ * @returns {{ position: P3, rotation: P3 }}
+ */
+export function anchorPose(position, normal, up = [0, 1, 0]) {
+  const z = new Vector3(...normal).normalize();
+  const x = new Vector3().crossVectors(new Vector3(...up), z);
+  if (x.lengthSq() < 1e-8) x.set(1, 0, 0);
+  x.normalize();
+  const y = new Vector3().crossVectors(z, x);
+  const e = new Euler().setFromRotationMatrix(new Matrix4().makeBasis(x, y, z));
+  return { position: [...position], rotation: [e.x, e.y, e.z] };
+}
+
 /** Symétrie gauche-droite : les pièces et leur copie en miroir. @param {Parts} parts */
 export function symmetric(parts) {
   return [...parts, ...parts.map((p) => ({ material: p.material, geometry: mirrorZ(p.geometry) }))];

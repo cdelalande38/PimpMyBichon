@@ -1,0 +1,32 @@
+{
+  "about": "Pièces d'habitacle partagées entre véhicules (§ 5.4, § 6, § 8) : volants, pommeaux, sièges avant, ciel étoilé. Une pièce = une ligne ici ; npm run vehicles:build fabrique ses fichiers (tools/vehicles/habitacle.mjs), l'app les pose sur les ancres des véhicules qui déclarent un intérieur (manifeste, section interior). Substituts déclarés : placeholder_volants, placeholder_pommeaux, placeholder_sieges (TODO_ASSETS.md).",
+  "anchors": { "steering": "volant", "knob": "pommeau", "seats": ["siege_avant_gauche", "siege_avant_droit"] },
+  "steering": [
+    { "id": "deux_branches", "style": "deux_branches", "label": "Fin à deux branches", "hint": "Le volant d'usine des années soixante, jante mince", "color": "#cfc5ab", "roughness": 0.45 },
+    { "id": "sport", "style": "trois_branches", "label": "Sport", "hint": "Trois branches percées, jante épaisse", "color": "#141416", "roughness": 0.6 },
+    { "id": "tulipe", "style": "tulipe", "label": "Tulipé", "hint": "Moyeu creusé, branches alu ajourées", "color": "#1c1c1f", "roughness": 0.55 },
+    { "id": "bois", "style": "bois", "label": "Bois", "hint": "Jante vernie rivetée, branches polies", "color": "#6e3a1c", "roughness": 0.28 },
+    { "id": "moyeu_large", "style": "moyeu_large", "label": "Moyeu large", "hint": "Gros moyeu rembourré, trois branches pleines", "color": "#18181a", "roughness": 0.6 }
+  ],
+  "knobs": [
+    { "id": "boule", "style": "boule", "label": "Boule", "hint": "Une bille ronde sur sa bague chromée", "color": "#141416" },
+    { "id": "poire", "style": "poire", "label": "Poire", "hint": "La goutte des années cinquante", "color": "#e9e2cf" },
+    { "id": "cylindre", "style": "cylindre", "label": "Long cylindre", "hint": "Un manche long cerclé de chrome", "color": "#c81e1e" },
+    { "id": "motif", "style": "motif", "label": "À motif", "hint": "Une bille gravée d'un éclair chromé", "color": "#1b3fa0" },
+    { "id": "tete_de_mort", "style": "tete_de_mort", "label": "Tête de mort", "hint": "Couleur os, langue rouge tirée", "color": "#e9e0c8" }
+  ],
+  "seats": [
+    { "id": "bas", "style": "bas", "label": "Baquet bas", "hint": "Dossier rond, sans appuie-tête" },
+    { "id": "confort", "style": "confort", "label": "Enveloppant", "hint": "Bourrelets marqués, appuie-tête réglable" },
+    { "id": "baquet", "style": "baquet", "label": "Baquet course", "hint": "Coque haute, appuie-tête intégré" },
+    { "id": "capitonne", "style": "capitonne", "label": "Capitonné", "hint": "Losanges rembourrés, boutons au creux" }
+  ],
+  "sky": {
+    "densities": [
+      { "id": "clairseme", "label": "Clairsemé", "factor": 0.45 },
+      { "id": "normal", "label": "Normal", "factor": 1 },
+      { "id": "dense", "label": "Dense", "factor": 1.9 }
+    ],
+    "origin": 1
+  }
+}

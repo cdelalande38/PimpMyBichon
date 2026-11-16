@@ -3,7 +3,11 @@
 // public/assets/vehicles/<id>/body.glb et affiche, par véhicule : triangles, matériaux, nœuds,
 // boîte englobante, poids. Fabrique aussi les roues partagées (jantes et pneus du catalogue
 // public/assets/shared/wheels/catalogue.json, modelés par tools/vehicles/roues.mjs) et compte le
-// véhicule complet, roues posées comprises, contre les budgets du § 8. Node seul, déterministe.
+// véhicule complet, roues posées comprises, contre les budgets du § 8. Fabrique de même les pièces
+// d'habitacle partagées (volants, pommeaux, sièges du catalogue public/assets/shared/habitacle/,
+// modelés par tools/vehicles/habitacle.mjs), les compte au pire cas avec le véhicule, et vérifie
+// qu'aucune, posée sur son ancre, ne traverse le plancher ni le tableau de bord (manifeste,
+// interior.clearance). Node seul, déterministe.
 // Mode d'emploi : assets-src/vehicles/LISEZ-MOI.md.
 //
 //   node tools/vehicles/build.mjs [id…]      (sans id : tous les dossiers qui ont un model.mjs)
@@ -15,11 +19,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { countGeometry, parseGlb } from '../lib/glb.mjs';
 import * as kit from './kit.mjs';
 import { buildRim, buildTire, readCatalogue, rimFile, tireFile } from './roues.mjs';
+import * as habitacle from './habitacle.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, 'assets-src', 'vehicles');
 const OUT = join(ROOT, 'public', 'assets', 'vehicles');
 const WHEELS_OUT = join(ROOT, 'public', 'assets', 'shared', 'wheels');
+const INTERIOR_OUT = join(ROOT, 'public', 'assets', 'shared', 'habitacle');
 /** Budgets d'un véhicule complet à l'écran (§ 8) : maximum, roues posées comprises. */
 export const VEHICLE_MAX = Object.freeze({ triangles: 400_000, drawCalls: 80 });
 
@@ -125,6 +131,108 @@ export function buildWheels() {
 }
 
 /**
+ * Pièces d'habitacle partagées : un fichier par volant, par pommeau, par siège. Rend, par fichier,
+ * son résumé et ses pièces (pour les contrôles de pose).
+ * @returns {Map<string, { summary: ReturnType<typeof summarize>, parts: import('./kit.mjs').Parts, kind: 'steering' | 'knob' | 'seat' }>}
+ */
+export function buildInterior() {
+  const catalogue = habitacle.readCatalogue();
+  /** @type {Map<string, { summary: ReturnType<typeof summarize>, parts: import('./kit.mjs').Parts, kind: 'steering' | 'knob' | 'seat' }>} */
+  const out = new Map();
+  mkdirSync(INTERIOR_OUT, { recursive: true });
+  /** @param {string} file @param {string} node @param {import('./kit.mjs').Parts} parts @param {'steering' | 'knob' | 'seat'} kind */
+  const write = (file, node, parts, kind) => {
+    const m = new kit.Model(file.replace(/\.glb$/, ''));
+    m.add(node, parts);
+    const { bytes } = m.toGlb();
+    writeFileSync(join(INTERIOR_OUT, file), bytes);
+    out.set(file, { summary: summarize(bytes), parts, kind });
+  };
+  for (const e of catalogue.steering) write(habitacle.steeringFile(e.id), 'volant', habitacle.buildSteering(e), 'steering');
+  for (const e of catalogue.knobs) write(habitacle.knobFile(e.id), 'pommeau', habitacle.buildKnob(e), 'knob');
+  for (const e of catalogue.seats) write(habitacle.seatFile(e.id), 'siege', habitacle.buildSeat(e), 'seat');
+  return out;
+}
+
+/**
+ * Pose de chaque ancre d'habitacle d'un GLB de véhicule : translation et rotation (quaternion).
+ * @param {Uint8Array} bytes
+ * @returns {Map<string, { t: number[], q: [number, number, number, number] }>}
+ */
+export function interiorAnchors(bytes) {
+  const parsed = parseGlb(bytes);
+  if (!parsed.ok) throw new Error(`GLB illisible : ${parsed.message}`);
+  const catalogue = habitacle.readCatalogue();
+  const names = [catalogue.anchors.steering, catalogue.anchors.knob, ...catalogue.anchors.seats];
+  /** @type {Map<string, { t: number[], q: [number, number, number, number] }>} */
+  const found = new Map();
+  for (const node of /** @type {any[]} */ (parsed.container.json.nodes ?? [])) {
+    if (names.includes(node.name)) found.set(node.name, { t: node.translation ?? [0, 0, 0], q: node.rotation ?? [0, 0, 0, 1] });
+  }
+  return found;
+}
+
+/**
+ * Pièces d'habitacle posées sur les ancres d'un véhicule : rien sous le plancher, rien au-delà de la
+ * face du tableau de bord sous son dessus (manifeste, interior.clearance). Rend les problèmes trouvés.
+ * @param {{ interior?: { clearance?: { floor: number, dash: readonly number[] }, seats?: { scale?: number } } }} manifest
+ * @param {Map<string, { t: number[], q: [number, number, number, number] }>} anchors
+ * @param {ReturnType<typeof buildInterior>} pieces
+ */
+export function interiorClearance(manifest, anchors, pieces) {
+  const clearance = manifest.interior?.clearance;
+  if (!clearance) return [];
+  const catalogue = habitacle.readCatalogue();
+  const [dashX = Infinity, dashTop = -Infinity] = clearance.dash;
+  /** @type {string[]} */
+  const problems = [];
+  /** @type {Record<'steering' | 'knob' | 'seat', string[]>} */
+  const where = { steering: [catalogue.anchors.steering], knob: [catalogue.anchors.knob], seat: catalogue.anchors.seats };
+  for (const [file, piece] of pieces) {
+    const scale = piece.kind === 'seat' ? (manifest.interior?.seats?.scale ?? 1) : 1;
+    for (const name of where[piece.kind]) {
+      const anchor = anchors.get(name);
+      if (!anchor) continue;
+      let low = Infinity;
+      let front = -Infinity;
+      for (const part of piece.parts) {
+        const pos = part.geometry.getAttribute('position');
+        for (let i = 0; i < pos.count; i += 1) {
+          const r = /** @type {[number, number, number]} */ (rotate([pos.getX(i) * scale, pos.getY(i) * scale, pos.getZ(i) * scale], anchor.q));
+          const wy = r[1] + /** @type {number} */ (anchor.t[1]);
+          const wx = r[0] + /** @type {number} */ (anchor.t[0]);
+          low = Math.min(low, wy);
+          if (wy < dashTop) front = Math.max(front, wx);
+        }
+      }
+      if (low < clearance.floor - 0.002) problems.push(`${file} sur ${name} : ${((clearance.floor - low) * 100).toFixed(1)} cm sous le plancher`);
+      if (front > dashX + 0.002) problems.push(`${file} sur ${name} : ${((front - dashX) * 100).toFixed(1)} cm dans le tableau de bord`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Habitacle au pire cas : le volant, le pommeau et le siège les plus lourds, sur leurs ancres.
+ * @param {ReturnType<typeof summarize>} body @param {ReturnType<typeof buildInterior>} pieces
+ */
+function interiorWorst(body, pieces) {
+  const catalogue = habitacle.readCatalogue();
+  const count = { steering: 0, knob: 0, seat: 0 };
+  if (body.nodes.includes(catalogue.anchors.steering)) count.steering = 1;
+  if (body.nodes.includes(catalogue.anchors.knob)) count.knob = 1;
+  count.seat = catalogue.anchors.seats.filter((n) => body.nodes.includes(n)).length;
+  let triangles = 0;
+  let drawCalls = 0;
+  for (const kind of /** @type {const} */ (['steering', 'knob', 'seat'])) {
+    const list = [...pieces.values()].filter((p) => p.kind === kind).map((p) => p.summary);
+    triangles += count[kind] * Math.max(0, ...list.map((s) => s.triangles));
+    drawCalls += count[kind] * Math.max(0, ...list.map((s) => s.primitives));
+  }
+  return { anchors: count.steering + count.knob + count.seat, triangles, drawCalls };
+}
+
+/**
  * Véhicule complet, pire cas : la caisse et, sur chaque ancre roue_*, la jante et le pneu les plus
  * lourds de son genre.
  * @param {string} id @param {ReturnType<typeof summarize>} body @param {Map<string, ReturnType<typeof summarize>>} wheels
@@ -166,6 +274,18 @@ async function main() {
     failed += 1;
     console.error(`roues partagées : ${error instanceof Error ? error.message : error}`);
   }
+  /** @type {ReturnType<typeof buildInterior>} */
+  let interior = new Map();
+  try {
+    const started = Date.now();
+    interior = buildInterior();
+    const list = [...interior].map(([file, p]) => `${file.replace(/\.glb$/, '')} ${p.summary.triangles.toLocaleString('fr-FR')} tr. ${p.summary.primitives} app.`);
+    console.log(`habitacle partagé : ${interior.size} fichiers en ${((Date.now() - started) / 1000).toFixed(1)} s → ${relative(ROOT, INTERIOR_OUT)}`);
+    console.log(`  ${list.join(' · ')}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`habitacle partagé : ${error instanceof Error ? error.message : error}`);
+  }
   for (const id of ids) {
     const started = Date.now();
     try {
@@ -180,13 +300,23 @@ async function main() {
       );
       console.log(`  matériaux : ${s.materials.join(', ')}`);
       const full = withWheels(id, s, wheels);
+      const inside = interiorWorst(s, interior);
       if (full) {
+        full.triangles += inside.triangles;
+        full.drawCalls += inside.drawCalls;
         const over = full.triangles > VEHICLE_MAX.triangles || full.drawCalls > VEHICLE_MAX.drawCalls;
-        const line = `  complet, roues les plus lourdes sur ${full.anchors} ancres : ${full.triangles.toLocaleString('fr-FR')} triangles · ${full.drawCalls} appels de dessin (maximum § 8 : ${VEHICLE_MAX.triangles.toLocaleString('fr-FR')} et ${VEHICLE_MAX.drawCalls})`;
+        const extra = inside.anchors > 0 ? ` et habitacle le plus lourd sur ${inside.anchors} ancres` : '';
+        const line = `  complet, roues les plus lourdes sur ${full.anchors} ancres${extra} : ${full.triangles.toLocaleString('fr-FR')} triangles · ${full.drawCalls} appels de dessin (maximum § 8 : ${VEHICLE_MAX.triangles.toLocaleString('fr-FR')} et ${VEHICLE_MAX.drawCalls})`;
         if (over) {
           failed += 1;
           console.error(`${line} : HORS BUDGET`);
         } else console.log(line);
+      }
+      const manifest = JSON.parse(readFileSync(join(OUT, id, 'vehicle.json'), 'utf8'));
+      const problems = interiorClearance(manifest, interiorAnchors(bytes), interior);
+      if (problems.length > 0) {
+        failed += 1;
+        console.error(`  habitacle : ${problems.join(' ; ')}`);
       }
       console.log(`  → ${relative(ROOT, out)}`);
     } catch (error) {

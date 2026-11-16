@@ -21,7 +21,8 @@ import { SceneBoundary } from '../app/SceneBoundary.tsx';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
 import { interiorViewsOf, modelPresent, resolveVehicle } from '../data/vehicles.ts';
-import type { CabinLighting, InteriorView } from '../data/vehicleTypes.ts';
+import type { Build, CabinLighting, InteriorView } from '../data/vehicleTypes.ts';
+import { cabinFor, INTERIOR_SLOTS, SKY_TUNE } from '../data/habitacle.ts';
 import { GARAGE } from '../data/garage.ts';
 import { CAMERA_LAYERS } from '../render/layers.ts';
 import { AccumulatePass } from '../render/photo/AccumulatePass.ts';
@@ -222,6 +223,19 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   const viewMode = useView((state) => state.mode);
   const setViewMode = useView((state) => state.setMode);
   const views = interiorViewsOf(vehicle);
+  // Habitacle allumé selon le build : ciel étoilé (couleur, densité, allumé ou éteint), lumière.
+  const skyKey = useBuilds((state) => {
+    const build = state.builds[vehicle.id];
+    return JSON.stringify([build?.parts?.[INTERIOR_SLOTS.sky], build?.partPaints?.[INTERIOR_SLOTS.sky]?.color, build?.tune?.[SKY_TUNE]]);
+  });
+  const cabin = useMemo(() => {
+    const [state, color, density] = JSON.parse(skyKey) as [string | undefined, string | undefined, number | undefined];
+    const build: Build = { paints: {} };
+    if (state !== undefined) build.parts = { [INTERIOR_SLOTS.sky]: state };
+    if (color !== undefined) build.partPaints = { [INTERIOR_SLOTS.sky]: { color } };
+    if (density !== undefined) build.tune = { [SKY_TUNE]: density };
+    return cabinFor(vehicle, build);
+  }, [vehicle, skyKey]);
   // Caisse posée par l'assiette et les roues (src/scene/vehicle/wheels.ts) : la vue intérieure et
   // l'habitacle allumé la suivent.
   const body = useBodyPose((state) => state.poses[vehicle.id]) ?? STILL_BODY;
@@ -565,10 +579,11 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
             </Suspense>
           </SceneBoundary>
         )}
-        {/* Ciel étoilé et lumière d'habitacle : montés avec le véhicule qui les déclare, allumés en vue intérieure seulement. */}
-        {vehicle.cabin && (
+        {/* Ciel étoilé et lumière d'habitacle : montés avec le véhicule qui les déclare, allumés en vue
+            intérieure seulement ; couleur, densité et allumage du ciel suivent le build (Custom · Intérieur). */}
+        {cabin && (
           <group position-y={body.y} rotation-z={body.pitch}>
-            <CabinLights key={vehicle.id} cabin={vehicle.cabin} on={!outside} />
+            <CabinLights key={vehicle.id} cabin={cabin} on={!outside} />
           </group>
         )}
       </group>
@@ -596,8 +611,11 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   );
 }
 
-/** Force des points du ciel étoilé : au-delà de 1, ils passent le seuil du halo (bloom). */
-const STAR_GLOW = 1.15;
+/**
+ * Force des points du ciel étoilé : au-delà de 1, ils passent le seuil du halo (bloom). Assez haut
+ * pour qu'un point de quelques millimètres, plus petit qu'un pixel, se lise encore sur le pavillon.
+ */
+const STAR_GLOW = 2.4;
 /** Disque d'un point du ciel, tourné vers le bas (on le voit depuis les sièges). */
 const STAR_DISC = new CircleGeometry(1, 8).rotateX(Math.PI / 2);
 
@@ -616,13 +634,18 @@ function CabinLights({ cabin, on }: { cabin: CabinLighting; on: boolean }) {
     const mesh = new InstancedMesh(STAR_DISC, material, layout.length);
     const matrix = new Matrix4();
     layout.forEach((star, i) => {
-      matrix.makeScale(star.radius, star.radius, star.radius).setPosition(star.x, sky.center[1], star.z);
+      matrix.makeScale(star.radius, star.radius, star.radius).setPosition(star.x, star.y, star.z);
       mesh.setMatrixAt(i, matrix);
     });
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
     return mesh;
   }, [sky]);
+  // Ciel changé (couleur, densité, allumé) : une image de plus, la scène est rendue à la demande.
+  const invalidate = useThree((state) => state.invalidate);
+  useEffect(() => {
+    invalidate();
+  }, [stars, light, invalidate]);
   useEffect(
     () => () => {
       if (!stars) return;

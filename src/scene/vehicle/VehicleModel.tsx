@@ -4,7 +4,8 @@
 // placeholder_banc) l'est par la section « adapt » de son manifeste. Ce composant ne connaît
 // aucun véhicule ni aucun nom de matériau propre à un modèle. Les roues (nœuds roue_*, ou ceux du
 // manifeste) sont rangées à part de la caisse : l'atelier y pose la jante et le pneu choisis, et
-// l'assiette déplace la caisse seule (src/scene/vehicle/wheels.ts).
+// l'assiette déplace la caisse seule (src/scene/vehicle/wheels.ts). L'habitacle (volant, pommeau,
+// sièges avant) est posé de même sur ses ancres (src/scene/vehicle/habitacle.ts).
 
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
@@ -39,6 +40,7 @@ import { useBench } from '../../state/bench.ts';
 import { resolvePaints, useBuilds } from '../../state/builds.ts';
 import { resolveWheels, TIRE_PAINT, WHEEL_SLOTS, wheelFiles } from '../../data/wheels.ts';
 import type { Build } from '../../data/vehicleTypes.ts';
+import { useHabitacle } from './habitacle.ts';
 import { createMarkMaterial, mergeGround, mountWheels, preloadWheels, useBodyPose, useWheelMounts, useWheelSources, type WheelAnchor, type WheelMount, type WheelRig } from './wheels.ts';
 
 const BASE = import.meta.env.BASE_URL;
@@ -203,12 +205,13 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
     });
   }
   // Zone des jantes posées par l'atelier : son matériau existe même si le modèle n'a pas de jante.
-  const rimZone = vehicle.wheels?.fit?.zone;
-  const rimZoneData = vehicle.zones.find((zone) => zone.id === rimZone);
-  if (rimZoneData && !zones.has(rimZoneData.id)) {
+  // De même pour les zones des pièces d'habitacle posées par l'atelier (pommeau, sellerie).
+  const posedZones = [vehicle.wheels?.fit?.zone, vehicle.interior?.knob?.zone, vehicle.interior?.seats?.zone];
+  for (const zoneData of vehicle.zones.filter((zone) => posedZones.includes(zone.id))) {
+    if (zones.has(zoneData.id)) continue;
     const stub = new MeshStandardMaterial();
-    stub.name = rimZoneData.materials[0] ?? `paint_${rimZoneData.id}`;
-    zones.set(rimZoneData.id, createPaintMaterial(stub));
+    stub.name = zoneData.materials[0] ?? `paint_${zoneData.id}`;
+    zones.set(zoneData.id, createPaintMaterial(stub));
     stub.dispose();
   }
   const paints = [...zones.values()];
@@ -297,12 +300,14 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   turn.updateMatrixWorld(true);
   const box = new Box3().setFromObject(turn, true);
   // Ancre sans maillage (la roue est posée par l'atelier) : la roue d'origine compte dans la boîte,
-  // son centre à son rayon au-dessus du sol (modèle aux conventions, au sol).
+  // son centre à son rayon au-dessus du sol (modèle aux conventions : le sol est y = 0). Mesurer le
+  // rayon depuis le bas de la caisse posait le modèle trop bas de sa garde au sol, et décalait tout
+  // ce qui se place en coordonnées du manifeste (ciel étoilé, cadrans, œil de la vue intérieure).
   const at = new Vector3();
   for (const node of loose.wheels) {
     if (new Box3().setFromObject(node, true).isEmpty()) {
       node.getWorldPosition(at);
-      const r = Math.max(0.05, at.y - box.min.y);
+      const r = Math.max(0.05, at.y);
       box.expandByPoint(at.clone().addScalar(r));
       box.expandByPoint(at.clone().subScalar(r));
     }
@@ -511,6 +516,8 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
 
   // Roues et assiette : posées avant la première image et avant la compilation d'avance, reposées à chaque choix.
   const { stamp } = useVehicleWheels(prepared, vehicle, invalidate, { merge: true });
+  // Habitacle : volant, pommeau et sièges du build sur les ancres (src/scene/vehicle/habitacle.ts).
+  useHabitacle(prepared, vehicle, invalidate, { preload: true });
 
   // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
   // vernis), et compilerait pour rien une variante de plus pendant le démarrage. Rendu à la

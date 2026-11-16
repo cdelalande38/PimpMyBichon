@@ -18,7 +18,7 @@
 // - Bourrelet des passages de roue : le flanc est repoussé de 3 cm le long du cercle de chaque
 //   passage (fonction de la distance au cercle), dans le même loft : pas de couture.
 
-import interieur from './interieur.mjs';
+import interieur, { ancres } from './interieur.mjs';
 
 /** @typedef {typeof import('../../../tools/vehicles/kit.mjs')} Kit */
 /** @typedef {import('../../../tools/vehicles/kit.mjs').Parts} Parts */
@@ -354,6 +354,9 @@ export default function van(k) {
     .material('paint_jantes', { color: '#f0efe9', roughness: 0.3 });
   m.add('carrosserie', body);
   m.add('habitacle', cabin);
+  // Habitacle : ancres du volant, du pommeau et des sièges avant ; l'app y pose les pièces partagées
+  // choisies (tools/vehicles/habitacle.mjs ; d'origine : moyeu large, boule, enveloppants).
+  for (const { node, ...pose } of ancres(k)) m.anchor(node, pose);
   m.add('accessoires', [...k.symmetric([...mirror, ...handles, ...repeater, ...fog]), ...front, ...flap, ...rest]);
 
   // Roues : jante tôle à 16 trous, moyeu noir ; un maillage partagé posé quatre fois.

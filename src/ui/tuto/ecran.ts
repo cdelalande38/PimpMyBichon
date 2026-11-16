@@ -32,7 +32,9 @@ export function ecranCourant({ route, vue, dock, sortiAccueil }: EcranFaits): Ec
     default:
       return null;
   }
-  if (vue === 'interieur') return 'vue:interieur';
+  // L'entrée « Intérieur » du dock fait entrer dans la vue intérieure : son tutoriel passe avant.
+  const contenu = !dock.closed && dock.menu !== 'sections' && dock.menu !== 'entrees';
+  if (vue === 'interieur' && !(contenu && dock.entry === 'interieur')) return 'vue:interieur';
   if (dock.closed) return 'accueil';
   // Un seul niveau du menu à l'écran : les sections expliquent le menu (l'accueil) ; les entrées
   // d'une section n'ont pas de tutoriel à elles. Le tutoriel d'une entrée attend son contenu.

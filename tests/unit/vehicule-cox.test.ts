@@ -7,6 +7,7 @@ import { parseGlb } from '../../tools/lib/glb.mjs';
 import { buildVehicle } from '../../tools/vehicles/build.mjs';
 import * as kit from '../../tools/vehicles/kit.mjs';
 import { buildRim, buildTire, readCatalogue } from '../../tools/vehicles/roues.mjs';
+import * as habitacle from '../../tools/vehicles/habitacle.mjs';
 import { outerRadius } from '../../src/data/wheels.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
@@ -20,6 +21,13 @@ const near = (value: number, expected: number) => expect(Math.abs(value - expect
 function sharedWheelMaterials(kind: 'car' | 'bike'): string[] {
   const catalogue = readCatalogue();
   const parts = [...catalogue.rims.filter((rim) => rim.kind === kind).flatMap((rim) => buildRim(rim, catalogue)), ...catalogue.tires.flatMap((tire) => buildTire(tire, kind, catalogue))];
+  return [...new Set(parts.map((part) => part.material))];
+}
+
+/** Matériaux des pièces d'habitacle partagées que l'app pose sur les ancres (volants, pommeaux, sièges). */
+function sharedInteriorMaterials(): string[] {
+  const catalogue = habitacle.readCatalogue();
+  const parts = [...catalogue.steering.flatMap(habitacle.buildSteering), ...catalogue.knobs.flatMap(habitacle.buildKnob), ...catalogue.seats.flatMap(habitacle.buildSeat)];
   return [...new Set(parts.map((part) => part.material))];
 }
 
@@ -133,7 +141,15 @@ describe('modèle de la Cox', () => {
     // La zone des jantes est portée par les jantes partagées (tools/vehicles/roues.mjs), que l'app pose sur les ancres.
     const fitZone = manifest.wheels?.fit?.zone;
     expect(fitZone).toBeDefined();
-    for (const zone of manifest.zones) for (const mat of zone.materials) if (zone.id !== fitZone) expect(summary.materials).toContain(mat);
+    // Le pommeau et les sièges avant sont des pièces d'habitacle partagées (tools/vehicles/habitacle.mjs) :
+    // leurs zones, déclarées par le manifeste (interior), sont portées par ces pièces.
+    const interiorZones = [manifest.interior?.knob?.zone, manifest.interior?.seats?.zone];
+    expect(interiorZones).toEqual(['pommeau', 'sellerie']);
+    const interiorMaterials = sharedInteriorMaterials();
+    for (const zone of manifest.zones) {
+      if (zone.id === fitZone) continue;
+      for (const mat of zone.materials) expect(interiorZones.includes(zone.id) ? interiorMaterials : summary.materials).toContain(mat);
+    }
     const wheelMaterials = sharedWheelMaterials(manifest.kind);
     expect(wheelMaterials).toContain(`paint_${fitZone}`);
     for (const role of ['glass', 'lamp', 'tail', 'signal', 'chrome', 'rubber', 'black']) expect([...summary.materials, ...wheelMaterials]).toContain(role);
@@ -150,7 +166,15 @@ describe('modèle de la Cox', () => {
     const node = json.nodes.find((n: { name: string }) => n.name === 'habitacle');
     expect(node).toBeDefined();
     const mats = json.meshes[node.mesh].primitives.map((p: { material: number }) => json.materials[p.material].name as string);
-    for (const m of ['paint_sellerie', 'paint_pommeau', 'black', 'tail', 'chrome']) expect(mats).toContain(m);
+    for (const m of ['paint_sellerie', 'black', 'tail', 'chrome']) expect(mats).toContain(m);
+    // Le pommeau d'origine (tête de mort couleur os, langue rouge) est posé par l'app sur l'ancre `pommeau`.
+    const knob = habitacle.readCatalogue().knobs.find((item) => item.id === manifest.interior?.knob?.default);
+    expect(knob?.id).toBe('tete_de_mort');
+    const knobMats = habitacle.buildKnob(knob!).map((part) => part.material);
+    for (const m of ['paint_pommeau', 'tail', 'black']) expect(knobMats).toContain(m);
+    const anchor = json.nodes.find((n: { name: string }) => n.name === 'pommeau');
+    expect(anchor).toBeDefined();
+    expect(anchor.mesh).toBeUndefined();
     // Tout noir mat d'après la fiche : plus de ciel de toit en cuir.
     expect(mats).not.toContain('leather');
     const cabin = nodeBox('habitacle');
@@ -158,6 +182,10 @@ describe('modèle de la Cox', () => {
     for (let i = 0; i < 3; i += 1) {
       expect(cabin.min[i]!).toBeGreaterThan(body.min[i]!);
       expect(cabin.max[i]!).toBeLessThan(body.max[i]!);
+    }
+    for (let i = 0; i < 3; i += 1) {
+      expect(anchor.translation[i]).toBeGreaterThan(cabin.min[i]!);
+      expect(anchor.translation[i]).toBeLessThan(cabin.max[i]!);
     }
     // Chaque œil est dans l'habitacle garni.
     for (const { eye } of [manifest.interiorView!, ...(manifest.interiorViews ?? [])]) {

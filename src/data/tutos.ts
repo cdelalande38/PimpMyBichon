@@ -113,6 +113,18 @@ export const TUTOS: readonly Tuto[] = [
     ],
   },
   {
+    id: 'habitacle',
+    ecrans: ['entree:interieur'],
+    titre: 'L’intérieur',
+    but: 'Ici, tu garnis l’habitacle : volant, pommeau, sièges et ciel étoilé, et tu les vois de l’intérieur.',
+    etapes: [
+      { texte: 'Quatre volets : Volant, Pommeau, Sièges et Ciel. Chaque choix se voit aussitôt, depuis la place du passager.', cible: 'footer.dock .habitacle-volets' },
+      { texte: 'Les pastilles colorent la jante du volant, le pommeau ou les étoiles. Le « + » ouvre toutes les couleurs.' },
+      { texte: 'Dans Ciel, allume ou éteins les étoiles et choisis leur densité. Glisse un doigt sur l’image pour lever les yeux.' },
+      { texte: '« D’origine » remet l’habitacle comme avant. Quitte l’entrée et tu ressors dans l’atelier.' },
+    ],
+  },
+  {
     id: 'preparation',
     ecrans: ['entree:preparation'],
     titre: 'La préparation moteur',
