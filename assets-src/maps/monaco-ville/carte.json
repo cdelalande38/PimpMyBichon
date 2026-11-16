@@ -2,7 +2,7 @@
   "id": "monaco-ville",
   "nom": "Monaco, la ville",
   "fournisseur": "ign",
-  "note": "Traversée de la Principauté d'ouest en est : Fontvieille et son tunnel, la place d'Armes, le port par le boulevard Albert-Ier, la montée de l'avenue d'Ostende vers la place du Casino, la descente des Spélugues jusqu'au bord de mer, puis l'avenue Princesse-Grace jusqu'au Larvotto. Rues fermées à la circulation : les sens uniques ne détournent pas le parcours.",
+  "note": "Traversée de la Principauté d'ouest en est : Fontvieille et son tunnel, la place d'Armes, le port par le boulevard Albert-Ier, la montée de l'avenue d'Ostende vers la place du Casino, la descente des Spélugues jusqu'au bord de mer, puis l'avenue Princesse-Grace jusqu'au Larvotto. Le parcours respecte les sens uniques (chaussées séparées comprises).",
   "emprise": {
     "lonMin": 7.4,
     "latMin": 43.72,
@@ -11,7 +11,7 @@
   },
   "itineraire": {
     "penalite": 4,
-    "sensIgnore": true,
+    "sensIgnore": false,
     "etapes": [
       {
         "nom": "Fontvieille",
@@ -32,23 +32,14 @@
         ]
       },
       {
-        "nom": "Sainte-Dévote",
-        "carrefour": [
-          "BD ALBERT 1ER",
-          "R GRIMALDI"
-        ],
-        "par": [
-          "AV DU PORT",
-          "BD ALBERT 1ER"
-        ]
-      },
-      {
         "nom": "Haut de l'avenue d'Ostende",
         "carrefour": [
           "AV D'OSTENDE",
           "AV DE MONTE CARLO"
         ],
         "par": [
+          "AV DU PORT",
+          "BD ALBERT 1ER",
           "AV D'OSTENDE"
         ]
       },
@@ -64,20 +55,12 @@
         ]
       },
       {
-        "nom": "Bas des Spélugues",
-        "carrefour": [
-          "AV DES SPELUGUES",
-          "R DU PORTIER"
-        ],
-        "par": [
-          "AV DES SPELUGUES"
-        ]
-      },
-      {
         "nom": "Larvotto",
         "lon": 7.44014,
         "lat": 43.75056,
         "par": [
+          "AV DES SPELUGUES",
+          "R DU PORTIER",
           "AV PRINCESSE GRACE"
         ]
       }
@@ -122,7 +105,7 @@
     {
       "id": "casino",
       "label": "Place du Casino",
-      "etape": 4,
+      "etape": 3,
       "decalage": -150
     },
     {
@@ -135,7 +118,7 @@
     {
       "nom": "plan",
       "vue": "dessus",
-      "s": 2240,
+      "s": 2200,
       "regard": 0,
       "hauteur": 3200
     },
@@ -148,7 +131,7 @@
     {
       "nom": "casino",
       "vue": "conducteur",
-      "s": 2080,
+      "s": 2040,
       "regard": 0
     },
     {
@@ -160,7 +143,7 @@
     {
       "nom": "lacets",
       "vue": "oiseau",
-      "s": 2420,
+      "s": 2380,
       "regard": 0
     }
   ]

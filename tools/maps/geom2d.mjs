@@ -59,6 +59,35 @@ export function indexPolyligne(pts, o = {}) {
         }
       return best.d <= rayon ? best : { d: Infinity, i: -1, t: 0, cote: 0 };
     },
+    /**
+     * Tous les segments à moins de `rayon` de (x, z), chacun une fois : f(i, d, qx, qz), (qx, qz)
+     * étant le point du segment le plus proche.
+     * @param {number} x @param {number} z @param {number} rayon
+     * @param {(i: number, d: number, qx: number, qz: number) => void} f
+     */
+    autour(x, z, rayon, f) {
+      const r = Math.ceil(rayon / cellule);
+      const cx = Math.floor(x / cellule);
+      const cz = Math.floor(z / cellule);
+      /** @type {Set<number>} */
+      const vus = new Set();
+      for (let a = cx - r; a <= cx + r; a += 1)
+        for (let b = cz - r; b <= cz + r; b += 1)
+          for (const i of cases.get(`${a}|${b}`) ?? []) {
+            if (vus.has(i)) continue;
+            vus.add(i);
+            const ax = X[i] ?? 0;
+            const az = Z[i] ?? 0;
+            const dx = (X[i + 1] ?? 0) - ax;
+            const dz = (Z[i + 1] ?? 0) - az;
+            const L2 = dx * dx + dz * dz;
+            const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)) : 0;
+            const qx = ax + dx * t;
+            const qz = az + dz * t;
+            const d = Math.hypot(x - qx, z - qz);
+            if (d <= rayon) f(i, d, qx, qz);
+          }
+    },
   };
 }
 

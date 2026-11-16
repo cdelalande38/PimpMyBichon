@@ -1,14 +1,15 @@
 // Garde au sol des caméras de la sortie (src/drive/cameras.ts, guardShot) et sonde de terrain
 // (src/drive/scene/relief.ts) : sur un relief d'essai, puis sur chaque carte fabriquée (npm run
 // maps:build) de bout en bout, tronçons réels compris : aucune des six caméras ne passe sous le
-// terrain ni dans un bâtiment, et aucun talus ne cache le véhicule (hors tunnels, où la garde se tait).
+// terrain ni dans un bâtiment, aucun talus ne cache le véhicule et aucune chaussée n'est recouverte
+// (hors tunnels déclarés, où la garde se tait). Strict sur toutes les cartes.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MapRoute } from '../../src/data/mapTypes.ts';
 import { CAMERA_GUARD, cameraShot, createShot, guardShot, type GroundSampler } from '../../src/drive/cameras.ts';
 import { CAMERA_IDS, type DriveMotion, type VehicleFrame } from '../../src/drive/contrat.ts';
 import { createPose, createRail } from '../../src/drive/rail.ts';
-import { addRoleMesh, createChunkRelief, HeightGrid, LAYER_GAP, Relief } from '../../src/drive/scene/relief.ts';
+import { addRoleMesh, createChunkRelief, HeightGrid, LAYER_GAP, Relief, RELIEF_CELL } from '../../src/drive/scene/relief.ts';
 
 
 const ORBIT = { yaw: 0.6, pitch: 0.28, distance: 7.5 };
@@ -80,13 +81,6 @@ describe('garde d’un plan', () => {
 
 const MAPS_DIR = new URL('../../public/assets/maps/', import.meta.url);
 const BUILT = existsSync(MAPS_DIR) ? readdirSync(MAPS_DIR).filter((id) => existsSync(new URL(`${id}/route.json`, MAPS_DIR))) : [];
-/**
- * Cartes tenues à zéro défaut. Les autres (Monaco, novembre 2026) ont des tronçons où le terrain de la
- * carte recouvre la chaussée (défaut de l'outil des cartes, noté dans TODO_ASSETS.md) : là, aucune
- * caméra ne peut voir le véhicule ; on y vérifie seulement que la garde fait mieux que rien.
- */
-const STRICT = new Set(['plateau-matheysin']);
-
 /** Lecteur GLB minimal : positions et indices de chaque maillage nommé fusion_<rôle>. */
 function readChunk(file: URL): Array<{ role: string; positions: Float32Array; index: Uint32Array | Uint16Array | null }> {
   const buf = readFileSync(file);
@@ -129,6 +123,25 @@ describe.skipIf(BUILT.length === 0)('les cartes fabriquées : aucune caméra sou
     });
     const pose = createPose();
     const shot = createShot();
+    /**
+     * La caméra est-elle dans le tube d'un tunnel déclaré (point du rail le plus proche, à ±40 m de
+     * l'abscisse du véhicule, en section tunnel, à moins de la demi-largeur + 3 m de l'axe) ? Là, comme
+     * le moteur quand le véhicule y roule, la sonde est faussée par le relief au-dessus de la voûte.
+     */
+    const cameraEnTunnel = (x: number, z: number, s: number): boolean => {
+      const r = route.rail;
+      let best = Infinity;
+      let bi = -1;
+      const i0 = Math.max(0, Math.floor((s - 40) / route.step));
+      const i1 = Math.min(r.length / 3 - 1, Math.ceil((s + 40) / route.step));
+      for (let i = i0; i <= i1; i += 1) {
+        const d = Math.hypot((r[i * 3] ?? 0) - x, (r[i * 3 + 2] ?? 0) - z);
+        if (d < best) [best, bi] = [d, i];
+      }
+      const se = route.sections.find((q) => bi * route.step >= q.from && bi * route.step <= q.to);
+      return se?.ground === 'tunnel' && best < se.width / 2 + 3;
+    };
+    let inTunnel = 0;
     const vehicles: VehicleFrame[] = [
       { kind: 'car', position: [0, 0, 0], heading: 0, pitch: 0, roll: 0, halfLength: 2.1, halfWidth: 0.95, height: 1.3 },
       { kind: 'bike', position: [0, 0, 0], heading: 0, pitch: 0, roll: 0, halfLength: 1.1, halfWidth: 0.45, height: 1.2 },
@@ -142,9 +155,10 @@ describe.skipIf(BUILT.length === 0)('les cartes fabriquées : aucune caméra sou
         rail.poseAt(s, pose);
         if (pose.ground === 'tunnel') continue;
         // Chaussée recouverte (terrain ou ouvrage à plus de LAYER_GAP au-dessus, hors tunnel déclaré) :
-        // un défaut de la carte, où aucune caméra ne voit le véhicule de dehors. Compté, borné.
+        // un défaut de la carte, où aucune caméra ne voit le véhicule de dehors. Aucun toléré.
         if (relief.ground(pose.position[0], pose.position[2]) > pose.position[1] + LAYER_GAP) {
           covered += 1;
+          failures.push(`${frame.kind} s=${s} : chaussée recouverte`);
           continue;
         }
         frame.position = [pose.position[0], pose.position[1], pose.position[2]];
@@ -163,12 +177,21 @@ describe.skipIf(BUILT.length === 0)('les cartes fabriquées : aucune caméra sou
           if (g === g && y < g + CAMERA_GUARD.clearance - 1e-3) failures.push(`${frame.kind} ${id} s=${s} : ${(y - g).toFixed(2)} m au-dessus du sol`);
           const b = relief.built(x, z);
           if (b === b && y < b) failures.push(`${frame.kind} ${id} s=${s} : dans un bâtiment`);
-          // Ligne de visée : pas de terrain entre la caméra et le point visé.
+          // Ligne de visée : pas de terrain entre la caméra et le point visé (sauf caméra dans un tunnel).
+          if (cameraEnTunnel(x, z, s)) {
+            inTunnel += 1;
+            continue;
+          }
           for (let k = 1; k < CAMERA_GUARD.steps; k += 1) {
             const f = k / CAMERA_GUARD.steps;
             const px = shot.target[0] + (x - shot.target[0]) * f;
             const py = shot.target[1] + (y - shot.target[1]) * f;
             const pz = shot.target[2] + (z - shot.target[2]) * f;
+            // Sous la caisse du véhicule (à moins d'une demi-longueur de son centre, et d'une case de la
+            // sonde, qui ne distingue pas la chaussée sous les roues de la bordure du trottoir voisin),
+            // ce n'est pas un talus qui le cache : la chaussée recouverte y est contrôlée à part
+            // (ci-dessus, et à la fabrication par tools/maps/couverture.mjs, au centimètre près).
+            if (Math.hypot(px - frame.position[0], pz - frame.position[2]) < Math.max(frame.halfLength, RELIEF_CELL)) continue;
             const h = relief.ground(px, pz, py);
             if (h === h && py < h - 0.05) {
               failures.push(`${frame.kind} ${id} s=${s} : talus dans la ligne de visée`);
@@ -179,9 +202,9 @@ describe.skipIf(BUILT.length === 0)('les cartes fabriquées : aucune caméra sou
       }
     }
     const under = failures.filter((f) => f.includes('au-dessus du sol')).length;
-    console.info(`${id} : garde des caméras sur ${checked} plans, ${before} sous le terrain sans elle, ${under} avec elle ; ${failures.length} défauts en tout ; ${covered} positions sous une chaussée recouverte`);
+    console.info(`${id} : garde des caméras sur ${checked} plans, ${before} sous le terrain sans elle, ${under} avec elle ; ${failures.length} défauts en tout ; ${covered} positions sous une chaussée recouverte ; ${inTunnel} plans pris d'un tunnel`);
     expect(checked).toBeGreaterThan((route.length / 4) * 10);
-    if (STRICT.has(id)) expect(failures.slice(0, 12)).toEqual([]);
-    else expect(under).toBeLessThan(Math.max(1, before));
+    expect(covered).toBe(0);
+    expect(failures.slice(0, 12)).toEqual([]);
   }, 60_000);
 });

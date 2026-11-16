@@ -11,6 +11,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { countGeometry, parseGlb } from '../lib/glb.mjs';
+import { chausseeCouverte, resumerCouverture } from './couverture.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -136,6 +137,33 @@ export function lireTroncon(bytes) {
   return { erreurs, triangles: countGeometry(json).triangles };
 }
 
+/**
+ * Maillages d'un GLB de tronçon dans le repère de la carte (positions + origine), pour la couverture.
+ * @param {Uint8Array} bytes @param {number[]} origine
+ * @returns {Array<{ role: string, positions: Float32Array, index: Uint32Array | Uint16Array | null }>}
+ */
+export function maillagesTroncon(bytes, origine) {
+  const p = parseGlb(bytes);
+  if (!p.ok) return [];
+  const { json, bin } = p.container;
+  const lire = (/** @type {number} */ a) => {
+    const acc = json.accessors[a];
+    const bv = json.bufferViews[acc.bufferView];
+    const debut = bin.byteOffset + (bv.byteOffset ?? 0) + (acc.byteOffset ?? 0);
+    const n = acc.count * (acc.type === 'VEC3' ? 3 : 1);
+    const octets = bin.buffer.slice(debut, debut + n * (acc.componentType === 5123 ? 2 : 4));
+    if (acc.componentType === 5126) return new Float32Array(octets);
+    return acc.componentType === 5123 ? new Uint16Array(octets) : new Uint32Array(octets);
+  };
+  return (json.meshes ?? []).flatMap((/** @type {any} */ m) =>
+    (m.primitives ?? []).map((/** @type {any} */ prim) => {
+      const positions = /** @type {Float32Array} */ (lire(prim.attributes.POSITION));
+      for (let i = 0; i < positions.length; i += 3) for (let k = 0; k < 3; k += 1) positions[i + k] = (positions[i + k] ?? 0) + (origine[k] ?? 0);
+      return { role: String(m.name).replace(/^fusion_/, ''), positions, index: prim.indices === undefined ? null : /** @type {Uint32Array | Uint16Array} */ (lire(prim.indices)) };
+    }),
+  );
+}
+
 /** Poids d'un dossier, récursif. @param {string} dir */
 function poids(dir) {
   let n = 0;
@@ -164,6 +192,8 @@ export function verifierCarte(id, o = {}) {
   const r = JSON.parse(readFileSync(routeFile, 'utf8'));
   erreurs.push(...validerRoute(r, id));
   const tri = [];
+  /** @type {ReturnType<typeof maillagesTroncon>} */
+  const maillages = [];
   for (const c of r.chunks ?? []) {
     const f = join(dir, c.file);
     if (!existsSync(f)) {
@@ -171,7 +201,9 @@ export function verifierCarte(id, o = {}) {
       tri.push(0);
       continue;
     }
-    const t = lireTroncon(new Uint8Array(readFileSync(f)));
+    const octets = new Uint8Array(readFileSync(f));
+    const t = lireTroncon(octets);
+    maillages.push(...maillagesTroncon(octets, c.origin ?? [0, 0, 0]));
     erreurs.push(...t.erreurs.map((x) => `${c.file} : ${x}`));
     if (t.triangles !== c.triangles) erreurs.push(`${c.file} : ${t.triangles} triangles, ${c.triangles} annoncés`);
     if (t.triangles > BUDGETS.trianglesParTroncon) erreurs.push(`${c.file} : ${t.triangles} triangles, budget ${BUDGETS.trianglesParTroncon}`);
@@ -180,13 +212,28 @@ export function verifierCarte(id, o = {}) {
   let pire = 0;
   for (let i = 0; i < tri.length; i += 1) pire = Math.max(pire, tri.slice(i, i + BUDGETS.tronconsVisibles).reduce((s, v) => s + v, 0));
   if (pire > BUDGETS.trianglesVisibles) erreurs.push(`${BUDGETS.tronconsVisibles} tronçons consécutifs : ${pire} triangles, budget ${BUDGETS.trianglesVisibles}`);
+  /** @type {ReturnType<typeof maillagesTroncon>} */
+  let lointain = [];
   if (r.far) {
     const f = join(dir, r.far.file);
     if (!existsSync(f)) erreurs.push(`${r.far.file} absent`);
     else {
-      const p = parseGlb(new Uint8Array(readFileSync(f)));
+      const octets = new Uint8Array(readFileSync(f));
+      const p = parseGlb(octets);
       if (!p.ok) erreurs.push(`${r.far.file} : ${p.message}`);
       else if (countGeometry(p.container.json).triangles !== r.far.triangles) erreurs.push(`${r.far.file} : triangles annoncés faux`);
+      else lointain = maillagesTroncon(octets, [0, 0, 0]);
+    }
+  }
+  // Chaussée couverte (hors tunnel déclaré) : terrain, bâtiment, ouvrage, autre portion de la route
+  // ou relief lointain au-dessus de la chaussée. Aucun point toléré.
+  if (Array.isArray(r.rail) && Array.isArray(r.sections)) {
+    const cv = chausseeCouverte(r, maillages, lointain);
+    if (cv.couverts.length) {
+      const z = resumerCouverture(cv.couverts);
+      erreurs.push(
+        `chaussée couverte en ${cv.couverts.length} points sur ${cv.points} (${Object.entries(z.parRole).map(([k, v]) => `${k} ${v}`).join(', ')} ; jusqu'à ${z.dyMax.toFixed(2)} m ; vers ${z.zones.slice(0, 12).join(', ')} m)`,
+      );
     }
   }
   const total = poids(dir);

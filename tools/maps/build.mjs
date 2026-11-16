@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { ShapeUtils, Vector2 } from 'three';
 import { plafonner, semer } from './arbres.mjs';
 import { repartirEau } from './eau.mjs';
-import { aire, boite, dansPolygone, hasard, indexPolyligne } from './geom2d.mjs';
+import { chausseeCouverte, gardeChaussee, resumerCouverture } from './couverture.mjs';
+import { aire, boite, dansPolygone, hasard, indexPolyligne, simplifier } from './geom2d.mjs';
 import { Assembleur, ecrireGlb } from './maillage.mjs';
 import { decouper, dentsDeScie, densifier, lisserSerie, pentes, rayons, reechantillonnerCorde, sections as faireSections } from './trace.mjs';
 
@@ -25,6 +26,8 @@ const OUT = join(ROOT, 'public', 'assets', 'maps');
 const DECALAGES = [0, 1.5, 3.5, 6, 9, 13, 18, 24, 32, 42, 54, 68, 85, 105, 127];
 /** Pente des talus (déblai et remblai) : 2 de haut pour 3 de long. */
 const TALUS = 2 / 3;
+/** Retrait des bâtiments rognés au-delà du bord du trottoir, en mètres. */
+const RETRAIT_BATI = 0.5;
 /** Tunnels : hauteur des piédroits, de la voûte, et du dessus (terrain recouvrant), au-dessus de l'axe. */
 const TUNNEL = { piedroit: 5.2, voute: 6, dessus: 7.2 };
 
@@ -82,7 +85,7 @@ function relief(d) {
 /**
  * Construit une carte : route, tronçons et relief lointain, en mémoire.
  * @param {string} id
- * @param {{ srcDir?: string }} [o]
+ * @param {{ srcDir?: string, sansGarde?: boolean }} [o] sansGarde : terrain et routes voisines sans la garde de la chaussée (essais)
  */
 export function buildMap(id, o = {}) {
   const dir = join(o.srcDir ?? SRC, id);
@@ -200,6 +203,51 @@ export function buildMap(id, o = {}) {
     const ye = y + bordure - (se.urban ? 0 : 0.05);
     return { i, s, p, hw, sw, e, y, ye, bordure, ground: se.ground, urban: se.urban, n: normale(s, 0) };
   });
+  // Emprise protégée : chaussée et trottoirs de toutes les passes du parcours, hors tunnel, en
+  // triangles (chaussée bombée ; dessus du trottoir relevé de 5 cm). Aucun
+  // triangle de terrain ni de route voisine ne passe au-dessus (garde.couvre) : là où le parcours se
+  // frôle, s'enroule en lacets ou se croise, le terrain d'une passe s'arrête au bord de la chaussée
+  // de l'autre au lieu de la recouvrir.
+  /** @type {number[]} */
+  const protege = [];
+  /** Coupe en travers protégée au point i : [u, hauteur] de gauche à droite. @param {number} i */
+  const coupeProtegee = (i) => {
+    const se = sec[i] ?? /** @type {typeof sections[0]} */ (sections[0]);
+    const y = rail[i]?.[1] ?? 0;
+    const hw = Math.max((largeur[i] ?? 6) / 2, se.width / 2 - 0.3);
+    const e = hw + (se.urban ? 2.2 : 1.0);
+    const yt = y + (se.urban ? 0.14 : -0.05) + 0.05;
+    return [
+      [-e, yt],
+      [-hw, yt],
+      [-hw, y],
+      [0, y + 0.06],
+      [hw, y],
+      [hw, yt],
+      [e, yt],
+    ];
+  };
+  for (let i = 0; i < N - 1; i += 1) {
+    if ((sec[i]?.ground ?? 'sol') === 'tunnel' || (sec[i + 1]?.ground ?? 'sol') === 'tunnel') continue;
+    const [A, B] = [i, i + 1].map((k) => {
+      const p = /** @type {number[]} */ (rail[k]);
+      const t = /** @type {number[]} */ (T[k]);
+      return coupeProtegee(k).map(([u = 0, h = 0]) => [(p[0] ?? 0) - (t[1] ?? 0) * u, h, (p[2] ?? 0) + (t[0] ?? 0) * u]);
+    });
+    for (let k = 0; k < 6; k += 1) {
+      const a0 = /** @type {number[]} */ (A?.[k]);
+      const a1 = /** @type {number[]} */ (A?.[k + 1]);
+      const b0 = /** @type {number[]} */ (B?.[k]);
+      const b1 = /** @type {number[]} */ (B?.[k + 1]);
+      // Les deux bandes verticales (bordure) n'ont pas d'aire : la garde les ignore.
+      protege.push(...a0, ...b0, ...b1, ...a0, ...b1, ...a1);
+    }
+  }
+  const garde = gardeChaussee(o.sansGarde ? [] : protege);
+  /** Abscisses (à 50 m près) des triangles de terrain refusés par la garde : diagnostic. @type {Set<number>} */
+  const zonesRefusees = new Set();
+  let terrainRefuse = 0;
+
   // Terrain : positions (pliages repoussés le long de la tangente) puis altitudes avec talus. Un
   // sommet qui tombe plus près d'une autre portion du parcours que de la sienne (rues parallèles,
   // épingles, boucle autour d'un pâté de maisons) s'arrête sur le précédent : les nappes de terrain
@@ -266,24 +314,6 @@ export function buildMap(id, o = {}) {
     }
   }
   for (const pr of profils) if (pr.ground === 'sol') ecartAxe = Math.max(ecartAxe, Math.abs(terrainNu(pr.p[0] ?? 0, pr.p[2] ?? 0) - pr.y));
-  // Garde : aucun sommet de terrain au-dessus de l'emprise de la chaussée (courbes serrées, retours de la route).
-  let terrainSurRoute = 0;
-  /** Abscisses (à 50 m près) des profils dont le terrain a été rabattu : diagnostic. @type {Set<number>} */
-  const zonesRabattues = new Set();
-  for (let q = 0; q < terX.length; q += 1) {
-    const pr = idxRail.proche(terX[q] ?? 0, terZ[q] ?? 0, 15);
-    if (pr.i < 0) continue;
-    const r = /** @type {number[]} */ (rail[pr.i]);
-    const pf = /** @type {typeof profils[0]} */ (profils[Math.min(NS - 1, Math.round(pr.i / K))]);
-    // Au-dessus d'un tunnel, le terrain recouvre la voûte : il n'est pas sur la chaussée.
-    if (pf.ground === 'tunnel' || profils[Math.floor(q / (2 * nT))]?.ground === 'tunnel') continue;
-    if (pr.d < pf.e - 0.2 && (terY[q] ?? 0) > (r[1] ?? 0) - 0.3) {
-      terY[q] = (r[1] ?? 0) - 0.6;
-      terrainSurRoute += 1;
-      const sq = Math.floor(q / (2 * nT));
-      zonesRabattues.add(Math.round(((profils[sq]?.i ?? 0) * step) / 50) * 50);
-    }
-  }
   // Écart chaussée-terrain au bord : bord d'accotement contre premier sommet du terrain (sections au sol).
   let ecartBord = 0;
   for (let s = 0; s < NS; s += 1) {
@@ -386,6 +416,14 @@ export function buildMap(id, o = {}) {
       const acc = [-1, 1].map((cote) => [ac.sommet(...P(cote * pr.hw, pr.y)), ac.sommet(...P(cote * pr.hw, pr.y + pr.bordure)), ac.sommet(...P(cote * pr.e, pr.ye))]);
       const ter = [0, 1].map((cc) => Array.from({ length: nT }, (_, k) => te.sommet(terX[at(s, cc, k)] ?? 0, terY[at(s, cc, k)] ?? 0, terZ[at(s, cc, k)] ?? 0)));
       const prev = prevRoute.pop();
+      /** Triangle de terrain, sauf s'il passe au-dessus de la chaussée ou d'un trottoir. @param {number} i0 @param {number} i1 @param {number} i2 */
+      const terre = (i0, i1, i2) => {
+        const v = [i0, i1, i2].map((k) => [te.pos[k * 3] ?? 0, te.pos[k * 3 + 1] ?? 0, te.pos[k * 3 + 2] ?? 0]);
+        if (garde.couvre(/** @type {number[]} */ (v[0]), /** @type {number[]} */ (v[1]), /** @type {number[]} */ (v[2]), 0.1)) {
+          terrainRefuse += 1;
+          zonesRefusees.add(Math.round((pr.i * step) / 50) * 50);
+        } else te.tri(i0, i1, i2);
+      };
       if (prev && s > a) {
         const [pr0, pacc, pter] = /** @type {[number[], number[][], number[][]]} */ (/** @type {unknown} */ (prev));
         // Sens : la face visible est vue d'en haut (Y vers le haut, avance vers la tangente).
@@ -405,8 +443,13 @@ export function buildMap(id, o = {}) {
           const tl1 = /** @type {number[]} */ (ter[0]);
           const tr0 = /** @type {number[]} */ (pter[1]);
           const tr1 = /** @type {number[]} */ (ter[1]);
-          te.quad(/** @type {number} */ (tl0[k + 1]), /** @type {number} */ (tl0[k]), /** @type {number} */ (tl1[k]), /** @type {number} */ (tl1[k + 1]));
-          te.quad(/** @type {number} */ (tr0[k]), /** @type {number} */ (tr0[k + 1]), /** @type {number} */ (tr1[k + 1]), /** @type {number} */ (tr1[k]));
+          for (const [q0, q1, q2, q3] of [
+            [tl0[k + 1], tl0[k], tl1[k], tl1[k + 1]],
+            [tr0[k], tr0[k + 1], tr1[k + 1], tr1[k]],
+          ].map((q) => q.map((v) => /** @type {number} */ (v)))) {
+            terre(/** @type {number} */ (q0), /** @type {number} */ (q1), /** @type {number} */ (q2));
+            terre(/** @type {number} */ (q0), /** @type {number} */ (q2), /** @type {number} */ (q3));
+          }
         }
       }
       prevRoute.push(/** @type {any} */ ([r, acc, ter]));
@@ -601,7 +644,13 @@ export function buildMap(id, o = {}) {
       const nx = -tz / L;
       const nz = tx / L;
       const cur = [-w, w].map((u) => m.sommet(x + nx * u, sol(x + nx * u, z + nz * u) + 0.12, z + nz * u));
-      if (prev.length && prevC === c) m.quad(/** @type {number} */ (prev[0]), /** @type {number} */ (prev[1]), /** @type {number} */ (cur[1]), /** @type {number} */ (cur[0]));
+      if (prev.length && prevC === c) {
+        // Garde : le ruban d'une route voisine ne passe pas au-dessus de la chaussée qu'il rejoint.
+        const q = [prev[0], prev[1], cur[1], cur[0]].map((k) => [m.pos[(k ?? 0) * 3] ?? 0, m.pos[(k ?? 0) * 3 + 1] ?? 0, m.pos[(k ?? 0) * 3 + 2] ?? 0]);
+        const [q0, q1, q2, q3] = /** @type {number[][]} */ (q);
+        if (!garde.couvre(/** @type {number[]} */ (q0), /** @type {number[]} */ (q1), /** @type {number[]} */ (q2), 0.1) && !garde.couvre(/** @type {number[]} */ (q0), /** @type {number[]} */ (q2), /** @type {number[]} */ (q3), 0.1))
+          m.quad(/** @type {number} */ (prev[0]), /** @type {number} */ (prev[1]), /** @type {number} */ (cur[1]), /** @type {number} */ (cur[0]));
+      }
       prev = cur;
       prevC = c;
     }
@@ -639,6 +688,96 @@ export function buildMap(id, o = {}) {
 
   // --- 10. Bâtiments : emprise extrudée, toit plat, bandes de fenêtres par étage.
   let nbBatiments = 0;
+  let batimentsRognes = 0;
+  let batimentsEcartes = 0;
+  /** Abscisses (à 10 m près) des bâtiments rognés : diagnostic. @type {Set<number>} */
+  const zonesRognees = new Set();
+  const eMaxBati = Math.max(...profils.map((p) => p.e)) + RETRAIT_BATI;
+  /**
+   * Contour d'un bâtiment hors de l'emprise du parcours (toutes les passes, hors tunnel) : null s'il
+   * faut l'écarter ; `tunnel` : profil de tunnel sous le bâtiment (il reste entier, posé dessus).
+   * @param {number[][]} an anneau trigonométrique
+   * @returns {{ an: number[][], tunnel: typeof profils[0] | null } | null}
+   */
+  const rognerBati = (an) => {
+    /** @type {{ v: typeof profils[0] | null }} */
+    const sous = { v: null };
+    /** Emprise la plus enfoncée en (x, z) : [profondeur, qx, qz, e] ou null. @param {number} x @param {number} z */
+    const dedans = (x, z) => {
+      /** @type {{ v: number[] | null }} */
+      const pire = { v: null };
+      idxRail.autour(x, z, eMaxBati, (i, d, qx, qz) => {
+        const pf = /** @type {typeof profils[0]} */ (profils[Math.min(NS - 1, Math.round(i / K))]);
+        const lim = pf.e + RETRAIT_BATI;
+        if (d >= lim) return;
+        if (pf.ground === 'tunnel') {
+          sous.v = pf;
+          return;
+        }
+        if (!pire.v || lim - d > (pire.v[0] ?? 0)) pire.v = [lim - d, qx, qz, lim];
+      });
+      return pire.v;
+    };
+    // La route traverse-t-elle le bâtiment (un point du rail hors tunnel dans son contour) ?
+    const ba = boite([an]);
+    const prc = idxRail.proche((ba[0] + ba[2]) / 2, (ba[1] + ba[3]) / 2, Math.hypot(ba[2] - ba[0], ba[3] - ba[1]) / 2 + 2);
+    if (prc.i >= 0) {
+      for (let i = Math.max(0, prc.i - 60); i < Math.min(N, prc.i + 60); i += 1) {
+        const r = /** @type {number[]} */ (rail[i]);
+        if (!dansPolygone(r[0] ?? 0, r[2] ?? 0, [an])) continue;
+        if ((sec[i]?.ground ?? 'sol') !== 'tunnel') return null;
+        sous.v = profils[Math.min(NS - 1, Math.round(i / K))] ?? null;
+      }
+    }
+    if (!an.some((p) => dedans(p[0] ?? 0, p[1] ?? 0))) {
+      // Sommets dehors : reste à voir si un côté entame l'emprise.
+      let entame = false;
+      for (let i = 0; i < an.length && !entame; i += 1) {
+        const p = /** @type {number[]} */ (an[i]);
+        const q = /** @type {number[]} */ (an[(i + 1) % an.length]);
+        const L = Math.hypot((q[0] ?? 0) - (p[0] ?? 0), (q[1] ?? 0) - (p[1] ?? 0));
+        for (let k = 1; k < Math.ceil(L); k += 1) if (dedans(mix(p[0] ?? 0, q[0] ?? 0, k / Math.ceil(L)), mix(p[1] ?? 0, q[1] ?? 0, k / Math.ceil(L)))) entame = true;
+      }
+      if (!entame) return { an, tunnel: sous.v };
+    }
+    // Contour redécoupé au mètre, chaque point dans l'emprise repoussé radialement jusqu'à son bord.
+    /** @type {number[][]} */
+    const dense = [];
+    for (let i = 0; i < an.length; i += 1) {
+      const p = /** @type {number[]} */ (an[i]);
+      const q = /** @type {number[]} */ (an[(i + 1) % an.length]);
+      const n = Math.max(1, Math.ceil(Math.hypot((q[0] ?? 0) - (p[0] ?? 0), (q[1] ?? 0) - (p[1] ?? 0))));
+      for (let k = 0; k < n; k += 1) dense.push([mix(p[0] ?? 0, q[0] ?? 0, k / n), mix(p[1] ?? 0, q[1] ?? 0, k / n)]);
+    }
+    const cx = an.reduce((s, p) => s + (p[0] ?? 0), 0) / an.length;
+    const cz = an.reduce((s, p) => s + (p[1] ?? 0), 0) / an.length;
+    for (const p of dense) {
+      for (let iter = 0; iter < 4; iter += 1) {
+        const w = dedans(p[0] ?? 0, p[1] ?? 0);
+        if (!w) break;
+        const [, qx = 0, qz = 0, lim = 0] = w;
+        let dx = (p[0] ?? 0) - qx;
+        let dz = (p[1] ?? 0) - qz;
+        let L = Math.hypot(dx, dz);
+        if (L < 1e-3) {
+          dx = cx - qx;
+          dz = cz - qz;
+          L = Math.hypot(dx, dz) || 1;
+        }
+        p[0] = qx + (dx / L) * (lim + 0.01);
+        p[1] = qz + (dz / L) * (lim + 0.01);
+      }
+      if (dedans(p[0] ?? 0, p[1] ?? 0)) return null; // coincé entre deux passes
+    }
+    let out = simplifier([...dense, /** @type {number[]} */ (dense[0])], 0.15).slice(0, -1);
+    // Points confondus (deux côtés repoussés sur le même bord) : retirés.
+    out = out.filter((p, i) => {
+      const q = /** @type {number[]} */ (out[(i + 1) % out.length]);
+      return Math.hypot((q[0] ?? 0) - (p[0] ?? 0), (q[1] ?? 0) - (p[1] ?? 0)) > 0.05;
+    });
+    if (out.length < 3 || aire(out) < 8) return null;
+    return { an: out, tunnel: sous.v };
+  };
   for (const bt of d.batiments) {
     /** @type {number[][]} */
     let an = [];
@@ -648,27 +787,23 @@ export function buildMap(id, o = {}) {
     const cz = an.reduce((s, p) => s + (p[1] ?? 0), 0) / an.length;
     const c = chunkEn(cx, cz, dl + 20);
     if (c < 0) continue;
-    // Aucun bâtiment sur la chaussée ou ses accotements (données décalées, passages couverts) : ni
-    // sommet dans l'emprise de la route, ni route qui traverse l'emprise du bâtiment. Au-dessus d'un
-    // tunnel, le bâtiment reste, posé sur le recouvrement.
-    const ba = boite([an]);
-    const rayon = Math.hypot(ba[2] - ba[0], ba[3] - ba[1]) / 2 + 12;
-    const prc = idxRail.proche(cx, cz, rayon);
-    /** @type {typeof profils[0] | null} */
-    let conflit = null;
-    for (const p of an) {
-      const pr = idxRail.proche(p[0] ?? 0, p[1] ?? 0, 12);
-      const pf = pr.i >= 0 ? profils[Math.min(NS - 1, Math.round(pr.i / K))] : undefined;
-      if (pf && pr.d < pf.e + 0.3) conflit = pf;
+    // Aucun bâtiment sur la chaussée ou ses accotements (données décalées, passages couverts) : le
+    // contour, redécoupé au mètre, est repoussé hors de l'emprise de toutes les passes du parcours
+    // (trottoir + RETRAIT_BATI), puis simplifié ; le bâtiment reste, rogné, en retrait du trottoir.
+    // Au-dessus d'un tunnel, le bâtiment reste entier, posé sur le recouvrement. Écarté seulement si
+    // la route le traverse ou s'il ne reste presque rien.
+    const rogne = rognerBati(an);
+    if (rogne === null) {
+      batimentsEcartes += 1;
+      continue;
     }
-    if (prc.i >= 0) {
-      const r0 = /** @type {number[]} */ (rail[prc.i]);
-      const r1 = /** @type {number[]} */ (rail[Math.min(N - 1, prc.i + 1)]);
-      const x = (r0[0] ?? 0) + ((r1[0] ?? 0) - (r0[0] ?? 0)) * prc.t;
-      const z = (r0[2] ?? 0) + ((r1[2] ?? 0) - (r0[2] ?? 0)) * prc.t;
-      if (dansPolygone(x, z, [an])) conflit = profils[Math.min(NS - 1, Math.round(prc.i / K))] ?? null;
+    if (rogne.an !== an) {
+      batimentsRognes += 1;
+      const pr = idxRail.proche(cx, cz, dl + 20);
+      if (pr.i >= 0) zonesRognees.add(Math.round((pr.i * step) / 10) * 10);
     }
-    if (conflit && conflit.ground !== 'tunnel') continue;
+    an = rogne.an;
+    const conflit = rogne.tunnel;
     // Sol du bâtiment : médiane des altitudes aux sommets (une pente forte ou un sommet hors du
     // couloir ne le hisse pas) ; les murs descendent jusqu'au point le plus bas, 8 m au plus.
     const hs = an.map((p) => sol(p[0] ?? 0, p[1] ?? 0)).sort((x, y) => x - y);
@@ -833,6 +968,25 @@ export function buildMap(id, o = {}) {
    * @param {boolean} trouer
    */
   const grilleFar = (g, abaisse, garder, trouer) => {
+    // Plancher : la plus basse altitude de la chaussée (hors tunnel, emprise et 3 m compris) dans chaque
+    // case ; les quatre coins d'une case que la route traverse passent 2 m dessous, si bien que le
+    // relief lointain ne recouvre jamais la route (la rampe au départ de la carte des lacs).
+    /** @type {Map<number, number>} */
+    const plancher = new Map();
+    for (let i = 0; i < N; i += 1) {
+      if ((sec[i]?.ground ?? 'sol') === 'tunnel') continue;
+      const p = /** @type {number[]} */ (rail[i]);
+      const e = (largeur[i] ?? 6) / 2 + 2.2 + 3;
+      const ia = Math.floor(((p[0] ?? 0) - e) / g.pas) - g.i0;
+      const ib = Math.floor(((p[0] ?? 0) + e) / g.pas) - g.i0;
+      const ja = Math.floor(((p[2] ?? 0) - e) / g.pas) - g.j0;
+      const jb = Math.floor(((p[2] ?? 0) + e) / g.pas) - g.j0;
+      for (let ci = ia; ci <= ib; ci += 1)
+        for (let cj = ja; cj <= jb; cj += 1) {
+          const k = (cj + 1) * (g.nx + 3) + ci + 1;
+          plancher.set(k, Math.min(plancher.get(k) ?? Infinity, p[1] ?? 0));
+        }
+    }
     const ids = new Int32Array(g.nx * g.nz);
     const pres = new Uint8Array(g.nx * g.nz);
     const auLarge = new Uint8Array(g.nx * g.nz);
@@ -847,6 +1001,13 @@ export function buildMap(id, o = {}) {
         const pr = trouer ? idxLarge.proche(x, z, dl + 60) : { d: Infinity };
         if (pr.d < dl + 60) y -= 4;
         if (pr.d < dl - 30) pres[j * g.nx + i] = 1;
+        for (const [ci, cj] of [
+          [i - 1, j - 1],
+          [i, j - 1],
+          [i - 1, j],
+          [i, j],
+        ])
+          y = Math.min(y, (plancher.get(((cj ?? 0) + 1) * (g.nx + 3) + (ci ?? 0) + 1) ?? Infinity) - 2);
         ids[j * g.nx + i] = far.sommet(x, y, z);
       }
     for (let j = 0; j < g.nz - 1; j += 1)
@@ -919,6 +1080,9 @@ export function buildMap(id, o = {}) {
     far: { file: 'lointain.glb', triangles: farGlb.triangles },
   };
 
+  // Contrôle : aucun point de la chaussée (hors tunnel) sous le décor ni sous le relief lointain.
+  const maillagesEnMemoire = parChunk.flatMap((m) => [...m].map(([role, a]) => ({ role, positions: a.pos, index: a.idx })));
+  const couverture = chausseeCouverte(route, maillagesEnMemoire, [{ role: 'lointain', positions: far.pos, index: far.idx }]);
   const P = pentes(rail, Math.round(10 / step));
   const mesures = {
     longueur: length,
@@ -933,11 +1097,18 @@ export function buildMap(id, o = {}) {
     ecartBord,
     talusMax,
     ecartAxe,
-    terrainSurRoute,
+    terrainSurRoute: couverture.couverts.filter((c) => c.role === 'terrain').length,
     terrainReplie: replies,
+    terrainRefuse,
     sommetsTerrain: terX.length,
-    zonesRabattues: [...zonesRabattues].sort((x, y) => x - y),
+    zonesRefusees: [...zonesRefusees].sort((x, y) => x - y),
+    chausseeCouverte: couverture.couverts.length,
+    couverture: resumerCouverture(couverture.couverts),
+    couverts: couverture.couverts,
     batiments: nbBatiments,
+    batimentsRognes,
+    batimentsEcartes,
+    zonesRognees: [...zonesRognees].sort((x, y) => x - y),
     arbres: instances.reduce((s, x) => s + x.arbre.length / 5, 0),
     lampadaires: instances.reduce((s, x) => s + x.lampadaire.length / 5, 0),
     balises: instances.reduce((s, x) => s + x.balise.length / 5, 0),
@@ -986,9 +1157,13 @@ async function main() {
       );
       console.log(
         `  pente ${(m.penteMax * 100).toFixed(1)} % au plus · rayon ${m.rayonMin.toFixed(0)} m au moins · dents de scie ${(m.dentsDeScie * 100).toFixed(1)} cm · ` +
-          `bord chaussée-terrain ${m.ecartBord.toFixed(2)} m · talus ${m.talusMax.toFixed(1)} m au plus · axe-terrain nu ${m.ecartAxe.toFixed(1)} m · terrain rabattu sous la route : ${m.terrainSurRoute} sommets${m.zonesRabattues.length ? ` (vers ${m.zonesRabattues.slice(0, 12).join(', ')} m)` : ''} · replié contre une autre portion : ${m.terrainReplie} sommets`,
+          `bord chaussée-terrain ${m.ecartBord.toFixed(2)} m · talus ${m.talusMax.toFixed(1)} m au plus · axe-terrain nu ${m.ecartAxe.toFixed(1)} m · triangles de terrain écartés de la chaussée : ${m.terrainRefuse}${m.zonesRefusees.length ? ` (vers ${m.zonesRefusees.slice(0, 12).join(', ')} m)` : ''} · replié contre une autre portion : ${m.terrainReplie} sommets`,
       );
-      console.log(`  ${m.batiments} bâtiments · ${m.arbres} arbres · ${m.lampadaires} lampadaires · ${m.balises} balises · ${Math.round(m.glissieres)} m de glissières · ${m.ponts} ponts · ${m.tunnels} tunnels`);
+      console.log(
+        `  chaussée couverte (hors tunnel) : ${m.chausseeCouverte} points` +
+          (m.chausseeCouverte ? ` (${Object.entries(m.couverture.parRole).map(([k, v]) => `${k} ${v}`).join(', ')} ; jusqu'à ${m.couverture.dyMax.toFixed(2)} m ; vers ${m.couverture.zones.slice(0, 16).join(', ')} m)` : ''),
+      );
+      console.log(`  ${m.batiments} bâtiments (${m.batimentsRognes} rognés hors de l'emprise, ${m.batimentsEcartes} écartés) · ${m.arbres} arbres · ${m.lampadaires} lampadaires · ${m.balises} balises · ${Math.round(m.glissieres)} m de glissières · ${m.ponts} ponts · ${m.tunnels} tunnels`);
       console.log(`  → ${relative(ROOT, out)}/`);
     } catch (error) {
       failed += 1;
