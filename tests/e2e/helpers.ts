@@ -246,6 +246,19 @@ export async function reloadSaved(page: Page): Promise<void> {
 }
 
 /**
+ * « Rentrer au garage » de la barre de la sortie. Tant que la route roule, il demande d'abord
+ * « Rentrer au garage ? » (src/app/gardeSortie.ts) : on confirme par « Rentrer ». Route pas encore prête,
+ * en erreur ou au bout : pas de question, le garage revient tout de suite.
+ */
+export async function rentrerAuGarage(page: Page): Promise<void> {
+  await page.getByRole('contentinfo', { name: 'Commandes de la sortie' }).getByRole('button', { name: 'Rentrer au garage' }).tap();
+  const question = page.getByRole('dialog', { name: 'Rentrer au garage ?' });
+  const garage = page.getByRole('heading', { level: 1, name: 'PimpMyBichon' });
+  await expect(question.or(garage)).toBeVisible();
+  if (await question.isVisible()) await question.getByRole('button', { name: 'Rentrer', exact: true }).tap();
+}
+
+/**
  * Menu « Sortie de nuit » : touche une carte (la première par défaut). Rien n'est choisi à
  * l'ouverture du panneau ; les départs, la météo et « Sortir » n'apparaissent qu'ensuite.
  */

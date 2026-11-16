@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
+import { openApp, openEntry, pickMap, waitForBench, waitForScene, rentrerAuGarage } from './helpers.ts';
 
 // Le conducteur à bord en sortie de nuit (demande du 16 novembre 2026 : « il manque un pilote au
 // volant », « les motos il faut bien retirer la béquille pendant les sorties ») : il s'assoit dans la
@@ -50,7 +50,7 @@ test('sortie de nuit : le conducteur est au volant de la Cox, la béquille du bo
   await page.screenshot({ path: resolve(dir, 'conducteur-cox-suivante.png') });
   // Pas de béquille sur une voiture.
   await expect(stage(page)).not.toHaveAttribute('data-bequille', /.*/);
-  await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+  await rentrerAuGarage(page);
   await expect(stage(page)).toHaveCount(0);
   await waitForScene(page);
   await waitForBench(page);

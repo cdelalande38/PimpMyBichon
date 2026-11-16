@@ -264,6 +264,54 @@ button {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+/* Nouvelle version prête : une pastille d'un seul bouton, visible menu fermé. Sa zone d'appui déborde
+   du dessin pour offrir 48 px de haut au doigt, sans recouvrir les boutons ronds en dessous. */
+.maj-pill {
+  /* Le bandeau du haut laisse passer les gestes vers la scène : le bouton les reprend. */
+  pointer-events: auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.25rem;
+  margin: 0;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--ambre);
+  border-radius: 4px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+  text-align: right;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.maj-pill::after {
+  content: '';
+  position: absolute;
+  inset: -7px -4px;
+}
+.maj-pill b {
+  color: var(--ambre);
+  font-weight: 700;
+}
+.maj-pill svg {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: var(--ambre);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.maj-pill:active {
+  filter: brightness(1.2);
+}
+
 /* Le même bouton, rangé dans Atelier › Sous le capot. */
 .btn.install-here {
   display: flex;

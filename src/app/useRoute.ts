@@ -4,6 +4,14 @@ import { parseHash, routeToHash, type Route } from './router.ts';
 // Marqueur posé dans l'état d'historique des entrées que l'app a empilées elle-même :
 // fermer un panneau revient alors à faire « retour », comme le geste retour d'Android.
 const PUSHED = 'pmbSheet';
+/**
+ * Sentinelle de la sortie de nuit (src/app/gardeSortie.ts) : une entrée d'historique posée par-dessus
+ * celle de la sortie. Le geste retour la dépile (la page reste sur #/sortie) : c'est ce qui laisse le
+ * temps de demander confirmation. `pmbSous` : l'entrée de dessous a été empilée par l'app (fermer
+ * revient alors à reculer de deux pas) ; sinon c'est un lien direct, qu'on remplace par le garage.
+ */
+const GARDE = 'pmbGarde';
+const SOUS = 'pmbSous';
 
 const ROUTE_EVENT = 'pmb:route';
 const SETTLE_EVENT = 'pmb:settle';
@@ -55,6 +63,36 @@ function markClosed(): void {
   }, GHOST_TAP_MS);
 }
 
+/** L'état d'historique est celui d'une sentinelle de la sortie. */
+export function estSentinelle(state: unknown): state is Record<string, unknown> {
+  return typeof state === 'object' && state !== null && GARDE in state;
+}
+
+/** L'état d'historique d'une entrée empilée par l'app (panneau, mode photo, sortie). */
+function estEmpilee(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && PUSHED in state;
+}
+
+/** État de la sentinelle à poser par-dessus l'entrée courante (`state` : son état actuel). */
+export function etatSentinelle(state: unknown): Record<string, boolean> {
+  return { [GARDE]: true, [SOUS]: estEmpilee(state) };
+}
+
+/** Un retour d'historique lancé par l'app est en cours : les gardes d'historique se taisent. */
+export function fermetureEnCours(): boolean {
+  return closing;
+}
+
+let interception: (() => boolean) | null = null;
+
+/**
+ * Un écran peut intercepter la fermeture demandée par un bouton (la sortie de nuit demande d'abord
+ * confirmation) : la fonction rend vrai quand elle s'en charge. `closeSheetNow()` passe outre.
+ */
+export function intercepterFermeture(fn: (() => boolean) | null): void {
+  interception = fn;
+}
+
 function basePath(): string {
   return window.location.pathname + window.location.search;
 }
@@ -82,14 +120,49 @@ export function switchSheet(route: Exclude<Route, { name: 'garage' }>): void {
 
 /** Revient au garage (panneau ou mode photo), sans laisser l'entrée derrière soi dans l'historique. */
 export function closeSheet(): void {
+  fermer(false);
+}
+
+/** Comme `closeSheet`, sans l'interception de la sortie de nuit (« Rentrer » l'a déjà confirmé). */
+export function closeSheetNow(): void {
+  fermer(true);
+}
+
+function fermer(force: boolean): void {
   // Double appui ou double clic : le premier suffit. Un second retour d'historique
   // reculerait d'une entrée de trop et ferait sortir de l'app.
   if (closing) return;
   if (parseHash(window.location.hash).name === 'garage') return;
+  if (!force && interception?.()) return;
   markClosed();
 
   const state: unknown = window.history.state;
-  if (typeof state === 'object' && state !== null && PUSHED in state) {
+  if (estSentinelle(state)) {
+    // Sortie de nuit gardée : on dépile la sentinelle avec l'entrée de la sortie, sans rien laisser derrière.
+    closing = true;
+    const settle = () => {
+      closing = false;
+    };
+    window.setTimeout(settle, 1000);
+    if (state[SOUS] === true) {
+      window.addEventListener('popstate', settle, { once: true });
+      window.history.go(-2);
+      return;
+    }
+    // Lien direct : on dépile la sentinelle, puis l'entrée de la sortie devient le garage.
+    window.addEventListener(
+      'popstate',
+      () => {
+        window.history.replaceState(null, '', basePath());
+        window.dispatchEvent(new Event(ROUTE_EVENT));
+        settle();
+      },
+      { once: true },
+    );
+    window.history.back();
+    return;
+  }
+  if (estEmpilee(state)) {
     closing = true;
     const settle = () => {
       closing = false;

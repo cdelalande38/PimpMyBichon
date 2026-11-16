@@ -1,0 +1,122 @@
+/* Dialogue « Rentrer au garage ? » de la sortie de nuit et offre de mise à jour de l'écran de pause
+   (src/ui/drive/QuitterSortie.tsx). Portrait : la carte se pose en bas, les boutons sous le pouce,
+   « Rester sur la route » en dernier. Paysage : carte centrée, les deux boutons côte à côte. */
+
+.quitter {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem calc(var(--gutter) + var(--safe-r)) calc(1.25rem + var(--safe-b)) calc(var(--gutter) + var(--safe-l));
+  background: rgba(10, 9, 17, 0.72);
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.quitter-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 26rem;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 1rem;
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--ambre);
+  border-radius: 6px;
+  background: var(--sheet);
+  box-shadow: 0 0 28px rgba(0, 0, 0, 0.6);
+}
+
+.quitter-carte h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 1.25rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.quitter-carte p {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.quitter-actes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.quitter-actes .btn {
+  flex: none;
+  width: 100%;
+  min-height: var(--tap);
+}
+
+.quitter-rester:focus-visible,
+.quitter-rentrer:focus-visible {
+  outline: 2px solid var(--chrome);
+  outline-offset: 2px;
+}
+
+/* Paysage bas (844 × 390) : la carte se centre, titre et texte à gauche, boutons côte à côte. */
+@media (orientation: landscape) and (max-height: 32rem) {
+  .quitter {
+    align-items: center;
+    padding-top: calc(0.5rem + var(--safe-t));
+    padding-bottom: calc(0.5rem + var(--safe-b));
+  }
+
+  .quitter-carte {
+    max-width: 34rem;
+    padding: 0.75rem 1rem;
+    gap: 0.5rem;
+  }
+
+  .quitter-actes {
+    flex-direction: row;
+  }
+
+  .quitter-actes .btn {
+    flex: 1;
+  }
+}
+
+/* Offre de mise à jour : au milieu de l'écran de pause, jamais en roulant. */
+.maj-sortie {
+  position: fixed;
+  top: 38%;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  padding: 0 calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
+  pointer-events: none;
+}
+
+.maj-sortie-btn {
+  flex: none;
+  gap: 0.5rem;
+  max-width: 100%;
+  border-color: var(--ambre);
+  pointer-events: auto;
+}
+
+.maj-sortie-btn b {
+  color: var(--ambre);
+  font-weight: 700;
+}
+
+@media (orientation: landscape) and (max-height: 32rem) {
+  .maj-sortie {
+    top: 30%;
+  }
+}

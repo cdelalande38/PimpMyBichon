@@ -5,7 +5,7 @@
 import { openSheet } from '../app/useRoute.ts';
 import { placeOf, resolveVehicle } from '../data/vehicles.ts';
 import { precachePercent, setInstallLater, usePwa } from '../pwa/pwaStore.ts';
-import { promptInstall } from '../pwa/register.ts';
+import { applyUpdate, promptInstall } from '../pwa/register.ts';
 import { useBuilds } from '../state/builds.ts';
 import { useDock } from '../state/dock.ts';
 import { useView } from '../state/view.ts';
@@ -64,6 +64,32 @@ function OfflinePill() {
 }
 
 /**
+ * Nouvelle version prête : le bandeau du menu ne se voit que menu ouvert (retour du 16 novembre 2026 :
+ * un téléphone est resté des heures sur l'ancienne version). Cette pastille se voit au garage même menu
+ * fermé ; un appui applique la version et recharge la page.
+ */
+function UpdatePill({ covered }: { covered: boolean }) {
+  const updateReady = usePwa((state) => state.updateReady);
+  if (!updateReady) return null;
+  return (
+    <button
+      type="button"
+      className="maj-pill"
+      aria-label="Nouvelle version prête : recharger l’atelier"
+      title="Une nouvelle version de l’atelier est prête"
+      inert={covered}
+      onClick={() => void applyUpdate()}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5" />
+      </svg>
+      <span>Nouvelle version</span>
+      <b>Recharger</b>
+    </button>
+  );
+}
+
+/**
  * Vue intérieure (§ 5.1) : seulement si le véhicule courant déclare des places dans son manifeste.
  * Le bouton rond entre (à la place gardée pour ce véhicule, le conducteur la première fois) et
  * ressort ; le choix de la place se fait par son nom, au pouce (PlacePicker).
@@ -100,6 +126,7 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
       </h1>
       <div className="hud-side">
         <OfflinePill />
+        <UpdatePill covered={covered} />
         {/* De haut en bas : l'atelier (rare), la photo, la radio (la plus courue), puis la vue
             intérieure (au plus près du pouce, quand le véhicule en a une). La ligne du morceau en
             cours s'étend à gauche de la radio, sous la marque et l'étiquette du véhicule, sans

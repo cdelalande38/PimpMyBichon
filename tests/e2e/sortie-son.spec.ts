@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, reloadSaved } from './helpers.ts';
+import { openApp, openEntry, pickMap, reloadSaved, rentrerAuGarage } from './helpers.ts';
 
 // Son du moteur en sortie de nuit (§ 5.5, § 9) : au départ le moteur démarre et tourne, le régime
 // publié monte avec la vitesse et passe des rapports, le bouton « Moteur » coupe et remet (choix
@@ -155,7 +155,7 @@ test.describe('son du moteur en sortie', () => {
     // Coupé à la main, puis retour au garage : le moteur est coupé au garage.
     await button.tap();
     await expect(button).toHaveAttribute('data-moteur', 'muet');
-    await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+    await rentrerAuGarage(page);
     await expect(stage(page)).toHaveCount(0);
     await openEntry(page, 'Préparation');
     await expect(page.locator('footer.dock .engine-sound')).toHaveAttribute('data-moteur', 'coupe');
@@ -166,7 +166,7 @@ test.describe('son du moteur en sortie', () => {
     await expect(engine(page)).toHaveAttribute('aria-pressed', 'false');
     await engine(page).tap();
     await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
-    await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+    await rentrerAuGarage(page);
     await expect(stage(page)).toHaveCount(0);
     await openEntry(page, 'Préparation');
     await expect(page.locator('footer.dock .engine-sound')).toHaveAttribute('data-moteur', 'coupe');
@@ -305,7 +305,7 @@ test.describe('son du moteur en sortie', () => {
       // Au garage, la radio reprend son volume ; les réglages sont gardés d'une sortie à l'autre.
       await bouton.tap();
       await curseur('Route').fill('55');
-      await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+      await rentrerAuGarage(page);
       await expect(stage(page)).toHaveCount(0);
       await goOut(page);
       await page.locator('.mixage').getByRole('button', { name: 'Réglages du son', exact: true }).tap();

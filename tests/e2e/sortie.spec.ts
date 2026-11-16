@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { capture, openApp, openEntry, waitForScene } from './helpers.ts';
+import { capture, openApp, openEntry, waitForScene, rentrerAuGarage } from './helpers.ts';
 
 // Sortie de nuit, lot 1 (§ 5.5) : on entre par le menu (Garage · Sortie de nuit), on roule, on change
 // de caméra, on passe à la main, on rentre au garage. Le parcours ne lit que les attributs que la
@@ -97,7 +97,7 @@ test.describe('sortie de nuit', () => {
     // Rentrer au garage en deux gestes à la main (la languette rappelle la barre) : l'atelier revient
     // tel qu'on l'avait laissé.
     await bar(page).getByRole('button', { name: 'Afficher les commandes' }).tap();
-    await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+    await rentrerAuGarage(page);
     await expect(page).not.toHaveURL(/#\/sortie/);
     await expect(stage(page)).toHaveCount(0);
     await expect(page.locator('footer.dock')).toBeVisible();
@@ -173,7 +173,7 @@ test.describe('sortie de nuit', () => {
     await page.unroute('**/assets/maps/*/route.json');
     await page.getByRole('button', { name: 'Réessayer' }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
-    await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+    await rentrerAuGarage(page);
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
   });
 });

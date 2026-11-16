@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
+import { openApp, openEntry, pickMap, waitForBench, waitForScene, rentrerAuGarage } from './helpers.ts';
 
 // Sortie de nuit : la caméra « embarquée » se pose à la place du conducteur du manifeste (œil posé
 // sur son siège, comme au garage), pas au-dessus du toit. Séquence de captures de revue :
@@ -41,5 +41,5 @@ test('sortie de nuit : la caméra embarquée est à la place du conducteur de la
     await page.screenshot({ path: resolve(dir, `sortie-embarquee-cox-${i}.png`) });
     await expect(stage(page)).toHaveAttribute('data-camera', 'embarquee');
   }
-  await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+  await rentrerAuGarage(page);
 });

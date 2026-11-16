@@ -10,10 +10,9 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
+import { openApp, openEntry, pickMap, waitForBench, waitForScene, rentrerAuGarage } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
-const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
 const DIR = resolve('captures', 'vague-o-virage');
 
 /** Un relevé : abscisse (m), braquage montré (°), roulis (°). */
@@ -88,7 +87,7 @@ test('sortie de nuit : en virage, les roues braquent, la voiture roule, la moto 
   // En ligne droite après le lacet : tout revient à zéro.
   expect(within(car, 258, 330).some(([, b, r]) => Math.abs(b) <= 1 && Math.abs(r) <= 1), 'retour à zéro après le lacet').toBe(true);
 
-  await bar(page).getByRole('button', { name: 'Rentrer au garage' }).tap();
+  await rentrerAuGarage(page);
   await expect(stage(page)).toHaveCount(0);
   await waitForScene(page);
   await waitForBench(page);

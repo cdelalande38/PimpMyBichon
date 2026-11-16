@@ -13,6 +13,7 @@ import { useDrive } from '../state/drive.ts';
 import { useSettings } from '../state/store.ts';
 import { Dock } from '../ui/Dock.tsx';
 import { DriveScreen } from '../ui/drive/DriveScreen.tsx';
+import { QuitterSortie } from '../ui/drive/QuitterSortie.tsx';
 import { Hud } from '../ui/Hud.tsx';
 import { SceneOverlay } from '../ui/overlay/SceneOverlay.tsx';
 import { PhotoBar } from '../ui/PhotoBar.tsx';
@@ -79,8 +80,12 @@ export function App() {
         )}
 
         {sortie ? (
-          // Sortie de nuit : l'atelier s'efface, la route prend l'écran.
-          <DriveScreen />
+          // Sortie de nuit : l'atelier s'efface, la route prend l'écran. « Retour » y demande d'abord
+          // confirmation (src/app/gardeSortie.ts).
+          <>
+            <DriveScreen />
+            <QuitterSortie />
+          </>
         ) : photo ? (
           // Mode photo : l'interface s'efface, la scène prend l'écran.
           <>
