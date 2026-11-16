@@ -15,7 +15,8 @@
 //   sortie roule moteur voulu, le moteur et la route sont devant et la radio baisse (rampe de 0,4 s) ;
 //   elle reprend son volume en pause, au bout du parcours et au garage. Au ralenti d'image, moteur et
 //   route baissent, la hauteur ne bouge pas.
-// - Bruitages de route (src/audio/sfx/route.ts, qui joue quoi : src/data/bruitages.ts), relus dix
+// - Bruitages de route (src/audio/sfx/route.ts, qui joue quoi : src/data/bruitages.ts ; la glisse des
+//   pneus vient de `DriveMotion.slip` ou, à défaut, du braquage et de l’adhérence), relus dix
 //   fois par seconde avec le pilote : coupés en pause, au garage et moteur coupé.
 // - Aucun son avant un geste dans la page (ouverture directe de #/sortie comprise) : le moteur
 //   attend le premier appui.
@@ -24,7 +25,7 @@
 import { create } from 'zustand';
 import { baisserRadio } from '../audio/radio/player.ts';
 import { meteoSon } from '../audio/sfx/meteo.ts';
-import type { EtatRoute } from '../audio/sfx/regles.ts';
+import { glisseMesuree, type EtatRoute } from '../audio/sfx/regles.ts';
 import { instantRepos, LecteurBruitages } from '../audio/sfx/route.ts';
 import { boiteDuVehicule } from '../data/boites.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
@@ -104,6 +105,15 @@ export function brancherSonSortie(): () => void {
 
   const famille = () => soundFamilyOf(resolveVehicle(useBuilds.getState().current));
   let familleCourante = famille();
+  // Genre et adhérence du véhicule, pour estimer la glisse des pneus quand le pilote ne la publie pas.
+  let genre: 'car' | 'bike' = 'car';
+  let grip: number | undefined;
+  const lireVehicule = () => {
+    const vehicule = resolveVehicle(useBuilds.getState().current);
+    genre = vehicule.kind;
+    grip = vehicule.performance?.grip;
+  };
+  lireVehicule();
   bruitages ??= new LecteurBruitages((emplacement) => useSonSortie.setState((state) => ({ bruitage: emplacement, bruitages: state.bruitages + 1 })));
   const lecteur = bruitages;
   // Ce que les bruitages écoutent, réécrit sur place à chaque relecture.
@@ -127,6 +137,7 @@ export function brancherSonSortie(): () => void {
   /** Démarre ou coupe selon les conditions, règle le mélange, publie l'état. */
   const evaluer = () => {
     familleCourante = famille();
+    lireVehicule();
     const c = conditions();
     roule = moteurVoulu(c);
     const moteur = useEngineSound.getState();
@@ -171,6 +182,9 @@ export function brancherSonSortie(): () => void {
       const train = pilote.train;
       etatRoute.vitesseKmh = motion.speed * 3.6;
       etatRoute.nos = train?.nos === true;
+      // `slip` : glisse publiée par le pilote (facultative) ; à défaut, estimée d'après le braquage et l'adhérence.
+      const pneus = motion as { slip?: number };
+      etatRoute.glisse = glisseMesuree({ slip: pneus.slip, vitesse: motion.speed, braquage: motion.steer, grip, genre });
       instant.vitesseKmh = etatRoute.vitesseKmh;
       instant.accel = motion.accel;
       instant.shifting = train?.shifting === true;

@@ -4,7 +4,7 @@
 // régime). Les données sont dans src/data/bruitages.ts ; le lecteur dans ./route.ts. Aucune
 // allocation : tout s'écrit dans des objets donnés par l'appelant.
 
-import type { BoucleRoute, Declencheur, PonctuelRoute } from '../../data/bruitages.ts';
+import { ESTIMATION_GLISSE, type BoucleRoute, type Declencheur, type Glisse, type PonctuelRoute } from '../../data/bruitages.ts';
 
 /** Ce que les boucles écoutent, relu dix fois par seconde. */
 export interface EtatRoute {
@@ -19,6 +19,11 @@ export interface EtatRoute {
   abri: number;
   /** Poussée du NOS en cours. */
   nos: boolean;
+  /**
+   * Glisse brute des pneus, de 0 (ils tiennent) à 1 (ils glissent franchement) : `DriveMotion.slip`
+   * du pilote, ou `glisseMesuree` à défaut. Absente : 0. Le lecteur la fait passer par `suivreGlisse`.
+   */
+  glisse?: number;
 }
 
 /** Un instant du moteur et du véhicule, pour les déclencheurs (deux instants : avant, maintenant). */
@@ -32,6 +37,8 @@ export interface InstantRoute {
   charge: number;
   /** Régime rapporté au rupteur, de 0 à 1. */
   regime: number;
+  /** Poussée du NOS en cours (le lecteur la tire de `EtatRoute.nos`). */
+  nos?: boolean;
 }
 
 /** Au-dessus de cette coupure (Hz), le filtre d'une boucle est grand ouvert. */
@@ -53,33 +60,102 @@ function mouilleRoulement(e: EtatRoute): number {
   return unite(e.mouille) * (1 - unite(e.neige));
 }
 
-/** Niveau visé d'une boucle, de 0 à 1 (avant le curseur « Route »). */
-export function niveauBoucle(b: BoucleRoute, e: EtatRoute): number {
+/**
+ * Niveau visé d'une boucle, de 0 à 1 (avant le curseur « Route »). `glisse` : la glisse déjà suivie
+ * (hystérésis et rampes de `suivreGlisse`) pour une boucle de glisse ; par défaut, la glisse brute.
+ */
+export function niveauBoucle(b: BoucleRoute, e: EtatRoute, glisse: number = e.glisse ?? 0): number {
   let n = b.niveau;
+  if (b.glisse) n *= unite(glisse);
   if (b.vitesse) n *= partVitesse(b, e.vitesseKmh) ** b.vitesse.puissance;
   if (b.meteo === 'sec') n *= 1 - mouilleRoulement(e);
   else if (b.meteo === 'mouille') n *= mouilleRoulement(e);
   else if (b.meteo === 'pluie') n *= unite(e.pluie);
   if (b.neige) n *= 1 + (b.neige.niveau - 1) * unite(e.neige);
+  if (b.mouille) n *= 1 + (b.mouille.niveau - 1) * mouilleRoulement(e);
   if (b.abri === 'dehors') n *= 1 - unite(e.abri);
   else if (b.abri === 'dessous') n *= unite(e.abri);
   if (b.nos && !e.nos) n = 0;
   return unite(n);
 }
 
-/** Hauteur (vitesse de lecture) d'une boucle : elle monte avec la vitesse. */
-export function hauteurBoucle(b: BoucleRoute, e: EtatRoute): number {
+/** Hauteur (vitesse de lecture) d'une boucle : elle monte avec la vitesse (ou, si elle glisse, avec la glisse). */
+export function hauteurBoucle(b: BoucleRoute, e: EtatRoute, glisse: number = e.glisse ?? 0): number {
+  if (b.glisse) {
+    const [bas, haut] = b.glisse.hauteur;
+    return bas + (haut - bas) * unite(glisse);
+  }
   if (!b.hauteur) return 1;
   const [bas, haut] = b.hauteur;
   return bas + (haut - bas) * partVitesse(b, e.vitesseKmh);
 }
 
-/** Coupure du filtre passe-bas d'une boucle, en Hz : étouffée sous la neige. */
+/** Coupure du filtre passe-bas d'une boucle, en Hz : étouffée sous la neige, sourde sur le mouillé. */
 export function coupureBoucle(b: BoucleRoute, e: EtatRoute): number {
-  if (!b.neige) return COUPURE_OUVERTE;
-  const k = unite(e.neige);
   // Interpolation géométrique : l'oreille entend les octaves.
-  return COUPURE_OUVERTE * (b.neige.coupure / COUPURE_OUVERTE) ** k;
+  let coupure = COUPURE_OUVERTE;
+  if (b.neige) coupure = Math.min(coupure, COUPURE_OUVERTE * (b.neige.coupure / COUPURE_OUVERTE) ** unite(e.neige));
+  if (b.mouille) coupure = Math.min(coupure, COUPURE_OUVERTE * (b.mouille.coupure / COUPURE_OUVERTE) ** mouilleRoulement(e));
+  return coupure;
+}
+
+/** Ce que la boucle de glisse retient d'un instant à l'autre (une par voix, réécrit sur place). */
+export interface SuiviGlisse {
+  /** Allumée (au-dessus du seuil, jusqu'à retomber sous `seuil - hysteresis`). */
+  actif: boolean;
+  /** Niveau suivi, de 0 à 1 : ce qui règle le niveau et la hauteur de la boucle. */
+  valeur: number;
+}
+
+/** Un suivi au repos : éteint, muet. */
+export function suiviGlisseRepos(): SuiviGlisse {
+  return { actif: false, valeur: 0 };
+}
+
+/**
+ * Avance le suivi de la glisse de `dt` secondes d'après la glisse brute et la vitesse, et rend le
+ * niveau suivi (de 0 à 1). Hystérésis : allumé au-dessus de `seuil`, éteint au-dessous de
+ * `seuil - hysteresis` ; sous `vitesseMin`, éteint. Le niveau cible monte de 0 à 1 entre `seuil -
+ * hysteresis` et la glisse pleine, puis suit en attaque (montée) et relâchement (descente) doux.
+ */
+export function suivreGlisse(suivi: SuiviGlisse, brute: number, vitesseKmh: number, dt: number, g: Glisse): number {
+  const glisse = unite(brute);
+  const bas = Math.max(0, g.seuil - g.hysteresis);
+  if (!(vitesseKmh >= g.vitesseMin)) suivi.actif = false;
+  else if (suivi.actif) suivi.actif = glisse >= bas;
+  else suivi.actif = glisse >= g.seuil;
+  const cible = suivi.actif ? unite((glisse - bas) / Math.max(0.01, 1 - bas)) : 0;
+  const tau = cible > suivi.valeur ? g.attaque : g.relache;
+  const pas = Number.isFinite(dt) && dt > 0 ? 1 - Math.exp(-dt / Math.max(0.001, tau)) : 0;
+  suivi.valeur = unite(suivi.valeur + (cible - suivi.valeur) * pas);
+  return suivi.valeur;
+}
+
+/** Ce que le pilote dit des pneus, pour `glisseMesuree` (rien d'autre n'est lu du pilote). */
+export interface MesureGlisse {
+  /** `DriveMotion.slip`, s'il est publié. */
+  slip?: number;
+  /** Vitesse, en m/s. */
+  vitesse: number;
+  /** Braquage des roues avant, en radians (`DriveMotion.steer`). */
+  braquage?: number;
+  /** Adhérence du véhicule, en m/s² (`performance.grip`). */
+  grip?: number;
+  /** Genre du véhicule (choisit l'empattement). */
+  genre: 'car' | 'bike';
+}
+
+/**
+ * Glisse brute, de 0 à 1 : celle que le pilote publie (`slip`) ; à défaut, estimée : accélération
+ * latérale (vitesse² × tan(braquage) ÷ empattement) rapportée à l'adhérence, nulle sous une marge.
+ */
+export function glisseMesuree(m: MesureGlisse): number {
+  if (typeof m.slip === 'number' && Number.isFinite(m.slip)) return unite(m.slip);
+  if (typeof m.braquage !== 'number' || !Number.isFinite(m.braquage) || !Number.isFinite(m.vitesse)) return 0;
+  const E = ESTIMATION_GLISSE;
+  const lateral = (m.vitesse * m.vitesse * Math.abs(Math.tan(m.braquage))) / E.empattement[m.genre];
+  const grip = typeof m.grip === 'number' && Number.isFinite(m.grip) ? Math.max(1, m.grip) : E.gripDefaut;
+  return unite((lateral / grip - E.marge) / E.plage);
 }
 
 /**
@@ -94,6 +170,8 @@ export function declenche(d: Declencheur, avant: InstantRoute, maintenant: Insta
     }
     case 'rapport':
       return maintenant.shifting && !avant.shifting;
+    case 'nos':
+      return maintenant.nos === true && avant.nos !== true;
     case 'leve-pied':
       return avant.charge >= LEVE_PIED.avant && maintenant.charge <= LEVE_PIED.apres && avant.regime >= d.regimeMin && alea < d.chance;
   }
@@ -111,4 +189,5 @@ export function copierInstant(de: InstantRoute, vers: InstantRoute): void {
   vers.shifting = de.shifting;
   vers.charge = de.charge;
   vers.regime = de.regime;
+  vers.nos = de.nos;
 }

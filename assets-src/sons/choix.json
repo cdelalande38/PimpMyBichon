@@ -857,6 +857,51 @@
             },
             "fondu": 0.12
           }
+        ],
+        "derapage-long": [
+          {
+            "prise": "prise-cfff7de619",
+            "debut": 0,
+            "fin": 4,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, boucle sans raccord ; prise la plus stable des 2 (±1,56 dB)",
+            "boucle": {
+              "debut": 0.1,
+              "fin": 3.9
+            },
+            "fondu": 0.12
+          }
+        ],
+        "nos-depart": [
+          {
+            "prise": "prise-252379e960",
+            "debut": 0,
+            "fin": 0.7,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-010327b176",
+            "debut": 0,
+            "fin": 0.7,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          },
+          {
+            "prise": "prise-16481badf2",
+            "debut": 0,
+            "fin": 0.4,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 3"
+          }
         ]
       }
     }

@@ -1,14 +1,14 @@
 // Liste de courses des sons (tools/sons/manque.mjs) et prises générées par le commanditaire
 // (tools/sons/catalogue.mjs) : un dossier d'essai tient lieu de dépôt, rien n'est lu du dossier privé.
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBrandMatcher, loadBrandHashes } from '../../tools/lib/brands.mjs';
 import { LICENCE_GENEREE_CREDITS, licence, ligneCredit } from '../../tools/sons/catalogue.mjs';
-import { FAMILLES } from '../../tools/sons/emplacements.mjs';
+import { FAMILLES, famille } from '../../tools/sons/emplacements.mjs';
 import { emplacementsBranches, listeManques, MOTEURS } from '../../tools/sons/manque.mjs';
 
 const dossiers: string[] = [];
@@ -69,6 +69,23 @@ describe('sons:manque', () => {
       for (const vide of fam.vides) expect([...marques(vide.fr), ...marques(vide.en)].map((hit) => hit.term), `${fam.famille} · ${vide.emplacement}`).toEqual([]);
     }
     expect(Object.keys(MOTEURS).sort()).toEqual(FAMILLES.filter((f) => f.genre === 'moteur').map((f) => f.id).sort());
+  });
+
+  it('le crissement long et le coup d’envoi du NOS sont déclarés, décrits et joués par l’app', () => {
+    // Dépôt d'essai (route vide) : la description existe ; ce que l'app joue se lit dans les vraies données.
+    const route = listeManques({ racine: depotEssai() }).familles.find((f) => f.famille === 'route')!;
+    const joues = emplacementsBranches(readFileSync(new URL('../../src/data/bruitages.ts', import.meta.url), 'utf8'));
+    expect(joues.has('derapage-long')).toBe(true);
+    expect(joues.has('nos-depart')).toBe(true);
+    const long = route.vides.find((v) => v.emplacement === 'derapage-long')!;
+    expect(long).toMatchObject({ genre: 'boucle' });
+    const depart = route.vides.find((v) => v.emplacement === 'nos-depart')!;
+    expect(depart).toMatchObject({ genre: 'ponctuel' });
+    expect(depart.dureeVisee).toBeGreaterThanOrEqual(0.5);
+    expect(depart.dureeVisee).toBeLessThanOrEqual(1);
+    expect(depart.fr).toMatch(/gaz sous pression/);
+    expect(depart.en).toMatch(/pressurised gas/);
+    expect(famille('route')?.emplacements.find((e) => e.id === 'nos-depart')?.genre).toBe('ponctuel');
   });
 
   it('lit les emplacements joués dans src/data/bruitages.ts', () => {

@@ -58,7 +58,7 @@ export const FAMILLES = Object.freeze([
     dossier: 'sfx/route',
     emplacements: bruitages(
       ['derapage-long', 'burnout', 'roulement-sec', 'roulement-mouille', 'pluie', 'vent', 'tunnel', 'nos'],
-      ['derapage-court', 'freinage', 'passage-1', 'passage-2', 'rapport', 'klaxon-1', 'klaxon-2', 'klaxon-3', 'essuie-glaces', 'clignotant', 'backfire'],
+      ['derapage-court', 'freinage', 'passage-1', 'passage-2', 'rapport', 'nos-depart', 'klaxon-1', 'klaxon-2', 'klaxon-3', 'essuie-glaces', 'clignotant', 'backfire'],
       -20,
     ),
   },

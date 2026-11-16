@@ -174,6 +174,11 @@ const BRIEFS_ROUTE = {
     fr: 'Pneus qui patinent sur place et crissent en continu, moteur discret, bouclable sans clic',
     en: 'Tyres spinning on the spot with a continuous screech, engine kept quiet, seamlessly loopable',
   },
+  'nos-depart': {
+    duree: 0.8,
+    fr: 'Décharge brève et sèche de gaz sous pression, attaque franche puis retombée rapide, comme une vanne qui s’ouvre d’un coup, sans moteur ni explosion',
+    en: 'Brief sharp discharge of pressurised gas, hard attack then a quick decay, like a valve snapping open, no engine, no explosion',
+  },
   rapport: {
     duree: 0.5,
     fr: 'Claquement mécanique bref d’un levier de vitesses de voiture qui passe un rapport, entendu de l’habitacle, sans moteur',

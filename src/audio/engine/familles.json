@@ -43,8 +43,8 @@
       "nom": "Route (sortie de nuit)",
       "genre": "bruitage",
       "provisoire": true,
-      "boucles": 6,
-      "ponctuels": 8
+      "boucles": 7,
+      "ponctuels": 11
     }
   },
   "attributions": [

@@ -1,5 +1,6 @@
 // Lecteur des bruitages de route en sortie de nuit (§ 5.5 « Son », § 9) : roulement, vent, pluie,
-// tunnel, NOS en boucles ; freinage, dérapage, rapport, retour de flamme en ponctuels. Même contexte
+// tunnel, NOS, dérapage long (les pneus qui glissent) en boucles ; freinage, dérapage court, rapport,
+// coup d'envoi du NOS, retour de flamme en ponctuels. Même contexte
 // audio et même sortie (limiteur) que le moteur (src/audio/engine/lecteur.ts), avec son propre
 // gain : le curseur « Route ». Qui joue quoi : src/data/bruitages.ts ; règles : ./regles.ts.
 //
@@ -12,7 +13,7 @@
 import { BOUCLES_ROUTE, FAMILLE_ROUTE, FONDU_BOUCLES, PONCTUELS_ROUTE, type BoucleRoute } from '../../data/bruitages.ts';
 import { engineFileUrl, parseEngineManifest } from '../engine/manifeste.ts';
 import { parseSfxManifest, sfxFileUrl, type SfxBoucle, type SfxManifest, type SfxPonctuel } from './manifeste.ts';
-import { copierInstant, coupureBoucle, hauteurBoucle, niveauBoucle, ponctuelPart, type EtatRoute, type InstantRoute } from './regles.ts';
+import { copierInstant, coupureBoucle, hauteurBoucle, niveauBoucle, ponctuelPart, suiviGlisseRepos, suivreGlisse, type EtatRoute, type InstantRoute, type SuiviGlisse } from './regles.ts';
 
 /** Un son décodé, avec son gain de lecture (dB). */
 interface Prise {
@@ -30,6 +31,8 @@ interface Voix {
   source: AudioBufferSourceNode;
   gain: GainNode;
   filtre: BiquadFilterNode | null;
+  /** Suivi de la glisse (hystérésis, rampes) d'une boucle de glisse ; null pour les autres. */
+  suivi: SuiviGlisse | null;
   /** Gain de lecture de la prise (linéaire). */
   base: number;
 }
@@ -41,7 +44,7 @@ const LISSAGE = 0.12;
 
 /** Un instant neutre (véhicule arrêté). */
 export function instantRepos(): InstantRoute {
-  return { vitesseKmh: 0, accel: 0, shifting: false, charge: 0, regime: 0 };
+  return { vitesseKmh: 0, accel: 0, shifting: false, charge: 0, regime: 0, nos: false };
 }
 
 export class LecteurBruitages {
@@ -59,6 +62,10 @@ export class LecteurBruitages {
   private famille: string | null = null;
   private voix: Voix[] = [];
   private readonly avant: InstantRoute = instantRepos();
+  /** L'instant présent, avec le NOS tiré de l'état de la route (front montant du coup d'envoi). */
+  private readonly present: InstantRoute = instantRepos();
+  /** Dernière mise à jour (temps du contexte, s) : pas de temps des rampes de glisse. */
+  private dernierTemps = -1;
   private readonly dernierDepart = new Float64Array(PONCTUELS_ROUTE.length).fill(-Infinity);
   private readonly onBruitage: (emplacement: string) => void;
   private readonly base: string;
@@ -210,7 +217,7 @@ export class LecteurBruitages {
       const gain = ctx.createGain();
       gain.gain.value = 0;
       let filtre: BiquadFilterNode | null = null;
-      if (boucle.neige) {
+      if (boucle.neige || boucle.mouille) {
         filtre = ctx.createBiquadFilter();
         filtre.type = 'lowpass';
         filtre.frequency.value = 20000;
@@ -221,7 +228,7 @@ export class LecteurBruitages {
       gain.connect(bus);
       // Départ au hasard dans la boucle : deux sorties ne sonnent pas pareil au même endroit.
       source.start(ctx.currentTime, prise.entree.boucle[0] + Math.random() * (source.loopEnd - prise.entree.boucle[0]));
-      this.voix.push({ boucle, source, gain, filtre, base: dbToGain(prise.entree.gain) });
+      this.voix.push({ boucle, source, gain, filtre, suivi: boucle.glisse ? suiviGlisseRepos() : null, base: dbToGain(prise.entree.gain) });
     }
   }
 
@@ -265,16 +272,22 @@ export class LecteurBruitages {
     if (!this.brancher(audio)) return;
     const ctx = this.ctx as AudioContext;
     const now = ctx.currentTime;
+    const dt = this.dernierTemps >= 0 ? Math.min(0.5, Math.max(0, now - this.dernierTemps)) : 0;
+    this.dernierTemps = now;
     (this.bus as GainNode).gain.setTargetAtTime(this.niveau, now, LISSAGE);
+    // L'instant présent : celui du moteur, avec le NOS de l'état de la route.
+    const present = this.present;
+    copierInstant(instant, present);
+    present.nos = etat.nos;
     if (!actif) {
       if (this.actif) this.couper();
-      copierInstant(instant, this.avant);
+      copierInstant(present, this.avant);
       return;
     }
     if (!this.actif) {
       this.actif = true;
       this.lancerBoucles();
-      copierInstant(instant, this.avant);
+      copierInstant(present, this.avant);
     }
     if (famille !== this.famille) {
       this.famille = famille;
@@ -286,16 +299,17 @@ export class LecteurBruitages {
       }
     }
     for (const voix of this.voix) {
-      const cible = niveauBoucle(voix.boucle, etat) * voix.base;
+      const glisse = voix.suivi && voix.boucle.glisse ? suivreGlisse(voix.suivi, etat.glisse ?? 0, etat.vitesseKmh, dt, voix.boucle.glisse) : 0;
+      const cible = niveauBoucle(voix.boucle, etat, glisse) * voix.base;
       // Trois constantes de temps font la rampe : FONDU_BOUCLES à l'aller comme au retour.
       voix.gain.gain.setTargetAtTime(cible, now, FONDU_BOUCLES / 3);
-      voix.source.playbackRate.setTargetAtTime(hauteurBoucle(voix.boucle, etat), now, LISSAGE);
+      voix.source.playbackRate.setTargetAtTime(hauteurBoucle(voix.boucle, etat, glisse), now, LISSAGE);
       voix.filtre?.frequency.setTargetAtTime(coupureBoucle(voix.boucle, etat), now, LISSAGE);
     }
     if (ctx.state === 'running') {
       for (let i = 0; i < PONCTUELS_ROUTE.length; i += 1) {
         const ponctuel = PONCTUELS_ROUTE[i] as (typeof PONCTUELS_ROUTE)[number];
-        if (!ponctuelPart(ponctuel, this.avant, instant, now - (this.dernierDepart[i] ?? -Infinity), Math.random())) continue;
+        if (!ponctuelPart(ponctuel, this.avant, present, now - (this.dernierDepart[i] ?? -Infinity), Math.random())) continue;
         const prises = ponctuel.famille === 'moteur' && this.flammes.length > 0 ? this.flammes : this.jeu?.ponctuels.get(ponctuel.emplacement);
         if (!prises || prises.length === 0) continue;
         this.dernierDepart[i] = now;
@@ -303,7 +317,7 @@ export class LecteurBruitages {
         this.onBruitage(ponctuel.emplacement);
       }
     }
-    copierInstant(instant, this.avant);
+    copierInstant(present, this.avant);
   }
 
   private jouer(prise: Prise, niveau: number): void {
@@ -327,5 +341,6 @@ export class LecteurBruitages {
     this.actif = false;
     this.arreterBoucles();
     this.dernierDepart.fill(-Infinity);
+    this.dernierTemps = -1;
   }
 }

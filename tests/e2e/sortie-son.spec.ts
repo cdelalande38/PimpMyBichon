@@ -313,5 +313,60 @@ test.describe('son du moteur en sortie', () => {
 
       expect(errors).toEqual([]);
     });
+
+    test('à la main, un appui sur le NOS fait partir « nos-depart » une seule fois par poussée', async ({ page }) => {
+      test.setTimeout(420_000);
+      const errors = watchErrors(page);
+      // Index d'essai : le seul coup d'envoi du NOS, avec pour fichier une prise réelle du dépôt
+      // (la coupure d'un moteur). Rien n'est fabriqué, aucune boucle : seul ce ponctuel peut partir.
+      const prise = readFileSync(resolve('public/assets/audio/engines/quatre-en-ligne-moto/stop.ogg'));
+      await page.route('**/assets/audio/sfx/route/**', async (route) => {
+        const path = new URL(route.request().url()).pathname.split('/assets/audio/sfx/route/')[1] ?? '';
+        if (path === 'sfx.json') {
+          await route.fulfill({
+            json: {
+              format: 'pmb-sfx-sons',
+              version: 1,
+              famille: 'route',
+              provisoire: true,
+              boucles: [],
+              ponctuels: [{ emplacement: 'nos-depart', fichier: 'nos-depart-1.ogg', empreinte: 'e55a2', duree: 1, gain: -6, credit: 0 }],
+              credits: [{ auteur: 'essai', licence: 'CC0-1.0', source: 'essai', citer: false }],
+            },
+          });
+          return;
+        }
+        await route.fulfill({ body: prise, contentType: 'audio/ogg' });
+      });
+      await openApp(page);
+      await putOnScreen(page, 'sportive');
+      await reloadSaved(page);
+      await goOut(page);
+      const mix = page.locator('.mixage');
+      const nos = page.getByRole('button', { name: 'NOS' });
+      const bruitages = async () => Number(await mix.getAttribute('data-bruitages'));
+      await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 60_000 });
+      await expect(mix).toHaveAttribute('data-bruitages', '0');
+
+      // À la main : le NOS n'est envoyé qu'à la main. Un appui : le coup d'envoi part, une fois.
+      await page.getByRole('switch', { name: 'Conduite à la main' }).tap();
+      await expect(nos).toBeVisible();
+      await nos.tap();
+      await expect(nos).toHaveAttribute('data-nos', 'envoye', { timeout: 120_000 });
+      await expect.poll(bruitages, { timeout: 120_000, intervals: [250] }).toBe(1);
+      await expect(mix).toHaveAttribute('data-bruitage', 'nos-depart');
+      // Tant que la poussée dure, aucun autre coup ; une fois finie, toujours un seul.
+      await expect(page.locator('.drive-dial')).toHaveAttribute('data-nos', 'true', { timeout: 30_000 });
+      expect(await bruitages()).toBe(1);
+      await expect(page.locator('.drive-dial')).toHaveAttribute('data-nos', 'false', { timeout: 150_000 });
+      expect(await bruitages()).toBe(1);
+      await shot(page, 'nos-depart-390', 'vague-p-derapage');
+
+      // Une nouvelle poussée : un nouveau coup d'envoi.
+      await expect(nos).toHaveAttribute('data-nos', /pret|envoye/, { timeout: 150_000 });
+      await nos.tap();
+      await expect.poll(bruitages, { timeout: 150_000, intervals: [250] }).toBe(2);
+      expect(errors).toEqual([]);
+    });
   });
 });
