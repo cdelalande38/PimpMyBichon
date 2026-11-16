@@ -2,6 +2,7 @@
 // Aucune de ces étapes n'est bloquante : l'app s'affiche tout de suite, le cache se remplit derrière.
 
 import { registerSW } from 'virtual:pwa-register';
+import { peutAppliquerDoffice } from './majAuto.ts';
 import { isPrecacheProgress } from './messages.ts';
 import { usePwa, setInstallLater } from './pwaStore.ts';
 
@@ -18,8 +19,58 @@ const RELOAD_FALLBACK_MS = 5000;
 let skipWaiting: (() => Promise<void>) | null = null;
 let installEvent: BeforeInstallPromptEvent | null = null;
 let started = false;
-/** Vrai dès que l'utilisateur a demandé la mise à jour : seul cas où la page se recharge. */
+/** Vrai dès que la mise à jour est demandée (par l'utilisateur, ou d'office avant son premier geste) : seul cas où la page se recharge. */
 let reloadRequested = false;
+/** Vrai dès le premier geste dans la page : au-delà, plus de rechargement sans accord. */
+let interacted = false;
+const bootAt = Date.now();
+/** Clé de session : heure de la dernière mise à jour appliquée d'office dans cet onglet. */
+const AUTO_UPDATE_KEY = 'pmb-maj-auto';
+
+function watchInteraction(): void {
+  const mark = () => {
+    interacted = true;
+  };
+  for (const type of ['pointerdown', 'keydown', 'touchstart'] as const) {
+    window.addEventListener(type, mark, { once: true, capture: true, passive: true });
+  }
+}
+
+/**
+ * Une version déjà téléchargée attend. Tant que l'utilisateur n'a rien touché, on l'applique d'office
+ * (règle : src/pwa/majAuto.ts) ; sinon on la propose (bandeau du menu), sans rien imposer.
+ */
+function offerOrApplyUpdate(): void {
+  let sinceLast = Number.POSITIVE_INFINITY;
+  let storage: Storage | null;
+  try {
+    storage = window.sessionStorage;
+    const last = Number(storage.getItem(AUTO_UPDATE_KEY));
+    if (Number.isFinite(last) && last > 0) sinceLast = Date.now() - last;
+  } catch {
+    // Stockage refusé : pas de garde possible contre une boucle, donc pas de rechargement d'office.
+    storage = null;
+  }
+  const auto =
+    storage !== null &&
+    peutAppliquerDoffice({
+      geste: interacted,
+      enSortie: window.location.hash.startsWith('#/sortie'),
+      depuisLancementMs: Date.now() - bootAt,
+      depuisDerniereMs: sinceLast,
+    });
+  if (!auto) {
+    usePwa.setState({ updateReady: true });
+    return;
+  }
+  try {
+    storage?.setItem(AUTO_UPDATE_KEY, String(Date.now()));
+  } catch {
+    usePwa.setState({ updateReady: true });
+    return;
+  }
+  void applyUpdate();
+}
 
 function watchNetwork(): void {
   const sync = () => usePwa.setState({ online: navigator.onLine });
@@ -74,9 +125,7 @@ function watchInstalls(swUrl: string, registration: ServiceWorkerRegistration): 
   const follow = (worker: ServiceWorker | null) => {
     if (!worker) return;
     worker.addEventListener('statechange', () => {
-      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-        usePwa.setState({ updateReady: true });
-      }
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) offerOrApplyUpdate();
       if (worker.state === 'redundant' && !registration.active) {
         usePwa.setState({ offline: 'erreur', done: 0, total: 0 });
         retryInstall(swUrl);
@@ -141,7 +190,7 @@ function watchServiceWorker(): void {
   const update = registerSW({
     immediate: true,
     onOfflineReady: () => usePwa.setState({ offline: 'pret' }),
-    onNeedRefresh: () => usePwa.setState({ updateReady: true }),
+    onNeedRefresh: () => offerOrApplyUpdate(),
     // Pas de rechargement décidé par la bibliothèque : voir `controllerchange` ci-dessus.
     onNeedReload: () => {},
     onRegisteredSW: (swUrl, registration) => {
@@ -150,6 +199,8 @@ function watchServiceWorker(): void {
       else usePwa.setState((state) => (state.offline === 'inconnu' ? { offline: 'preparation' } : state));
       watchInstalls(swUrl, registration);
       watchForUpdates(registration);
+      // Une version téléchargée lors d'une visite précédente attend déjà : c'est le moment de l'appliquer.
+      if (registration.waiting && navigator.serviceWorker.controller) offerOrApplyUpdate();
     },
     onRegisterError: () => usePwa.setState({ offline: 'erreur' }),
   });
@@ -166,10 +217,11 @@ export function startPwa(): void {
   watchNetwork();
   watchDisplayMode();
   watchInstallPrompt();
+  watchInteraction();
   watchServiceWorker();
 }
 
-/** Applique la mise à jour sur un geste : la page se recharge dès que la nouvelle version a pris la main. */
+/** Applique la mise à jour (sur un geste, ou d'office avant le premier geste) : la page se recharge dès que la nouvelle version a pris la main. */
 export async function applyUpdate(): Promise<void> {
   reloadRequested = true;
   usePwa.setState({ updateReady: false });

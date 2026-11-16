@@ -71,6 +71,8 @@ test('une nouvelle version attend un geste, puis s’applique', async ({ page })
   });
 
   await page.goto(`${origin}${BASE_PATH}`);
+  // Un geste a eu lieu : la nouvelle version attend alors l'accord (sans geste, elle s'applique d'office : src/pwa/majAuto.ts).
+  await page.keyboard.press('Shift');
   await waitOfflineReady(page);
   await expect(page.getByText('Nouvelle version de l’atelier prête.')).toBeHidden();
   expect(loads).toBe(1);
