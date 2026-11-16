@@ -24,6 +24,7 @@ import {
   type Texture,
   type WebGLRenderer,
 } from 'three';
+import { feuxSon } from '../../audio/sfx/feux.ts';
 import { meteoSon } from '../../audio/sfx/meteo.ts';
 import { resolveStart } from '../../data/maps.ts';
 import type { MapRoute } from '../../data/mapTypes.ts';
@@ -33,9 +34,10 @@ import { ATMOSPHERE_LAYER, CAMERA_LAYERS, PROBE_ONLY_LAYER } from '../../render/
 import { PlanarReflection } from '../../render/planarReflection.ts';
 import type { QualityLevel } from '../../render/quality.ts';
 import { useBuilds } from '../../state/builds.ts';
-import { livePilot, useDrive } from '../../state/drive.ts';
+import { liveDepart, livePilot, useDrive } from '../../state/drive.ts';
 import { cameraShot, guardShot } from '../cameras.ts';
 import type { CameraId, CameraShot, Director, DriveTelemetry, Pilot, Rail, RailPose, VehicleFrame } from '../contrat.ts';
+import { armerDepart, cleTemps, createDepart, lancerDepart, pasDepart, tenuSurLaLigne } from '../depart.ts';
 import { createPilot, performanceDe } from '../pilote.ts';
 import { createPose, createRail } from '../rail.ts';
 import { createDirector } from '../realisateur.ts';
@@ -43,6 +45,7 @@ import { localWeather, nearestSpan, shelteredAt, type WeatherAmounts } from './a
 import { createFarLights, createProbeBand, createRain, createSky, createTownGlow, SKY } from './ciel.ts';
 import { driveDebug, type DriveMeasure } from './debug.ts';
 import { Decor, DecorKit, LAMP_HEAD } from './decor.ts';
+import { LignesDepart } from './lignes.ts';
 import { createSignAtlas, createSignMaterial } from './enseignes.ts';
 import type { Relief } from './relief.ts';
 import { createNightUniforms, createRoleMaterials, LAMP_FADE, MAX_LAMPS, MAX_NEONS, MIST, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
@@ -163,6 +166,12 @@ export class DriveEngine {
   readonly rail: Rail;
   readonly pilot: Pilot;
   private readonly director: Director;
+  /** Départ arrêté, chrono, tours et arrivée (src/drive/depart.ts) ; lignes en damier sur la chaussée. */
+  readonly depart = createDepart();
+  private readonly lignes: LignesDepart;
+  private startId = '';
+  private readonly vehicleId: string;
+  private readonly halfLengthHint: number;
   private readonly roles: ReturnType<typeof createRoleMaterials>;
   private readonly kit: DecorKit;
   private readonly decor: Decor;
@@ -252,6 +261,10 @@ export class DriveEngine {
     this.pilot = createPilot(this.rail, performanceDe(vehicle, useBuilds.getState().builds[vehicle.id]));
     livePilot.current = this.pilot;
     this.director = createDirector();
+    this.vehicleId = vehicle.id;
+    this.halfLengthHint = vehicle.halfLengthHint;
+    this.lignes = new LignesDepart(this.uniforms);
+    liveDepart.current = this.depart;
     // Lumières lointaines : les lampadaires de toute la carte, la lueur des villages.
     this.farLights = createFarLights(routeLampHeads(route), this.uniforms.pmbLampColor.value);
     this.townGlow = createTownGlow(townCenters(route, this.rail), new Color('#ff8a3a'));
@@ -265,7 +278,7 @@ export class DriveEngine {
   attach(scene: Scene, camera: PerspectiveCamera): void {
     this.attached = { scene, fog: scene.fog, environment: scene.environment };
     this.band.layers.set(PROBE_ONLY_LAYER);
-    scene.add(this.decor.root, this.sky, this.rain, this.farLights, this.band, ...this.lampLights);
+    scene.add(this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, ...this.lampLights);
     if (this.townGlow) scene.add(this.townGlow);
     scene.fog = new FogExp2(new Color(SKY.fog), fogDensity(this.profile.fogFar));
     scene.environment = this.probe.target.texture;
@@ -279,21 +292,29 @@ export class DriveEngine {
   detach(): void {
     const a = this.attached;
     if (!a) return;
-    a.scene.remove(this.decor.root, this.sky, this.rain, this.farLights, this.band, ...this.lampLights);
+    a.scene.remove(this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, ...this.lampLights);
     if (this.townGlow) a.scene.remove(this.townGlow);
     a.scene.fog = a.fog;
     a.scene.environment = a.environment;
     this.attached = null;
   }
 
-  /** Départ choisi (MapStart.id), sinon le premier. */
+  /** Départ choisi (MapStart.id), sinon le premier : départ arrêté sur la ligne, feux dès que la route est prête. */
   start(id: string | null): void {
-    this.pilot.reset(resolveStart(this.route, id).at);
+    const start = resolveStart(this.route, id);
+    this.startId = start.id;
+    this.pilot.reset(start.at);
     this.director.reset();
+    armerDepart(this.depart, this.pilot.motion.s, this.rail.loop);
+    this.pilot.setHold?.(true);
+    this.lignes.poser(this.rail, this.pilot.motion.s, this.rig.measure?.halfLength ?? this.halfLengthHint);
+    useDrive.getState().effacerArrivee();
   }
 
-  /** Repart un peu avant `s` et roule jusqu'à elle (le pilote y arrive lancé). */
+  /** Repart un peu avant `s` et roule jusqu'à elle (le pilote y arrive lancé ; départ lancé, sans les feux). */
   seek(s: number): void {
+    lancerDepart(this.depart, Math.max(0, s - 90), this.rail.loop);
+    this.pilot.setHold?.(false);
     this.pilot.reset(Math.max(0, s - 90));
     const input = useDrive.getState().input;
     for (let i = 0; i < 400 && this.pilot.motion.s < s; i += 1) this.pilot.step(0.1, input, this.kind);
@@ -332,9 +353,18 @@ export class DriveEngine {
     const drive = useDrive.getState();
     const dt = stepOf(delta, drive.paused, drive.slow);
     this.time += dt;
+    // Départ arrêté : tenu sur la ligne tant que les feux ne sont pas au vert.
+    const depart = this.depart;
+    this.pilot.setHold?.(tenuSurLaLigne(depart));
     const motion = this.pilot.step(dt, drive.input, this.kind);
+    const arrived = depart.phase === 'arrive';
+    pasDepart(depart, dt, this.vehicleReady && !this.vehicleFailed && decor.status.loaded > 0 && this.frames > 2, motion.s, this.rail, motion.finished);
+    if (!arrived && depart.phase === 'arrive' && drive.map) drive.noterArrivee(cleTemps(drive.map, this.startId, this.vehicleId), depart.arrivee);
+    feuxSon.rouges = depart.rouges;
+    feuxSon.vert = depart.vert;
     // Le pilote publié est celui qui roule (en mode strict de React, une scène écartée a pu le publier).
     livePilot.current = this.pilot;
+    liveDepart.current = depart;
     const pose = this.rail.poseAt(motion.s, this.pose);
 
     // Véhicule sur le rail : écart latéral vers la gauche de la marche, cap, pente, roulis, plongée.
@@ -400,9 +430,10 @@ export class DriveEngine {
     this.lastCamera.copy(camera.position);
     this.lastCameraId = cameraId;
 
-    // Décor autour du véhicule.
+    // Décor autour du véhicule, lignes de départ et d'arrivée recalées sur le relief.
     const now = performance.now();
     decor.update(motion.s, now, camera.position.x, camera.position.z);
+    this.lignes.update(decor.relief, motion.s);
     // Plan proche : la profondeur garde sa précision au loin (marquage, fenêtres, relief).
     const near = cameraId === 'embarquee' ? NEAR.cockpit : NEAR.default;
     if (camera.near !== near) {
@@ -560,6 +591,7 @@ export class DriveEngine {
         s: motion.s,
         progress: this.rail.length > 0 ? Math.min(1, motion.s / this.rail.length) : 0,
         finished: motion.finished,
+        depart: depart.phase,
       };
       drive.setTelemetry(telemetry);
       putData(stage, 'sortie', broken ? 'erreur' : ready ? 'prete' : 'chargement');
@@ -568,6 +600,8 @@ export class DriveEngine {
       putData(stage, 'camera', cameraId);
       putData(stage, 'troncons', String(decor.status.loaded));
       putData(stage, 'meteo', drive.weather);
+      putData(stage, 'depart', depart.phase);
+      putData(stage, 'chrono', String(Math.floor(depart.chrono / 100)));
       putData(stage, 'abri', here.rain + here.snow + here.wet < 1e-3 && wet > 0 ? 'oui' : 'non');
       // Virage : braquage montré des roues avant et roulis de la caisse, en degrés arrondis.
       putData(stage, 'braquage', String(Math.round((steer * 180) / Math.PI)));
@@ -673,7 +707,11 @@ export class DriveEngine {
 
   dispose(): void {
     if (livePilot.current === this.pilot) livePilot.current = null;
+    if (liveDepart.current === this.depart) liveDepart.current = null;
+    feuxSon.rouges = 0;
+    feuxSon.vert = false;
     this.detach();
+    this.lignes.dispose();
     this.decor.dispose();
     this.kit.dispose();
     for (const m of this.roles.values()) m.dispose();

@@ -179,6 +179,16 @@ const BRIEFS_ROUTE = {
     fr: 'Décharge brève et sèche de gaz sous pression, attaque franche puis retombée rapide, comme une vanne qui s’ouvre d’un coup, sans moteur ni explosion',
     en: 'Brief sharp discharge of pressurised gas, hard attack then a quick decay, like a valve snapping open, no engine, no explosion',
   },
+  'depart-feu': {
+    duree: 0.3,
+    fr: 'Bip électronique bref et net d’un feu de départ qui s’allume au rouge, ton médium, attaque franche, sans écho ni voix',
+    en: 'Short clean electronic beep of a start light turning red, mid-pitched tone, sharp attack, no echo, no voice',
+  },
+  'depart-vert': {
+    duree: 0.8,
+    fr: 'Bip électronique plus long et plus aigu d’un feu de départ qui passe au vert, ton tenu puis coupé net, sans écho ni voix',
+    en: 'Longer, higher-pitched electronic beep of a start light turning green, held tone then a clean cut, no echo, no voice',
+  },
   rapport: {
     duree: 0.5,
     fr: 'Claquement mécanique bref d’un levier de vitesses de voiture qui passe un rapport, entendu de l’habitacle, sans moteur',

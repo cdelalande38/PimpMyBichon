@@ -217,7 +217,7 @@ export const TUTOS: readonly Tuto[] = [
       { texte: '« Pilote auto » ou « À la main » : le bouton du bas dit qui conduit. Touche-le pour prendre le volant.', cible: '.drive-mode' },
       { texte: 'À la main, c’est toi qui tiens la direction. Pose ton pouce : en haut les gaz, en bas le frein, sur les côtés tu tournes.', cible: '.drive-mid' },
       { texte: '« NOS » envoie une poussée, l’anneau dit la réserve. La languette rappelle la barre des commandes.', cible: '.drive-pilot' },
-      { texte: 'Compte-tours : vert, ça tire ; orange, le témoin s’allume et ça passe la vitesse ; rouge, zone rouge.', cible: '.drive-dial' },
+      { texte: 'Sous le compte-tours, les feux : rouge, rouge, vert, et le chrono part. Cadran : vert ça tire, orange ça passe la vitesse, rouge zone rouge.', cible: '.drive-dial' },
       { texte: 'Barre du bas : caméras, météo, « Pédales », « Rentrer au garage », et « Direction : assistée » si tu veux que l’aide suive la route.', cible: '.drive-acts' },
     ],
   },

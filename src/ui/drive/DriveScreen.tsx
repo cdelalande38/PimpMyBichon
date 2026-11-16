@@ -41,6 +41,7 @@ import { useEngineSoundPrefs } from '../../state/engineSound.ts';
 import { RadioButton } from '../radio/RadioButton.tsx';
 import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
+import { ArriveePanneau, ChronoSortie, FeuxDepart } from './Depart.tsx';
 import { DriveIcon } from './icones.tsx';
 import { Mixage } from './Mixage.tsx';
 import {
@@ -98,6 +99,8 @@ function DriveTop() {
         </span>
       </div>
       <CompteTours />
+      <FeuxDepart />
+      <ChronoSortie />
       <div className="drive-top-droite">
         <RadioButton enSortie />
         <button type="button" className="drive-round" aria-label={paused ? 'Reprendre' : 'Pause'} aria-pressed={paused} {...pause}>
@@ -555,6 +558,8 @@ function DriveBar({ paysage }: { paysage: boolean }) {
   const weather = useDrive((state) => state.weather);
   const paused = useDrive((state) => state.paused);
   const finished = useDrive((state) => state.telemetry.finished);
+  // L'arrivée a son panneau (src/ui/drive/Depart.tsx) : pas de second « Repartir » dans la barre.
+  const arrive = useDrive((state) => state.telemetry.depart === 'arrive');
   // Barre rappelée à la main : vaut pour ce passage à la main (elle s'abaisse de nouveau au suivant).
   const [raisedFor, setRaisedFor] = useState<{ auto: boolean; up: boolean }>({ auto, up: false });
   const raised = raisedFor.auto === auto && raisedFor.up;
@@ -576,7 +581,7 @@ function DriveBar({ paysage }: { paysage: boolean }) {
 
   return (
     <footer className="drive-bar" aria-label="Commandes de la sortie" data-replie={folded}>
-      {finished && (
+      {finished && !arrive && (
         <div className="drive-end">
           <p role="status">Bout de la route. On repart, ou on rentre ?</p>
           <button type="button" className="btn" onClick={() => drive().retry()}>
@@ -830,6 +835,7 @@ export function DriveScreen() {
       <DriveGestures paysage={paysage} />
       <DriveVeil />
       <DriveBar paysage={paysage} />
+      <ArriveePanneau />
       <DriveLoading key={`${mapId ?? ''}-${attempt}`} />
     </>
   );

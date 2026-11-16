@@ -13,6 +13,7 @@
 
 import type { BoiteSpec } from '../data/boites.ts';
 import type { MapId, MapRoute, RailGround } from '../data/mapTypes.ts';
+import type { PhaseDepart } from './depart.ts';
 
 export type Vec3 = [number, number, number];
 
@@ -167,6 +168,12 @@ export interface Pilot {
   setSize?(halfWidth: number, halfLength: number): void;
   /** Repart d'une abscisse, à l'arrêt. */
   reset(s: number): void;
+  /**
+   * Départ arrêté (src/drive/depart.ts) : tenu (vrai), le véhicule reste à l'arrêt quoi que demandent
+   * les commandes ; l'accélérateur à la main fait seulement monter le régime à vide. Absent d'un pilote
+   * qui ne sait pas tenir.
+   */
+  setHold?(held: boolean): void;
   /** Avance de `dt` secondes (borné par l'appelant à 0,1 s). */
   step(dt: number, input: DriveInput, kind: 'car' | 'bike'): DriveMotion;
 }
@@ -274,6 +281,8 @@ export interface DriveTelemetry {
   /** Part du parcours faite, de 0 à 1. */
   progress: number;
   finished: boolean;
+  /** Départ arrêté (src/drive/depart.ts) : « attente », « feux », « parti » ou « arrive » ; absent : « attente ». */
+  depart?: PhaseDepart;
 }
 
 /**
@@ -305,6 +314,7 @@ export interface DriveStore {
  * Attributs que la scène pose sur son élément racine (classe `drive-stage`), pour les parcours :
  * `data-sortie` (« chargement », « prete » ou « erreur »), `data-carte`, `data-vehicule`, `data-s`
  * (abscisse arrondie au mètre), `data-vitesse` (km/h arrondis), `data-camera`, `data-troncons`
- * (nombre de tronçons chargés), `data-meteo`.
+ * (nombre de tronçons chargés), `data-meteo`, `data-depart` (phase du départ arrêté) et `data-chrono`
+ * (chrono en dixièmes de seconde).
  */
 export const DRIVE_STAGE_CLASS = 'drive-stage';

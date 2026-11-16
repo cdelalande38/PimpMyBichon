@@ -75,6 +75,10 @@ export type Declencheur =
   | { type: 'rapport' }
   /** Coup d'envoi du NOS : front montant de `train.nos`, une fois par poussée. */
   | { type: 'nos' }
+  /** Départ arrêté : un feu rouge de plus s'allume (src/drive/depart.ts). */
+  | { type: 'feu-rouge' }
+  /** Départ arrêté : le feu vert s'allume. */
+  | { type: 'feu-vert' }
   /** Lever de pied à haut régime (part du rupteur), au hasard (`chance` par lever). */
   | { type: 'leve-pied'; regimeMin: number; chance: number };
 
@@ -120,5 +124,8 @@ export const PONCTUELS_ROUTE: readonly PonctuelRoute[] = Object.freeze([
   { emplacement: 'rapport', famille: 'route', declencheur: { type: 'rapport' }, niveau: 0.55, attente: 0.25 },
   // Coup sec à l'instant où le NOS part, en plus de la boucle « nos » qui continue pendant la poussée.
   { emplacement: 'nos-depart', famille: 'route', declencheur: { type: 'nos' }, niveau: 0.85, attente: 0.8 },
+  // Départ arrêté : un bip bref à chaque feu rouge, un bip plus long et plus aigu au vert.
+  { emplacement: 'depart-feu', famille: 'route', declencheur: { type: 'feu-rouge' }, niveau: 0.8, attente: 0.3 },
+  { emplacement: 'depart-vert', famille: 'route', declencheur: { type: 'feu-vert' }, niveau: 0.9, attente: 0.3 },
   { emplacement: 'backfire', famille: 'moteur', declencheur: { type: 'leve-pied', regimeMin: 0.75, chance: 0.3 }, niveau: 0.8, attente: 4 },
 ] satisfies PonctuelRoute[]);

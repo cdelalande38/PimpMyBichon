@@ -11,6 +11,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { CAMERA_IDS, type CameraId, type DriveInput, type DriveStore, type DriveTelemetry, type OrbitView, type Pilot, type Weather } from '../drive/contrat.ts';
 import { clampOrbit, DEFAULT_ORBIT } from '../drive/cameras.ts';
+import type { EtatDepart } from '../drive/depart.ts';
 import { mapById, MAPS } from '../data/maps.ts';
 import type { MapId } from '../data/mapTypes.ts';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
@@ -78,6 +79,33 @@ export const AUTO_INPUT: Readonly<DriveInput> = Object.freeze({ auto: true, thro
  */
 export const livePilot: { current: Pilot | null } = { current: null };
 
+/** Départ, chrono et tours de la sortie en cours (src/drive/depart.ts), tenus par la scène ; lus par les feux et le chrono. */
+export const liveDepart: { current: EtatDepart | null } = { current: null };
+
+/** Arrivée passée (parcours ouvert) : le temps, et le meilleur gardé pour ce parcours, ce départ et ce véhicule. */
+export interface ArriveeSortie {
+  /** Temps, en ms de temps de sortie. */
+  temps: number;
+  /** Meilleur temps gardé, celui-ci compris, en ms. */
+  meilleur: number;
+  /** Meilleur temps précédent, en ms ; -1 s'il n'y en avait pas. */
+  precedent: number;
+}
+
+/** Meilleurs temps gardés au plus (les plus anciens partent d'abord). */
+export const MEILLEURS_MAX = 200;
+
+/** Meilleurs temps relus du stockage : seulement des temps plausibles (moins d'un jour), clés courtes. */
+export function sanitizeMeilleurs(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return out;
+  const entries = Object.entries(raw as Record<string, unknown>).filter(
+    ([key, value]) => key.length > 0 && key.length <= 200 && typeof value === 'number' && Number.isFinite(value) && value > 0 && value < 86_400_000,
+  );
+  for (const [key, value] of entries.slice(-MEILLEURS_MAX)) out[key] = value as number;
+  return out;
+}
+
 export const IDLE_TELEMETRY: Readonly<DriveTelemetry> = Object.freeze({
   ready: false,
   failed: false,
@@ -104,7 +132,7 @@ export function nextCameraOf(camera: CameraId): CameraId {
 }
 
 function sameTelemetry(a: DriveTelemetry, b: DriveTelemetry): boolean {
-  return a.ready === b.ready && a.failed === b.failed && a.speedKmh === b.speedKmh && a.s === b.s && a.progress === b.progress && a.finished === b.finished;
+  return a.ready === b.ready && a.failed === b.failed && a.speedKmh === b.speedKmh && a.s === b.s && a.progress === b.progress && a.finished === b.finished && a.depart === b.depart;
 }
 
 export interface DriveState extends DriveStore {
@@ -158,6 +186,14 @@ export interface DriveState extends DriveStore {
   setOrbit: (orbit: Partial<OrbitView>) => void;
   setSlow: (slow: boolean) => void;
   setPaused: (paused: boolean) => void;
+  /** Meilleurs temps à l'arrivée, par parcours, départ et véhicule (src/drive/depart.ts, cleTemps) ; gardés. */
+  meilleurs: Record<string, number>;
+  /** Arrivée de la sortie en cours, ou `null` (posée par la scène, effacée à chaque départ). */
+  arrivee: ArriveeSortie | null;
+  /** Ligne d'arrivée passée en `temps` ms : garde le meilleur temps de `cle`. */
+  noterArrivee: (cle: string, temps: number) => void;
+  /** Nouveau départ : l'arrivée précédente s'efface. */
+  effacerArrivee: () => void;
 }
 
 const unit = (value: number) => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0);
@@ -254,14 +290,29 @@ export const useDrive = create<DriveState>()(
       setOrbit: (orbit) => set((state) => ({ orbit: clampOrbit({ ...state.orbit, ...orbit }) })),
       setSlow: (slow) => set((state) => (state.slow === slow ? state : { slow })),
       setPaused: (paused) => set((state) => (state.paused === paused ? state : { paused })),
+      meilleurs: {},
+      arrivee: null,
+      noterArrivee: (cle, temps) =>
+        set((state) => {
+          if (!(Number.isFinite(temps) && temps > 0)) return state;
+          const old = state.meilleurs[cle];
+          const precedent = typeof old === 'number' && old > 0 ? old : -1;
+          const meilleur = precedent > 0 ? Math.min(precedent, temps) : temps;
+          const meilleurs = { ...state.meilleurs };
+          delete meilleurs[cle];
+          meilleurs[cle] = meilleur;
+          return { meilleurs: sanitizeMeilleurs(meilleurs), arrivee: { temps, meilleur, precedent } };
+        }),
+      effacerArrivee: () => set((state) => (state.arrivee === null ? state : { arrivee: null })),
     }),
     {
       name: DRIVE_KEY,
       version: DRIVE_VERSION,
       storage: createJSONStorage(() => idbStorage),
-      partialize: ({ weather, camera, commande, direction }) => ({ weather, camera, commande, direction }),
-      migrate: (persisted) => sanitizeDrivePrefs(persisted),
-      merge: (persisted, current) => ({ ...current, ...sanitizeDrivePrefs(persisted) }),
+      // Les meilleurs temps ne sont écrits qu'une fois le premier posé.
+      partialize: ({ weather, camera, commande, direction, meilleurs }) => ({ weather, camera, commande, direction, ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}) }),
+      migrate: (persisted) => ({ ...sanitizeDrivePrefs(persisted), meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs) }),
+      merge: (persisted, current) => ({ ...current, ...sanitizeDrivePrefs(persisted), meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs) }),
       onRehydrateStorage: () => () => {
         useDrive.setState({ hydrated: true });
       },

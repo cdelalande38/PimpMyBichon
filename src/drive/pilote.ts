@@ -517,6 +517,7 @@ export interface PilotWithProfile extends Pilot {
   /** Accélération latérale réellement prise (m/s², positive vers la gauche), au dernier sous-pas. */
   readonly lateral: number;
   setSize(halfWidth: number, halfLength: number): void;
+  setHold(held: boolean): void;
 }
 
 function newMotion(): DriveMotion {
@@ -795,6 +796,8 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
   let nosLeft = 0;
   /** Dernier compteur d'appuis du NOS vu (`null` : pas encore lu ; la première lecture ne lance rien). */
   let nosSeen: number | null = null;
+  /** Tenu sur la ligne de départ (feux pas encore au vert, src/drive/depart.ts) : il n'avance pas. */
+  let held = false;
 
   function reset(s: number): void {
     const start = rail.loop ? s : Math.min(rail.length, Math.max(0, Number.isFinite(s) ? s : 0));
@@ -1084,7 +1087,7 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
   function step(dt: number, input: DriveInput, kind: 'car' | 'bike'): DriveMotion {
     const span = Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
     if (span > 0) touched = 0;
-    if (span > 0 && !motion.finished) {
+    if (span > 0 && !motion.finished && !held) {
       const count = Math.max(1, Math.ceil(span / PILOT.substep - 1e-9));
       const h = span / count;
       for (let i = 0; i < count && !motion.finished; i += 1) substep(h, input, kind);
@@ -1096,8 +1099,16 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
       motion.yaw = (motion.yaw ?? 0) * Math.max(0, 1 - span * 4);
       motion.pull = (motion.pull ?? 0) * Math.max(0, 1 - span * 4);
       motion.slip = (motion.slip ?? 0) * Math.max(0, 1 - span * 8);
+      if (held) {
+        // Tenu sur la ligne : un appui sur le NOS ne part pas ; l'accélérateur fait monter le régime à vide.
+        nosSeen = input.nos ?? 0;
+        nosLeft = 0;
+        motion.speed = 0;
+        motion.accel = 0;
+      }
       stepNos(span, input);
-      stepGearbox(span, 0, 0, true);
+      const revs = held && !input.auto ? input.throttle : 0;
+      stepGearbox(span, 0, revs, !held || input.brake > 0.05);
     }
     // À la main, les feux stop sont ceux du joueur : un bord qui ralentit n'est pas un freinage.
     motion.braking = input.auto
@@ -1115,6 +1126,11 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     halfLength = l;
     line = createRacingLine(rail, kind0, halfWidth, halfLength);
     profile = createSpeedProfile(rail, performance, line);
+  }
+
+  /** Tient le véhicule sur la ligne (vrai) ou le lâche (faux). */
+  function setHold(on: boolean): void {
+    held = on;
   }
 
   reset(0);
@@ -1138,5 +1154,6 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     reset,
     step,
     setSize,
+    setHold,
   };
 }

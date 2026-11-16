@@ -39,6 +39,10 @@ export interface InstantRoute {
   regime: number;
   /** Poussée du NOS en cours (le lecteur la tire de `EtatRoute.nos`). */
   nos?: boolean;
+  /** Feux rouges allumés du départ arrêté (le lecteur les tire de src/audio/sfx/feux.ts). */
+  feuxRouges?: number;
+  /** Feu vert du départ allumé. */
+  vert?: boolean;
 }
 
 /** Au-dessus de cette coupure (Hz), le filtre d'une boucle est grand ouvert. */
@@ -172,6 +176,10 @@ export function declenche(d: Declencheur, avant: InstantRoute, maintenant: Insta
       return maintenant.shifting && !avant.shifting;
     case 'nos':
       return maintenant.nos === true && avant.nos !== true;
+    case 'feu-rouge':
+      return (maintenant.feuxRouges ?? 0) > (avant.feuxRouges ?? 0) && maintenant.vert !== true;
+    case 'feu-vert':
+      return maintenant.vert === true && avant.vert !== true;
     case 'leve-pied':
       return avant.charge >= LEVE_PIED.avant && maintenant.charge <= LEVE_PIED.apres && avant.regime >= d.regimeMin && alea < d.chance;
   }
@@ -190,4 +198,6 @@ export function copierInstant(de: InstantRoute, vers: InstantRoute): void {
   vers.charge = de.charge;
   vers.regime = de.regime;
   vers.nos = de.nos;
+  vers.feuxRouges = de.feuxRouges;
+  vers.vert = de.vert;
 }

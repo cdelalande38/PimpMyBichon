@@ -1,0 +1,164 @@
+/* Départ arrêté (src/ui/drive/Depart.tsx) : feux sous le compte-tours, chrono sous la progression,
+   panneau d'arrivée. */
+
+/* Place des feux : une case de hauteur nulle au pied du compte-tours ; les lampes pendent dessous,
+   sans pousser le bandeau ni rien recouvrir d'autre que la scène. */
+.drive-feux-place {
+  position: relative;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  height: 0;
+  pointer-events: none;
+}
+
+.drive-feux {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(10, 9, 17, 0.78);
+  transform: translateX(-50%);
+  transition: opacity 0.3s ease;
+}
+
+.drive-feux[data-visible='non'] {
+  opacity: 0;
+}
+
+.drive-feux i {
+  display: block;
+  width: 1.375rem;
+  height: 1.375rem;
+  border-radius: 50%;
+  background: #1b1a22;
+  box-shadow: inset 0 0 0 2px rgba(233, 230, 242, 0.12);
+  transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.drive-feux i[data-feu='rouge'] {
+  background: var(--rouge);
+  box-shadow: 0 0 10px 2px rgba(255, 45, 63, 0.65), inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+.drive-feux i[data-feu='vert'] {
+  background: #39d98a;
+  box-shadow: 0 0 10px 2px rgba(57, 217, 138, 0.65), inset 0 0 0 2px rgba(255, 255, 255, 0.25);
+}
+
+/* Chrono : à la place des feux une fois effacés, discret, chiffres à chasse fixe (ils ne dansent pas). */
+.drive-chrono {
+  position: absolute;
+  top: 0.375rem;
+  left: 50%;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(10, 9, 17, 0.6);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  color: var(--chrome);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.drive-chrono b {
+  font-size: 0.875rem;
+  letter-spacing: 0.03em;
+}
+
+.drive-chrono small {
+  color: rgba(236, 233, 244, 0.72);
+  font-size: 0.6875rem;
+}
+
+.drive-chrono small:empty {
+  display: none;
+}
+
+/* Arrivée : par-dessus la scène, au milieu. */
+.drive-arrivee-voile {
+  z-index: 3;
+}
+
+.drive-arrivee {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 22rem;
+  margin: 0 auto;
+  padding: 1rem 1rem 0.875rem;
+  border-left: 3px solid var(--ambre);
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.drive-arrivee h2 {
+  margin: 0;
+  color: var(--ambre);
+  font-size: 1.125rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.drive-arrivee-temps {
+  margin: 0;
+  color: var(--chrome);
+  font-size: 2.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.drive-arrivee-meilleur {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.drive-arrivee[data-record] .drive-arrivee-meilleur {
+  color: #39d98a;
+}
+
+.drive-arrivee-actes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.drive-arrivee-actes .btn {
+  flex: 1 1 8rem;
+  min-height: var(--tap);
+}
+
+.drive-chrono[data-visible='non'] {
+  visibility: hidden;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .drive-feux,
+  .drive-chrono {
+    top: 0.25rem;
+  }
+
+  .drive-arrivee {
+    padding: 0.625rem 0.875rem;
+  }
+
+  .drive-arrivee-temps {
+    font-size: 1.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drive-feux,
+  .drive-feux i {
+    transition: none;
+  }
+}

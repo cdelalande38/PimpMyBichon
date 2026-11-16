@@ -13,6 +13,7 @@
 import { BOUCLES_ROUTE, FAMILLE_ROUTE, FONDU_BOUCLES, PONCTUELS_ROUTE, type BoucleRoute } from '../../data/bruitages.ts';
 import { engineFileUrl, parseEngineManifest } from '../engine/manifeste.ts';
 import { parseSfxManifest, sfxFileUrl, type SfxBoucle, type SfxManifest, type SfxPonctuel } from './manifeste.ts';
+import { feuxSon } from './feux.ts';
 import { copierInstant, coupureBoucle, hauteurBoucle, niveauBoucle, ponctuelPart, suiviGlisseRepos, suivreGlisse, type EtatRoute, type InstantRoute, type SuiviGlisse } from './regles.ts';
 
 /** Un son décodé, avec son gain de lecture (dB). */
@@ -279,6 +280,8 @@ export class LecteurBruitages {
     const present = this.present;
     copierInstant(instant, present);
     present.nos = etat.nos;
+    present.feuxRouges = feuxSon.rouges;
+    present.vert = feuxSon.vert;
     if (!actif) {
       if (this.actif) this.couper();
       copierInstant(present, this.avant);
