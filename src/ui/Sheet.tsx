@@ -65,8 +65,13 @@ export function Sheet({ open, eyebrow, title, onClose, children, actions, switch
           {switcher}
           <div className="sheet-acts">
             {actions}
-            <button ref={closeRef} type="button" className="btn cta" onClick={onClose}>
-              Retour à l’atelier
+            {/* Discret, à gauche, sous le pouce (retour du 16 novembre 2026 : le grand bouton rouge
+                prenait trop de place). Son nom complet reste « Retour à l'atelier ». */}
+            <button ref={closeRef} type="button" className="btn sheet-back" aria-label="Retour à l’atelier" onClick={onClose}>
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+              Retour
             </button>
           </div>
         </div>

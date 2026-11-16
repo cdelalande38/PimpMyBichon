@@ -208,6 +208,68 @@ button {
   background: var(--mute);
 }
 
+/* Installer l'app : une petite pastille à la place de l'état quand il n'a rien à dire, avec sa
+   croix « plus tard ». Les zones d'appui débordent du dessin pour offrir 48 px de haut au doigt. */
+.install-pill {
+  display: inline-flex;
+  align-items: stretch;
+  min-height: 2rem;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+}
+.install-pill button {
+  /* Le bandeau du haut laisse passer les gestes vers la scène : ses boutons les reprennent. */
+  pointer-events: auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.install-go {
+  padding: 0.25rem 0.5rem;
+}
+.install-pill .install-later {
+  padding: 0.25rem 0.5rem;
+  border-left: 1px solid var(--line);
+  color: var(--mute);
+}
+.install-go::after,
+.install-later::after {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+}
+.install-later::after {
+  right: -6px;
+}
+.install-pill svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Le même bouton, rangé dans Atelier › Sous le capot. */
+.btn.install-here {
+  display: flex;
+  margin-top: 0.5rem;
+}
+
 .pill[data-state='pret']::before {
   background: var(--ok);
   box-shadow: 0 0 8px var(--ok);
@@ -559,6 +621,22 @@ button {
 }
 .sheet-acts > .btn.cta {
   flex: 2 1 0;
+}
+/* La fermeture : petite, à gauche, avant les commandes du panneau. */
+.sheet-acts > .btn.sheet-back {
+  flex: 0 0 auto;
+  order: -1;
+  gap: 0.125rem;
+  padding: 0 0.875rem 0 0.375rem;
+}
+.sheet-back svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .card h2 {

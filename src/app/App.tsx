@@ -95,10 +95,12 @@ export function App() {
             {!sceneFailed && <SceneOverlay covered={isSheetRoute(route)} />}
 
             <div className="mid">
-              {/* Jamais de substitut en silence : il est annoncé à l'écran, comme le chargement. */}
-              {!sceneFailed && (vehicle.placeholder !== undefined || benchStatus !== 'pret') && (
+              {/* Où l'on est et le véhicule à l'écran, puis son chargement. Le mot « substitut » n'y est
+                  plus (retour du 16 novembre 2026 : il ne se comprenait pas) : une maquette est annoncée
+                  dans le choix du véhicule et dans Atelier › Sous le capot. */}
+              {!sceneFailed && (
                 <p className="tag" role="status">
-                  {vehicle.placeholder !== undefined ? `Substitut · ${vehicle.name}` : vehicle.name}
+                  {`Garage · ${vehicle.name}`}
                   {benchStatus === 'chargement' && ' · en route…'}
                   {benchStatus === 'absent' && ' · modèle absent de cette version'}
                   {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}

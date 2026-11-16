@@ -4,7 +4,8 @@
 
 import { openSheet } from '../app/useRoute.ts';
 import { interiorViewsOf, resolveVehicle } from '../data/vehicles.ts';
-import { precachePercent, usePwa } from '../pwa/pwaStore.ts';
+import { precachePercent, setInstallLater, usePwa } from '../pwa/pwaStore.ts';
+import { promptInstall } from '../pwa/register.ts';
 import { useBuilds } from '../state/builds.ts';
 import { useView } from '../state/view.ts';
 import { openAtelier } from './AtelierSwitcher.tsx';
@@ -16,16 +17,47 @@ function OfflinePill() {
   const offline = usePwa((state) => state.offline);
   const online = usePwa((state) => state.online);
   const percent = usePwa(precachePercent);
+  const canInstall = usePwa((state) => state.canInstall);
+  const installLater = usePwa((state) => state.installLater);
   const label = offlineLabel(offline, online);
+  // « Prêt hors ligne », en ligne, ne dit rien d'utile (retour du 16 novembre 2026) : la pastille ne
+  // se montre que s'il y a quelque chose à signaler (préparation, panne, hors ligne). L'état complet
+  // reste dans Atelier › Sous le capot. Quand elle se tait, sa place sert au bouton d'installation,
+  // petit : il ne prend plus une rangée du dock. Sa croix le range pour de bon (« plus tard ») : il
+  // ne reste alors que dans Atelier › Sous le capot.
+  const quiet = label === '' || (offline === 'pret' && online);
 
   return (
-    <p className="pill" role="status" data-state={offline} hidden={label === ''}>
-      <span>{label}</span>
-      {offline === 'preparation' && percent > 0 && (
-        // Le pourcentage bouge sans arrêt : inutile de le faire lire à chaque pas.
-        <span aria-hidden="true">{percent}&nbsp;%</span>
+    <>
+      <p className="pill" role="status" data-state={offline} hidden={quiet}>
+        <span>{label}</span>
+        {offline === 'preparation' && percent > 0 && (
+          // Le pourcentage bouge sans arrêt : inutile de le faire lire à chaque pas.
+          <span aria-hidden="true">{percent}&nbsp;%</span>
+        )}
+      </p>
+      {canInstall && !installLater && quiet && (
+        <div className="install-pill" role="group" aria-label="Installer l’atelier">
+          <button type="button" className="install-go" title="Installer l’atelier sur ce téléphone" onClick={() => void promptInstall()}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />
+            </svg>
+            Installer
+          </button>
+          <button
+            type="button"
+            className="install-later"
+            aria-label="Plus tard : ranger le bouton dans l’Atelier"
+            title="Plus tard : le bouton reste dans Atelier › Sous le capot"
+            onClick={() => setInstallLater(true)}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M7 7l10 10M17 7L7 17" />
+            </svg>
+          </button>
+        </div>
       )}
-    </p>
+    </>
   );
 }
 

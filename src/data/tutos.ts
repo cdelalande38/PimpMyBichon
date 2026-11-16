@@ -72,7 +72,7 @@ export const TUTOS: readonly Tuto[] = [
       { texte: 'Chaque puce est un véhicule du catalogue. Fais défiler la rangée pour tous les voir.', cible: 'footer.dock [aria-label="Véhicule"][role="group"]' },
       { texte: 'Touche un véhicule : il entre au garage.' },
       { texte: 'Chacun garde ses réglages. Tu peux passer de l’un à l’autre sans rien perdre.' },
-      { texte: '« Substitut » veut dire maquette : le vrai modèle arrive plus tard.' },
+      { texte: '« Maquette » : un modèle provisoire, en attendant le vrai.' },
     ],
   },
   {

@@ -164,7 +164,8 @@ export async function waitForStill(page: Page): Promise<void> {
 
 /** Le précache est terminé : l'indicateur du HUD passe à « prêt ». */
 export async function waitOfflineReady(page: Page): Promise<void> {
-  await expect(page.locator('.pill[data-state="pret"]')).toBeVisible({ timeout: 45_000 });
+  // La pastille se tait quand tout va bien (elle reste dans la page, masquée) : on lit son état.
+  await expect(page.locator('.pill[data-state="pret"]')).toHaveCount(1, { timeout: 45_000 });
 }
 
 /** Capture d'écran de revue, rangée dans captures/jalon-1/ (hors dépôt). */

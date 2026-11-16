@@ -15,7 +15,7 @@ test.describe('coque de l’app', () => {
     await waitForBench(page);
 
     // Le véhicule de départ est un substitut déclaré : il est annoncé à l'écran et nommé dans le dock.
-    await expect(page.locator('.tag')).toHaveText(/^Substitut · /);
+    await expect(page.locator('.tag')).toHaveText(/^Garage · /);
     await expect(page.locator('footer.dock .dock-vehicle')).not.toBeEmpty();
     // Radio, photo et atelier : les boutons ronds du haut de l'écran.
     for (const name of [/^Radio/, /^Photo$/, /^Atelier$/]) await expect(quick(page).getByRole('button', { name })).toBeVisible();

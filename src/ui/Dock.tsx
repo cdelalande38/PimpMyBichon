@@ -15,7 +15,7 @@ import { useSettling } from '../app/useRoute.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
 import type { VehicleManifest } from '../data/vehicleTypes.ts';
 import { usePwa } from '../pwa/pwaStore.ts';
-import { applyUpdate, promptInstall } from '../pwa/register.ts';
+import { applyUpdate } from '../pwa/register.ts';
 import { useBuilds } from '../state/builds.ts';
 import { dockSize, useDock, type DockLevel, type MenuLevel } from '../state/dock.ts';
 import { activeEntry, visibleSections } from '../data/dockMenu.ts';
@@ -108,7 +108,7 @@ function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boo
       ? [section?.label]
       : [section?.label, entry && entry.label !== section?.label ? entry.label : undefined, ...deeper];
   const parts = crumbs.filter((crumb): crumb is string => crumb !== undefined);
-  // Les sections, ou le choix du véhicule : le véhicule à l'écran (et « substitut ») reste lisible.
+  // Les sections, ou le choix du véhicule : le véhicule à l'écran reste lisible.
   const top = level === 'sections' || (section?.id === 'vehicule' && levels.length === 0);
 
   return (
@@ -125,7 +125,6 @@ function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boo
         {top ? (
           <span className="eyebrow">
             Au garage · <b className="dock-vehicle">{vehicle.name}</b>
-            {vehicle.placeholder !== undefined && ' · substitut'}
           </span>
         ) : (
           <>
@@ -197,7 +196,6 @@ function useKeepFocus(footer: RefObject<HTMLElement | null>, key: string): void 
 }
 
 export function Dock({ sceneFailed, covered = false }: DockProps) {
-  const canInstall = usePwa((state) => state.canInstall);
   const updateReady = usePwa((state) => state.updateReady);
   // Double appui sur « Retour à l'atelier » : le second ne doit pas rouvrir un panneau.
   const settling = useSettling();
@@ -290,12 +288,6 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
           </button>
         </div>
       )}
-
-      {canInstall && (
-        <button type="button" className="btn cta" onClick={() => void promptInstall()}>
-          Installer l’atelier
-        </button>
-      )}
     </>
   );
 
@@ -305,7 +297,6 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
         <div className="dock-text">
           <p className="eyebrow">
             Au garage · <b className="dock-vehicle">{vehicle.name}</b>
-            {vehicle.placeholder !== undefined && ' · substitut'}
           </p>
         </div>
         {banners}

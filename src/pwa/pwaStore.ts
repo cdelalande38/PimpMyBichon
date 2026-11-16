@@ -25,9 +25,24 @@ export interface PwaState {
   updateReady: boolean;
   /** Chrome propose l'installation (événement beforeinstallprompt reçu). */
   canInstall: boolean;
+  /**
+   * « Plus tard » : le bouton d'installation est rangé (croix de la pastille, ou refus dans la
+   * fenêtre du navigateur). Il ne reste que dans Atelier › Sous le capot. Retenu sur l'appareil.
+   */
+  installLater: boolean;
   /** L'app tourne en fenêtre autonome (installée). */
   standalone: boolean;
   online: boolean;
+}
+
+const INSTALL_LATER_KEY = 'pmb-installer-plus-tard';
+
+function readInstallLater(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(INSTALL_LATER_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 export const usePwa = create<PwaState>()(() => ({
@@ -36,6 +51,7 @@ export const usePwa = create<PwaState>()(() => ({
   total: 0,
   updateReady: false,
   canInstall: false,
+  installLater: readInstallLater(),
   standalone: false,
   online: true,
 }));
@@ -44,4 +60,15 @@ export const usePwa = create<PwaState>()(() => ({
 export function precachePercent(state: Pick<PwaState, 'done' | 'total'>): number {
   if (state.total <= 0) return 0;
   return Math.max(0, Math.min(100, Math.round((state.done / state.total) * 100)));
+}
+
+/** Range le bouton d'installation (ou le ressort) et le retient sur l'appareil. */
+export function setInstallLater(later: boolean): void {
+  usePwa.setState({ installLater: later });
+  try {
+    if (later) localStorage.setItem(INSTALL_LATER_KEY, '1');
+    else localStorage.removeItem(INSTALL_LATER_KEY);
+  } catch {
+    // Stockage refusé (navigation privée) : le choix vaut pour la séance.
+  }
 }

@@ -5,6 +5,7 @@
 import { useEffect, useState } from 'react';
 import { BUILD, formatBuildDate } from '../app/buildInfo.ts';
 import { precachePercent, usePwa } from '../pwa/pwaStore.ts';
+import { promptInstall } from '../pwa/register.ts';
 import { QUALITY_LABELS, resolveQuality } from '../render/quality.ts';
 import {
   atScreenCap,
@@ -62,9 +63,10 @@ function privateAssetsLine(): string {
   return `Présents : ${count(assets.engines, 'moteur')}, ${count(assets.sfx, 'bruitage')}, ${count(assets.stations, 'station')}.`;
 }
 
-function installLine(standalone: boolean, canInstall: boolean): string {
+function installLine(standalone: boolean, canInstall: boolean, later = false): string {
   if (standalone) return 'Installée : l’atelier tourne comme une app.';
-  if (canInstall) return 'Dans le navigateur. Le bouton « Installer l’atelier » est dans le dock.';
+  if (canInstall && later) return 'Dans le navigateur. Tu as rangé le bouton d’installation : il t’attend ici.';
+  if (canInstall) return 'Dans le navigateur. Le bouton « Installer » est aussi en haut à droite de l’écran.';
   return 'Dans le navigateur. Pour l’installer : menu de Chrome, puis « Ajouter à l’écran d’accueil ».';
 }
 
@@ -269,6 +271,7 @@ export function UnderHoodPanel() {
   const standalone = usePwa((state) => state.standalone);
   const online = usePwa((state) => state.online);
   const canInstall = usePwa((state) => state.canInstall);
+  const installLater = usePwa((state) => state.installLater);
   const gpu = useRenderStats((state) => state.gpu);
   const fps = useRenderStats((state) => state.fps);
   const dpr = useRenderStats((state) => state.dpr);
@@ -307,7 +310,14 @@ export function UnderHoodPanel() {
       <dd>{typo(offlineDetail(offline, percent))}</dd>
 
       <dt>Installation</dt>
-      <dd>{typo(installLine(standalone, canInstall))}</dd>
+      <dd>
+        {typo(installLine(standalone, canInstall, installLater))}
+        {canInstall && !standalone && (
+          <button type="button" className="btn install-here" onClick={() => void promptInstall()}>
+            Installer l’atelier
+          </button>
+        )}
+      </dd>
 
       <dt>Réseau</dt>
       <dd>{online ? 'En ligne.' : 'Hors ligne.'}</dd>

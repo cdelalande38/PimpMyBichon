@@ -30,7 +30,7 @@ export function VehiclePicker() {
         const active = vehicle.id === current;
         const note = notes([
           vehicle.hint,
-          vehicle.placeholder !== undefined && 'substitut',
+          vehicle.placeholder !== undefined && 'maquette',
           modelPresent(vehicle) === false && 'modèle absent',
           active && status === 'chargement' && 'en route…',
         ]);

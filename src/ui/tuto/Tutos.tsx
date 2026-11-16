@@ -209,7 +209,7 @@ function TutoDialog() {
 }
 
 /**
- * Bas de l'étiquette du véhicule (« Substitut · Le van · introuvable… », src/app/App.tsx), en pixels ;
+ * Bas de l'étiquette du véhicule (« Garage · Le van · introuvable… », src/app/App.tsx), en pixels ;
  * `null` sans étiquette. Suivi quand elle paraît, change de texte ou de taille (taille du texte, écran).
  */
 function useBasEtiquette(): number | null {

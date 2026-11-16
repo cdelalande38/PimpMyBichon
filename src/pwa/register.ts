@@ -3,7 +3,7 @@
 
 import { registerSW } from 'virtual:pwa-register';
 import { isPrecacheProgress } from './messages.ts';
-import { usePwa } from './pwaStore.ts';
+import { usePwa, setInstallLater } from './pwaStore.ts';
 
 /** Événement non standard de Chrome qui permet de proposer l'installation depuis l'app. */
 interface BeforeInstallPromptEvent extends Event {
@@ -196,7 +196,9 @@ export async function promptInstall(): Promise<void> {
   usePwa.setState({ canInstall: false });
   try {
     await event.prompt();
-    await event.userChoice;
+    // « Pas maintenant » : on n'insiste pas, le bouton se range dans Atelier › Sous le capot.
+    const choice = await event.userChoice;
+    if (choice.outcome === 'dismissed') setInstallLater(true);
   } catch {
     // Fenêtre déjà affichée ou refusée par le navigateur : rien à faire.
   }

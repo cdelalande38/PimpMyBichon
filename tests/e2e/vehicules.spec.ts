@@ -63,7 +63,7 @@ test.describe('catalogue des véhicules', () => {
     for (const [index, entry] of CATALOG.entries()) {
       const chip = chips.nth(index);
       await expect(chip.locator('b')).toHaveText(entry.name);
-      if (entry.placeholder) await expect(chip.locator('small')).toContainText('substitut');
+      if (entry.placeholder) await expect(chip.locator('small')).toContainText('maquette');
       if (!hasModel(entry)) await expect(chip.locator('small')).toContainText('modèle absent');
     }
 
