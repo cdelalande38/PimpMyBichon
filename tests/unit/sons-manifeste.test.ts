@@ -55,6 +55,9 @@ describe('jeux de sons de moteur', () => {
   it('chaque véhicule du catalogue déclare une famille fabriquée', () => {
     const dir = join(ROOT, 'public', 'assets', 'vehicles');
     for (const id of readdirSync(dir)) {
+      // tests/unit/vehicules.test.ts pose un véhicule d'essai (zz-essai-<pid>) le temps de son passage :
+      // ce n'est pas un véhicule du catalogue.
+      if (id.startsWith('zz-essai-')) continue;
       const file = join(dir, id, 'vehicle.json');
       if (!existsSync(file)) continue;
       const vehicle = JSON.parse(readFileSync(file, 'utf8')) as { engine?: { sound?: string } };
