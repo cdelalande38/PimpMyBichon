@@ -902,6 +902,37 @@
             "provisoire": true,
             "pourquoi": "son généré par le commanditaire, prise 3"
           }
+        ],
+        "depart-feu": [
+          {
+            "prise": "prise-1796a947f1",
+            "debut": 0,
+            "fin": 0.4,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2 (la prise 1 saturait : 14 % d’écrêtage)"
+          }
+        ],
+        "depart-vert": [
+          {
+            "prise": "prise-19cf458a1b",
+            "debut": 0,
+            "fin": 0.8,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-8b07162978",
+            "debut": 0,
+            "fin": 0.8,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          }
         ]
       }
     }

@@ -12,7 +12,7 @@
       "duree": 3.7981041666666666,
       "gain": 0,
       "gainFabrication": -11.7,
-      "credit": 11,
+      "credit": 14,
       "regime": null,
       "boucle": [
         0,
@@ -26,7 +26,7 @@
       "duree": 5.763520833333334,
       "gain": 0,
       "gainFabrication": -8,
-      "credit": 12,
+      "credit": 15,
       "regime": null,
       "boucle": [
         0,
@@ -40,7 +40,7 @@
       "duree": 5.770125,
       "gain": 0,
       "gainFabrication": -10.8,
-      "credit": 13,
+      "credit": 16,
       "regime": null,
       "boucle": [
         0,
@@ -54,7 +54,7 @@
       "duree": 7.781583333333334,
       "gain": 0,
       "gainFabrication": 5.8,
-      "credit": 14,
+      "credit": 17,
       "regime": null,
       "boucle": [
         0,
@@ -68,7 +68,7 @@
       "duree": 7.77175,
       "gain": 0,
       "gainFabrication": -6.5,
-      "credit": 15,
+      "credit": 18,
       "regime": null,
       "boucle": [
         0,
@@ -82,7 +82,7 @@
       "duree": 7.760083333333333,
       "gain": 0,
       "gainFabrication": -15.4,
-      "credit": 16,
+      "credit": 19,
       "regime": null,
       "boucle": [
         0,
@@ -96,7 +96,7 @@
       "duree": 3.8,
       "gain": 0,
       "gainFabrication": -13.8,
-      "credit": 17,
+      "credit": 20,
       "regime": null,
       "boucle": [
         0,
@@ -187,13 +187,40 @@
       "credit": 8
     },
     {
+      "emplacement": "depart-feu",
+      "fichier": "depart-feu-1.ogg",
+      "empreinte": "25a316c928",
+      "duree": 0.4,
+      "gain": 0,
+      "gainFabrication": -11.9,
+      "credit": 9
+    },
+    {
+      "emplacement": "depart-vert",
+      "fichier": "depart-vert-1.ogg",
+      "empreinte": "d38c0234a6",
+      "duree": 0.8,
+      "gain": 0,
+      "gainFabrication": -10.6,
+      "credit": 10
+    },
+    {
+      "emplacement": "depart-vert",
+      "fichier": "depart-vert-2.ogg",
+      "empreinte": "c203e740dd",
+      "duree": 0.8,
+      "gain": 0,
+      "gainFabrication": -12.9,
+      "credit": 11
+    },
+    {
       "emplacement": "backfire",
       "fichier": "backfire-1.ogg",
       "empreinte": "a0acf79825",
       "duree": 0.5,
       "gain": 0,
       "gainFabrication": -6.3,
-      "credit": 9
+      "credit": 12
     },
     {
       "emplacement": "backfire",
@@ -202,10 +229,28 @@
       "duree": 0.5,
       "gain": 0,
       "gainFabrication": -4,
-      "credit": 10
+      "credit": 13
     }
   ],
   "credits": [
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
     {
       "auteur": "le commanditaire",
       "licence": "son généré par le commanditaire",
