@@ -1,6 +1,6 @@
 // Le manche virtuel de la sortie de nuit (§ 5.5), en calcul pur : du déplacement du pouce depuis la
 // base du manche (pixels CSS, y vers le bas) aux commandes du pilote. Vers le haut, le gaz ; vers le
-// bas, le frein ; sur les côtés, le placement ; chacun progressif de 0 à 1 au-delà d'une zone morte
+// bas, le frein ; sur les côtés, la direction (braquage, ou placement en direction assistée) ; chacun progressif de 0 à 1 au-delà d'une zone morte
 // centrale, à fond au bord du rayon. Le bouton dessiné suit le doigt sans sortir du rayon. Une
 // manette physique (API Gamepad, disposition standard) se lit de la même façon (`lireManettePhysique`).
 
@@ -12,7 +12,7 @@ export interface LectureManche {
   throttle: number;
   /** Frein, de 0 à 1. */
   brake: number;
-  /** Placement, de −1 (à gauche) à 1 (à droite). */
+  /** Direction, de −1 (à gauche) à 1 (à droite) : braquage, ou placement en direction assistée. */
   steer: number;
 }
 

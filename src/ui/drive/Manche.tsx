@@ -12,7 +12,7 @@
 // - `useAppui` : un bouton qui répond aussi sous un second doigt (le navigateur n'envoie de « click »
 //   qu'au premier doigt posé).
 // - `useManettePhysique` : une manette branchée (API Gamepad) est lue à chaque image, à la main, dans
-//   la même boucle que le compte-tours : gâchettes gaz et frein, manche gauche le placement, NOS.
+//   la même boucle que le compte-tours : gâchettes gaz et frein, manche gauche la direction, NOS.
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { useDrive } from '../../state/drive.ts';
@@ -27,7 +27,10 @@ export const MANUEL: { stick: LectureManche; pad: LectureManche & { nos: boolean
   frein: false,
 };
 
-/** Écrit dans le store ce que tiennent les doigts ; `steer` absent hors du manche (pédales). */
+/**
+ * Écrit dans le store ce que tiennent les doigts ; `steer` absent quand rien ne braque (pédales en
+ * direction assistée : le placement passe par `lane`).
+ */
 export function appliquerManuel(manche: boolean): void {
   const m = MANUEL;
   useDrive.getState().setManual({
@@ -147,13 +150,13 @@ export function MancheDessin({ el }: { el: RefObject<HTMLDivElement | null> }) {
   );
 }
 
-/** Tant qu'on ne roule pas : où poser le pouce. */
-export function Amorce() {
+/** Tant qu'on ne roule pas : où poser le pouce ; les côtés braquent (direction libre) ou placent (assistée). */
+export function Amorce({ libre = true }: { libre?: boolean }) {
   return (
     <div className="drive-amorce" aria-hidden="true">
       <i className="drive-amorce-rond" />
       <b>Pose ton pouce</b>
-      <small>haut : gaz · bas : frein · côtés : placement</small>
+      <small>haut : gaz · bas : frein · côtés : {libre ? 'tourner' : 'placement'}</small>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { MapRoute, RailSection } from '../../src/data/mapTypes.ts';
 import type { DriveInput, DriveMotion, Pilot, Rail } from '../../src/drive/contrat.ts';
-import { createPilot, createPlacementManche, cruiseSpeed, laneBound, laneCenter, pasPlacement, PILOT, sampleLine } from '../../src/drive/pilote.ts';
+import { createPilot, createPlacementManche, cruiseSpeed, laneBound, laneCenter, laneLimits, pasPlacement, PILOT, sampleLine } from '../../src/drive/pilote.ts';
 import { createPose, createRail } from '../../src/drive/rail.ts';
 
 type Segment = { line: number } | { arc: number; turn: number };
@@ -211,14 +211,33 @@ describe('à la main', () => {
     expect(pilot.motion.s).toBe(s);
   });
 
-  it('jamais de sortie de route : plein gaz dans un rond-point, l’enveloppe freine à sa place', () => {
-    const rail = createRail(makeRoute([{ line: 400 }, { arc: 17, turn: 1.5 * Math.PI }, { line: 400 }]));
-    const pilot = createPilot(rail);
-    const trace = drive(pilot, rail, 60, () => ({ auto: false, throttle: 1, brake: 0, lane: 1 }));
-    expect(trace.maxLateral).toBeLessThan(PILOT.manual.lateral * 1.15);
+  it('jamais de sortie de route ni de frein posé par l’app : plein gaz dans un rond-point, le bord seul ralentit', () => {
+    for (const assist of [true, false]) {
+      const rail = createRail(makeRoute([{ line: 400 }, { arc: 17, turn: 1.5 * Math.PI }, { line: 400 }]));
+      const pilot = createPilot(rail);
+      const pose = createPose();
+      const lim: [number, number] = [0, 0];
+      let worst = 0;
+      let rubbed = 0;
+      for (let i = 0; i < 60 * 60 && !pilot.motion.finished; i += 1) {
+        const before = pilot.motion.speed;
+        // Assistée : l'aide suit la route ; libre : manche à gauche, vers l'intérieur du rond-point.
+        const m = pilot.step(1 / 60, { auto: false, throttle: 1, brake: 0, lane: 1, assist, ...(assist ? {} : { steer: -0.6 }) }, 'car');
+        if (!m.finished) expect(m.braking, assist ? 'assistée' : 'libre').toBe(false);
+        if (m.speed < before - 0.02 && !m.finished) expect(pilot.contact, `${assist ? "assistée" : "libre"} : ralenti hors du bord à ${m.s.toFixed(1)} m, ${before.toFixed(3)} → ${m.speed.toFixed(3)}`).not.toBe(0);
+        if (pilot.contact !== 0) rubbed += 1;
+        worst = Math.max(worst, Math.abs(pilot.lateral));
+        rail.poseAt(m.s, pose);
+        laneLimits(pose, 'car', PILOT.halfWidth.car, PILOT.halfLength.car, lim);
+        expect(m.offset).toBeGreaterThanOrEqual(lim[0] - 1e-9);
+        expect(m.offset).toBeLessThanOrEqual(lim[1] + 1e-9);
+      }
+      expect(worst).toBeLessThanOrEqual(PILOT.manual.lateral + 1e-6);
+      expect(rubbed).toBeGreaterThan(0);
+    }
   });
 
-  it('placement : route dégagée, à gauche ou à droite de toute la chaussée, jamais hors d’elle', () => {
+  it('direction assistée, placement : route dégagée, à gauche ou à droite de toute la chaussée, jamais hors d’elle', () => {
     const sections: RailSection[] = [
       { from: 0, to: 300, ground: 'sol', urban: false, lanes: 2, width: 7 },
       { from: 300, to: 400, ground: 'pont', urban: false, lanes: 1, width: 3.5 },
@@ -230,15 +249,15 @@ describe('à la main', () => {
     const center = laneCenter({ width: 7, lanes: 2 });
     expect(center).toBeCloseTo(-1.75, 6);
     // Toute la chaussée : bien au-delà de la voie de droite, à gauche comme à droite.
-    drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: -1 }));
+    drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: -1, assist: true }));
     expect(pilot.motion.offset).toBeGreaterThan(1.5);
-    drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: 1 }));
+    drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: 1, assist: true }));
     expect(pilot.motion.offset).toBeLessThan(-1.5);
     // Sans demande : la trajectoire du pilote, au milieu d'une ligne droite.
-    drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: 0 }));
+    drive(pilot, rail, 6, () => ({ auto: false, throttle: 0.6, brake: 0, lane: 0, assist: true }));
     expect(Math.abs(pilot.motion.offset)).toBeLessThan(0.3);
     for (const lane of [-1, 1] as const) {
-      const trace = drive(pilot, rail, 60, () => ({ auto: false, throttle: 0.5, brake: 0, lane }));
+      const trace = drive(pilot, rail, 60, () => ({ auto: false, throttle: 0.5, brake: 0, lane, assist: true }));
       for (const item of trace.samples) {
         rail.poseAt(item.s, pose);
         expect(Math.abs(item.offset)).toBeLessThanOrEqual(laneBound(pose, 'car') + 1e-9);
@@ -402,24 +421,24 @@ describe('placement au manche (progressif)', () => {
     expect(fast.weight).toBe(1);
   });
 
-  it('dans le pilote : continu, borné, et à l’arrêt le véhicule ne se déplace pas', () => {
+  it('direction assistée, dans le pilote : continu, borné, et à l’arrêt le véhicule ne se déplace pas', () => {
     const rail = createRail(makeRoute([{ line: 1500 }]));
     const pilot = createPilot(rail);
     // À l'arrêt, manche à fond à gauche : rien ne bouge.
     const start = pilot.motion.offset;
-    drive(pilot, rail, 1, () => ({ auto: false, throttle: 0, brake: 0, lane: 0, steer: -1 }));
+    drive(pilot, rail, 1, () => ({ auto: false, throttle: 0, brake: 0, lane: 0, assist: true, steer: -1 }));
     expect(pilot.motion.offset).toBeCloseTo(start, 9);
     // En roulant, à droite : l'écart descend jusqu'à la borne, sans saut.
-    const trace = drive(pilot, rail, 8, (_m, t) => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, steer: t > 4 ? 1 : 0 }));
+    const trace = drive(pilot, rail, 8, (_m, t) => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, assist: true, steer: t > 4 ? 1 : 0 }));
     const bound = laneBound({ width: 7 }, 'car');
     expect(pilot.motion.offset).toBeLessThan(-bound + 0.05);
     expect(pilot.motion.offset).toBeGreaterThanOrEqual(-bound - 1e-6);
     for (let i = 1; i < trace.samples.length; i += 1) expect(Math.abs(trace.samples[i]!.offset - trace.samples[i - 1]!.offset)).toBeLessThan(0.1);
     // Lâché : la place tient un moment, puis revient vers la trajectoire (au milieu de la ligne droite).
     const held = pilot.motion.offset;
-    drive(pilot, rail, 0.8, () => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, steer: 0 }));
+    drive(pilot, rail, 0.8, () => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, assist: true, steer: 0 }));
     expect(Math.abs(pilot.motion.offset - held)).toBeLessThan(0.1);
-    drive(pilot, rail, 15, () => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, steer: 0 }));
+    drive(pilot, rail, 15, () => ({ auto: false, throttle: 0.7, brake: 0, lane: 0, assist: true, steer: 0 }));
     expect(Math.abs(pilot.motion.offset)).toBeLessThan(0.3);
   });
 });

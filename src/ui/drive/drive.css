@@ -725,11 +725,15 @@
 }
 
 .drive-acts {
-  display: grid;
-  /* Autant de colonnes que de boutons, sur une ligne : un bouton de plus s'y range de lui-même. */
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
+  /* Autant de boutons que de place, sur une ligne : un bouton de plus s'y range de lui-même. Chacun
+     part de la largeur de son libellé (« Réalisateur » entier à côté de « Libre »), le reste est
+     partagé ; trop serrés, ils rétrécissent ensemble et le libellé s'abrège, jamais sous 48 px. */
+  display: flex;
   gap: 6px;
+}
+
+.drive-acts > .drive-act {
+  flex: 1 1 auto;
 }
 
 .drive-act {

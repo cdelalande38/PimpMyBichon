@@ -200,12 +200,12 @@ describe('marge au bord de la chaussée, sur les quatre cartes', () => {
     describe.skipIf(!existsSync(file))(id, () => {
       for (const kind of ['car', 'bike'] as const) {
         for (const lane of [0, -1, 1] as const) {
-          it(`${kind === 'car' ? 'voiture large' : 'moto'}, ${lane === 0 ? 'pilote automatique' : lane < 0 ? 'à la main, collée à gauche' : 'à la main, collée à droite'}`, () => {
+          it(`${kind === 'car' ? 'voiture large' : 'moto'}, ${lane === 0 ? 'pilote automatique' : lane < 0 ? 'à la main assistée, collée à gauche' : 'à la main assistée, collée à droite'}`, () => {
             const route = JSON.parse(readFileSync(file, 'utf8')) as MapRoute;
             const rail = createRail(route);
             const vehicle = VEHICLES.find((v) => v.kind === kind) ?? VEHICLES[0]!;
             const pilot = createPilot(rail, { ...performanceDe(vehicle), ...SIZES[kind] });
-            const input: DriveInput = lane === 0 ? { auto: true, throttle: 0, brake: 0, lane: 0 } : { auto: false, throttle: 0.6, brake: 0, lane };
+            const input: DriveInput = lane === 0 ? { auto: true, throttle: 0, brake: 0, lane: 0 } : { auto: false, throttle: 0.6, brake: 0, lane, assist: true };
             const m = mesurer(route, rail, pilot, kind, SIZES[kind], () => input, createPose(), 4000);
             expect(m.min, `${id} : marge la plus faible à ${m.at} m (zones ${m.zones.join(', ')})`).toBeGreaterThan(MARGIN);
             expect(m.outside).toBe(0);

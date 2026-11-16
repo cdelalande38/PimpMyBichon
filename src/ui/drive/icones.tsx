@@ -22,7 +22,9 @@ export type DriveIconName =
   | 'descendre'
   | 'manche'
   | 'pedales'
-  | 'manette';
+  | 'manette'
+  | 'directionLibre'
+  | 'directionAssistee';
 
 // Bloc moteur vu de côté : carter, bouchon de remplissage, échappement à droite, ventilateur à gauche.
 const BLOC = 'M6 9h2.5l1.5-2h5l1.5 2H18v8.5h-1.5L15 19H9l-1.5-1.5H6Z M10 7V4.5h4V7 M18 12h2.5v3H18 M6 12.25H3.5 M3.5 10v4.5';
@@ -78,6 +80,22 @@ const SHAPES: Record<DriveIconName, ReactNode> = {
       <circle cx="12" cy="12" r="8.5" />
       <circle cx="12" cy="12" r="2.2" />
       <path d="M3.8 10.6 9.9 11.4M20.2 10.6l-6.1.8M12 14.2v6.3" />
+    </>
+  ),
+  // Direction libre : une flèche qui tourne où on veut, entre les bords de la route.
+  directionLibre: (
+    <>
+      <path d="M4 21V3M20 21V3" />
+      <path d="M9 20v-5.5c0-3 2.5-5.5 6-5.5" />
+      <path d="m13 6.5 3 2.5-3 2.5" />
+    </>
+  ),
+  // Direction assistée : une flèche droite tenue au milieu de la route par deux guides.
+  directionAssistee: (
+    <>
+      <path d="M4 21V3M20 21V3" />
+      <path d="M12 20V6M8.5 9.5 12 6l3.5 3.5" />
+      <path d="M7 15h2M15 15h2" />
     </>
   ),
   // Ralenti : un sablier.

@@ -26,9 +26,25 @@ beforeEach(() => {
 
 describe('préférences', () => {
   it('lecture tolérante : une valeur inconnue retombe sur l’origine', () => {
-    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ weather: 'sec', camera: 'orbite', commande: 'manche' });
-    expect(sanitizeDrivePrefs({ weather: 'neige', camera: 'orbite', commande: 'pedales' })).toEqual({ weather: 'neige', camera: 'orbite', commande: 'pedales' });
-    for (const raw of [null, 42, 'pluie', [], {}, { weather: 'grele', camera: 'drone', commande: 'volant' }, { weather: '__proto__' }, { camera: '__proto__' }, { commande: '__proto__' }]) {
+    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ weather: 'sec', camera: 'orbite', commande: 'manche', direction: 'libre' });
+    expect(sanitizeDrivePrefs({ weather: 'neige', camera: 'orbite', commande: 'pedales', direction: 'assistee' })).toEqual({
+      weather: 'neige',
+      camera: 'orbite',
+      commande: 'pedales',
+      direction: 'assistee',
+    });
+    for (const raw of [
+      null,
+      42,
+      'pluie',
+      [],
+      {},
+      { weather: 'grele', camera: 'drone', commande: 'volant', direction: 'auto' },
+      { weather: '__proto__' },
+      { camera: '__proto__' },
+      { commande: '__proto__' },
+      { direction: '__proto__' },
+    ]) {
       expect(sanitizeDrivePrefs(raw), JSON.stringify(raw)).toEqual(DEFAULT_DRIVE_PREFS);
     }
   });
@@ -44,27 +60,30 @@ describe('préférences', () => {
     drive.getState().setWeather('sec');
     drive.getState().setCamera('avant');
     drive.getState().setCommande('pedales');
+    drive.getState().setDirection('assistee');
     drive.getState().enter(first.id, null);
     drive.getState().setSlow(true);
     await vi.waitFor(async () => {
       const raw = await get<string>(DRIVE_KEY, db());
-      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ weather: 'sec', camera: 'avant', commande: 'pedales' });
+      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ weather: 'sec', camera: 'avant', commande: 'pedales', direction: 'assistee' });
     });
     const again = await launch();
     const state = again.getState();
-    expect({ weather: state.weather, camera: state.camera, commande: state.commande, map: state.map, slow: state.slow }).toEqual({
+    expect({ weather: state.weather, camera: state.camera, commande: state.commande, direction: state.direction, map: state.map, slow: state.slow }).toEqual({
       weather: 'sec',
       camera: 'avant',
       commande: 'pedales',
+      direction: 'assistee',
       map: null,
       slow: false,
     });
   });
 
   it('une sauvegarde trafiquée ne bloque pas l’ouverture', async () => {
-    await set(DRIVE_KEY, JSON.stringify({ state: { weather: '<script>', camera: 12, commande: { a: 1 } }, version: 1 }), db());
+    await set(DRIVE_KEY, JSON.stringify({ state: { weather: '<script>', camera: 12, commande: { a: 1 }, direction: 7 }, version: 1 }), db());
     const drive = await launch();
-    expect({ weather: drive.getState().weather, camera: drive.getState().camera, commande: drive.getState().commande }).toEqual(DEFAULT_DRIVE_PREFS);
+    const { weather, camera, commande, direction } = drive.getState();
+    expect({ weather, camera, commande, direction }).toEqual(DEFAULT_DRIVE_PREFS);
   });
 });
 
@@ -145,6 +164,43 @@ describe('une sortie', () => {
     expect('steer' in drive.getState().input).toBe(false);
     drive.getState().setAuto(true);
     expect(drive.getState().input).toEqual(AUTO_INPUT);
+  });
+
+  it('à la main : poursuite et réalisateur coupé ; rien ne les remet tout seul ; direction assistée passée au pilote', async () => {
+    const drive = await launch();
+    drive.getState().enter();
+    expect(drive.getState().director).toBe(true);
+    drive.getState().setCamera('avant');
+    drive.getState().setDirector(true);
+    drive.getState().setAuto(false);
+    expect(drive.getState().camera).toBe('poursuite');
+    expect(drive.getState().director).toBe(false);
+    expect('assist' in drive.getState().input).toBe(false);
+    // Le joueur choisit une autre caméra : un second passage à la main (déjà à la main) n'y touche pas.
+    drive.getState().setCamera('embarquee');
+    drive.getState().setAuto(false);
+    expect(drive.getState().camera).toBe('embarquee');
+    // Retour au pilote automatique, pause, bout du parcours : rien ne change de caméra ni ne rallume le réalisateur.
+    drive.getState().setAuto(true);
+    drive.getState().setPaused(true);
+    drive.getState().setPaused(false);
+    drive.getState().setTelemetry({ ready: true, failed: false, speedKmh: 0, s: 100, progress: 1, finished: true });
+    drive.getState().retry();
+    expect(drive.getState().camera).toBe('embarquee');
+    expect(drive.getState().director).toBe(false);
+    // Direction assistée : passée au pilote tout de suite, et à chaque prise du volant.
+    drive.getState().setAuto(false);
+    drive.getState().setDirection('assistee');
+    expect(drive.getState().input.assist).toBe(true);
+    drive.getState().setManual({ throttle: 0.5, brake: 0, steer: 0.2 });
+    expect(drive.getState().input).toEqual({ auto: false, throttle: 0.5, brake: 0, lane: 0, steer: 0.2, assist: true });
+    drive.getState().setAuto(true);
+    drive.getState().setAuto(false);
+    expect(drive.getState().input.assist).toBe(true);
+    drive.getState().setDirection('libre');
+    expect('assist' in drive.getState().input).toBe(false);
+    drive.getState().setDirection('volant' as never);
+    expect(drive.getState().direction).toBe('libre');
   });
 
   it('orbite bornée, ralenti, pause, télémétrie publiée seulement quand elle change', async () => {

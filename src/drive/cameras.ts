@@ -9,6 +9,11 @@
 // la caméra revient dans l'axe. L'embarquée penche avec la caisse (une part bornée du roulis, l'œil
 // suit le motard qui se couche) et regarde un peu vers l'intérieur de la courbe.
 //
+// Direction à la main (le véhicule peut prendre un vrai cap sur la route, `motion.yaw`, ±0,6 rad au
+// plus) : la poursuite se place derrière le véhicule (son cap relatif s'ajoute au retard), pas
+// derrière la route ; l'embarquée regarde là où pointe le véhicule. En pilote automatique ce cap ne
+// fait que quelques degrés : rien ne change à l'œil.
+//
 // - poursuite : derrière, sur le rail quelques mètres en arrière, à la hauteur du toit ; suit la route.
 // - rasante : au ras du sol (0,35 m), le long du flanc gauche (côté axe de la chaussée), regarde vers
 //   l'arrière du véhicule.
@@ -127,6 +132,12 @@ export function followChase(frame: VehicleFrame, motion: DriveMotion, rail: Rail
   chase.slide = Math.max(-C.lateralMax, Math.min(C.lateralMax, chase.offset - motion.offset));
   chase.offset = motion.offset + chase.slide;
 }
+
+/** Cap du véhicule relatif à la route (rad), borné comme le pilote le borne. */
+const relativeYaw = (motion: DriveMotion) => {
+  const yaw = motion.yaw ?? 0;
+  return Number.isFinite(yaw) ? Math.max(-0.6, Math.min(0.6, yaw)) : 0;
+};
 
 /** Tourne le point `p` de `angle` radians autour de la verticale passant par (cx, cz), comme un cap. */
 function turnAround(p: Vec3, cx: number, cz: number, angle: number): void {
@@ -256,7 +267,7 @@ export function cameraShot(
       extendedPose(rail, motion.s - back, scratch);
       // En retard sur la place, puis sur le cap : le point tourne autour du véhicule de l'écart de cap.
       lateralPoint(scratch, motion.offset + chase.slide, frame.height + 1.1 - lower + shakeY, out.position);
-      turnAround(out.position, px, pz, chase.lag);
+      turnAround(out.position, px, pz, relativeYaw(motion) + chase.lag);
       out.position[0] += lx * shakeX;
       out.position[2] += lz * shakeX;
       set(out.target, px + fx * frame.halfLength * 0.6, py + frame.height * 0.75, pz + fz * frame.halfLength * 0.6);
@@ -322,6 +333,8 @@ export function cameraShot(
       const inside = Math.max(-R.insideMax, Math.min(R.insideMax, scratch.curvature * R.inside));
       lateralPoint(scratch, motion.offset + inside, frame.height * 0.6, point);
       set(out.target, point[0], point[1], point[2]);
+      // Là où pointe le véhicule : le point visé tourne autour de lui de son cap relatif.
+      turnAround(out.target, px, pz, relativeYaw(motion));
       // Dans l'habitacle, un champ plus ouvert : le volant, la planche et la route.
       out.position[1] += shakeY * 0.5;
       out.fov = (eye ? 74 : 66) + extraFov * 0.6;

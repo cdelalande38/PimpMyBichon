@@ -2,13 +2,18 @@
 // chargement qui nomme la carte et s'efface quand la route est prête ; mode de conduite toujours
 // lisible ; à la main, la barre s'abaisse, l'amorce dit où poser le pouce, le manche virtuel apparaît
 // sous le pouce : vers le haut la vitesse et le compte-tours montent (zones, passages), vers le bas elle
-// baisse, sur les côtés le placement ; deux doigts à la fois (manche et NOS, manche et pause) sans que
+// baisse, sur les côtés la direction ; deux doigts à la fois (manche et NOS, manche et pause) sans que
 // l'un lâche l'autre ; les pédales restent au choix dans les commandes ; la languette rappelle la
 // barre ; la radio se déploie sans quitter la route ; le nom de la carte en entier, le compte-tours
 // agrandi ; en paysage (844 × 390), la manette : manche à gauche, GAZ, FREIN et NOS à droite, rien ne
 // se recouvre, tout offre 48 px, le manche et le GAZ répondent en même temps. Appuis tactiles seulement
 // (aucune souris) : de vrais événements tactiles, par le protocole du navigateur.
-// Captures : captures/vague-o-manette/.
+// Direction (vague P, demandes du 16 novembre 2026) : passer à la main met la poursuite et coupe le
+// réalisateur, et rien ne les remet au retour en pilote automatique ; en direction libre (par défaut)
+// le manche braque vraiment (le véhicule prend un cap, la caisse quitte sa place) ; en direction
+// assistée, l'ancien comportement : le manche place le véhicule, qui revient ensuite sur sa trajectoire.
+// Écart (m), cap (°) et glissement relevés sur la zone des gestes (data-ecart, data-cap, data-glisse).
+// Captures : captures/vague-o-manette/, captures/vague-p-direction/.
 
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -21,10 +26,46 @@ const dial = (page: Page) => page.locator('.drive-dial');
 const mode = (page: Page) => page.getByRole('switch', { name: 'Conduite à la main' });
 const kmh = async (page: Page) => Number(await stage(page).getAttribute('data-vitesse'));
 
-async function shot(page: Page, name: string): Promise<void> {
-  const path = resolve('captures', 'vague-o-manette', `${name}.png`);
+async function shot(page: Page, name: string, dir = 'vague-o-manette'): Promise<void> {
+  const path = resolve('captures', dir, `${name}.png`);
   mkdirSync(dirname(path), { recursive: true });
   await page.screenshot({ path });
+}
+
+const gestes = (page: Page) => page.locator('.drive-mid');
+const ecart = async (page: Page) => Number(await gestes(page).getAttribute('data-ecart'));
+const realisateur = (page: Page) => page.locator('.drive-act[aria-label="Réalisateur"]');
+
+/**
+ * Relève sur la zone des gestes, à chaque changement, le cap le plus fort à gauche et à droite (°) et
+ * l'écart le plus grand (m) depuis le dernier appel ; rend ceux de l'appel précédent.
+ */
+async function releves(page: Page): Promise<{ capMax: number; capMin: number; ecartMax: number; ecartMin: number }> {
+  return page.evaluate(() => {
+    const w = window as unknown as { __releves?: { capMax: number; capMin: number; ecartMax: number; ecartMin: number } };
+    const el = document.querySelector<HTMLElement>('.drive-mid');
+    const before = w.__releves ?? { capMax: 0, capMin: 0, ecartMax: -1e9, ecartMin: 1e9 };
+    const r = { capMax: -1e9, capMin: 1e9, ecartMax: -1e9, ecartMin: 1e9 };
+    w.__releves = r;
+    if (el && !el.dataset.observe) {
+      el.dataset.observe = 'oui';
+      new MutationObserver(() => {
+        const cur = w.__releves;
+        if (!cur) return;
+        const cap = Number(el.dataset.cap);
+        const e = Number(el.dataset.ecart);
+        if (Number.isFinite(cap)) {
+          cur.capMax = Math.max(cur.capMax, cap);
+          cur.capMin = Math.min(cur.capMin, cap);
+        }
+        if (Number.isFinite(e)) {
+          cur.ecartMax = Math.max(cur.ecartMax, e);
+          cur.ecartMin = Math.min(cur.ecartMin, e);
+        }
+      }).observe(el, { attributes: true, attributeFilter: ['data-cap', 'data-ecart'] });
+    }
+    return before;
+  });
 }
 
 /** Met un véhicule à l'écran par la sauvegarde des builds (idb-keyval). */
@@ -184,8 +225,13 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await mid.tap({ position: { x: 195, y: 200 } });
     await expect(page.getByText('Reprendre la main ?')).toBeVisible();
 
-    // À la main, au doigt : le mode change à l'écran, la barre s'abaisse, l'amorce dit où poser le pouce.
+    // Pilote automatique au premier lancement : le réalisateur est mis d'office.
+    await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'true');
+    // À la main, au doigt : le mode change à l'écran, la barre s'abaisse, l'amorce dit où poser le pouce ;
+    // la caméra passe en poursuite et le réalisateur se coupe.
     await mode(page).tap();
+    await expect(stage(page)).toHaveAttribute('data-camera', 'poursuite');
+    await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'false');
     await expect(mode(page)).toHaveAttribute('aria-checked', 'true');
     await expect(mode(page)).toContainText('À la main');
     await expect(bar(page)).toHaveAttribute('data-replie', 'true');
@@ -250,10 +296,17 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect(page.locator('.drive-top').getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
     await expect(manche).toHaveAttribute('data-gaz', '1.00');
 
-    // Sur les côtés, le placement : à gauche négatif, progressif.
+    // Sur les côtés, la direction (libre, par défaut) : à gauche négatif, progressif ; le véhicule
+    // braque vraiment, il prend un cap à gauche puis, de l'autre côté, à droite.
+    await releves(page);
     await doigts.glisser(1, x0 - 70, y0 - 20);
     await expect.poll(async () => Number(await manche.getAttribute('data-placement'))).toBeLessThan(-0.8);
+    await expect.poll(async () => (await releves(page)).capMax, { timeout: 120_000 }).toBeGreaterThanOrEqual(3);
     await shot(page, '05-manche-gauche');
+    await shot(page, 'portrait-virage-gauche', 'vague-p-direction');
+    await doigts.glisser(1, x0 + 70, y0 - 20);
+    await expect.poll(async () => (await releves(page)).capMin, { timeout: 120_000 }).toBeLessThanOrEqual(-3);
+    await doigts.glisser(1, x0, y0 - 40);
     // Lâché : le manche s'efface, ni gaz ni frein.
     await doigts.toutLever();
     await expect(manche).toHaveAttribute('data-actif', 'false');
@@ -272,6 +325,30 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect.poll(() => kmh(page), { timeout: 120_000 }).toBeLessThan(fast - 15);
     await expect(mode(page)).toContainText('À la main');
     await doigts.toutLever();
+
+    // Direction assistée, dans la barre : l'ancien comportement. Manche à gauche, la place glisse à
+    // gauche ; lâché sur le côté, elle tient puis revient sur la trajectoire. Puis retour à la direction libre.
+    await page.getByRole('button', { name: 'Afficher les commandes' }).tap();
+    await expect(page.getByRole('button', { name: 'Direction : Libre' })).toBeVisible();
+    await shot(page, 'portrait-barre-direction', 'vague-p-direction');
+    await page.getByRole('button', { name: 'Direction : Libre' }).tap();
+    await expect(page.getByRole('button', { name: 'Direction : Assistée' })).toBeVisible();
+    await page.getByRole('button', { name: 'Replier les commandes' }).tap();
+    await doigts.poser(1, x0, y0);
+    await doigts.glisser(1, x0, y0 - 50);
+    await expect.poll(() => kmh(page), { timeout: 120_000 }).toBeGreaterThan(30);
+    await releves(page);
+    const avant = await ecart(page);
+    await doigts.glisser(1, x0 - 70, y0 - 40);
+    await expect.poll(async () => (await releves(page)).ecartMax, { timeout: 120_000 }).toBeGreaterThan(avant + 0.8);
+    const loin = await ecart(page);
+    await doigts.glisser(1, x0, y0 - 40);
+    await expect.poll(() => ecart(page), { timeout: 150_000 }).toBeLessThan(loin - 0.8);
+    await doigts.toutLever();
+    await page.getByRole('button', { name: 'Afficher les commandes' }).tap();
+    await page.getByRole('button', { name: 'Direction : Assistée' }).tap();
+    await expect(page.getByRole('button', { name: 'Direction : Libre' })).toBeVisible();
+    await page.getByRole('button', { name: 'Replier les commandes' }).tap();
 
     // La languette rappelle la barre (et « Rentrer au garage ») ; les pédales, au choix, et le retour au manche.
     await page.getByRole('button', { name: 'Afficher les commandes' }).tap();
@@ -305,10 +382,14 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await page.locator('.drive-top .quick-btn').tap();
     await expect(page.locator('#radio-mini')).toBeHidden();
 
-    // Retour au pilote automatique : la barre remonte d'elle-même.
+    // Retour au pilote automatique : la barre remonte d'elle-même ; la caméra reste la poursuite et le
+    // réalisateur reste coupé (seul un appui sur ses boutons les change).
     await mode(page).tap();
     await expect(mode(page)).toContainText('Pilote auto');
     await expect(bar(page)).toHaveAttribute('data-replie', 'false');
+    await page.waitForTimeout(1500);
+    await expect(stage(page)).toHaveAttribute('data-camera', 'poursuite');
+    await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'false');
 
     // Petit téléphone, à la main, à l'arrêt (manche tiré vers le bas) : l'amorce revient, rien ne se
     // recouvre, le nom de la carte reste entier.

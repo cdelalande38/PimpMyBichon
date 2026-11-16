@@ -8,7 +8,7 @@ import { VEHICLES, vehicleById } from '../../src/data/vehicles.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
 import { CAMERA_FEEL, cameraFeel, cameraShot, createShot, DEFAULT_ORBIT, shakeAmplitude, speedFov } from '../../src/drive/cameras.ts';
 import type { DriveInput, DriveMotion, VehicleFrame } from '../../src/drive/contrat.ts';
-import { createPilot, performanceDe, PILOT, sampleLine } from '../../src/drive/pilote.ts';
+import { createPilot, performanceDe, PILOT } from '../../src/drive/pilote.ts';
 import { createRail } from '../../src/drive/rail.ts';
 
 type Segment = { line: number } | { arc: number; turn: number };
@@ -145,22 +145,24 @@ describe('accélération et vitesse de pointe, par véhicule (données des manif
 });
 
 describe('courbes : l’adhérence borne la vitesse', () => {
-  it('plein gaz dans un grand virage : l’accélération latérale sur la trajectoire reste sous l’adhérence ; plus d’adhérence, plus vite', () => {
+  it('plein gaz dans un grand virage, sans frein de l’app : l’accélération latérale prise reste sous l’adhérence (au-delà, il élargit) ; plus d’adhérence, plus vite', () => {
     const rail = createRail(route([{ line: 600 }, { arc: 60, turn: Math.PI }, { line: 400 }]));
+    // Direction assistée : l'aide suit la route, gaz à fond, jamais de frein.
+    const input: DriveInput = { ...FULL, assist: true };
     const lateral = (vehicle: VehicleManifest) => {
       const pilot = createPilot(rail, performanceDe(vehicle));
       let worst = 0;
       let slowest = Infinity;
       for (let i = 0; i < 60 * 60 && !pilot.motion.finished; i += 1) {
-        pilot.step(1 / 60, FULL, vehicle.kind);
-        const k = Math.abs(sampleLine(pilot.line.curvature, pilot.line, pilot.motion.s));
-        worst = Math.max(worst, pilot.motion.speed ** 2 * k);
+        pilot.step(1 / 60, input, vehicle.kind);
+        if (!pilot.motion.finished) expect(pilot.motion.braking).toBe(false);
+        worst = Math.max(worst, Math.abs(pilot.lateral));
         if (pilot.motion.s > 650 && pilot.motion.s < 760) slowest = Math.min(slowest, pilot.motion.speed);
       }
       return { worst, slowest };
     };
     const results = VEHICLES.map((vehicle) => ({ vehicle, ...lateral(vehicle) }));
-    for (const r of results) expect(r.worst, r.vehicle.id).toBeLessThan((r.vehicle.performance?.grip ?? PILOT.manual.lateral) * 1.15);
+    for (const r of results) expect(r.worst, r.vehicle.id).toBeLessThanOrEqual((r.vehicle.performance?.grip ?? PILOT.manual.lateral) + 1e-6);
     const concept = results.find((r) => r.vehicle.id === 'concept');
     const van = results.find((r) => r.vehicle.id === 'van');
     if (concept && van) expect(concept.slowest).toBeGreaterThan(van.slowest);

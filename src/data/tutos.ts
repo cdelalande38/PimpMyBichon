@@ -215,10 +215,10 @@ export const TUTOS: readonly Tuto[] = [
     but: 'Ici, tu regardes ton véhicule rouler. Il se débrouille tout seul : pose le téléphone et profite.',
     etapes: [
       { texte: '« Pilote auto » ou « À la main » : le bouton du bas dit qui conduit. Touche-le pour prendre le volant.', cible: '.drive-mode' },
-      { texte: 'À la main, pose ton pouce n’importe où : le manche apparaît. Pousse en haut pour les gaz, en bas pour freiner, sur les côtés pour te placer.', cible: '.drive-mid' },
+      { texte: 'À la main, c’est toi qui tiens la direction. Pose ton pouce : en haut les gaz, en bas le frein, sur les côtés tu tournes.', cible: '.drive-mid' },
       { texte: '« NOS » envoie une poussée, l’anneau dit la réserve. La languette rappelle la barre des commandes.', cible: '.drive-pilot' },
       { texte: 'Compte-tours : vert, ça tire ; orange, le témoin s’allume et ça passe la vitesse ; rouge, zone rouge.', cible: '.drive-dial' },
-      { texte: 'Caméras, ralenti, météo, « Pédales » si tu préfères au manche, et « Rentrer au garage » : tout est dans la barre du bas.', cible: '.drive-acts' },
+      { texte: 'Barre du bas : caméras, météo, « Pédales », « Rentrer au garage », et « Direction : assistée » si tu veux que l’aide suive la route.', cible: '.drive-acts' },
     ],
   },
 ];

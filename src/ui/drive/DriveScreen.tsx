@@ -3,16 +3,18 @@
 //   rapport, vitesse ; src/ui/drive/CompteTours.tsx), à droite la radio (bouton rond et mini-lecteur,
 //   sans quitter la route) et la pause ;
 // - au milieu, la zone des gestes : à la main, le manche virtuel par défaut (src/ui/drive/Manche.tsx :
-//   le pouce se pose n'importe où, la base apparaît sous lui ; haut le gaz, bas le frein, côtés le
-//   placement, tous progressifs ; une amorce dit où poser le pouce tant qu'on ne roule pas), ou, au
-//   choix dans les commandes (gardé), les deux pédales : appui maintenu à droite pour accélérer, à
-//   gauche pour freiner, glissé latéral pour se placer ; en pilote automatique, un appui propose de
+//   le pouce se pose n'importe où, la base apparaît sous lui ; haut le gaz, bas le frein, côtés la
+//   direction (direction libre : on braque ; assistée : on se place), tous progressifs ; une amorce
+//   dit où poser le pouce tant qu'on ne roule pas), ou, au choix dans les commandes (gardé), les deux
+//   pédales : appui maintenu à droite pour accélérer, à gauche pour freiner, glissé latéral pour
+//   tourner (libre, progressif) ou se placer (assistée) ; en pilote automatique, un appui propose de
 //   reprendre la main, un appui long met le ralenti (dit à l'écran), et, sur la caméra d'orbite, un
 //   glissé tourne autour du véhicule. Chaque doigt a le sien : le manche sous un pouce, le NOS, la
 //   pause ou la languette sous un autre, sans que l'un lâche l'autre ;
 // - en bas, au pouce : le mode de conduite, toujours visible (« Pilote auto » ou « À la main », un
-//   appui pour passer de l'un à l'autre), le NOS à la main ; puis la barre des commandes (caméra,
-//   réalisateur, ralenti, météo, commande, moteur, manette, « Rentrer au garage »). À la main, la
+//   appui pour passer de l'un à l'autre ; à la main : caméra de poursuite et réalisateur coupé), le NOS
+//   à la main ; puis la barre des commandes (caméra, réalisateur, ralenti, météo, commande, direction
+//   libre ou assistée, moteur, manette, « Rentrer au garage »). À la main, la
 //   barre s'abaisse pour laisser la place au pilotage : il en reste une languette qui la rappelle ;
 //   elle remonte d'elle-même en pilote automatique, en pause et au bout de la route ;
 // - en paysage (téléphone couché, ou « Manette (paysage) » : plein écran et orientation verrouillée,
@@ -21,7 +23,9 @@
 // Tant que la route n'est pas prête, un écran de chargement plein et opaque (même air que celui du
 // lancement de l'app) nomme la carte et coche ses étapes, « Rentrer au garage » compris ; il s'efface
 // en fondu à la première image de la route. L'erreur garde son message et « Réessayer ».
-// La sortie se regarde sans toucher l'écran : pilote automatique et réalisateur sont mis d'office.
+// La sortie se regarde sans toucher l'écran : pilote automatique et réalisateur sont mis d'office au
+// premier lancement ; en passant à la main, la poursuite et plus de réalisateur, jusqu'à ce que tu
+// les changes toi-même.
 // Le son du moteur est branché sur la sortie tant que l'écran est monté (src/drive/son.ts).
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
@@ -32,7 +36,7 @@ import { resolveVehicle } from '../../data/vehicles.ts';
 import { DRIVE_STAGE_CLASS } from '../../drive/contrat.ts';
 import { basculerMoteur, brancherSonSortie, useSonSortie, type EtatSonSortie } from '../../drive/son.ts';
 import { useBuilds } from '../../state/builds.ts';
-import { CAMERA_LABELS, COMMANDES, useDrive, WEATHERS } from '../../state/drive.ts';
+import { CAMERA_LABELS, COMMANDES, DIRECTIONS, useDrive, WEATHERS } from '../../state/drive.ts';
 import { useEngineSoundPrefs } from '../../state/engineSound.ts';
 import { RadioButton } from '../radio/RadioButton.tsx';
 import '../tuto/tuto.css';
@@ -53,6 +57,7 @@ import {
   useManettePhysique,
   type MancheTenu,
 } from './Manche.tsx';
+import { axeManche } from './manche.ts';
 import { entrerManette, manettePossible, quitterManette, useManette } from './manette.ts';
 import './drive.css';
 
@@ -60,8 +65,11 @@ import './drive.css';
 const PAYSAGE = '(orientation: landscape) and (max-height: 540px)';
 /** Appui long qui déclenche le ralenti, en millisecondes. */
 const LONG_PRESS_MS = 450;
-/** Glissé latéral qui change de placement, en pixels CSS. */
+/** Glissé latéral qui change de placement (direction assistée), en pixels CSS. */
 const LANE_SWIPE_PX = 44;
+/** Pédales en direction libre : glissé qui braque à fond, et zone morte, en pixels CSS. */
+const PEDAL_STEER_PX = 90;
+const PEDAL_STEER_DEAD = 0.1;
 /** Orbite au doigt : radians par pixel. */
 const ORBIT_YAW_PER_PX = 0.009;
 const ORBIT_PITCH_PER_PX = 0.006;
@@ -105,6 +113,9 @@ interface Touch {
   x: number;
   y: number;
   laneX: number;
+  /** Abscisse où le doigt s'est posé, et braquage qu'il donne (pédales, direction libre). */
+  x0: number;
+  steer: number;
   moved: boolean;
   at: number;
 }
@@ -144,6 +155,7 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
   const brake = useDrive((state) => state.input.brake);
   const lane = useDrive((state) => state.input.lane);
   const commande = useDrive((state) => state.commande);
+  const libre = useDrive((state) => state.direction === 'libre');
   const slow = useDrive((state) => state.slow);
   const finished = useDrive((state) => state.telemetry.finished);
   const zone = useRef<HTMLDivElement>(null);
@@ -157,20 +169,40 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
   const mancheEl = useRef<HTMLDivElement>(null);
   const stick = useRef<MancheTenu | null>(null);
   const [tenu, setTenu] = useState(false);
+  // Le manche (ou le glissé des pédales) donne `steer` : en direction libre toujours, en assistée au manche.
+  const steers = manche || libre;
   // Une manette branchée se lit aussi, à la main (gâchettes, manche gauche, NOS).
-  useManettePhysique(!auto && !finished, manche);
+  useManettePhysique(!auto && !finished, steers);
+  // Pour les parcours : écart à l'axe (m), cap relatif (°, positif à gauche) et glissement (0 à 1) du
+  // véhicule, posés sur la zone des gestes à chaque image quand ils changent (sans rendu React).
+  const shown = useRef({ ecart: '', cap: '', glisse: '' });
+  useBoucleImage((pilot) => {
+    const el = zone.current;
+    const m = pilot?.motion;
+    if (!el || !m) return;
+    const ecart = m.offset.toFixed(1);
+    const cap = String(Math.round(((m.yaw ?? 0) * 180) / Math.PI));
+    const glisse = (m.slip ?? 0).toFixed(1);
+    const seen = shown.current;
+    if (ecart !== seen.ecart) el.dataset.ecart = seen.ecart = ecart;
+    if (cap !== seen.cap) el.dataset.cap = seen.cap = cap;
+    if (glisse !== seen.glisse) el.dataset.glisse = seen.glisse = glisse;
+  });
 
   const pedals = () => {
     let right = false;
     let left = false;
+    let steer = 0;
     for (const touch of touches.current.values()) {
       if (touch.side === 'droite') right = true;
       else left = true;
+      // Direction libre : le doigt qui glisse braque (le dernier qui a glissé l'emporte).
+      if (libre && touch.steer !== 0) steer = touch.steer;
     }
     MANUEL.stick.throttle = right ? 1 : 0;
     MANUEL.stick.brake = left ? 1 : 0;
-    MANUEL.stick.steer = 0;
-    appliquerManuel(false);
+    MANUEL.stick.steer = steer;
+    appliquerManuel(libre);
   };
 
   const stopTimer = () => {
@@ -213,7 +245,7 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
     stick.current = null;
     lacherManuel();
     leverManche(mancheEl.current);
-    if (!useDrive.getState().input.auto) appliquerManuel(manche);
+    if (!useDrive.getState().input.auto) appliquerManuel(steers);
     return () => {
       held.clear();
       stick.current = null;
@@ -222,7 +254,7 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
       if (slowByPress.current) useDrive.getState().setSlow(false);
       slowByPress.current = false;
     };
-  }, [auto, manche]);
+  }, [auto, manche, steers]);
 
   useEffect(() => {
     if (!offer) return;
@@ -252,7 +284,7 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
         }
         zone.current?.setPointerCapture?.(event.pointerId);
         const side = event.clientX - box.left > box.width / 2 ? 'droite' : 'gauche';
-        touches.current.set(event.pointerId, { side, x: event.clientX, y: event.clientY, laneX: event.clientX, moved: false, at: performance.now() });
+        touches.current.set(event.pointerId, { side, x: event.clientX, y: event.clientY, laneX: event.clientX, x0: event.clientX, steer: 0, moved: false, at: performance.now() });
         if (!drive.input.auto) {
           pedals();
           return;
@@ -276,6 +308,15 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
         if (!touch) return;
         const drive = useDrive.getState();
         if (!drive.input.auto) {
+          if (libre) {
+            // Direction libre : le glissé braque, progressif, autant que le doigt s'écarte.
+            const steer = axeManche((event.clientX - touch.x0) / PEDAL_STEER_PX, PEDAL_STEER_DEAD);
+            if (steer !== touch.steer) {
+              touch.steer = steer;
+              pedals();
+            }
+            return;
+          }
           const dx = event.clientX - touch.laneX;
           if (Math.abs(dx) >= LANE_SWIPE_PX) {
             const next = Math.max(-1, Math.min(1, drive.input.lane + Math.sign(dx))) as -1 | 0 | 1;
@@ -321,7 +362,7 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
           </button>
         </div>
       )}
-      {manche && !finished && !tenu && !faded && <Amorce />}
+      {manche && !finished && !tenu && !faded && <Amorce libre={libre} />}
       {manche && !finished && <MancheDessin el={mancheEl} />}
       {!auto && !manche && !finished && (
         <div className="drive-pedals" aria-hidden="true" data-estompe={faded}>
@@ -330,9 +371,7 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
             Frein
             <small>maintiens à gauche</small>
           </span>
-          <span className="drive-lane">
-            {lane === -1 ? '← à gauche' : lane === 1 ? 'à droite →' : 'glisse pour te placer'}
-          </span>
+          <span className="drive-lane">{libre ? '← glisse pour tourner →' : lane === -1 ? '← à gauche' : lane === 1 ? 'à droite →' : 'glisse pour te placer'}</span>
           <span className="drive-pedal" data-pedale="gaz" data-appui={throttle > 0}>
             <i className="drive-pedal-plaque" />
             Gaz
@@ -509,6 +548,7 @@ function ManetteToggle() {
 function DriveBar({ paysage }: { paysage: boolean }) {
   const camera = useDrive((state) => state.camera);
   const commande = useDrive((state) => state.commande);
+  const direction = useDrive((state) => state.direction);
   const director = useDrive((state) => state.director);
   const auto = useDrive((state) => state.input.auto);
   const slow = useDrive((state) => state.slow);
@@ -531,6 +571,8 @@ function DriveBar({ paysage }: { paysage: boolean }) {
   const nextCamera = useAppui(() => drive().nextCamera());
   const nextCommande = COMMANDES[(COMMANDES.findIndex((item) => item.id === commande) + 1) % COMMANDES.length]?.id ?? 'manche';
   const commandeLabel = COMMANDES.find((item) => item.id === commande)?.label ?? commande;
+  const nextDirection = DIRECTIONS[(DIRECTIONS.findIndex((item) => item.id === direction) + 1) % DIRECTIONS.length]?.id ?? 'libre';
+  const directionLabel = DIRECTIONS.find((item) => item.id === direction)?.label ?? direction;
 
   return (
     <footer className="drive-bar" aria-label="Commandes de la sortie" data-replie={folded}>
@@ -596,6 +638,17 @@ function DriveBar({ paysage }: { paysage: boolean }) {
                 <span>{commandeLabel}</span>
               </button>
             )}
+            {/* Direction à la main : libre (on braque) ou assistée (l'aide suit la route). Aucune ne freine à ta place. */}
+            <button
+              type="button"
+              className="drive-act"
+              aria-label={`Direction : ${directionLabel}`}
+              data-direction={direction}
+              onClick={() => drive().setDirection(nextDirection)}
+            >
+              <DriveIcon name={direction === 'libre' ? 'directionLibre' : 'directionAssistee'} />
+              <span>{directionLabel}</span>
+            </button>
           </nav>
           <div className="drive-foot">
             <EngineToggle />

@@ -11,10 +11,23 @@
 // véhicule (`DrivePerformance`, tirée du manifeste par `performanceDe`) : puissance constante
 // bornée par l'adhérence au départ, résistance de l'air réglée pour que l'équilibre tombe juste
 // au-dessus de la vitesse de pointe, limiteur à la vitesse de pointe. Aux passages de rapport la
-// poussée est presque coupée (PILOT.engine.cut) : ça se sent. Dans les courbes, l'adhérence borne la
-// vitesse : une enveloppe de sécurité, calculée une fois sur toute la route à `performance.grip` m/s²
-// d'accélération latérale, freine à la place du joueur avant qu'il ne traverse le décor. Aucune
-// collision : il n'y a rien d'autre sur la route.
+// poussée est presque coupée (PILOT.engine.cut) : ça se sent. Aucun frein posé par l'app (demande du
+// 16 novembre 2026 : « Le fait de cogner ralentira mais pas de freins auto ») : le gaz et le frein
+// sont ceux du joueur ; trop vite dans une courbe, le véhicule élargit, frotte le bord, et c'est ce
+// frottement qui le ralentit. Aucune collision : il n'y a rien d'autre sur la route.
+//
+// Direction à la main (`DriveInput.assist` absent ou faux, par défaut) : le joueur tient le braquage.
+// Modèle dans le repère de la route : abscisse s, écart latéral e, cap relatif ψ à la tangente. Le
+// volant (le manche, lissé) donne une courbure (`courbureVolant` : sensibilité qui baisse avec la
+// vitesse, bornée par le braquage du véhicule) ; l'adhérence (`performance.grip`) borne la courbure
+// obtenue (`courbureTenue` : au-delà, sous-virage, `DriveMotion.slip` monte) ; ψ suit la différence
+// entre cette courbure et celle de la route, e suit ψ (`avanceLibre`). Sans braquer dans un virage,
+// le véhicule va tout droit vers le bord extérieur ; manche lâché, il garde son cap. Au bord
+// (`bordLibre`, laneLimits moins ce que le cap fait déborder les coins), il frotte : son cap revient le
+// long du bord, il perd de la vitesse (franchement de face, peu en effleurant), jamais d'arrêt net ni
+// de recul. Direction assistée (`assist` vrai) : la même physique, braquée par une aide qui vise la
+// place d'avant (trajectoire, manche ou bords demandés, `courbureAssistee`) ; le pilote automatique,
+// lui, ne change pas.
 //
 // Moteur et boîte (`train`) : la boîte de src/drive/boite.ts avance à chaque sous-pas ; c'est la
 // seule vérité du régime et du rapport (compte-tours, son du moteur, coupure aux passages).
@@ -30,19 +43,19 @@
 // de passage en courbe (profils). Elle est bornée par la largeur réelle de la chaussée moins la
 // demi-largeur du véhicule (`setSize`, sinon celle de son genre) et une garde, plus grande à
 // l'extérieur des courbes (les coins du véhicule débordent, la chaussée dessinée suit des cordes de
-// 4 m), resserrée un peu avant et après les rétrécissements. À la main, le placement demandé va
-// jusqu'au bord gauche ou droit de la chaussée ; sans demande, la même trajectoire que le pilote. Au
-// manche (`steer`), le placement est progressif : la place visée glisse à une allure proportionnelle
-// (toute la largeur en une seconde, moins vite à basse vitesse, rien à l'arrêt), tient au lâcher, puis
-// revient doucement sur la trajectoire (`pasPlacement`).
-// Le véhicule la suit avec un ressort amorti et ne quitte jamais la chaussée.
+// 4 m), resserrée un peu avant et après les rétrécissements. En pilote automatique, le véhicule la
+// suit avec un ressort amorti et ne quitte jamais la chaussée. En direction assistée, l'aide braque
+// vers la place visée : le placement demandé va jusqu'au bord gauche ou droit de la chaussée ; sans
+// demande, la même trajectoire que le pilote ; au manche (`steer`), le placement est progressif : la
+// place visée glisse à une allure proportionnelle (toute la largeur en une seconde, moins vite à basse
+// vitesse, rien à l'arrêt), tient au lâcher, puis revient doucement sur la trajectoire (`pasPlacement`).
 //
 // Caisse : `roll` est la rotation autour de l'axe avant (+X) du véhicule, au sens direct de three.js :
 // positif, le toit part vers la droite (+Z du véhicule). Une voiture roule vers l'extérieur du virage
 // (ressort amorti), d'autant plus qu'elle est souple (peu d'adhérence) : de l'ordre de 2,5 à 4° en
 // pilote automatique, 5 à 5,5° à la limite (`carRollOf`) ; une moto s'incline vers l'intérieur (angle
 // d'équilibre atan(v²κ/g), un peu appuyé, jusqu'à 45° et plus à la limite), un peu avant la corde
-// (courbure à venir). `dive` est la rotation autour de l'axe latéral, positive nez en l'air (cabrage),
+// (courbure à venir) en pilote automatique, selon la courbure réellement prise à la main. `dive` est la rotation autour de l'axe latéral, positive nez en l'air (cabrage),
 // négative au freinage (plongée). Virage : la courbure de la trajectoire réellement suivie (celle de la
 // route, plus le changement de place) donne le braquage des roues avant (`steer`, angle d'Ackermann sur
 // l'empattement du genre de véhicule) ; le changement de place fait pivoter le véhicule (`yaw`) au lieu
@@ -86,7 +99,29 @@ export const PILOT = {
    * Conduite à la main : frein (m/s²), roue libre (frein moteur, m/s²), vitesse de pointe et
    * adhérence d'un véhicule sans performances déclarées, freinage prévu par l'enveloppe, à-coups.
    */
-  manual: { brake: 7, coast: 0.45, topKmh: 120, lateral: 4.5, brakeEnvelope: 5.5, jerk: 14 },
+  manual: { brake: 7, coast: 0.45, topKmh: 120, lateral: 4.5, jerk: 14 },
+  /**
+   * Direction à la main. Manche à fond : `fullGrip` fois l'adhérence en accélération latérale (au plus
+   * le braquage le plus fort du véhicule ; sous `slowSpeed` m/s, la sensibilité ne monte plus), courbe
+   * `expo` ; le volant suit le manche en `tauIn` s et revient au neutre en `tauOut` s ; cap relatif le
+   * plus fort (rad). Bord : retour du cap le long du bord (s), part de la vitesse perdue de face,
+   * frottement (m/s²) au-delà d'un angle d'appui (rad). Glissement : dépassement de l'adhérence qui
+   * donne un glissement franc (part), lissage (s) ; au bord : glissement de base, gain par radian
+   * d'appui, vitesse où il est plein (m/s). Direction assistée : temps de retour sur la place visée et
+   * de mise en cap (s), cap visé le plus fort (rad), cap rendu au pilote automatique : lissage (s).
+   */
+  free: {
+    fullGrip: 1.3,
+    slowSpeed: 4,
+    expo: 1.5,
+    tauIn: 0.08,
+    tauOut: 0.22,
+    yawMax: 0.6,
+    edge: { tau: 0.15, face: 0.7, rub: 1, touch: 0.01 },
+    slip: { over: 0.6, tau: 0.08, edge: 0.35, edgeGain: 4, edgeSpeed: 8 },
+    assist: { lateralTime: 0.6, headingTime: 0.15, yawMax: 0.35 },
+    handover: 0.5,
+  },
   /**
    * Moteur : rendement de la transmission, plafond d'accélération au départ (adhérence, cabrage d'une
    * moto) en m/s², équilibre de l'air au-dessus de la vitesse de pointe, roulement (m/s²), part de la
@@ -417,13 +452,11 @@ export function sampleLine(values: Float64Array, line: RacingLine, s: number): n
   return values[i]! + (values[i + 1]! - values[i]!) * t;
 }
 
-/** Profil de vitesse le long du rail, échantillonné tous les `step` mètres. */
+/** Profil de vitesse du pilote automatique le long du rail, échantillonné tous les `step` mètres. */
 export interface SpeedProfile {
   readonly step: number;
   /** Vitesse visée par le pilote automatique, m/s. */
   readonly auto: Float64Array;
-  /** Vitesse la plus forte permise à la main, m/s. */
-  readonly envelope: Float64Array;
 }
 
 /** Vitesse et pente (dv/ds) du profil à l'abscisse `s`, écrites dans `out` ([v, dv/ds]). */
@@ -442,24 +475,20 @@ export function sampleProfile(values: Float64Array, step: number, rail: Rail, s:
 }
 
 /**
- * Calcule une fois les deux profils pour un véhicule : courbure et croisière (pilote automatique),
- * courbure et adhérence (enveloppe de la conduite à la main, vitesse de pointe du NOS comprise), puis
- * freinage anticipé à rebours.
+ * Calcule une fois le profil du pilote automatique pour un véhicule : courbure et croisière, puis
+ * freinage anticipé à rebours. À la main, aucun profil : le joueur freine lui-même.
  */
 export function createSpeedProfile(rail: Rail, performance: DrivePerformance = DEFAULT_PERFORMANCE, line?: RacingLine): SpeedProfile {
   const step = PILOT.profileStep;
   const n = Math.max(2, Math.ceil(rail.length / step) + 1);
   const auto = new Float64Array(n);
-  const envelope = new Float64Array(n);
   const pose = createPose();
-  const manualTop = kmh(performance.topKmh * PILOT.nos.topRatio);
   const autoLateral = Math.min(PILOT.lateral, performance.grip);
   for (let i = 0; i < n; i += 1) {
     rail.poseAt(Math.min(rail.length, i * step), pose);
     // Courbure de la trajectoire suivie quand on la connaît (plus douce que celle de la route).
     const k = Math.max(Math.abs(line ? sampleLine(line.curvature, line, i * step) : pose.curvature), 1e-6);
     auto[i] = Math.min(cruiseSpeed(pose, performance.topKmh), Math.sqrt(autoLateral / k));
-    envelope[i] = Math.min(manualTop, Math.sqrt(performance.grip / k));
   }
   const backward = (values: Float64Array, brake: number) => {
     if (!rail.loop) values[n - 1] = 0;
@@ -474,8 +503,7 @@ export function createSpeedProfile(rail: Rail, performance: DrivePerformance = D
     }
   };
   backward(auto, PILOT.plannedBrake);
-  backward(envelope, PILOT.manual.brakeEnvelope);
-  return { step, auto, envelope };
+  return { step, auto };
 }
 
 export interface PilotWithProfile extends Pilot {
@@ -484,11 +512,15 @@ export interface PilotWithProfile extends Pilot {
   readonly rail: Rail;
   readonly performance: DrivePerformance;
   readonly train: DriveTrain;
+  /** À la main : bord touché (−1 à droite, 1 à gauche, 0 libre) pendant le dernier pas. */
+  readonly contact: number;
+  /** Accélération latérale réellement prise (m/s², positive vers la gauche), au dernier sous-pas. */
+  readonly lateral: number;
   setSize(halfWidth: number, halfLength: number): void;
 }
 
 function newMotion(): DriveMotion {
-  return { s: 0, speed: 0, accel: 0, offset: 0, roll: 0, dive: 0, braking: false, finished: false, pull: 0, boost: 0, steer: 0, yaw: 0 };
+  return { s: 0, speed: 0, accel: 0, offset: 0, roll: 0, dive: 0, braking: false, finished: false, pull: 0, boost: 0, steer: 0, yaw: 0, slip: 0 };
 }
 
 /** Accélération du moteur à plein gaz, avant la résistance de l'air (m/s²), et ce qui freine (m/s²). */
@@ -593,6 +625,127 @@ export function bikeLeanOf(lateral: number): number {
   return clampTo(-Math.atan((L.gain * lateral) / G), L.max);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Direction à la main (demande du 16 novembre 2026 : « on dirait qu'un auto pilot nous pilote encore
+// un peu sur la direction ») : fonctions pures, sans allocation, appelées à chaque sous-pas.
+
+/** Courbure la plus forte que le braquage du véhicule permet, 1/m. */
+export function courbureBraquage(kind: 'car' | 'bike'): number {
+  return Math.tan(PILOT.steer.max) / PILOT.steer.wheelbase[kind];
+}
+
+/**
+ * Courbure demandée par le volant (1/m, positive à gauche) : `volant` de −1 (à fond à gauche) à 1 (à
+ * fond à droite), comme le manche. À fond, `fullGrip` fois l'adhérence en accélération latérale : la
+ * sensibilité baisse avec la vitesse (on ne zigzague pas à 200 km/h) ; au pas, le braquage du véhicule.
+ */
+export function courbureVolant(volant: number, speed: number, grip: number, kind: 'car' | 'bike'): number {
+  const F = PILOT.free;
+  if (!Number.isFinite(volant) || volant === 0) return 0;
+  const u = clampTo(volant, 1);
+  const v = Math.max(F.slowSpeed, Number.isFinite(speed) ? speed : 0);
+  const g = Math.max(1, Number.isFinite(grip) ? grip : PILOT.manual.lateral);
+  const full = Math.min(courbureBraquage(kind), (F.fullGrip * g) / (v * v));
+  return -Math.sign(u) * Math.pow(Math.abs(u), F.expo) * full;
+}
+
+/** Courbure obtenue : celle demandée, bornée par l'adhérence (au-delà, le véhicule élargit). */
+export function courbureTenue(demandee: number, speed: number, grip: number): number {
+  if (!Number.isFinite(demandee)) return 0;
+  const v2 = Number.isFinite(speed) ? speed * speed : 0;
+  if (v2 < 1e-6) return demandee;
+  return clampTo(demandee, Math.max(1, Number.isFinite(grip) ? grip : PILOT.manual.lateral) / v2);
+}
+
+/** Glissement des pneus en sous-virage, de 0 (ils tiennent) à 1 (ils glissent franchement). */
+export function glissementSousVirage(demandee: number, speed: number, grip: number): number {
+  if (!Number.isFinite(demandee) || !Number.isFinite(speed)) return 0;
+  const ratio = (Math.abs(demandee) * speed * speed) / Math.max(1, Number.isFinite(grip) ? grip : PILOT.manual.lateral);
+  return Math.min(1, Math.max(0, (ratio - 1) / PILOT.free.slip.over));
+}
+
+/** Ce que le cap relatif fait déborder les coins du véhicule sur le côté (m). */
+export function debordCap(psi: number, halfWidth: number, halfLength: number): number {
+  if (!Number.isFinite(psi)) return 0;
+  return Math.max(0, halfLength * Math.abs(Math.sin(psi)) + halfWidth * (Math.cos(psi) - 1));
+}
+
+/** Mouvement libre dans le repère de la route, tenu par le pilote à la main. */
+export interface EtatLibre {
+  /** Écart à l'axe (m, positif à gauche) et cap relatif à la tangente (rad, positif à gauche). */
+  offset: number;
+  psi: number;
+  /** Courbure obtenue au dernier pas (1/m, positive à gauche). */
+  curvature: number;
+  /** Bord touché : −1 à droite, 1 à gauche, 0 libre ; angle d'appui vers le bord (rad). */
+  contact: number;
+  push: number;
+}
+
+export function createEtatLibre(): EtatLibre {
+  return { offset: 0, psi: 0, curvature: 0, contact: 0, push: 0 };
+}
+
+/**
+ * Un sous-pas du mouvement libre : la courbure demandée, bornée par l'adhérence, fait tourner le
+ * véhicule ; son cap relatif suit la différence avec la courbure de la route ici (`kRoad`), son écart
+ * suit son cap. Rend le chemin fait le long de l'axe (m, jamais négatif : le cap reste borné).
+ */
+export function avanceLibre(state: EtatLibre, demandee: number, kRoad: number, speed: number, grip: number, h: number): number {
+  const F = PILOT.free;
+  const v = Number.isFinite(speed) ? Math.max(0, speed) : 0;
+  const kr = Number.isFinite(kRoad) ? kRoad : 0;
+  const k = courbureTenue(demandee, v, grip);
+  const ds = ((v * Math.cos(state.psi)) / Math.max(0.2, 1 - kr * state.offset)) * h;
+  state.offset += v * Math.sin(state.psi) * h;
+  state.psi = clampTo(state.psi + v * k * h - kr * ds, F.yawMax);
+  state.curvature = k;
+  return ds;
+}
+
+/**
+ * Le bord : l'écart reste dans [lo, hi] (laneLimits, droite négative), moins ce que le cap fait
+ * déborder les coins. Au contact, le cap vers le bord revient le long du bord en `edge.tau` s et le
+ * véhicule perd de la vitesse : d'autant plus qu'il arrive de face. Rend la décélération (m/s²).
+ */
+export function bordLibre(state: EtatLibre, lo: number, hi: number, halfWidth: number, halfLength: number, speed: number, h: number): number {
+  const E = PILOT.free.edge;
+  const extra = debordCap(state.psi, halfWidth, halfLength);
+  let a = lo + extra;
+  let b = hi - extra;
+  if (a > b) a = b = (lo + hi) / 2;
+  let side = 0;
+  if (state.offset > b) {
+    state.offset = b;
+    side = 1;
+  } else if (state.offset < a) {
+    state.offset = a;
+    side = -1;
+  }
+  state.contact = side;
+  if (side === 0) {
+    state.push = 0;
+    return 0;
+  }
+  const push = Math.max(0, side * state.psi);
+  state.push = push;
+  const v = Number.isFinite(speed) ? Math.max(0, speed) : 0;
+  state.psi -= side * push * (1 - Math.exp(-h / E.tau));
+  return (E.face * v * Math.sin(push)) / E.tau + (push > E.touch && v > 0 ? E.rub : 0);
+}
+
+/**
+ * Direction assistée : la courbure qui ramène le véhicule sur la place visée (`err`, m, positif à
+ * gauche) en `lateralTime` s, cap mis en `headingTime` s, bornée par le braquage du véhicule.
+ */
+export function courbureAssistee(err: number, psi: number, kRoad: number, offset: number, speed: number, kind: 'car' | 'bike'): number {
+  const A = PILOT.free.assist;
+  const v = Math.max(1, Number.isFinite(speed) ? speed : 0);
+  const wanted = clampTo(Math.atan2((Number.isFinite(err) ? err : 0) / A.lateralTime, v), A.yawMax);
+  const keep = (kRoad * Math.cos(psi)) / Math.max(0.2, 1 - kRoad * offset);
+  return clampTo(keep + (wanted - psi) / (A.headingTime * v), courbureBraquage(kind));
+}
+
 export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_PERFORMANCE): PilotWithProfile {
   let line = createRacingLine(rail, performance.kind, performance.halfWidth, performance.halfLength);
   let profile = createSpeedProfile(rail, performance, line);
@@ -630,6 +783,15 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
   let lastOffset = 0;
   let lateralRate = 0;
   let pathCurvature = 0;
+  // À la main : mouvement libre, volant (le manche lissé), mode du sous-pas précédent (passage de
+  // relais sans à-coup), cap rendu au pilote automatique qui s'efface, accélération latérale prise.
+  const free = createEtatLibre();
+  let volant = 0;
+  let mode: 'auto' | 'main' | null = null;
+  let yawCarry = 0;
+  let lateralNow = 0;
+  /** Bord touché pendant le dernier pas (un sous-pas suffit). */
+  let touched = 0;
   let nosLeft = 0;
   /** Dernier compteur d'appuis du NOS vu (`null` : pas encore lu ; la première lecture ne lance rien). */
   let nosSeen: number | null = null;
@@ -646,6 +808,17 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     motion.dive = 0;
     motion.steer = 0;
     motion.yaw = 0;
+    motion.slip = 0;
+    free.offset = motion.offset;
+    free.psi = 0;
+    free.curvature = 0;
+    free.contact = 0;
+    free.push = 0;
+    volant = 0;
+    mode = null;
+    yawCarry = 0;
+    lateralNow = 0;
+    touched = 0;
     lastOffset = motion.offset;
     lateralRate = 0;
     pathCurvature = 0;
@@ -744,8 +917,8 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
       const throttle = nos ? 1 : Math.min(1, Math.max(0, input.throttle));
       wanted = throttle * engine.thrust(v, nos, train.rpm) * cut - engine.resist(v) - brake * PILOT.manual.brake;
       if (throttle === 0 && brake === 0) wanted -= PILOT.manual.coast;
-      // Enveloppe de sécurité : le pilote freine à la place du joueur, jamais l'inverse.
-      wanted = Math.max(-PILOT.manual.brake, Math.min(wanted, track(profile.envelope, motion.s, v)));
+      // Aucun frein posé par l'app : seul le bord ralentit, plus bas.
+      wanted = Math.max(-PILOT.manual.brake, wanted);
       jerk = PILOT.manual.jerk;
       braking = brake > 0;
       load = brake > 0 ? 0 : throttle;
@@ -759,11 +932,45 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
       speed = 0;
       if (accel < 0) accel = 0;
     }
+    // À la main : le mouvement libre (chemin fait le long de l'axe), repris d'où en est le véhicule.
+    const kRoad = pose.curvature;
+    let kCmd = 0;
+    let advance = speed * h;
+    if (!input.auto) {
+      if (mode !== 'main') {
+        free.offset = motion.offset;
+        free.psi = clampTo(motion.yaw ?? 0, PILOT.free.yawMax);
+        free.curvature = pathCurvature;
+        volant = 0;
+        mode = 'main';
+      }
+      if (input.assist === true) {
+        volant = 0;
+        const lead = motion.s + (rail.loop ? 1 : Math.sign(rail.length - motion.s) || 1) * speed * PILOT.lane.lead;
+        laneLimits(pose, kind, halfWidth, halfLength, here);
+        let target = sampleLine(line.offset, line, lead);
+        if (input.steer !== undefined) target = pasPlacement(manche, input.steer, target, here[0], here[1], speed, h);
+        else {
+          manche.weight = 0;
+          if (input.lane < 0) target = sampleLine(line.left, line, lead) - PILOT.lane.request;
+          else if (input.lane > 0) target = sampleLine(line.right, line, lead) + PILOT.lane.request;
+        }
+        target = Math.max(here[0], Math.min(here[1], target));
+        kCmd = courbureAssistee(target - free.offset, free.psi, kRoad, free.offset, speed, kind);
+      } else {
+        manche.weight = 0;
+        const want = Number.isFinite(input.steer) ? clampTo(input.steer as number, 1) : 0;
+        const returning = Math.abs(want) < Math.abs(volant) && want * volant >= 0;
+        volant += (want - volant) * (1 - Math.exp(-h / (returning ? PILOT.free.tauOut : PILOT.free.tauIn)));
+        if (Math.abs(volant) < 1e-4 && want === 0) volant = 0;
+        kCmd = courbureVolant(volant, speed, performance.grip, kind);
+      }
+      advance = avanceLibre(free, kCmd, kRoad, speed, performance.grip, h);
+    }
     motion.accel = (speed - v) / h;
     motion.speed = speed;
-    motion.pull = (motion.pull ?? 0) + (motion.accel - (motion.pull ?? 0)) * Math.min(1, h / PILOT.pullTau);
     stepGearbox(h, speed, load, braking);
-    let s = motion.s + speed * h;
+    let s = motion.s + advance;
     if (rail.loop) {
       s = ((s % rail.length) + rail.length) % rail.length;
     } else if (s >= rail.length || (rail.length - s < 0.25 && speed < 0.6 && input.auto)) {
@@ -775,55 +982,98 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     }
     motion.s = s;
 
-    // Placement : la trajectoire de route dégagée, visée un peu en avant ; à la main, le bord gauche ou
-    // droit demandé, ou la place tenue au manche (progressive, rien ne bouge à l'arrêt). Jamais au-delà
-    // des bornes d'ici.
     rail.poseAt(s, pose);
     laneLimits(pose, kind, halfWidth, halfLength, here);
-    const lead = s + (rail.loop ? 1 : Math.sign(rail.length - s) || 1) * speed * PILOT.lane.lead;
-    const steer = input.auto || input.steer === undefined ? null : input.steer;
-    const lane = input.auto ? 0 : input.lane;
-    let target = sampleLine(line.offset, line, lead);
-    if (steer !== null) target = pasPlacement(manche, steer, target, here[0], here[1], speed, h);
-    else {
-      manche.weight = 0;
-      if (lane < 0) target = sampleLine(line.left, line, lead) - PILOT.lane.request;
-      else if (lane > 0) target = sampleLine(line.right, line, lead) + PILOT.lane.request;
-    }
-    target = Math.max(here[0], Math.min(here[1], target));
-    const omega = PILOT.lane.omega;
-    offsetRate += (omega * omega * (target - motion.offset) - 2 * omega * offsetRate) * h;
-    let maxRate = Math.max(PILOT.lane.maxRate, PILOT.lane.maxRatePerSpeed * speed);
-    if (steer !== null) maxRate *= Math.min(1, speed / PILOT.lane.steerSpeed);
-    offsetRate = Math.max(-maxRate, Math.min(maxRate, offsetRate));
-    motion.offset = Math.max(here[0], Math.min(here[1], motion.offset + offsetRate * h));
-
-    // Caisse. La vitesse latérale (changement de place), lissée, fait pivoter le véhicule (`yaw`) ; la
-    // courbure réellement suivie (la route ici, plus la variation de ce cap par mètre) fait le braquage
-    // des roues avant et l'accélération latérale du roulis.
     const S = PILOT.steer;
-    if (pose.s !== s) rail.poseAt(s, pose);
-    lateralRate += ((motion.offset - lastOffset) / h - lateralRate) * Math.min(1, h / S.lateralTau);
-    lastOffset = motion.offset;
-    const yawBefore = motion.yaw ?? 0;
-    motion.yaw = yawOf(lateralRate, speed);
-    const followed = pose.curvature + (motion.yaw - yawBefore) / (h * Math.max(speed, S.fade));
-    pathCurvature += (followed - pathCurvature) * Math.min(1, h / S.curveTau);
-    const wheelAngle = motion.steer ?? 0;
-    motion.steer = wheelAngle + (steerOf(pathCurvature, speed, kind) - wheelAngle) * Math.min(1, h / S.tau);
-    const lateral = speed * speed * pathCurvature;
-    if (kind === 'bike') {
-      // Elle se couche un peu avant la corde : la courbure à venir sur la trajectoire s'ajoute.
-      const ahead = sampleLine(line.curvature, line, s + speed * PILOT.lean.anticipation) - sampleLine(line.curvature, line, s);
-      const lean = bikeLeanOf(lateral + speed * speed * ahead);
-      motion.roll += (lean - motion.roll) * Math.min(1, h / PILOT.lean.tau);
-      rollRate = 0;
+    if (!input.auto) {
+      // À la main : le bord (frottement, cap ramené le long du bord, vitesse perdue), puis la caisse.
+      // Les bornes d'ici, resserrées comme celles de la trajectoire un peu avant et après les
+      // rétrécissements (les coins du véhicule y arrivent avant son centre).
+      let lo = Math.max(here[0], sampleLine(line.right, line, s));
+      let hi = Math.min(here[1], sampleLine(line.left, line, s));
+      if (lo > hi) lo = hi = (lo + hi) / 2;
+      const scrub = bordLibre(free, lo, hi, halfWidth, halfLength, motion.speed, h);
+      if (free.contact !== 0) touched = free.contact;
+      if (scrub > 0 && !motion.finished) {
+        motion.speed = Math.max(0, motion.speed - scrub * h);
+        motion.accel = (motion.speed - v) / h;
+      }
+      const F = PILOT.free;
+      const edgeSlip = free.contact !== 0 ? Math.min(1, F.slip.edge + F.slip.edgeGain * free.push) * Math.min(1, motion.speed / F.slip.edgeSpeed) : 0;
+      const slipWanted = Math.max(glissementSousVirage(kCmd, motion.speed, performance.grip), edgeSlip);
+      motion.slip = (motion.slip ?? 0) + (slipWanted - (motion.slip ?? 0)) * Math.min(1, h / F.slip.tau);
+      motion.offset = free.offset;
+      motion.yaw = free.psi;
+      // Pour rendre la main au pilote automatique sans à-coup.
+      lateralRate = motion.speed * Math.sin(free.psi);
+      lastOffset = motion.offset;
+      pathCurvature = free.curvature;
+      const wheelAngle = motion.steer ?? 0;
+      motion.steer = wheelAngle + (steerOf(kCmd, motion.speed, kind) - wheelAngle) * Math.min(1, h / S.tau);
+      lateralNow = motion.speed * motion.speed * free.curvature;
+      if (kind === 'bike') {
+        // Elle se couche selon la courbure réellement prise.
+        motion.roll += (bikeLeanOf(lateralNow) - motion.roll) * Math.min(1, h / PILOT.lean.tau);
+        rollRate = 0;
+      } else {
+        const w = PILOT.roll.omega;
+        rollRate += (w * w * (carRollOf(lateralNow, performance.grip) - motion.roll) - 2 * PILOT.roll.damping * w * rollRate) * h;
+        motion.roll += rollRate * h;
+      }
     } else {
-      const roll = carRollOf(lateral, performance.grip);
-      const w = PILOT.roll.omega;
-      rollRate += (w * w * (roll - motion.roll) - 2 * PILOT.roll.damping * w * rollRate) * h;
-      motion.roll += rollRate * h;
+      // Placement : la trajectoire de route dégagée, visée un peu en avant ; à la main, le bord gauche ou
+      // droit demandé, ou la place tenue au manche (progressive, rien ne bouge à l'arrêt). Jamais au-delà
+      // des bornes d'ici.
+      const lead = s + (rail.loop ? 1 : Math.sign(rail.length - s) || 1) * speed * PILOT.lane.lead;
+      if (mode !== 'auto') {
+        // On reprend d'où en est le véhicule : sa vitesse latérale, et son cap qui s'efface doucement.
+        const rate = speed * Math.sin(motion.yaw ?? 0);
+        offsetRate = rate;
+        lateralRate = rate;
+        lastOffset = motion.offset;
+        yawCarry = mode === 'main' ? (motion.yaw ?? 0) - yawOf(rate, speed) : 0;
+        manche.weight = 0;
+        mode = 'auto';
+      }
+      let target = sampleLine(line.offset, line, lead);
+      target = Math.max(here[0], Math.min(here[1], target));
+      const omega = PILOT.lane.omega;
+      offsetRate += (omega * omega * (target - motion.offset) - 2 * omega * offsetRate) * h;
+      const maxRate = Math.max(PILOT.lane.maxRate, PILOT.lane.maxRatePerSpeed * speed);
+      offsetRate = Math.max(-maxRate, Math.min(maxRate, offsetRate));
+      motion.offset = Math.max(here[0], Math.min(here[1], motion.offset + offsetRate * h));
+
+      // Caisse. La vitesse latérale (changement de place), lissée, fait pivoter le véhicule (`yaw`) ; la
+      // courbure réellement suivie (la route ici, plus la variation de ce cap par mètre) fait le braquage
+      // des roues avant et l'accélération latérale du roulis.
+      if (pose.s !== s) rail.poseAt(s, pose);
+      lateralRate += ((motion.offset - lastOffset) / h - lateralRate) * Math.min(1, h / S.lateralTau);
+      lastOffset = motion.offset;
+      const yawBefore = motion.yaw ?? 0;
+      yawCarry *= Math.exp(-h / PILOT.free.handover);
+      if (Math.abs(yawCarry) < 1e-5) yawCarry = 0;
+      motion.yaw = yawOf(lateralRate, speed) + yawCarry;
+      const followed = pose.curvature + (motion.yaw - yawBefore) / (h * Math.max(speed, S.fade));
+      pathCurvature += (followed - pathCurvature) * Math.min(1, h / S.curveTau);
+      const wheelAngle = motion.steer ?? 0;
+      motion.steer = wheelAngle + (steerOf(pathCurvature, speed, kind) - wheelAngle) * Math.min(1, h / S.tau);
+      const lateral = speed * speed * pathCurvature;
+      lateralNow = lateral;
+      motion.slip = (motion.slip ?? 0) * Math.max(0, 1 - h / PILOT.free.slip.tau);
+      if (kind === 'bike') {
+        // Elle se couche un peu avant la corde : la courbure à venir sur la trajectoire s'ajoute.
+        const ahead = sampleLine(line.curvature, line, s + speed * PILOT.lean.anticipation) - sampleLine(line.curvature, line, s);
+        const lean = bikeLeanOf(lateral + speed * speed * ahead);
+        motion.roll += (lean - motion.roll) * Math.min(1, h / PILOT.lean.tau);
+        rollRate = 0;
+      } else {
+        const roll = carRollOf(lateral, performance.grip);
+        const w = PILOT.roll.omega;
+        rollRate += (w * w * (roll - motion.roll) - 2 * PILOT.roll.damping * w * rollRate) * h;
+        motion.roll += rollRate * h;
+      }
     }
+    motion.pull = (motion.pull ?? 0) + (motion.accel - (motion.pull ?? 0)) * Math.min(1, h / PILOT.pullTau);
     const gain = kind === 'bike' ? PILOT.dive.gainBike : PILOT.dive.gainCar;
     const dive = Math.max(-PILOT.dive.max, Math.min(PILOT.dive.max, gain * motion.accel));
     const w = PILOT.dive.omega;
@@ -833,6 +1083,7 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
 
   function step(dt: number, input: DriveInput, kind: 'car' | 'bike'): DriveMotion {
     const span = Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
+    if (span > 0) touched = 0;
     if (span > 0 && !motion.finished) {
       const count = Math.max(1, Math.ceil(span / PILOT.substep - 1e-9));
       const h = span / count;
@@ -844,10 +1095,14 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
       motion.steer = (motion.steer ?? 0) * Math.max(0, 1 - span * 4);
       motion.yaw = (motion.yaw ?? 0) * Math.max(0, 1 - span * 4);
       motion.pull = (motion.pull ?? 0) * Math.max(0, 1 - span * 4);
+      motion.slip = (motion.slip ?? 0) * Math.max(0, 1 - span * 8);
       stepNos(span, input);
       stepGearbox(span, 0, 0, true);
     }
-    motion.braking = motion.finished || motion.speed < 0.05 || motion.accel < -0.6 || (!input.auto && input.brake > 0.05);
+    // À la main, les feux stop sont ceux du joueur : un bord qui ralentit n'est pas un freinage.
+    motion.braking = input.auto
+      ? motion.finished || motion.speed < 0.05 || motion.accel < -0.6
+      : motion.finished || input.brake > 0.05 || (motion.speed < 0.05 && !(input.throttle > 0));
     return motion;
   }
 
@@ -874,6 +1129,12 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     rail,
     performance,
     train,
+    get contact() {
+      return touched;
+    },
+    get lateral() {
+      return lateralNow;
+    },
     reset,
     step,
     setSize,
