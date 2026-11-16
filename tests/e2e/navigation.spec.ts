@@ -135,10 +135,16 @@ test.describe('navigation du dock', () => {
     await back(page).tap();
     await expect(tabs(page)).toBeVisible();
     await expect(back(page)).toHaveCount(0);
-    // Garage, une seule entrée : son contenu tout de suite, sans écran à un seul choix.
+    // Garage, deux entrées (Ambiance, Sortie de nuit) : ses entrées d'abord, puis le contenu ;
+    // « Retour » remonte aux entrées, puis aux sections.
     await tabs(page).getByRole('button', { name: 'Garage', exact: true }).tap();
+    const garageEntries = dock(page).getByRole('navigation', { name: 'Entrées · Garage' });
+    await expect(garageEntries.getByRole('button')).toHaveText(['Ambiance', 'Sortie de nuit']);
+    await garageEntries.getByRole('button', { name: 'Ambiance', exact: true }).tap();
     await expect(dock(page).getByRole('group', { name: 'Ambiance' })).toBeVisible();
     await expectCrumbs(page, ['Garage', 'Ambiance']);
+    await back(page).tap();
+    await expect(garageEntries).toBeVisible();
     await back(page).tap();
     await expect(tabs(page)).toBeVisible();
     await openEntry(page, 'Peinture');

@@ -16,6 +16,7 @@ describe('parseHash', () => {
     expect(parseHash('#/commande')).toEqual({ name: 'commande' });
     expect(parseHash('/commande')).toEqual({ name: 'commande' });
     expect(parseHash('#/radio')).toEqual({ name: 'radio' });
+    expect(parseHash('#/sortie')).toEqual({ name: 'sortie' });
     // La fiche moteur vit dans le dock (Mécanique · Préparation) : plus de panneau à cette adresse.
     expect(parseHash('#/moteur')).toEqual({ name: 'garage' });
   });
@@ -81,6 +82,7 @@ describe('routeToHash', () => {
       { name: 'capot' },
       { name: 'commande' },
       { name: 'radio' },
+      { name: 'sortie' },
       { name: 'build', code: CODE },
       { name: 'defi', code: CODE },
     ];
@@ -100,5 +102,11 @@ describe('isSheetRoute', () => {
     expect(isSheetRoute({ name: 'reglages' })).toBe(true);
     expect(isSheetRoute({ name: 'radio' })).toBe(true);
     expect(isSheetRoute({ name: 'illisible', kind: 'defi' })).toBe(true);
+  });
+
+  it('le mode photo et la sortie de nuit remplacent l’interface : ce ne sont pas des panneaux', () => {
+    expect(isSheetRoute({ name: 'photo' })).toBe(false);
+    expect(isSheetRoute({ name: 'sortie' })).toBe(false);
+    expect(routeToHash({ name: 'sortie' })).toBe('#/sortie');
   });
 });

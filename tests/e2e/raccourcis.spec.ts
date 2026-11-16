@@ -65,10 +65,11 @@ test.describe('raccourcis et dock de personnalisation', () => {
     await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Custom', 'Peinture']);
     await shot(page, '01c-custom-peinture');
-    // « Garage » : une seule entrée, pas d'écran d'entrées ; le fil dit « Garage · Ambiance ».
+    // « Garage » : deux entrées (Ambiance, Sortie de nuit) ; le fil dit « Garage · Ambiance ».
     await backToSections(page);
     await tabs(page).getByRole('button', { name: 'Garage', exact: true }).tap();
-    await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
+    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Garage' }).getByRole('button')).toHaveText(['Ambiance', 'Sortie de nuit']);
+    await dock(page).getByRole('navigation', { name: 'Entrées · Garage' }).getByRole('button', { name: 'Ambiance', exact: true }).tap();
     await expect(dock(page).getByRole('group', { name: 'Ambiance' })).toBeVisible();
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Garage', 'Ambiance']);
     await backToSections(page);

@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { activeEntry, directEntry, DOCK_MENU, sectionEntries, sectionOf, visibleSections } from '../../src/data/dockMenu.ts';
 
 describe('arbre du dock', () => {
-  it('Véhicule et Garage ouvrent directement leur contenu ; Custom et Mécanique montrent leurs entrées', () => {
+  it('Véhicule ouvre directement son contenu ; Custom, Mécanique et Garage montrent leurs entrées', () => {
     const direct = (id: string) => directEntry(DOCK_MENU.find((section) => section.id === id)!)?.id;
     expect(direct('vehicule')).toBe('vehicule');
-    expect(direct('garage')).toBe('ambiance');
+    expect(direct('garage')).toBeUndefined();
     expect(direct('custom')).toBeUndefined();
     expect(direct('mecanique')).toBeUndefined();
     // Sans les « bientôt », Custom n'aurait plus qu'une entrée : elle s'ouvrirait directement.
@@ -23,7 +23,7 @@ describe('arbre du dock', () => {
     }
   });
 
-  it('les entrées prévues : Peinture puis cinq « bientôt » ; Préparation puis Moteur et Échappement', () => {
+  it('les entrées prévues : Peinture puis cinq « bientôt » ; Préparation puis Moteur et Échappement ; Ambiance et Sortie de nuit', () => {
     const custom = DOCK_MENU.find((section) => section.id === 'custom');
     const mecanique = DOCK_MENU.find((section) => section.id === 'mecanique');
     expect(custom && sectionEntries(custom).map((entry) => [entry.label, entry.available])).toEqual([
@@ -35,6 +35,12 @@ describe('arbre du dock', () => {
       ['Suspension', false],
     ]);
     expect(mecanique && sectionEntries(mecanique).map((entry) => entry.label)).toEqual(['Préparation', 'Moteur', 'Échappement']);
+    // Garage : l'ambiance, puis la sortie de nuit (§ 5.5), toutes deux disponibles.
+    const garage = DOCK_MENU.find((section) => section.id === 'garage');
+    expect(garage && sectionEntries(garage).map((entry) => [entry.label, entry.available])).toEqual([
+      ['Ambiance', true],
+      ['Sortie de nuit', true],
+    ]);
     // Masquées d'un coup : il ne reste que les entrées disponibles.
     expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture']);
   });
@@ -50,6 +56,7 @@ describe('arbre du dock', () => {
     expect(activeEntry(custom, undefined)?.id).toBe('peinture');
     expect(activeEntry(custom, 'stickers')?.id).toBe('peinture');
     expect(sectionOf('ambiance')?.id).toBe('garage');
+    expect(sectionOf('sortie')?.id).toBe('garage');
     expect(sectionOf('preparation')?.id).toBe('mecanique');
   });
 });

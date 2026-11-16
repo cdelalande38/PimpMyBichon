@@ -1,12 +1,18 @@
 // Coque de l'app : la scène 3D en fond, le HUD en haut (marque, état, boutons ronds de la radio, de
 // la photo et de l'atelier), le dock en bas (la personnalisation), et un panneau bas piloté par l'adresse.
+// Sortie de nuit (« #/sortie », § 5.5) : la scène de la route, chargée à la première sortie, prend la
+// place de celle du garage (déchargée pour tenir la mémoire) ; l'atelier s'efface derrière l'écran de
+// la sortie. Au retour, le garage se remonte tel qu'on l'avait laissé (tout vit dans les stores).
 
-import { lazy, Suspense, useEffect, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { mapById } from '../data/maps.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
 import { useBench } from '../state/bench.ts';
 import { useBuilds } from '../state/builds.ts';
+import { useDrive } from '../state/drive.ts';
 import { useSettings } from '../state/store.ts';
 import { Dock } from '../ui/Dock.tsx';
+import { DriveScreen } from '../ui/drive/DriveScreen.tsx';
 import { Hud } from '../ui/Hud.tsx';
 import { SceneOverlay } from '../ui/overlay/SceneOverlay.tsx';
 import { PhotoBar } from '../ui/PhotoBar.tsx';
@@ -19,12 +25,8 @@ import { useRoute } from './useRoute.ts';
 
 // three.js et la scène arrivent dans un second temps : la coque s'affiche d'abord.
 const GarageCanvas = lazy(() => import('../scene/GarageCanvas.tsx'));
-
-/**
- * « Réessayer » : en bas de la zone centrale, comme l'alerte, à portée du pouce (le haut à gauche est
- * pris par le bouton « ? »). La zone laisse passer les gestes vers la scène ; le bouton, lui, se touche.
- */
-const RETRY: CSSProperties = { flex: 'none', marginTop: 'auto', pointerEvents: 'auto' };
+// La scène de la route n'est chargée qu'à la première sortie.
+const DriveCanvas = lazy(() => import('../drive/DriveCanvas.tsx'));
 
 function SceneFailure() {
   return (
@@ -43,6 +45,16 @@ export function App() {
   const setBenchStatus = useBench((state) => state.setStatus);
   const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const photo = route.name === 'photo' && !sceneFailed;
+  const sortie = route.name === 'sortie';
+  const driveMap = mapById(useDrive((state) => state.map));
+  const driveAttempt = useDrive((state) => state.attempt);
+
+  // L'adresse décide : « #/sortie » entre en sortie (carte et départ choisis dans le menu, sinon la
+  // première carte), toute autre adresse rentre au garage (bouton, geste retour d'Android).
+  useEffect(() => {
+    if (sortie) useDrive.getState().enter();
+    else useDrive.getState().leave();
+  }, [sortie]);
 
   // La taille du texte s'applique à la racine : toute l'interface est dimensionnée en rem.
   useEffect(() => {
@@ -52,13 +64,24 @@ export function App() {
   return (
     <>
       <div className="app">
-        <SceneBoundary onFail={() => setSceneFailed(true)}>
-          <Suspense fallback={<p className="stage-wait">Ouverture du garage…</p>}>
-            <GarageCanvas paused={isSheetRoute(route)} photo={photo} />
-          </Suspense>
-        </SceneBoundary>
+        {sortie ? (
+          <SceneBoundary key={`sortie-${driveAttempt}`} onFail={() => useDrive.getState().fail()}>
+            <Suspense fallback={null}>
+              {driveMap && <DriveCanvas key={`${driveMap.id}-${driveAttempt}`} map={driveMap} vehicle={vehicle} />}
+            </Suspense>
+          </SceneBoundary>
+        ) : (
+          <SceneBoundary onFail={() => setSceneFailed(true)}>
+            <Suspense fallback={<p className="stage-wait">Ouverture du garage…</p>}>
+              <GarageCanvas paused={isSheetRoute(route)} photo={photo} />
+            </Suspense>
+          </SceneBoundary>
+        )}
 
-        {photo ? (
+        {sortie ? (
+          // Sortie de nuit : l'atelier s'efface, la route prend l'écran.
+          <DriveScreen />
+        ) : photo ? (
           // Mode photo : l'interface s'efface, la scène prend l'écran.
           <>
             <div className="mid" />
@@ -81,9 +104,10 @@ export function App() {
                   {benchStatus === 'erreur' && ' · introuvable, relance avec du réseau'}
                 </p>
               )}
-              {/* Modèle tombé : nouvel essai sur le même véhicule (src/scene/GarageCanvas.tsx), sous le pouce. */}
+              {/* Modèle tombé : nouvel essai sur le même véhicule (src/scene/GarageCanvas.tsx), en bas de
+                  la zone centrale, sous le pouce (le haut à gauche est pris par le bouton « ? », styles.css). */}
               {!sceneFailed && benchStatus === 'erreur' && (
-                <button type="button" className="btn" style={RETRY} onClick={() => setBenchStatus('chargement')}>
+                <button type="button" className="btn mid-retry" onClick={() => setBenchStatus('chargement')}>
                   Réessayer
                 </button>
               )}
@@ -96,7 +120,8 @@ export function App() {
         <Sheets route={route} />
       </div>
       {/* Accueil d'un nouvel utilisateur, hors de la coque : écran de chargement, tutos et bouton « ? ». */}
-      <Chargement sceneFailed={sceneFailed} />
+      {/* En sortie, le garage n'est pas monté : l'écran d'ouverture du garage cède la place à celui de la route. */}
+      <Chargement sceneFailed={sceneFailed || sortie} />
       <Tutos />
     </>
   );

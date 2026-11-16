@@ -26,6 +26,8 @@ const ECRANS_ATTENDUS: EcranKey[] = [
   'panneau:capot',
   'photo',
   'vue:interieur',
+  'entree:sortie',
+  'sortie',
 ];
 
 describe('données des tutos', () => {
@@ -94,12 +96,13 @@ describe('écran courant', () => {
     expect(ecranCourant({ ...base, dock: { ...custom, menu: 'contenu' }, sortiAccueil: true })).toBe('entree:peinture');
   });
 
-  it('panneaux, photo et vue intérieure passent devant le dock', () => {
+  it('panneaux, photo, sortie de nuit et vue intérieure passent devant le dock', () => {
     const routes: [Route, EcranKey | null][] = [
       [{ name: 'radio' }, 'panneau:radio'],
       [{ name: 'reglages' }, 'panneau:reglages'],
       [{ name: 'capot' }, 'panneau:capot'],
       [{ name: 'photo' }, 'photo'],
+      [{ name: 'sortie' }, 'sortie'],
       [{ name: 'commande' }, null],
       [{ name: 'illisible', kind: 'build' }, null],
     ];

@@ -67,9 +67,17 @@ export interface DriveMotion {
   accel: number;
   /** Écart latéral à l'axe de la chaussée, en mètres, positif vers la gauche de la marche. */
   offset: number;
-  /** Roulis de la caisse d'une voiture, ou inclinaison d'une moto dans la courbe, en radians. */
+  /**
+   * Roulis de la caisse d'une voiture, ou inclinaison d'une moto dans la courbe, en radians :
+   * rotation autour de l'axe avant (+X) du véhicule, au sens direct de three.js ; positif, le toit
+   * part vers la droite (+Z du véhicule). Une voiture roule vers l'extérieur du virage, une moto
+   * s'incline vers l'intérieur.
+   */
   roll: number;
-  /** Plongée au freinage ou cabrage à l'accélération, en radians, en plus de la pente. */
+  /**
+   * Plongée au freinage ou cabrage à l'accélération, en radians, en plus de la pente : rotation
+   * autour de l'axe latéral, de même sens que `pitch` (positive nez en l'air, négative au freinage).
+   */
   dive: number;
   /** Feux stop allumés. */
   braking: boolean;
@@ -185,6 +193,8 @@ export interface DriveStore {
   paused: boolean;
   telemetry: DriveTelemetry;
   setTelemetry: (telemetry: DriveTelemetry) => void;
+  /** La scène n'a pas pu se poser (route absente, hors ligne à la première sortie, erreur de rendu). */
+  fail: () => void;
 }
 
 /**

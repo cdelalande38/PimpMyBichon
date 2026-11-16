@@ -75,7 +75,9 @@ test.describe('atelier', () => {
         await tabs(page).getByRole('button', { name: tab, exact: true }).click();
         const buttons = dock(page).locator('button:visible');
         const count = await buttons.count();
-        expect(count).toBeGreaterThan(4);
+        // Au moins « Retour », la croix et une commande : la poignée ne s'affiche plus que là où
+        // agrandir montre quelque chose de plus, et une section peut n'avoir que deux entrées.
+        expect(count).toBeGreaterThanOrEqual(3);
         for (let i = 0; i < count; i += 1) {
           const button = buttons.nth(i);
           const label = (await button.innerText()).trim().replace(/\s+/g, ' ');

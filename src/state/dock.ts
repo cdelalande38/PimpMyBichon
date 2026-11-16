@@ -27,8 +27,8 @@ export type PaintStep = 'couleur' | 'finition';
 
 /**
  * Niveau du menu à l'écran, un seul à la fois : les sections, les entrées d'une section, ou le
- * contenu d'une entrée (et ses niveaux à elle, `levels`). Une section à une seule entrée (Véhicule,
- * Garage) passe directement des sections au contenu.
+ * contenu d'une entrée (et ses niveaux à elle, `levels`). Une section à une seule entrée (Véhicule)
+ * passe directement des sections au contenu ; Garage montre ses deux entrées (Ambiance, Sortie de nuit).
  */
 export type MenuLevel = 'sections' | 'entrees' | 'contenu';
 

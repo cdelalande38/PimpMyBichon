@@ -70,13 +70,20 @@ describe('pile des niveaux du dock', () => {
     dock().setSection('custom');
     dock().setEntry('peinture');
     dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
-    // Garage, une seule entrée : son contenu tout de suite, et « Retour » ramène aux sections.
+    // Garage, deux entrées (Ambiance, Sortie de nuit) : ses entrées d'abord, puis le contenu ;
+    // « Retour » remonte aux entrées, puis aux sections.
     dock().setSection('garage');
-    expect(dock().menu).toBe('contenu');
+    expect(dock().menu).toBe('entrees');
     expect(dock().levels).toEqual([]);
+    dock().setEntry('sortie');
+    expect(dock().menu).toBe('contenu');
+    expect(entryOf('garage', dock().entries)).toBe('sortie');
+    expect(dock().back()).toBe(true);
+    expect(dock().menu).toBe('entrees');
     expect(dock().back()).toBe(true);
     expect(dock().menu).toBe('sections');
     dock().setSection('garage');
+    dock().setEntry('ambiance');
     // Hors de la peinture, rien ne s'empile.
     dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
     expect(dock().levels).toEqual([]);

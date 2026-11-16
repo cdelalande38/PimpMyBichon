@@ -1,0 +1,387 @@
+/* Sortie de nuit (§ 5.5) : l'entrée du menu et l'écran de la route. Mêmes jetons que l'atelier
+   (src/app/styles.css) ; toute commande offre 48 px au doigt. */
+
+/* ───────────── Entrée « Sortie de nuit » du menu ───────────── */
+
+/* En dock compact, le contenu défile en hauteur ; « Sortir » reste collé en bas, sous le pouce. */
+.dock[data-taille='compact'] .dock-tab[data-onglet='sortie'] {
+  max-height: var(--dock-body);
+  justify-content: flex-start;
+  margin: 0 calc(-1 * var(--pad-r)) 0 calc(-1 * var(--pad-l));
+  padding: 0 var(--pad-r) 0 var(--pad-l);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+}
+
+.drive-entry {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Les rangées qui défilent en largeur ne se laissent pas écraser par la hauteur bornée du dock. */
+.drive-entry > * {
+  flex: none;
+}
+
+.drive-credits {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
+.drive-note,
+.drive-empty {
+  align-self: center;
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.8125rem;
+}
+
+.drive-go-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  background: rgba(10, 9, 17, 0.97);
+}
+
+.drive-weather {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.drive-weather-btn {
+  flex: none;
+  gap: 0.25rem;
+  min-width: var(--tap);
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+.drive-weather-btn[aria-pressed='true'] {
+  border-color: var(--chrome);
+  background: var(--chrome);
+  color: var(--night);
+}
+
+.drive-go {
+  flex: 1;
+  min-height: var(--tap-chip);
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
+}
+
+.drive-icon {
+  flex: none;
+  width: 1.375rem;
+  height: 1.375rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ───────────── Écran de la route ───────────── */
+
+/* Racine de la scène (src/drive/DriveCanvas.tsx) : plein écran, sous l'interface. */
+.drive-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: #05040a;
+  touch-action: none;
+}
+
+.drive-top {
+  position: relative;
+  z-index: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: calc(0.5rem + var(--safe-t)) calc(var(--gutter) + var(--safe-r)) 0 calc(var(--gutter) + var(--safe-l));
+  pointer-events: none;
+}
+
+.drive-band {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  padding: 0.25rem 0.75rem 0.375rem;
+  border-left: 2px solid var(--ambre);
+  background: rgba(10, 9, 17, 0.55);
+}
+
+.drive-speed {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.drive-speed b {
+  min-width: 2.2ch;
+  font-family: var(--display);
+  font-size: 1.75rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.drive-speed small {
+  color: var(--mute);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.drive-where {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.drive-map {
+  overflow: hidden;
+  color: var(--chrome);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.drive-progress {
+  position: relative;
+  display: block;
+  height: 3px;
+  background: var(--line);
+}
+
+.drive-progress i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ambre);
+  box-shadow: 0 0 6px var(--ambre);
+}
+
+.drive-round {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--panel);
+  pointer-events: auto;
+}
+
+.drive-round[aria-pressed='true'] {
+  border-color: var(--ambre);
+  color: var(--ambre);
+}
+
+/* Zone des gestes : toute la hauteur libre, au-dessus de la scène. */
+.drive-mid {
+  z-index: 1;
+  grid-row: 2;
+  justify-content: flex-end;
+  align-items: stretch;
+  padding-bottom: 0.5rem;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.drive-pedals {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.drive-pedal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 6.5rem;
+  min-height: 4.5rem;
+  border: 1px dashed var(--edge);
+  border-radius: 6px;
+  background: rgba(10, 9, 17, 0.4);
+  font-family: var(--display);
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.drive-pedal small {
+  color: var(--mute);
+  font-family: var(--body);
+  font-size: 0.625rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.drive-pedal[data-pedale='frein'][data-appui='true'] {
+  border: 1px solid var(--rouge);
+  background: rgba(255, 45, 63, 0.35);
+}
+
+.drive-pedal[data-pedale='gaz'][data-appui='true'] {
+  border: 1px solid var(--ok);
+  background: rgba(34, 211, 182, 0.3);
+}
+
+.drive-lane {
+  flex: 1;
+  padding-bottom: 0.25rem;
+  color: var(--mute);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.drive-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0 calc(1.5rem + var(--safe-r)) 30% calc(1.5rem + var(--safe-l));
+  pointer-events: none;
+}
+
+.drive-veil[data-etat='chargement'] {
+  background: radial-gradient(ellipse at 50% 60%, rgba(59, 123, 255, 0.12), transparent 70%);
+}
+
+.drive-veil > * {
+  pointer-events: auto;
+}
+
+.drive-veil .btn {
+  flex: none;
+}
+
+.drive-veil .alert {
+  margin: 0;
+}
+
+.drive-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  text-align: center;
+}
+
+.drive-loading b {
+  font-family: var(--display);
+  font-size: 1.125rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+
+.drive-loading small {
+  color: var(--mute);
+  font-size: 0.75rem;
+}
+
+.drive-loading .drive-credits {
+  max-width: 22rem;
+  margin-top: 0.75rem;
+}
+
+.drive-bar {
+  position: relative;
+  z-index: 2;
+  grid-row: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0.5rem calc(var(--gutter) + var(--safe-r)) calc(0.75rem + var(--safe-b)) calc(var(--gutter) + var(--safe-l));
+  background: linear-gradient(to top, rgba(10, 9, 17, 0.92) 55%, rgba(10, 9, 17, 0));
+}
+
+.drive-end {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-left: 2px solid var(--ambre);
+  background: var(--panel);
+}
+
+.drive-end p {
+  flex: 1;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.drive-end .btn {
+  flex: none;
+}
+
+.drive-acts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.drive-act {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 48px;
+  min-height: var(--tap-chip);
+  padding: 0.25rem 0.125rem;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: var(--panel);
+  -webkit-touch-callout: none;
+}
+
+.drive-act span {
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drive-act[aria-pressed='true'] {
+  border-color: var(--bleu);
+  box-shadow: inset 0 -3px 0 var(--bleu);
+}
+
+.drive-act[data-conduite='main'] {
+  border-color: var(--ambre);
+  color: var(--ambre);
+}
+
+.drive-home {
+  flex: none;
+  gap: 0.5rem;
+}

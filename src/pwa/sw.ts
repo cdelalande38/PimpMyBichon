@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
 // Service worker de PimpMyBichon.
 // Rôle au jalon 0 : mettre toute la coque de l'app en cache dès la première visite, pour qu'elle
-// s'ouvre ensuite sans réseau, et dire à la page où en est ce précache.
+// s'ouvre ensuite sans réseau, et dire à la page où en est ce précache. Depuis le 15 novembre 2026,
+// garder aussi la musique d'accueil de la radio, morceau par morceau, à sa première écoute.
 
 import { clientsClaim } from 'workbox-core';
 import {
@@ -10,7 +11,11 @@ import {
   createHandlerBoundToURL,
   precacheAndRoute,
 } from 'workbox-precaching';
+import { CacheableResponsePlugin } from 'workbox-cacheable-response';
+import { ExpirationPlugin } from 'workbox-expiration';
+import { RangeRequestsPlugin } from 'workbox-range-requests';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
+import { CacheFirst } from 'workbox-strategies';
 import { PRECACHE_PROGRESS, SKIP_WAITING, type PrecacheProgressMessage } from './messages.ts';
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -46,6 +51,86 @@ precacheAndRoute(manifest);
 // Une seule page : toute navigation dans le périmètre de l'app retombe sur index.html,
 // y compris les liens partagés auxquels une messagerie a collé des paramètres.
 registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
+
+// Musique d'accueil de la radio (assets/audio/radio/<station>/, ≈ 3,5 Mo par morceau) : jamais dans
+// le précache (globIgnores de vite.config.ts), gardée à la première écoute, un morceau à la fois.
+// L'élément audio demande des tranches (Range) : le morceau est demandé une fois en entier (réponse
+// 200, mise en cache), puis les tranches sont découpées dans la copie du cache. Hors ligne, un morceau
+// déjà entendu rejoue ; un morceau jamais entendu échoue, et la radio passe au suivant.
+const WELCOME_CACHE = 'pmb-radio-accueil';
+registerRoute(
+  ({ url, request }) => url.origin === self.location.origin && request.destination === 'audio' && url.pathname.includes('/assets/audio/radio/'),
+  new CacheFirst({
+    cacheName: WELCOME_CACHE,
+    matchOptions: { ignoreVary: true },
+    plugins: [
+      // Sans l'en-tête Range : le morceau entier, seule réponse que l'on peut garder.
+      { requestWillFetch: async ({ request }) => new Request(request.url, { credentials: 'same-origin' }) },
+      new CacheableResponsePlugin({ statuses: [200] }),
+      new RangeRequestsPlugin(),
+      // Quelques stations au plus : un plafond large, pour qu'un ancien morceau retiré finisse par partir.
+      new ExpirationPlugin({ maxEntries: 24 }),
+    ],
+  }),
+);
+
+// Cartes de sortie (assets/maps/<id>/, hors du précache) : mises en cache à la demande, au fil de
+// la route, pour qu'une carte déjà roulée se recharge en mode avion. Les tronçons et le relief
+// (GLB) se servent du cache d'abord ; les fichiers JSON (manifeste, route) du réseau d'abord, le
+// cache en secours. Si la route a changé (carte refaite dans un nouveau déploiement), les fichiers
+// déjà gardés de cette carte sont oubliés : jamais une route neuve sur des tronçons anciens. Ce cache
+// survit aux mises à jour de l'app (cleanupOutdatedCaches ne touche que le précache).
+const MAP_CACHE = 'pmb-cartes-v1';
+const MAPS_PATH = new URL('assets/maps/', self.registration.scope).pathname;
+
+function isMapFile(url: URL, request: Request): boolean {
+  return request.method === 'GET' && url.origin === self.location.origin && url.pathname.startsWith(MAPS_PATH);
+}
+
+/** Oublie les fichiers gardés d'une carte (dossier `dir`), sauf ses fichiers JSON. */
+async function forgetMapFiles(cache: Cache, dir: string): Promise<void> {
+  for (const key of await cache.keys()) {
+    const path = new URL(key.url).pathname;
+    if (path.startsWith(dir) && !path.endsWith('.json')) await cache.delete(key);
+  }
+}
+
+/** Réponse entière, de notre origine, bonne à garder (jamais une réponse partielle ou opaque). */
+function keepable(response: Response): boolean {
+  return response.ok && response.status === 200 && response.type === 'basic';
+}
+
+async function mapFile(request: Request, url: URL): Promise<Response> {
+  const cache = await caches.open(MAP_CACHE);
+  if (!url.pathname.endsWith('.json')) {
+    const hit = await cache.match(request, { ignoreSearch: true });
+    if (hit) return hit;
+    const response = await fetch(request);
+    if (keepable(response)) await cache.put(request, response.clone());
+    return response;
+  }
+  try {
+    const response = await fetch(request);
+    if (keepable(response)) {
+      const previous = await cache.match(request, { ignoreSearch: true });
+      if (previous && url.pathname.endsWith('/route.json')) {
+        const [before, now] = await Promise.all([previous.text(), response.clone().text()]);
+        if (before !== now) await forgetMapFiles(cache, url.pathname.slice(0, url.pathname.lastIndexOf('/') + 1));
+      }
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch (error) {
+    const hit = await cache.match(request, { ignoreSearch: true });
+    if (hit) return hit;
+    throw error;
+  }
+}
+
+registerRoute(
+  ({ url, request }) => isMapFile(url, request),
+  ({ url, request }) => mapFile(request, url),
+);
 
 // Mise à jour : la nouvelle version attend que la page le demande (geste de l'utilisateur)
 // ou que l'app soit fermée puis rouverte. Jamais de rechargement surprise.

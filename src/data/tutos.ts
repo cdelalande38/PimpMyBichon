@@ -12,11 +12,13 @@ import type { EntryId } from './dockMenu.ts';
  * - `accueil` : le garage à l'ouverture (dock sur « Véhicule » sans en être sorti, ou dock fermé) ;
  * - `entree:<id>` : une entrée du dock (src/data/dockMenu.ts) ;
  * - `panneau:<nom>` : un panneau bas ouvert par l'adresse (src/app/router.ts) ;
- * - `photo` : le mode photo ; `vue:interieur` : la vue intérieure (src/state/view.ts).
+ * - `photo` : le mode photo ; `vue:interieur` : la vue intérieure (src/state/view.ts) ;
+ * - `sortie` : l'écran de la sortie de nuit, sur la route (§ 5.5).
  */
 export type EcranKey =
   | 'accueil'
   | 'photo'
+  | 'sortie'
   | 'vue:interieur'
   | `entree:${EntryId}`
   | 'panneau:radio'
@@ -116,7 +118,7 @@ export const TUTOS: readonly Tuto[] = [
     titre: 'La radio',
     but: 'Ici, tu mets ta musique dans le garage.',
     etapes: [
-      { texte: 'L’app ne fournit aucune musique : c’est toi qui fais entrer un pack.' },
+      { texte: 'Sans pack, la station de l’atelier tourne : quelques morceaux livrés avec l’app. Dès que ton pack est là, la radio passe dessus.' },
       { texte: 'Un pack entre par un fichier ZIP de ton téléphone, par son adresse, ou par un lien qu’un pote t’envoie.' },
       { texte: 'La lecture automatique lance la radio dès l’ouverture. Tu la coupes dans Atelier, rubrique Réglages.' },
       { texte: 'Radio garnie, le bouton rond Radio déploie le mini-lecteur : le titre, pause et suivant.' },
@@ -155,6 +157,31 @@ export const TUTOS: readonly Tuto[] = [
       { texte: 'Tu vois le véhicule avec les yeux du conducteur.' },
       { texte: 'Glisse un doigt pour regarder autour de toi.' },
       { texte: 'Pour ressortir, touche de nouveau le bouton rond au volant : il s’appelle « Sortir ».', cible: 'nav.quick' },
+    ],
+  },
+  {
+    id: 'sortie-menu',
+    ecrans: ['entree:sortie'],
+    titre: 'La sortie de nuit',
+    but: 'Ici, tu prépares la balade : tu sors ton véhicule du garage pour le regarder rouler, de nuit, sur une vraie route.',
+    etapes: [
+      { texte: 'Choisis la carte : une vraie route, redessinée de nuit. D’où viennent ses données, c’est écrit juste dessous.', cible: 'footer.dock [aria-label="Carte"][role="group"]' },
+      { texte: 'Choisis d’où tu pars : chaque départ est un coin de la route.', cible: 'footer.dock [aria-label="Départ"][role="group"]' },
+      { texte: 'Sec ou pluie : sous la pluie, la chaussée fait miroir et les néons s’y reflètent.', cible: 'footer.dock [aria-label="Météo"][role="group"]' },
+      { texte: 'Touche « Sortir » : la porte se lève et c’est parti.', cible: 'footer.dock .drive-go' },
+    ],
+  },
+  {
+    id: 'sortie',
+    ecrans: ['sortie'],
+    titre: 'Sur la route',
+    but: 'Ici, tu regardes ton véhicule rouler. Il se débrouille tout seul : pose le téléphone et profite.',
+    etapes: [
+      { texte: 'Le pilote automatique et le réalisateur font tout : la vitesse, les virages et les plans de caméra.', cible: '.drive-acts' },
+      { texte: '« Caméra suivante » pour choisir ton plan. « Réalisateur » lui rend la main.', cible: '.drive-acts [aria-label="Caméra suivante"], .drive-acts [aria-label="Réalisateur"]' },
+      { texte: 'À la main : maintiens à droite pour accélérer, à gauche pour freiner, et glisse pour te placer dans ta voie.', cible: '.drive-acts [data-conduite]' },
+      { texte: 'Garde le doigt sur « Ralenti » pour savourer un virage. La météo se change en roulant.', cible: '.drive-acts [aria-label="Ralenti"]' },
+      { texte: '« Rentrer au garage » te ramène à l’atelier, tel que tu l’as laissé.', cible: '.drive-home' },
     ],
   },
 ];

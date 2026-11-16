@@ -11,6 +11,8 @@ export type Route =
   | { name: 'radio' }
   /** Mode photo (§ 5.1) : l'interface s'efface, restent les cadrages, « Enregistrer » et « Retour ». */
   | { name: 'photo' }
+  /** Sortie de nuit (§ 5.5) : la scène de la route remplace le garage, l'atelier s'efface. */
+  | { name: 'sortie' }
   /** Lien de build reçu : `#b=<code>` (§ 5.7). */
   | { name: 'build'; code: string }
   /** Lien de défi reçu : `#d=<code>` (§ 5.7). */
@@ -18,8 +20,10 @@ export type Route =
   /** Lien de build ou de défi dont le code ne ressemble à rien de connu. */
   | { name: 'illisible'; kind: 'build' | 'defi' };
 
-export type SheetRouteName = Exclude<Route['name'], 'garage' | 'photo'>;
-export type SheetRoute = Exclude<Route, { name: 'garage' } | { name: 'photo' }>;
+/** Routes qui remplacent l'interface au lieu d'ouvrir un panneau : le mode photo et la sortie. */
+export type ScreenRouteName = 'photo' | 'sortie';
+export type SheetRouteName = Exclude<Route['name'], 'garage' | ScreenRouteName>;
+export type SheetRoute = Exclude<Route, { name: 'garage' } | { name: ScreenRouteName }>;
 
 /**
  * Forme attendue d'un code partagé : préfixe de version, puis base64url.
@@ -37,6 +41,7 @@ const PAGES = new Map<string, Route>([
   ['/commande', { name: 'commande' }],
   ['/radio', { name: 'radio' }],
   ['/photo', { name: 'photo' }],
+  ['/sortie', { name: 'sortie' }],
 ]);
 
 function safeDecode(value: string): string {
@@ -85,7 +90,7 @@ export function routeToHash(route: Route): string {
   }
 }
 
-/** Un panneau bas est ouvert (le mode photo n'en est pas un : il remplace l'interface). */
+/** Un panneau bas est ouvert (le mode photo et la sortie n'en sont pas : ils remplacent l'interface). */
 export function isSheetRoute(route: Route): route is SheetRoute {
-  return route.name !== 'garage' && route.name !== 'photo';
+  return route.name !== 'garage' && route.name !== 'photo' && route.name !== 'sortie';
 }

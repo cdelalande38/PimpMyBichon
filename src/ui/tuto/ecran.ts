@@ -21,6 +21,8 @@ export function ecranCourant({ route, vue, dock, sortiAccueil }: EcranFaits): Ec
   switch (route.name) {
     case 'photo':
       return 'photo';
+    case 'sortie':
+      return 'sortie';
     case 'radio':
     case 'reglages':
     case 'capot':
