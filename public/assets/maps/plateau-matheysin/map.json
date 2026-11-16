@@ -7,6 +7,7 @@
   "route": "route.json",
   "credits": [
     { "source": "IGN, BD TOPO (routes, bâtiments, plans d’eau, végétation)", "licence": "Licence Ouverte 2.0", "date": "2026-11" },
-    { "source": "IGN, RGE ALTI (relief)", "licence": "Licence Ouverte 2.0", "date": "2026-11" }
+    { "source": "IGN, RGE ALTI (relief)", "licence": "Licence Ouverte 2.0", "date": "2026-11" },
+    { "source": "© les contributeurs d’OpenStreetMap (lampadaires, arbres, parcs, feux, passages piétons, murs, vitesses limites, nature des commerces)", "licence": "ODbL 1.0", "date": "2026-11" }
   ]
 }

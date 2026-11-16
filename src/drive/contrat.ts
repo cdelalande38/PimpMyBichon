@@ -34,6 +34,8 @@ export interface RailPose {
   lanes: number;
   /** Largeur de la chaussée, en mètres. */
   width: number;
+  /** Vitesse limite de la section, en km/h, quand la carte la connaît (RailSection.speed). */
+  limit?: number;
 }
 
 /** Le parcours d'une carte, interrogeable à toute abscisse. Fourni par `createRail` (src/drive/rail.ts). */

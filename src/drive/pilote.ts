@@ -1,7 +1,8 @@
 // Le pilote (§ 5.5, lot 1) : fait avancer le véhicule sur le rail, tout seul ou à la main.
 //
-// Pilote automatique : croisière selon la route (50 km/h en agglomération ; 60, 80 ou 90 km/h
-// hors agglomération selon la largeur de la chaussée), vitesse réglée d'avance sur la courbure
+// Pilote automatique : croisière à la vitesse limite quand la carte la connaît (OpenStreetMap), sinon
+// selon la route (50 km/h en agglomération ; 60, 80 ou 90 km/h hors agglomération selon la largeur
+// de la chaussée), vitesse réglée d'avance sur la courbure
 // (accélération latérale plafonnée à PILOT.lateral m/s²), freinage anticipé et doux (profil de vitesse
 // calculé une fois à rebours, à PILOT.plannedBrake m/s²), reprise franche, arrêt au bout d'un parcours
 // ouvert. À la main : accélérateur, frein, roue libre ; une enveloppe de sécurité, calculée de la même
@@ -65,8 +66,12 @@ export const PILOT = {
 const G = 9.81;
 const kmh = (value: number) => value / 3.6;
 
-/** Croisière d'une section de route, en m/s. */
-export function cruiseSpeed(pose: Pick<RailPose, 'urban' | 'width' | 'lanes'>): number {
+/**
+ * Croisière d'une section de route, en m/s : la vitesse limite quand la carte la connaît
+ * (OpenStreetMap, plafonnée à la pointe de la conduite à la main), sinon selon la route.
+ */
+export function cruiseSpeed(pose: Pick<RailPose, 'urban' | 'width' | 'lanes' | 'limit'>): number {
+  if (pose.limit && pose.limit > 0) return kmh(Math.min(pose.limit, PILOT.manual.topKmh));
   if (pose.urban) return kmh(PILOT.urbanKmh);
   if (pose.width < PILOT.narrowWidth) return kmh(PILOT.narrowKmh);
   if (pose.width >= PILOT.wideWidth && pose.lanes >= 2) return kmh(PILOT.wideKmh);

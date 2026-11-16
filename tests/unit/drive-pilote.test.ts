@@ -101,6 +101,18 @@ describe('croisière et courbes', () => {
     expect(kmh(cruiseSpeed({ urban: false, width: 6, lanes: 2 }))).toBeCloseTo(80, 6);
   });
 
+  it('croisière : la vitesse limite de la carte quand elle la connaît (OpenStreetMap), plafonnée à 120', () => {
+    expect(kmh(cruiseSpeed({ urban: true, width: 12, lanes: 3, limit: 30 }))).toBeCloseTo(30, 6);
+    expect(kmh(cruiseSpeed({ urban: false, width: 7, lanes: 2, limit: 70 }))).toBeCloseTo(70, 6);
+    expect(kmh(cruiseSpeed({ urban: false, width: 9, lanes: 2, limit: 130 }))).toBeCloseTo(PILOT.manual.topKmh, 6);
+    expect(kmh(cruiseSpeed({ urban: true, width: 7, lanes: 2, limit: 0 }))).toBeCloseTo(50, 6);
+    // Le rail porte la limite de sa section jusqu'à la pose.
+    const route = makeRoute([{ line: 400 }]);
+    const rail = createRail({ ...route, sections: route.sections.map((x) => ({ ...x, speed: 30 })) });
+    const pilot = createPilot(rail);
+    expect(Math.max(...pilot.profile.auto)).toBeCloseTo(30 / 3.6, 6);
+  });
+
   it('atteint sa croisière en ligne droite, avec une reprise franche et sans dépasser', () => {
     const rail = createRail(makeRoute([{ line: 2000 }]));
     const pilot = createPilot(rail);
@@ -313,6 +325,7 @@ describe.skipIf(!existsSync(REAL))('la première carte, de bout en bout', () => 
     const pose = createPose();
     let maxLateral = 0;
     let maxUrban = 0;
+    let overLimit = 0;
     let outside = 0;
     let time = 0;
     while (!pilot.motion.finished && time < 3600) {
@@ -320,13 +333,16 @@ describe.skipIf(!existsSync(REAL))('la première carte, de bout en bout', () => 
       time += 1 / 30;
       rail.poseAt(motion.s, pose);
       maxLateral = Math.max(maxLateral, motion.speed * motion.speed * Math.abs(pose.curvature));
-      if (pose.urban) maxUrban = Math.max(maxUrban, motion.speed);
+      // En agglomération : 50 km/h, sauf vitesse limite connue (OpenStreetMap), que le pilote suit.
+      if (pose.urban && !pose.limit) maxUrban = Math.max(maxUrban, motion.speed);
+      if (pose.limit) overLimit = Math.max(overLimit, kmh(motion.speed) - pose.limit);
       if (Math.abs(motion.offset) > pose.width / 2 - 0.9) outside += 1;
     }
     expect(pilot.motion.finished).toBe(true);
     expect(pilot.motion.s).toBe(rail.length);
     expect(maxLateral).toBeLessThan(PILOT.lateral * 1.2);
     expect(kmh(maxUrban)).toBeLessThan(51);
+    expect(overLimit).toBeLessThan(1);
     expect(outside).toBe(0);
     // 15 km entre 25 et 90 km/h : entre 10 et 25 minutes.
     expect(time).toBeGreaterThan(600);

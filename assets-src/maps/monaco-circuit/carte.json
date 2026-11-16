@@ -2,6 +2,7 @@
   "id": "monaco-circuit",
   "nom": "Monaco, le circuit",
   "fournisseur": "ign",
+  "osm": true,
   "note": "Boucle fermée par les rues autour du port, dans le sens des aiguilles d'une montre : le boulevard Albert-Ier, Sainte-Dévote, la montée de l'avenue d'Ostende, la place du Casino, la descente en lacets des Spélugues, le tunnel du boulevard Louis-II sous l'hôtel, l'avenue J.-F.-Kennedy le long du port, le quai Albert-Ier et le virage serré du bout du port. Routes fermées : sens uniques ignorés.",
   "emprise": {
     "lonMin": 7.4,
@@ -113,7 +114,8 @@
     "hauteurMax": 180,
     "pasLampadaires": 9,
     "porteeEau": 1200,
-    "glissieres": "partout"
+    "glissieres": "partout",
+    "palmiers": 0.4
   },
   "departs": [
     {

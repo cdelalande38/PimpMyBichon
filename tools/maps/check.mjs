@@ -3,7 +3,8 @@
 // le manifeste (MapManifest), la route produite (MapRoute, src/data/mapTypes.ts) et ses tronçons
 // (un maillage fusion_<rôle> par rôle, matériau du même nom, triangles annoncés), les budgets du § 8
 // (150 000 triangles pour cinq tronçons consécutifs, 25 000 par tronçon, 12 Mo par carte,
-// donnees.json de 3 Mo au plus) et la présence des crédits (manifeste et CREDITS.md).
+// donnees.json de 3 Mo au plus), la présence des crédits (manifeste et CREDITS.md), et l'absence de
+// tout nom de commerce, de marque ou d'exploitant dans les fichiers de la carte (nomsInterdits).
 //
 //   node tools/maps/check.mjs [id…]
 
@@ -12,11 +13,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { countGeometry, parseGlb } from '../lib/glb.mjs';
 import { chausseeCouverte, resumerCouverture } from './couverture.mjs';
+import { empreinteNom, MAP_SHOP_KINDS, normaliserNom } from './enrichissement.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 export const ROLES = ['chaussee', 'marquage', 'accotement', 'terrain', 'eau', 'mur', 'toit', 'fenetre', 'ouvrage', 'glissiere', 'voie'];
-export const INSTANCES = ['arbre', 'lampadaire', 'balise'];
+export const INSTANCES = ['arbre', 'lampadaire', 'balise', 'feu', 'palmier'];
 export const BUDGETS = Object.freeze({
   trianglesVisibles: 150_000,
   tronconsVisibles: 5,
@@ -86,6 +88,7 @@ export function validerRoute(r, id) {
       if (typeof x.urban !== 'boolean') e.push('route : urban booléen attendu');
       if (!Number.isInteger(x.lanes) || x.lanes < 1) e.push('route : lanes entier positif attendu');
       if (!nombre(x.width) || x.width <= 0) e.push('route : width positif attendu');
+      if (x.speed !== undefined && (!Number.isInteger(x.speed) || x.speed < 5 || x.speed > 150)) e.push(`route : speed « ${x.speed} » (km/h, de 5 à 150)`);
       s = x.to;
     }
     if (Math.abs(s - r.length) > 1e-6) e.push(`route : sections jusqu'à ${s} au lieu de ${r.length}`);
@@ -103,6 +106,11 @@ export function validerRoute(r, id) {
       for (const [k, v] of Object.entries(c.instances ?? {})) {
         if (!INSTANCES.includes(k)) e.push(`route : ${c.file} instance « ${k} » inconnue`);
         if (!Array.isArray(v) || v.length % 5 !== 0 || !v.every(nombre)) e.push(`route : ${c.file} instances ${k}, cinq nombres chacune`);
+      }
+      if (c.shops !== undefined) {
+        const v = c.shops;
+        if (!Array.isArray(v) || v.length % 5 !== 0 || !v.every(nombre)) e.push(`route : ${c.file} shops, cinq nombres chacun`);
+        else for (let k = 4; k < v.length; k += 5) if (!Number.isInteger(v[k]) || v[k] < 0 || v[k] >= MAP_SHOP_KINDS.length) e.push(`route : ${c.file} genre de commerce ${v[k]} inconnu`);
       }
     }
     const fin = r.chunks[r.chunks.length - 1];
@@ -169,6 +177,75 @@ function poids(dir) {
   let n = 0;
   for (const e of readdirSync(dir, { withFileTypes: true })) n += e.isDirectory() ? poids(join(dir, e.name)) : statSync(join(dir, e.name)).size;
   return n;
+}
+
+/**
+ * Chemins de donnees.json où un texte est permis : tout le reste (et toute la clé « osm ») ne porte
+ * que des nombres. Les seuls textes libres sont les noms des rues et des plans d'eau (toponymes).
+ */
+const TEXTES_PERMIS = [/^(format|id|fournisseur|date)$/, /^sources\.\d+\.(source|licence|date)$/, /^repere\.note$/, /^axe\.troncons\.\d+\.(sol|nature|nom)$/, /^lacs\.\d+\.(nom|nature)$/, /^batiments\.\d+\.(n|u)$/];
+/**
+ * Aucun nom de commerce, de marque ou d'exploitant dans les fichiers versionnés ou produits d'une carte :
+ * 1. structure : donnees.json ne porte de texte qu'aux chemins permis (TEXTES_PERMIS), la clé « osm »
+ *    aucun ; route.json n'a de texte qu'aux formats, fichiers, sols, identifiants et noms de départ ;
+ * 2. contenu : les empreintes des noms, marques et exploitants des commerces, hôtels, bureaux et
+ *    artisans vus dans les réponses d'OpenStreetMap (brut/noms-commerces.json, notées par
+ *    maps:fetch, qui n'écrit jamais les noms eux-mêmes) sont comparées à celles de toutes les suites
+ *    de un à huit mots de carte.json, donnees.json, map.json et route.json ; une suite qui est aussi
+ *    un toponyme (nom de rue, de plan d'eau, fiche écrite à la main) est permise.
+ * @param {string} id @param {string} root
+ * @returns {{ erreurs: string[], noms: number }}
+ */
+export function nomsInterdits(id, root) {
+  /** @type {string[]} */
+  const erreurs = [];
+  const src = join(root, 'assets-src', 'maps', id);
+  const pub = join(root, 'public', 'assets', 'maps', id);
+  /** Textes des fichiers de la carte (valeurs des JSON : les nombres ne nomment personne). @type {string[]} */
+  const textes = [];
+  /** @param {unknown} v @param {string} chemin @param {(c: string) => boolean} permis @param {string} fichier */
+  const parcourir = (v, chemin, permis, fichier) => {
+    if (typeof v === 'string') {
+      textes.push(v);
+      if (!permis(chemin)) erreurs.push(`${fichier} : texte inattendu en ${chemin}`);
+    } else if (Array.isArray(v)) v.forEach((x, i) => parcourir(x, chemin ? `${chemin}.${i}` : String(i), permis, fichier));
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) parcourir(x, chemin ? `${chemin}.${k}` : k, permis, fichier);
+  };
+  /** Toponymes : noms de rues et de plans d'eau, fiche écrite à la main (un commerce peut porter le nom de sa rue). @type {string[]} */
+  const toponymes = [];
+  const fd = join(src, 'donnees.json');
+  if (existsSync(fd)) {
+    const d = JSON.parse(readFileSync(fd, 'utf8'));
+    parcourir(d, '', (c) => TEXTES_PERMIS.some((r) => r.test(c)), 'donnees.json');
+    for (const x of [...(d.axe?.troncons ?? []), ...(d.lacs ?? [])]) if (typeof x?.nom === 'string') toponymes.push(x.nom);
+  }
+  const fr = join(pub, 'route.json');
+  if (existsSync(fr)) {
+    parcourir(JSON.parse(readFileSync(fr, 'utf8')), '', (c) => /^(format|id)$|^chunks\.\d+\.file$|^far\.file$|^sections\.\d+\.ground$|^starts\.\d+\.(id|label)$/.test(c), 'route.json');
+  }
+  for (const f of [join(src, 'carte.json'), join(pub, 'map.json')]) if (existsSync(f)) parcourir(JSON.parse(readFileSync(f, 'utf8')), '', () => true, f);
+  if (existsSync(join(src, 'carte.json'))) toponymes.push(readFileSync(join(src, 'carte.json'), 'utf8'));
+  // Empreintes des noms de commerces notées au téléchargement (absentes sans réponses d'OpenStreetMap).
+  const fe = join(src, 'brut', 'noms-commerces.json');
+  /** @type {Set<string>} */
+  const noms = new Set(existsSync(fe) ? JSON.parse(readFileSync(fe, 'utf8')) : []);
+  if (noms.size) {
+    /** Empreintes de toutes les suites de 1 à 8 mots d'un texte. @param {string} t */
+    const suites = (t) => {
+      /** @type {Map<string, string>} */
+      const m = new Map();
+      const mots = normaliserNom(t).split(' ').filter(Boolean);
+      for (let i = 0; i < mots.length; i += 1)
+        for (let n = 1; n <= 8 && i + n <= mots.length; n += 1) {
+          const k = mots.slice(i, i + n).join(' ');
+          if (k.length >= 4) m.set(empreinteNom(k), k);
+        }
+      return m;
+    };
+    const topo = suites(toponymes.join('\n'));
+    for (const [e, k] of suites(textes.join('\n'))) if (noms.has(e) && !topo.has(e)) erreurs.push(`nom de commerce, de marque ou d'exploitant présent dans les fichiers de la carte : « ${k} »`);
+  }
+  return { erreurs, noms: noms.size };
 }
 
 /**
@@ -247,6 +324,9 @@ export function verifierCarte(id, o = {}) {
     const cle = String(c.source ?? '').split(/[,(]/)[0]?.trim() ?? '';
     if (cle && !credits.includes(cle)) erreurs.push(`CREDITS.md ne cite pas « ${cle} »`);
   }
+  const ni = nomsInterdits(id, root);
+  erreurs.push(...ni.erreurs);
+  if (ni.noms) notes.push(`${id} : ${ni.noms} empreintes de noms de commerces, marques ou exploitants d'OSM cherchées, aucune dans les fichiers de la carte`);
   notes.push(
     `${id} : ${(r.length / 1000).toFixed(2)} km, ${tri.length} tronçons, ${Math.max(...tri)} triangles au plus par tronçon, ${pire} pour ${BUDGETS.tronconsVisibles} consécutifs, ` +
       `lointain ${r.far?.triangles ?? 0}, ${(total / 1e6).toFixed(2)} Mo`,

@@ -8,25 +8,45 @@
 //
 //   node tools/maps/fetch.mjs <id>        npm run maps:fetch -- <id>
 //
-// Réseau : une requête à la fois, 300 ms entre deux, nom de client générique, aucun identifiant.
+// Réseau : une requête à la fois, 300 ms entre deux (4 s vers Overpass), nom de client générique,
+// aucun identifiant.
+//
+// OpenStreetMap : une carte dont le fournisseur est « osm » en tire tout (routes, bâtiments, eau, trait
+// de côte, végétation ; relief demandé au service d'altimétrie de l'IGN). Une carte de l'IGN qui le
+// demande (carte.json : « osm »: true) est enrichie par OpenStreetMap (enrichirOsm) : la géométrie
+// des routes, le bâti et le relief restent ceux de l'IGN. Enrichir seul une carte déjà téléchargée,
+// sans redemander l'IGN :
+//
+//   node tools/maps/fetch.mjs <id> --osm   npm run maps:fetch -- <id> --osm
 
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { repereCarte } from './geo.mjs';
-import { aire, boite, couperLigne, dansPolygone, fermerSurBoite, hasard, indexPolyligne, raccorder, simplifier } from './geom2d.mjs';
+import { LAMBERT93, repereCarte } from './geo.mjs';
+import { aire, boite, couperLigne, couperLigneEnMorceaux, dansPolygone, fermerSurBoite, hasard, indexPolyligne, raccorder, simplifier } from './geom2d.mjs';
+import { creer as creerOsm, projectionLocale } from './fournisseurs/osm.mjs';
+import { compter, empreinteNom, enrichir, normaliserNom } from './enrichissement.mjs';
 import { chainerEtapes } from './trace.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const SRC = join(ROOT, 'assets-src', 'maps');
-const CLIENT = 'pmb-cartes/1';
+const CLIENT = 'outil-cartes/1.0';
 const PAUSE = 300;
+/** Pause plus longue vers les services partagés (Overpass : quelques requêtes par minute au plus). */
+const PAUSES = /** @type {Record<string, number>} */ ({ 'overpass-api.de': 4000 });
 
 /** Fournisseurs connus : le nom vient de carte.json. */
 const FOURNISSEURS = {
   ign: () => import('./fournisseurs/ign.mjs'),
+  osm: () => import('./fournisseurs/osm.mjs'),
 };
+
+/**
+ * Interface commune des fournisseurs (celle de fournisseurs/ign.mjs ; OpenStreetMap y ajoute de quoi
+ * demander l'altitude des routes et les routes du couloir).
+ * @typedef {typeof import('./fournisseurs/ign.mjs').default & { altitudeRoutes?: boolean, routesCouloir?: typeof import('./fournisseurs/ign.mjs').default.routes }} Fournisseur
+ */
 
 /** @param {string} id */
 export function lireCarte(id) {
@@ -37,30 +57,63 @@ export function lireCarte(id) {
   return carte;
 }
 
-/** Lecteur avec cache disque : une réponse par adresse, jamais redemandée. @param {string} brut */
+/**
+ * Empreintes des noms de commerces vus dans les réponses (brut/noms-commerces.json, jamais versionné) :
+ * le contrôle des cartes (check.mjs, nomsInterdits) vérifie qu'aucun n'arrive dans leurs fichiers.
+ * @param {string} brut @param {string[]} noms
+ */
+export function noterNoms(brut, noms) {
+  if (!noms.length) return;
+  const f = join(brut, 'noms-commerces.json');
+  const set = new Set(existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : []);
+  for (const n of noms) {
+    const k = normaliserNom(n);
+    if (k.length >= 4) set.add(empreinteNom(k));
+  }
+  writeFileSync(f, `${JSON.stringify([...set].sort())}\n`);
+}
+
+/**
+ * Lecteur avec cache disque : une réponse par adresse, jamais redemandée. Un filtre peut réduire la
+ * réponse avant qu'elle soit écrite (OpenStreetMap : ni nom de commerce, ni contact, ni adresse).
+ * @param {string} brut
+ */
 function lecteur(brut) {
   mkdirSync(brut, { recursive: true });
   let dernier = 0;
   const stats = { reseau: 0, cache: 0 };
   return {
     stats,
-    /** @param {string} url */
-    async lire(url) {
+    /** @param {string} url @param {{ filtre?: (json: any) => { json: any, noms: string[] } }} [o] */
+    async lire(url, o = {}) {
       const file = join(brut, `${createHash('sha1').update(url).digest('hex').slice(0, 20)}.json`);
       if (existsSync(file)) {
         stats.cache += 1;
         return JSON.parse(readFileSync(file, 'utf8'));
       }
-      const attente = dernier + PAUSE - Date.now();
+      const pause = PAUSES[new URL(url).host] ?? PAUSE;
+      const attente = dernier + pause - Date.now();
       if (attente > 0) await new Promise((r) => setTimeout(r, attente));
       for (let essai = 1; ; essai += 1) {
         try {
           const res = await fetch(url, { headers: { 'User-Agent': CLIENT, Accept: 'application/json' } });
           const texte = await res.text();
           dernier = Date.now();
+          // Service encombré (429, 502, 503, 504) : attente doublée à chaque essai (30 s, 1 min, 2 min, 4 min).
+          if ([429, 502, 503, 504].includes(res.status)) {
+            if (essai >= 5) throw new Error(`HTTP ${res.status} : service encombré`);
+            process.stdout.write(`  service encombré (HTTP ${res.status}), nouvel essai dans ${15 * 2 ** essai} s\n`);
+            await new Promise((r) => setTimeout(r, 15000 * 2 ** essai));
+            continue;
+          }
           if (!res.ok) throw new Error(`HTTP ${res.status} : ${texte.slice(0, 200)}`);
-          const json = JSON.parse(texte);
-          writeFileSync(file, texte);
+          let json = JSON.parse(texte);
+          if (o.filtre) {
+            const f = o.filtre(json);
+            json = f.json;
+            noterNoms(brut, f.noms);
+            writeFileSync(file, JSON.stringify(json));
+          } else writeFileSync(file, texte);
           stats.reseau += 1;
           if (stats.reseau % 25 === 0) process.stdout.write(`  … ${stats.reseau} requêtes\n`);
           return json;
@@ -84,7 +137,13 @@ export async function fetchMap(id) {
   const carte = lireCarte(id);
   const charge = FOURNISSEURS[/** @type {keyof typeof FOURNISSEURS} */ (carte.fournisseur)];
   if (!charge) throw new Error(`fournisseur « ${carte.fournisseur} » inconnu (connus : ${Object.keys(FOURNISSEURS).join(', ')})`);
-  const fournisseur = (await charge()).default;
+  const e = carte.emprise;
+  /** @type {[number, number, number, number]} */
+  const emprise = [e.lonMin, e.latMin, e.lonMax, e.latMax];
+  const mod = /** @type {any} */ (await charge());
+  // OpenStreetMap seul : fournisseur lié à une projection locale, centrée sur l'emprise.
+  /** @type {Fournisseur} */
+  const fournisseur = carte.fournisseur === 'osm' ? mod.creer(projectionLocale(emprise)) : mod.default;
   const proj = fournisseur.projection;
   const ctx = lecteur(join(SRC, id, 'brut'));
   // Altitudes déjà connues, point par point (brut/altitudes.json) : un parcours retouché ne
@@ -94,6 +153,8 @@ export async function fetchMap(id) {
   const connus = existsSync(fichierPoints) ? JSON.parse(readFileSync(fichierPoints, 'utf8')) : {};
   /** @param {Array<[number, number]>} pts */
   const altitudes = async (pts) => {
+    // Relief plat déclaré (carte.json : « relief »: « plat ») : le service n'a pas de donnée ici.
+    if (carte.relief === 'plat') return pts.map(() => 0);
     const cle = (/** @type {[number, number]} */ p) => `${p[0].toFixed(6)},${p[1].toFixed(6)}`;
     const vus = new Set();
     const manquants = pts.filter((p) => {
@@ -110,9 +171,6 @@ export async function fetchMap(id) {
     }
     return pts.map((p) => connus[cle(p)] ?? 0);
   };
-  const e = carte.emprise;
-  /** @type {[number, number, number, number]} */
-  const emprise = [e.lonMin, e.latMin, e.lonMax, e.latMax];
 
   // L'itinéraire : une route numérotée de son départ à son arrivée (forme historique de carte.json :
   // route, depart, arrivee), ou des étapes reliées par le plus court chemin, sur des routes
@@ -133,6 +191,11 @@ export async function fetchMap(id) {
   const etapes = it.etapes.map((/** @type {any} */ e, /** @type {number} */ k) => ({ p: pointEtape(e, aretes, proj, k), par: e.par }));
   const ch = chainerEtapes(aretes, etapes, { boucle: Boolean(it.boucle), sensIgnore: Boolean(it.sensIgnore), penalite: it.penalite });
   if (ch.demiTours.length) console.log(`  attention : demi-tours à ${ch.demiTours.join(', ')} m (étape mal placée ?)`);
+  // Routes sans altitude (OpenStreetMap) : celle du terrain nu, demandée au service d'altimétrie.
+  if (fournisseur.altitudeRoutes === false) {
+    const z = await altitudes(ch.points.map((p) => proj.inverse(p[0] ?? 0, p[1] ?? 0)));
+    ch.points.forEach((p, i) => (p[2] = z[i] ?? 0));
+  }
   // Altitude inconnue (−1 000 dans la BD TOPO, quais et bretelles) : interpolée le long du parcours
   // entre les sommets connus les plus proches.
   const inconnus = altitudesManquantes(ch.points);
@@ -147,30 +210,7 @@ export async function fetchMap(id) {
   const pas = carte.couloir.pasRelief;
 
   // 3. Emprises de requête le long du couloir (une tous les 1,5 km), en longitude et latitude.
-  /** @type {Array<[number, number, number, number]>} */
-  const tuiles = [];
-  for (let i0 = 0; i0 < axe.length - 1; ) {
-    let L = 0;
-    let i1 = i0;
-    while (i1 < axe.length - 1 && L < 1500) {
-      const a = /** @type {number[]} */ (axe[i1]);
-      const b = /** @type {number[]} */ (axe[i1 + 1]);
-      L += Math.hypot((b[0] ?? 0) - (a[0] ?? 0), (b[2] ?? 0) - (a[2] ?? 0));
-      i1 += 1;
-    }
-    const seg = axe.slice(i0, i1 + 1);
-    const m = dl + 40;
-    const xs = seg.map((p) => p[0] ?? 0);
-    const zs = seg.map((p) => p[2] ?? 0);
-    const coins = [
-      [Math.min(...xs) - m, Math.min(...zs) - m],
-      [Math.max(...xs) + m, Math.max(...zs) + m],
-      [Math.min(...xs) - m, Math.max(...zs) + m],
-      [Math.max(...xs) + m, Math.min(...zs) - m],
-    ].map(([X, Z]) => proj.inverse(...rep.versProjete(X ?? 0, Z ?? 0)));
-    tuiles.push([Math.min(...coins.map((c) => c[0])), Math.min(...coins.map((c) => c[1])), Math.max(...coins.map((c) => c[0])), Math.max(...coins.map((c) => c[1]))]);
-    i0 = i1;
-  }
+  const tuiles = tuilesCouloir(axe, dl, rep, proj);
   console.log(`couloir : ${tuiles.length} emprises de requête`);
 
   /** @template T @param {T[]} liste @param {(t: T) => string} cleDe */
@@ -194,7 +234,7 @@ export async function fetchMap(id) {
   const zonesBrutes = [];
   const haiesBrutes = [];
   for (const t of tuiles) {
-    routesBrutes.push(...(await fournisseur.routes(ctx, t)));
+    routesBrutes.push(...(await (fournisseur.routesCouloir ?? fournisseur.routes)(ctx, t)));
     batBruts.push(...(await fournisseur.batiments(ctx, t)));
     const v = await fournisseur.vegetation(ctx, t);
     zonesBrutes.push(...v.zones);
@@ -215,7 +255,7 @@ export async function fetchMap(id) {
       run = [];
     };
     for (const p of r.points) {
-      const c = rep.versCarte(p[0] ?? 0, p[1] ?? 0, p[2] ?? 0);
+      const c = rep.versCarte(p[0] ?? 0, p[1] ?? 0, (p[2] ?? -1000) < -900 ? (p0[2] ?? 0) : (p[2] ?? 0));
       if (index.proche(c[0], c[2], dl + 20).d <= dl + 20) run.push([arr(c[0], 1), arr(c[1], 2), arr(c[2], 1)]);
       else flush();
     }
@@ -385,7 +425,14 @@ export async function fetchMap(id) {
     // Rectangle inscrit dans l'emprise (le repère de la carte est tourné de la convergence des méridiens).
     /** @type {[number, number, number, number]} */
     const r = [Math.max(xs[0] ?? 0, xs[3] ?? 0), Math.max(zs[2] ?? 0, zs[3] ?? 0), Math.min(xs[1] ?? 0, xs[2] ?? 0), Math.min(zs[0] ?? 0, zs[1] ?? 0)];
-    const cote = couperLigne(raccorder(lignesCote, 1)[0] ?? [], r);
+    // Le plus long trait de côte, ou celui qui passe le plus près d'un point en mer donné par la carte
+    // (« mer »: { « pres »: { lon, lat } }) : une île barrière a une côte de chaque bord.
+    const raccordees = raccorder(lignesCote, 1);
+    const pres = carte.mer?.pres ? plan(proj.forward(carte.mer.pres.lon, carte.mer.pres.lat)) : null;
+    const loin = (/** @type {number[][]} */ l) => (pres ? Math.min(...l.map((p) => Math.hypot((p[0] ?? 0) - (pres[0] ?? 0), (p[1] ?? 0) - (pres[1] ?? 0)))) : 0);
+    const cote = pres
+      ? ([...raccordees.flatMap((l) => couperLigneEnMorceaux(l, r)).filter((l) => l.length >= 2)].sort((a, b) => loin(a) - loin(b))[0] ?? [])
+      : couperLigne(raccordees[0] ?? [], r);
     if (cote.length < 2) throw new Error('mer : aucun trait de côte dans l’emprise');
     const dedans = (/** @type {number[][]} */ an) => axe.filter((p, i) => i % 10 === 0 && dansPolygone(p[0] ?? 0, p[2] ?? 0, [an])).length;
     const [a1, a2] = fermerSurBoite(cote, r);
@@ -402,7 +449,8 @@ export async function fetchMap(id) {
     id,
     fournisseur: fournisseur.nom,
     date,
-    sources: fournisseur.credits(date),
+    // Relief plat : le service d'altimétrie n'a rien donné, il n'est pas crédité.
+    sources: fournisseur.credits(date).filter((c) => carte.relief !== 'plat' || !/altim/i.test(c.source)),
     repere: {
       note: 'mètres ; X vers l’est, Y vers le haut, Z vers le sud ; origine au départ du parcours, à son altitude',
       origineProjetee: [arr(p0[0] ?? 0, 2), arr(p0[1] ?? 0, 2)],
@@ -413,7 +461,7 @@ export async function fetchMap(id) {
     axe: {
       points: axe.flatMap((p) => [arr(p[0], 2), arr(p[1], 2), arr(p[2], 2)]),
       rang: ch.rang,
-      troncons: ch.troncons.map((t) => ({ largeur: t.largeur, voies: t.voies, sol: t.sol, urbain: t.urbain, nature: t.nature, importance: t.importance, nom: t.nom || undefined })),
+      troncons: ch.troncons.map((t) => ({ largeur: t.largeur, voies: t.voies, sol: t.sol, urbain: t.urbain, nature: t.nature, importance: t.importance, nom: t.nom || undefined, vitesse: /** @type {any} */ (t).vitesse ?? undefined })),
       etapes: etapes.map((e) => {
         const c = rep.versCarte(e.p[0] ?? 0, e.p[1] ?? 0, 0);
         return [arr(c[0], 1), arr(c[2], 1)];
@@ -427,6 +475,13 @@ export async function fetchMap(id) {
     couloir: { pas, suites, dm: zCouloir.map((v) => Math.round((v - (p0[2] ?? 0)) * 10)) },
     lointain: { proche: lointainProche, loin: lointainLoin },
   };
+  // OpenStreetMap : toujours pour une carte d'OpenStreetMap seul, sur demande pour une carte de l'IGN.
+  if (carte.fournisseur === 'osm' || carte.osm) {
+    const osm = carte.fournisseur === 'osm' ? /** @type {ReturnType<typeof creerOsm>} */ (/** @type {unknown} */ (fournisseur)) : creerOsm(proj);
+    /** @type {any} */ (donnees).osm = await enrichir(osm, ctx, tuiles, rep, axe, dl, donnees.batiments);
+    console.log(`OpenStreetMap : ${JSON.stringify(compter(/** @type {any} */ (donnees).osm))}`);
+    if (carte.fournisseur !== 'osm') donnees.sources.push(...osm.creditsEnrichissement(date));
+  }
   const out = join(SRC, id, 'donnees.json');
   const texte = `${JSON.stringify(donnees)}\n`;
   writeFileSync(out, texte);
@@ -435,6 +490,70 @@ export async function fetchMap(id) {
       `${arbres.length / 3} arbres candidats · ${(texte.length / 1e6).toFixed(2)} Mo · réseau ${ctx.stats.reseau} requêtes, cache ${ctx.stats.cache}`,
   );
   console.log(`  → ${relative(ROOT, out)}`);
+}
+
+/**
+ * Emprises de requête le long du couloir : une tous les 1,5 km de parcours, élargie de la demi-largeur
+ * du couloir et de 40 m, en longitude et latitude.
+ * @param {number[][]} axe [x, y, z] dans le repère de la carte @param {number} dl
+ * @param {{ versProjete: (X: number, Z: number) => [number, number] }} rep
+ * @param {{ inverse: (x: number, y: number) => [number, number] }} proj
+ */
+export function tuilesCouloir(axe, dl, rep, proj) {
+  /** @type {Array<[number, number, number, number]>} */
+  const tuiles = [];
+  for (let i0 = 0; i0 < axe.length - 1; ) {
+    let L = 0;
+    let i1 = i0;
+    while (i1 < axe.length - 1 && L < 1500) {
+      const a = /** @type {number[]} */ (axe[i1]);
+      const b = /** @type {number[]} */ (axe[i1 + 1]);
+      L += Math.hypot((b[0] ?? 0) - (a[0] ?? 0), (b[2] ?? 0) - (a[2] ?? 0));
+      i1 += 1;
+    }
+    const seg = axe.slice(i0, i1 + 1);
+    const m = dl + 40;
+    const xs = seg.map((p) => p[0] ?? 0);
+    const zs = seg.map((p) => p[2] ?? 0);
+    const coins = [
+      [Math.min(...xs) - m, Math.min(...zs) - m],
+      [Math.max(...xs) + m, Math.max(...zs) + m],
+      [Math.min(...xs) - m, Math.max(...zs) + m],
+      [Math.max(...xs) + m, Math.min(...zs) - m],
+    ].map(([X, Z]) => proj.inverse(...rep.versProjete(X ?? 0, Z ?? 0)));
+    tuiles.push([Math.min(...coins.map((c) => c[0])), Math.min(...coins.map((c) => c[1])), Math.max(...coins.map((c) => c[0])), Math.max(...coins.map((c) => c[1]))]);
+    i0 = i1;
+  }
+  return tuiles;
+}
+
+/**
+ * Enrichit par OpenStreetMap une carte déjà téléchargée (donnees.json), sans redemander l'IGN : les
+ * emprises de requête sont refaites depuis l'axe et le repère enregistrés.
+ * @param {string} id
+ */
+export async function enrichirOsm(id) {
+  const carte = lireCarte(id);
+  const file = join(SRC, id, 'donnees.json');
+  const d = JSON.parse(readFileSync(file, 'utf8'));
+  const e = carte.emprise;
+  const proj = d.fournisseur === 'osm' ? projectionLocale([e.lonMin, e.latMin, e.lonMax, e.latMax]) : LAMBERT93;
+  const rep = repereCarte(proj, [d.repere.origineProjetee[0], d.repere.origineProjetee[1], d.repere.altitude]);
+  if (Math.abs(rep.k - d.repere.echelle) > 1e-6) throw new Error(`${id} : repère incohérent (échelle ${rep.k} au lieu de ${d.repere.echelle})`);
+  /** @type {number[][]} */
+  const axe = [];
+  for (let i = 0; i < d.axe.points.length; i += 3) axe.push([d.axe.points[i], d.axe.points[i + 1], d.axe.points[i + 2]]);
+  const dl = carte.couloir.demiLargeur;
+  const tuiles = tuilesCouloir(axe, dl, rep, proj);
+  const ctx = lecteur(join(SRC, id, 'brut'));
+  const osm = creerOsm(proj);
+  const date = new Date().toISOString().slice(0, 7);
+  d.osm = await enrichir(osm, ctx, tuiles, rep, axe, dl, d.batiments);
+  d.sources = d.sources.filter((/** @type {{ source: string }} */ s) => !/OpenStreetMap/.test(s.source));
+  d.sources.push(...(d.fournisseur === 'osm' ? osm.credits(date).slice(0, 1) : osm.creditsEnrichissement(date)));
+  const texte = `${JSON.stringify(d)}\n`;
+  writeFileSync(file, texte);
+  console.log(`${id} : OpenStreetMap ${JSON.stringify(compter(d.osm))} · ${(texte.length / 1e6).toFixed(2)} Mo · réseau ${ctx.stats.reseau} requêtes, cache ${ctx.stats.cache}`);
 }
 
 /**
@@ -514,7 +633,8 @@ async function main() {
     process.exitCode = 2;
     return;
   }
-  await fetchMap(id);
+  if (process.argv.includes('--osm')) await enrichirOsm(id);
+  else await fetchMap(id);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) await main();

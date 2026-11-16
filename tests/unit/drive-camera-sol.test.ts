@@ -206,5 +206,6 @@ describe.skipIf(BUILT.length === 0)('les cartes fabriquées : aucune caméra sou
     expect(checked).toBeGreaterThan((route.length / 4) * 10);
     expect(covered).toBe(0);
     expect(failures.slice(0, 12)).toEqual([]);
-  }, 60_000);
+    // Le plateau (20 km, tous les 4 m) prend près d'une minute seul : marge pour la suite entière.
+  }, 120_000);
 });

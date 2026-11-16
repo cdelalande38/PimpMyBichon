@@ -2,6 +2,7 @@
   "id": "plateau-matheysin",
   "nom": "Les lacs du plateau matheysin",
   "fournisseur": "ign",
+  "osm": true,
   "note": "Rampe de Laffrey (N85) depuis la sortie de Vizille, puis route des lacs (D1085) de Laffrey au centre de La Mure, le long du Grand Lac de Laffrey, du lac de Pétichet et du lac de Pierre-Châtel.",
   "emprise": {
     "lonMin": 5.72,

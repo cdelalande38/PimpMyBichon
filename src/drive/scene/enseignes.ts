@@ -3,8 +3,11 @@
 // dans un atlas (tubes nets dans le rouge, leur lueur floutée dans le vert ; rien de téléchargé). Les
 // enseignes sont posées par tronçon d'agglomération sur les façades qui bordent la route (sondées
 // par un rayon depuis l'axe), en instances : un appel de dessin par tronçon. Elles se reflètent
-// dans la chaussée mouillée et dans la caisse (reflet planaire et sonde).
+// dans la chaussée mouillée et dans la caisse (reflet planaire et sonde). Quand la carte connaît les
+// commerces du bord de la route (OpenStreetMap, MapChunk.shops), chacun a son enseigne, du côté où
+// il est, au mot de sa nature (BAR, CAFÉ, PHARMACIE…) : jamais son nom.
 
+import type { MapShopKind } from '../../data/mapTypes.ts';
 import {
   AdditiveBlending,
   Color,
@@ -29,13 +32,31 @@ import {
 export const SIGN_ITEMS: readonly string[] = [
   'ATELIER', 'GARAGE', 'PNEUS', 'OUVERT', 'CAFÉ', 'BAR', 'HÔTEL', 'CHROME',
   'VIDANGE', 'LAVAGE', 'PIÈCES', 'NUIT', '→', '←', '>>>', '★',
+  'RESTO', 'GLACES', 'CLUB', 'PHARMACIE', 'STATION', 'PAIN', 'CINÉMA', 'BOUTIQUE',
 ];
+
+/** Enseignes posées au jugé (cartes sans commerces connus) : les seize premières cases. */
+const RANDOM_CELLS = 16;
+
+/** Mot de l'enseigne d'un commerce, selon sa nature. */
+export const SHOP_SIGNS: Readonly<Record<MapShopKind, string>> = {
+  bar: 'BAR', cafe: 'CAFÉ', resto: 'RESTO', glaces: 'GLACES', club: 'CLUB', pharmacie: 'PHARMACIE', station: 'STATION', hotel: 'HÔTEL',
+  garage: 'GARAGE', lavage: 'LAVAGE', pneus: 'PNEUS', pieces: 'PIÈCES', pain: 'PAIN', cinema: 'CINÉMA', boutique: 'BOUTIQUE',
+};
+
+/** Case de l'atlas d'un commerce. */
+export function shopSignCell(kind: MapShopKind): number {
+  return Math.max(0, SIGN_ITEMS.indexOf(SHOP_SIGNS[kind]));
+}
+
+/** Cases des enseignes d'ambiance quand les commerces sont connus : rien qui se fasse passer pour un commerce. */
+export const DECOR_SIGN_CELLS: readonly number[] = ['OUVERT', 'NUIT', 'CHROME', 'ATELIER', '→', '←', '>>>', '★'].map((w) => SIGN_ITEMS.indexOf(w));
 
 /** Teintes des tubes (sRGB). */
 export const SIGN_COLORS: readonly string[] = ['#ff2bd6', '#22e4ff', '#ff3340', '#3b6dff', '#ffb02e', '#7dff4a', '#b04bff'];
 
 const COLS = 4;
-const ROWS = 4;
+const ROWS = 6;
 const CW = 256;
 const CH = 128;
 
@@ -96,7 +117,7 @@ function drawItem(ctx: CanvasRenderingContext2D, item: string, cx: number, cy: n
 }
 
 /**
- * Atlas des enseignes : 4 × 4 cases de 256 × 128 px. Rouge : les tubes ; vert : leur lueur. Fabriqué
+ * Atlas des enseignes : 4 × 6 cases de 256 × 128 px. Rouge : les tubes ; vert : leur lueur. Fabriqué
  * par le navigateur (canvas 2D), une fois par sortie.
  */
 export function createSignAtlas(): DataTexture {
@@ -197,6 +218,12 @@ export interface SignSpot {
   tangent: Vector3;
   s: number;
   width: number;
+  /** Case de l'atlas imposée (commerce connu, ou mot d'ambiance) ; sinon tirée au sort. */
+  cell?: number;
+  /** Côté imposé : 1 à gauche de la marche, −1 à droite ; sinon tiré au sort. */
+  side?: 1 | -1;
+  /** Toujours posée (commerce connu) : ni tirage, ni abandon faute de façade. */
+  always?: boolean;
 }
 
 /** Enseignes posées d'un tronçon : leur instance, et les mâts des enseignes sur pied (matrices d'une boîte unité). */
@@ -226,8 +253,9 @@ export function placeSigns(walls: Mesh[], spots: readonly SignSpot[], origin: Ve
   const colors: Color[] = [];
   for (const spot of spots) {
     const h = hash(spot.s);
-    if (h > 0.85) continue;
-    const side = hash(spot.s + 0.5) > 0.5 ? 1 : -1;
+    if (!spot.always && h > 0.85) continue;
+    const side = spot.side ?? (hash(spot.s + 0.5) > 0.5 ? 1 : -1);
+    const cell = spot.cell ?? Math.floor(hash(spot.s + 3.1) * RANDOM_CELLS) % RANDOM_CELLS;
     // Gauche de la marche : Y × tangente = (tz, 0, −tx).
     work.dir.set(spot.tangent.z * side, 0, -spot.tangent.x * side).normalize();
     const lift = 2.4 + hash(spot.s + 1.7) * 1.8;
@@ -236,7 +264,7 @@ export function placeSigns(walls: Mesh[], spots: readonly SignSpot[], origin: Ve
     ray.far = 42;
     const hit = walls.length > 0 ? ray.intersectObjects(walls, false)[0] : undefined;
     if (!hit || !hit.face || hit.distance < 4) {
-      if (hash(spot.s + 5.3) > 0.5) continue;
+      if (!spot.always && hash(spot.s + 5.3) > 0.5) continue;
       // Enseigne sur pied : au bord de la chaussée, de biais vers ceux qui arrivent.
       const edge = spot.width / 2 + 2.4;
       const p = spot.point.clone().addScaledVector(work.dir, edge).sub(origin);
@@ -245,7 +273,7 @@ export function placeSigns(walls: Mesh[], spots: readonly SignSpot[], origin: Ve
       work.n.copy(work.dir).multiplyScalar(-0.55).addScaledVector(spot.tangent, -0.85).normalize();
       work.q.setFromUnitVectors(work.z, work.n);
       mats.push(new Matrix4().compose(p, work.q.clone(), work.s));
-      cells.push(Math.floor(hash(spot.s + 3.1) * SIGN_ITEMS.length) % SIGN_ITEMS.length);
+      cells.push(cell);
       colors.push(new Color(SIGN_COLORS[Math.floor(hash(spot.s + 4.9) * SIGN_COLORS.length) % SIGN_COLORS.length]));
       const foot = p.clone().setY(p.y - top);
       const height = top - SIGN_SIZE.height / 2;
@@ -261,7 +289,7 @@ export function placeSigns(walls: Mesh[], spots: readonly SignSpot[], origin: Ve
     if (hash(spot.s + 2.3) < 0.33) work.q.multiply(work.q2.setFromAxisAngle(work.z, Math.PI / 2));
     const p = hit.point.clone().addScaledVector(work.n, 0.14).sub(origin);
     mats.push(new Matrix4().compose(p, work.q.clone(), work.s));
-    cells.push(Math.floor(hash(spot.s + 3.1) * SIGN_ITEMS.length) % SIGN_ITEMS.length);
+    cells.push(cell);
     colors.push(new Color(SIGN_COLORS[Math.floor(hash(spot.s + 4.9) * SIGN_COLORS.length) % SIGN_COLORS.length]));
   }
   if (mats.length === 0) return { signs: null, poles, lights };

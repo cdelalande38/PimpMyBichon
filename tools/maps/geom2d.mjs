@@ -235,10 +235,21 @@ export function raccorder(lignes, tol = 1) {
 }
 
 /**
- * Plus longue portion d'une ligne à l'intérieur d'un rectangle, bouts ramenés sur le bord.
+ * Plus longue portion d'une ligne à l'intérieur d'un rectangle, bouts ramenés sur le bord (toutes les
+ * portions, de la plus longue à la plus courte, avec `couperLigneEnMorceaux`).
  * @param {number[][]} ligne @param {[number, number, number, number]} r minX, minZ, maxX, maxZ
  */
 export function couperLigne(ligne, r) {
+  return couperLigneEnMorceaux(ligne, r)[0] ?? [];
+}
+
+/**
+ * Portions d'une ligne à l'intérieur d'un rectangle, bouts ramenés sur le bord, la plus longue (en
+ * sommets) d'abord.
+ * @param {number[][]} ligne @param {[number, number, number, number]} r minX, minZ, maxX, maxZ
+ * @returns {number[][][]}
+ */
+export function couperLigneEnMorceaux(ligne, r) {
   const dedans = (/** @type {number[]} */ p) => (p[0] ?? 0) >= r[0] && (p[0] ?? 0) <= r[2] && (p[1] ?? 0) >= r[1] && (p[1] ?? 0) <= r[3];
   /** Point du segment a → b sur le bord (a dedans, b dehors, ou l'inverse). */
   const bord = (/** @type {number[]} */ a, /** @type {number[]} */ b) => {
@@ -277,7 +288,7 @@ export function couperLigne(ligne, r) {
     }
   }
   if (cur.length) morceaux.push(cur);
-  return morceaux.sort((a, b) => b.length - a.length)[0] ?? [];
+  return morceaux.sort((a, b) => b.length - a.length);
 }
 
 /**

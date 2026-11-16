@@ -380,7 +380,7 @@ export function dentsDeScie(pts) {
 /**
  * Sections jointives à partir d'une étiquette par point du rail : fusion des points voisins de même
  * valeur, puis absorption des sections plus courtes que `min` mètres (sauf les ouvrages).
- * @template {{ ground: string, urban: boolean, lanes: number, width: number }} V
+ * @template {{ ground: string, urban: boolean, lanes: number, width: number, speed?: number }} V
  * @param {V[]} valeurs une par point du rail
  * @param {number} pas
  * @param {number} min
@@ -388,7 +388,7 @@ export function dentsDeScie(pts) {
  */
 export function sections(valeurs, pas, min) {
   /** @param {V} a @param {V} b */
-  const egal = (a, b) => a.ground === b.ground && a.urban === b.urban && a.lanes === b.lanes && a.width === b.width;
+  const egal = (a, b) => a.ground === b.ground && a.urban === b.urban && a.lanes === b.lanes && a.width === b.width && (a.speed ?? 0) === (b.speed ?? 0);
   /** @type {Array<V & { from: number, to: number }>} */
   let out = [];
   valeurs.forEach((v, i) => {

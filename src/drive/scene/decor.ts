@@ -1,6 +1,7 @@
 // Décor de la sortie de nuit : les tronçons de la carte autour du véhicule (chargés au fil de la
 // route, libérés derrière lui), habillés par rôle (src/drive/scene/materiaux.ts), leurs instances
-// (arbres en silhouettes, lampadaires et leur halo, balises, enseignes au néon en agglomération), le
+// (arbres et palmiers en silhouettes, lampadaires et leur halo, balises, feux tricolores et leur
+// lentille allumée, enseignes au néon en agglomération ou aux commerces connus de la carte), le
 // relief des tronçons chargés pour la garde des caméras (src/drive/scene/relief.ts), et le relief
 // lointain en silhouette sur le ciel. Aucune carte n'est connue ici : tout vient du manifeste et de
 // route.json.
@@ -8,6 +9,9 @@
 import {
   AdditiveBlending,
   BoxGeometry,
+  BufferAttribute,
+  BufferGeometry as Geometry,
+  CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
@@ -15,6 +19,7 @@ import {
   InstancedMesh,
   Matrix4,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   Quaternion,
@@ -27,11 +32,11 @@ import {
 import type { Rail } from '../contrat.ts';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MAP_INSTANCE_STRIDE, type MapChunk, type MapRoute } from '../../data/mapTypes.ts';
+import { MAP_INSTANCE_STRIDE, MAP_SHOP_KINDS, MAP_SHOP_STRIDE, type MapChunk, type MapRoute } from '../../data/mapTypes.ts';
 import { NO_MIRROR_LAYER } from '../../render/layers.ts';
 import { createPose } from '../rail.ts';
 import { SKY } from './ciel.ts';
-import { placeSigns, type PlacedSigns, type SignSpot } from './enseignes.ts';
+import { DECOR_SIGN_CELLS, placeSigns, shopSignCell, type PlacedSigns, type SignSpot } from './enseignes.ts';
 import { emitAttribute, isNoMirror, patchNight, type NightUniforms } from './materiaux.ts';
 import { chunkAt, chunkWindow, type DriveProfile } from './profil.ts';
 import { addRoleMesh, createChunkRelief, Relief } from './relief.ts';
@@ -72,6 +77,88 @@ function lampGeometry(): BufferGeometry {
 
 function baliseGeometry(): BufferGeometry {
   return new BoxGeometry(0.11, 1.05, 0.11).translate(0, 0.52, 0);
+}
+
+/** Palmier : stipe de 7,5 m et sept palmes retombantes, vues des deux faces (≈ 40 triangles). */
+export function palmGeometry(): BufferGeometry {
+  const trunk = new CylinderGeometry(0.15, 0.24, 7.6, 5, 1, true).translate(0, 3.8, 0);
+  const pos: number[] = [];
+  const top = 7.5;
+  for (let k = 0; k < 7; k += 1) {
+    const a = (k / 7) * Math.PI * 2 + 0.3;
+    const c = Math.cos(a);
+    const sn = Math.sin(a);
+    const at = (r: number, w: number, y: number) => [c * r - sn * w, y, sn * r + c * w];
+    const base = [0, top, 0];
+    const left = at(1.3, -0.42, top + 0.35);
+    const right = at(1.3, 0.42, top + 0.35);
+    const tip = at(3, 0, top - 1.1);
+    for (const t of [
+      [base, left, tip],
+      [base, tip, right],
+      [base, tip, left],
+      [base, right, tip],
+    ])
+      for (const v of t) pos.push(...(v as number[]));
+  }
+  const crown = new Geometry();
+  crown.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  crown.computeVertexNormals();
+  // Mêmes attributs des deux côtés : position et normale (le stipe perd ses coordonnées de texture).
+  const stipe = trunk.toNonIndexed();
+  stipe.deleteAttribute('uv');
+  const g = mergeGeometries([stipe, crown]) as BufferGeometry;
+  stipe.dispose();
+  trunk.dispose();
+  crown.dispose();
+  return g;
+}
+
+/** Hauteur des lentilles d'un feu tricolore : rouge en haut, vert en bas. */
+export const FEU = { red: 3.5, green: 2.66, lensZ: 0.2 } as const;
+
+/** Feu tricolore : mât et boîtier sombres (la lentille allumée est une instance à part). */
+function feuGeometry(): BufferGeometry {
+  const parts = [new CylinderGeometry(0.07, 0.09, 3.6, 5, 1, true).translate(0, 1.8, 0), new BoxGeometry(0.5, 1.3, 0.34).translate(0, 3.08, 0)];
+  for (const p of parts) p.setAttribute('pmbEmit', emitAttribute(p.getAttribute('position').count, Infinity));
+  const g = mergeGeometries(parts) as BufferGeometry;
+  for (const p of parts) p.dispose();
+  return g;
+}
+
+/** Hachage déterministe d'une position : la couleur allumée d'un feu. */
+const feuHash = (x: number, z: number) => {
+  const v = Math.sin(x * 0.373 + z * 0.117) * 43758.5453;
+  return v - Math.floor(v);
+};
+
+/**
+ * Lentilles allumées des feux d'un tronçon (rouge ou vert, tiré par la position), et leur lumière
+ * (position dans le repère de la carte et teinte, 6 nombres chacune) pour les reflets de la chaussée.
+ */
+function feuLenses(data: readonly number[], origin: readonly number[], geometry: BufferGeometry, material: Material): { mesh: InstancedMesh | null; lights: number[] } {
+  const n = data.length / MAP_INSTANCE_STRIDE;
+  const lights: number[] = [];
+  if (n <= 0) return { mesh: null, lights };
+  const mesh = new InstancedMesh(geometry, material, n);
+  const color = new Color();
+  for (let i = 0; i < n; i += 1) {
+    const o = i * MAP_INSTANCE_STRIDE;
+    const cap = data[o + 4] ?? 0;
+    const red = feuHash(data[o] ?? 0, data[o + 2] ?? 0) < 0.6;
+    work.q.setFromAxisAngle(work.y, cap);
+    work.p.set((data[o] ?? 0) + Math.sin(cap) * FEU.lensZ, (data[o + 1] ?? 0) + (red ? FEU.red : FEU.green), (data[o + 2] ?? 0) + Math.cos(cap) * FEU.lensZ);
+    work.s.set(1, 1, 1);
+    work.m.compose(work.p, work.q, work.s);
+    mesh.setMatrixAt(i, work.m);
+    // Au-delà de 1 : la lentille passe le seuil du halo (bloom).
+    mesh.setColorAt(i, red ? color.setRGB(3.2, 0.1, 0.04) : color.setRGB(0.08, 2.6, 0.9));
+    lights.push(work.p.x + (origin[0] ?? 0) + Math.sin(cap) * 0.5, work.p.y + (origin[1] ?? 0), work.p.z + (origin[2] ?? 0) + Math.cos(cap) * 0.5, ...(red ? [1, 0.07, 0.03] : [0.05, 1, 0.42]));
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  mesh.computeBoundingSphere();
+  return { mesh, lights };
 }
 
 // Halo d'un lampadaire, face à la caméra. Dans les plans rapides, il s'étire le long de son
@@ -123,6 +210,9 @@ export class DecorKit {
   readonly tree = treeGeometry();
   readonly lamp = lampGeometry();
   readonly balise = baliseGeometry();
+  readonly palm = palmGeometry();
+  readonly feu = feuGeometry();
+  readonly lens = new CircleGeometry(0.19, 12);
   readonly halo = new PlaneGeometry(1, 1);
   /** Mât d'une enseigne sur pied : boîte unité, à l'échelle dans sa matrice. */
   readonly pole = new BoxGeometry(1, 1, 1, 1, 1, 1);
@@ -130,6 +220,8 @@ export class DecorKit {
   readonly treeMaterial: MeshStandardMaterial;
   readonly lampMaterial: MeshStandardMaterial;
   readonly baliseMaterial: MeshStandardMaterial;
+  /** Lentilles allumées des feux : teinte par instance, au-delà de 1. */
+  readonly lensMaterial = new MeshBasicMaterial({ color: '#ffffff' });
   readonly haloMaterial: ShaderMaterial;
   readonly farMaterial: MeshStandardMaterial;
 
@@ -141,6 +233,7 @@ export class DecorKit {
     this.lampMaterial.name = 'nuit_lampadaire';
     this.baliseMaterial = patchNight(new MeshStandardMaterial({ color: '#d9d8d2', roughness: 0.6, envMapIntensity: 0.3 }), uniforms, { retro: 14 });
     this.baliseMaterial.name = 'nuit_balise';
+    this.lensMaterial.name = 'nuit_feu';
     this.haloMaterial = new ShaderMaterial({
       vertexShader: HALO_VERTEX,
       fragmentShader: HALO_FRAGMENT,
@@ -184,8 +277,8 @@ export class DecorKit {
   }
 
   dispose(): void {
-    for (const g of [this.tree, this.lamp, this.balise, this.halo, this.pole]) g.dispose();
-    for (const m of [this.treeMaterial, this.lampMaterial, this.baliseMaterial, this.haloMaterial, this.farMaterial]) m.dispose();
+    for (const g of [this.tree, this.lamp, this.balise, this.palm, this.feu, this.lens, this.halo, this.pole]) g.dispose();
+    for (const m of [this.treeMaterial, this.lampMaterial, this.baliseMaterial, this.lensMaterial, this.haloMaterial, this.farMaterial]) m.dispose();
   }
 }
 
@@ -375,8 +468,16 @@ export class Decor {
       instancedMeshes.push(mesh);
       group.add(mesh);
     };
-    const { arbre, lampadaire, balise } = chunk.instances;
+    const { arbre, lampadaire, balise, feu, palmier } = chunk.instances;
     if (arbre) put(instanced(arbre, this.profile.treeEvery, this.kit.tree, this.kit.treeMaterial));
+    if (palmier) put(instanced(palmier, this.profile.treeEvery, this.kit.palm, this.kit.treeMaterial));
+    let feuxLights: number[] = [];
+    if (feu) {
+      put(instanced(feu, 1, this.kit.feu, this.kit.lampMaterial));
+      const lenses = feuLenses(feu, chunk.origin, this.kit.lens, this.kit.lensMaterial);
+      put(lenses.mesh);
+      feuxLights = lenses.lights;
+    }
     if (lampadaire) {
       put(instanced(lampadaire, 1, this.kit.lamp, this.kit.lampMaterial));
       const halo = instanced(lampadaire, 1, this.kit.halo, this.kit.haloMaterial, true);
@@ -411,25 +512,45 @@ export class Decor {
       lamps[i * 3 + 2] = chunk.origin[2] + (l[o + 2] ?? 0) + Math.cos(cap) * LAMP_HEAD.reach * scale;
     }
     this.root.add(group);
-    this.loaded.set(index, { index, group, lamps, geometries, instanced: instancedMeshes, owned, neons: new Float32Array(placed?.lights ?? []) });
+    this.loaded.set(index, { index, group, lamps, geometries, instanced: instancedMeshes, owned, neons: new Float32Array([...(placed?.lights ?? []), ...feuxLights]) });
     this.status.loaded = this.loaded.size;
     this.status.complete = this.wanted.every((i) => this.loaded.has(i));
     this.collectLamps();
   }
 
-  /** Enseignes d'un tronçon : sur les façades des sections en agglomération, un point tous les 18 m. */
+  /**
+   * Enseignes d'un tronçon. Commerces connus (OpenStreetMap) : une enseigne par commerce, du côté où
+   * il est, au mot de sa nature, et des enseignes d’ambiance (un point tous les 36 m). Sinon, au
+   * jugé : sur les façades des sections en agglomération, un point tous les 18 m.
+   */
   private placeSigns(chunk: MapChunk, group: Group, walls: Mesh[]): PlacedSigns | null {
     const signs = this.signs;
     if (!signs) return null;
     const spots: SignSpot[] = [];
+    const known = Array.isArray(chunk.shops);
+    const shops = chunk.shops ?? [];
+    for (let k = 0; k + MAP_SHOP_STRIDE <= shops.length; k += MAP_SHOP_STRIDE) {
+      const s = shops[k] ?? 0;
+      const kind = MAP_SHOP_KINDS[shops[k + 4] ?? -1];
+      if (!kind) continue;
+      const pose = signs.rail.poseAt(s, createPose());
+      const tangent = new Vector3(pose.tangent[0], 0, pose.tangent[2]).normalize();
+      const dx = chunk.origin[0] + (shops[k + 1] ?? 0) - pose.position[0];
+      const dz = chunk.origin[2] + (shops[k + 3] ?? 0) - pose.position[2];
+      // Gauche de la marche : (tz, 0, −tx).
+      const side = dx * tangent.z - dz * tangent.x >= 0 ? 1 : -1;
+      spots.push({ s, point: new Vector3(...pose.position), tangent, width: pose.width, cell: shopSignCell(kind), side, always: true });
+    }
+    const every = known ? 36 : 18;
     for (const section of this.route.sections) {
       if (!section.urban || section.ground !== 'sol') continue;
       const from = Math.max(section.from, chunk.from) + 8;
       const to = Math.min(section.to, chunk.to) - 4;
-      for (let s = Math.ceil(from / 18) * 18; s <= to; s += 18) {
+      for (let s = Math.ceil(from / every) * every; s <= to; s += every) {
         const pose = signs.rail.poseAt(s, createPose());
         const tangent = new Vector3(pose.tangent[0], 0, pose.tangent[2]).normalize();
-        spots.push({ s, point: new Vector3(...pose.position), tangent, width: section.width });
+        const cell = known ? DECOR_SIGN_CELLS[Math.floor(Math.abs(Math.sin(s * 12.9898) * 43758.5453)) % DECOR_SIGN_CELLS.length] : undefined;
+        spots.push({ s, point: new Vector3(...pose.position), tangent, width: section.width, ...(cell === undefined ? {} : { cell }) });
       }
     }
     if (spots.length === 0) return null;

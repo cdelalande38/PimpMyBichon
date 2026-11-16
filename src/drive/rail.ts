@@ -168,6 +168,7 @@ export function createRail(route: MapRoute): Rail {
     out.urban = section.urban;
     out.lanes = section.lanes;
     out.width = section.width;
+    out.limit = section.speed ?? 0;
     return out;
   }
 

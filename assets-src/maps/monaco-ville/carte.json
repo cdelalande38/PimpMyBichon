@@ -2,6 +2,7 @@
   "id": "monaco-ville",
   "nom": "Monaco, la ville",
   "fournisseur": "ign",
+  "osm": true,
   "note": "Traversée de la Principauté d'ouest en est : Fontvieille et son tunnel, la place d'Armes, le port par le boulevard Albert-Ier, la montée de l'avenue d'Ostende vers la place du Casino, la descente des Spélugues jusqu'au bord de mer, puis l'avenue Princesse-Grace jusqu'au Larvotto. Le parcours respecte les sens uniques (chaussées séparées comprises).",
   "emprise": {
     "lonMin": 7.4,
@@ -89,7 +90,8 @@
     "longueurTroncon": 250,
     "hauteurMax": 180,
     "pasLampadaires": 9,
-    "porteeEau": 1200
+    "porteeEau": 1200,
+    "palmiers": 0.4
   },
   "departs": [
     {

@@ -55,6 +55,11 @@ export type RailSection = {
   lanes: number;
   /** Largeur de la chaussée, en mètres. */
   width: number;
+  /**
+   * Vitesse limite, en km/h, quand la donnée la connaît (OpenStreetMap, maxspeed) : le pilote
+   * automatique la suit. Absente des cartes fabriquées sans elle.
+   */
+  speed?: number;
 };
 
 /** Point de départ proposé au joueur. */
@@ -85,11 +90,24 @@ export type MapMaterialRole =
   | 'glissiere'
   | 'voie';
 
-/** Objets répétés, posés par l'app à partir d'une seule géométrie par nature. */
-export type MapInstanceKind = 'arbre' | 'lampadaire' | 'balise';
+/**
+ * Objets répétés, posés par l'app à partir d'une seule géométrie par nature. Feux tricolores et
+ * palmiers viennent d'OpenStreetMap (absents des cartes fabriquées sans lui).
+ */
+export type MapInstanceKind = 'arbre' | 'lampadaire' | 'balise' | 'feu' | 'palmier';
 
 /** Nombres par instance dans `MapChunk.instances` : x, y, z, échelle, cap (radians autour de Y). */
 export const MAP_INSTANCE_STRIDE = 5;
+
+/**
+ * Genres de commerces au bord du parcours (OpenStreetMap : amenity, shop, tourism), pour les
+ * enseignes de la sortie de nuit. Seul le genre est gardé : jamais le nom ni la marque.
+ */
+export const MAP_SHOP_KINDS = ['bar', 'cafe', 'resto', 'glaces', 'club', 'pharmacie', 'station', 'hotel', 'garage', 'lavage', 'pneus', 'pieces', 'pain', 'cinema', 'boutique'] as const;
+export type MapShopKind = (typeof MAP_SHOP_KINDS)[number];
+
+/** Nombres par commerce dans `MapChunk.shops` : abscisse du parcours, x, y, z (relatifs à `origin`), rang dans MAP_SHOP_KINDS. */
+export const MAP_SHOP_STRIDE = 5;
 
 /** Tronçon de décor, chargé puis libéré au fil de la route. */
 export type MapChunk = {
@@ -105,6 +123,12 @@ export type MapChunk = {
   triangles: number;
   /** Instances par nature, `MAP_INSTANCE_STRIDE` nombres chacune, relatives à `origin`. */
   instances: Partial<Record<MapInstanceKind, number[]>>;
+  /**
+   * Commerces au bord du parcours, `MAP_SHOP_STRIDE` nombres chacun (carte enrichie par
+   * OpenStreetMap ; une liste vide dit que la donnée existe et qu'il n'y a pas de commerce ici).
+   * Absent : la sortie pose ses enseignes au jugé.
+   */
+  shops?: number[];
 };
 
 /** Nombres par point dans `MapRoute.rail` : x, y, z. */

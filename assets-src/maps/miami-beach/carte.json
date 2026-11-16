@@ -1,0 +1,109 @@
+{
+  "id": "miami-beach",
+  "nom": "Miami Beach, le front de mer",
+  "fournisseur": "osm",
+  "note": "Hors de France : OpenStreetMap seul (routes, bâtiments, eau, trait de côte, végétation, mobilier). Ocean Drive de la 5e à la 15e rue, le long du parc et de la plage, devant les façades Art déco, puis Collins Avenue vers le nord jusqu'à la 41e rue, entre les hôtels et l'océan. Le service d'altimétrie de l'IGN n'a pas de donnée ici (ressource mondiale : −99 999) : relief plat déclaré, au niveau de la mer, ce qui est presque vrai sur cette île barrière. Sens uniques ignorés.",
+  "emprise": {
+    "lonMin": -80.142,
+    "latMin": 25.768,
+    "lonMax": -80.112,
+    "latMax": 25.822
+  },
+  "relief": "plat",
+  "itineraire": {
+    "sensIgnore": true,
+    "penalite": 4,
+    "etapes": [
+      {
+        "nom": "Ocean Drive, 5e rue",
+        "lon": -80.1306,
+        "lat": 25.774
+      },
+      {
+        "nom": "Ocean Drive, 14e rue",
+        "lon": -80.1294,
+        "lat": 25.7855,
+        "par": [
+          "Ocean Drive"
+        ]
+      },
+      {
+        "nom": "Collins Avenue, 41e rue",
+        "lon": -80.1222,
+        "lat": 25.8146,
+        "par": [
+          "Collins Avenue"
+        ]
+      }
+    ]
+  },
+  "mer": {
+    "pres": {
+      "lon": -80.124,
+      "lat": 25.795
+    }
+  },
+  "couloir": {
+    "demiLargeur": 110,
+    "pasRelief": 10
+  },
+  "lointain": {
+    "proche": {
+      "pas": 100,
+      "marge": 1000
+    },
+    "loin": {
+      "pas": 400,
+      "marge": 2000
+    }
+  },
+  "fabrication": {
+    "pasRail": 2,
+    "pasProfil": 2,
+    "lissagePlan": 5,
+    "lissageAltitude": 15,
+    "longueurTroncon": 250,
+    "hauteurMax": 120,
+    "pasLampadaires": 12,
+    "porteeEau": 1200,
+    "palmiers": 0.85
+  },
+  "departs": [
+    {
+      "id": "ocean-drive",
+      "label": "Ocean Drive",
+      "debut": true
+    },
+    {
+      "id": "collins",
+      "label": "Collins Avenue",
+      "rue": "Collins Avenue"
+    },
+    {
+      "id": "nord",
+      "label": "Vers la 41e rue",
+      "avantFin": 1200
+    }
+  ],
+  "captures": [
+    {
+      "nom": "plan",
+      "vue": "dessus",
+      "s": 2400,
+      "regard": 0,
+      "hauteur": 3400
+    },
+    {
+      "nom": "depart",
+      "vue": "conducteur",
+      "s": 60,
+      "regard": 0
+    },
+    {
+      "nom": "front-de-mer",
+      "vue": "oiseau",
+      "s": 700,
+      "regard": -60
+    }
+  ]
+}

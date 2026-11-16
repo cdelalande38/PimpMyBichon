@@ -116,6 +116,14 @@ const GEOS: Record<MapInstanceKind, Array<[BufferGeometry, Material]>> = {
     [new BoxGeometry(1.4, 0.18, 0.35).translate(0, 8, 0.6), new MeshLambertMaterial({ color: '#fff3c4', emissive: new Color('#ffd27a') })],
   ],
   balise: [[new BoxGeometry(0.12, 1.1, 0.12).translate(0, 0.55, 0), new MeshLambertMaterial({ color: '#f4f4f4', emissive: new Color('#552222') })]],
+  feu: [
+    [new CylinderGeometry(0.07, 0.07, 3.3, 5).translate(0, 1.65, 0), new MeshLambertMaterial({ color: '#2a2c30' })],
+    [new BoxGeometry(0.4, 1.1, 0.3).translate(0, 3.05, 0), new MeshLambertMaterial({ color: '#ff3a20', emissive: new Color('#aa1408') })],
+  ],
+  palmier: [
+    [new CylinderGeometry(0.16, 0.24, 7.5, 5).translate(0, 3.75, 0), new MeshLambertMaterial({ color: '#6a5a44' })],
+    [new ConeGeometry(2.6, 1.6, 7).translate(0, 7.3, 0), new MeshLambertMaterial({ color: '#3f6a2c' })],
+  ],
 };
 
 function instances(chunk: MapChunk, groupe: Group) {

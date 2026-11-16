@@ -1,0 +1,11 @@
+{
+  "id": "miami-beach",
+  "name": "Miami Beach, le front de mer",
+  "hint": "Ocean Drive, puis Collins Avenue vers le nord, entre les façades Art déco et l’océan",
+  "kind": "ville",
+  "order": 4,
+  "route": "route.json",
+  "credits": [
+    { "source": "© les contributeurs d’OpenStreetMap (routes, bâtiments, eau, trait de côte, végétation, mobilier urbain, nature des commerces)", "licence": "ODbL 1.0", "date": "2026-11" }
+  ]
+}
