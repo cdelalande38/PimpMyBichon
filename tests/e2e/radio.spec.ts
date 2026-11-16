@@ -46,6 +46,37 @@ async function openRadio(page: Page): Promise<void> {
 const radioButton = (page: Page) => page.getByRole('navigation', { name: 'Raccourcis' }).getByRole('button', { name: /^Radio(,|$)/ });
 
 /**
+ * Réglage du mini-lecteur tel qu'il est écrit sur le disque. L'écriture est asynchrone et un
+ * rechargement l'interrompt : un parcours l'attend avant de recharger.
+ */
+function savedMiniOpen(page: Page): Promise<boolean | null> {
+  return page.evaluate(
+    () =>
+      new Promise<boolean | null>((resolve) => {
+        const open = indexedDB.open('pimpmybichon-radio-reglages');
+        open.onerror = () => resolve(null);
+        open.onsuccess = () => {
+          const database = open.result;
+          try {
+            const request = database.transaction('kv', 'readonly').objectStore('kv').get('reglages');
+            request.onsuccess = () => {
+              database.close();
+              resolve((request.result as { miniOpen?: boolean } | undefined)?.miniOpen ?? null);
+            };
+            request.onerror = () => {
+              database.close();
+              resolve(null);
+            };
+          } catch {
+            database.close();
+            resolve(null);
+          }
+        };
+      }),
+  );
+}
+
+/**
  * Ouvre le panneau Radio depuis le garage, comme au doigt : radio garnie (la station d'accueil
  * compte), le bouton rond déploie le mini-lecteur, dont le titre ouvre le panneau.
  */
@@ -710,6 +741,7 @@ test('bouton rond : station d’accueil au premier lancement, déployer, pack, r
   // Redéployer : le choix est retrouvé après un rechargement.
   await radioButton(page).click();
   await expect(mini).toBeVisible();
+  await expect.poll(() => savedMiniOpen(page)).toBe(true);
   await page.reload();
   await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.radio-mini')).toBeVisible();
