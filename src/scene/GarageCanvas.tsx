@@ -17,7 +17,7 @@ import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import type { VignetteEffect } from 'postprocessing';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
-import { Box3, CircleGeometry, Color, DoubleSide, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera as Camera, PlaneGeometry, Quaternion, Raycaster, Vector3, type Group, type Material, type Object3D } from 'three';
+import { Box3, CircleGeometry, Color, DoubleSide, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera as Camera, Quaternion, Raycaster, Vector3, type Group, type Material, type Object3D } from 'three';
 import { SceneBoundary } from '../app/SceneBoundary.tsx';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
@@ -72,6 +72,7 @@ import {
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
+import { buildPanel } from './vehicle/tableau.ts';
 import { forgetModel, VehicleModel, type VehicleMeasure } from './vehicle/VehicleModel.tsx';
 import { bodyPoint, STILL_BODY, useBodyPose } from './vehicle/wheels.ts';
 
@@ -821,26 +822,13 @@ function CabinLights({ cabin, on }: { cabin: CabinLighting; on: boolean }) {
     },
     [stars],
   );
-  // Cadrans et écran : un disque ou un rectangle par surface, face à sa normale.
-  const panels = useMemo(
-    () =>
-      (cabin.panels ?? []).map((panel) => {
-        const [w, h] = panel.size;
-        const geometry = panel.shape === 'disque' ? new CircleGeometry(w / 2, 32) : new PlaneGeometry(w, h);
-        const material = new MeshBasicMaterial({ color: new Color(panel.color).multiplyScalar(panel.intensity ?? 1), toneMapped: false, fog: false });
-        const mesh = new Mesh(geometry, material);
-        mesh.position.set(...panel.center);
-        mesh.lookAt(new Vector3(...panel.center).add(new Vector3(...panel.normal)));
-        return mesh;
-      }),
-    [cabin.panels],
-  );
+  // Cadrans et écran : un disque ou un rectangle par surface, face à sa normale (src/scene/vehicle/
+  // tableau.ts). Ceux qui portent un instrument sont dessinés à zéro, une fois : au garage, rien n'est
+  // redessiné ensuite.
+  const panels = useMemo(() => (cabin.panels ?? []).map(buildPanel), [cabin.panels]);
   useEffect(
     () => () => {
-      for (const mesh of panels) {
-        mesh.geometry.dispose();
-        (mesh.material as MeshBasicMaterial).dispose();
-      }
+      for (const panel of panels) panel.dispose();
     },
     [panels],
   );
@@ -849,8 +837,8 @@ function CabinLights({ cabin, on }: { cabin: CabinLighting; on: boolean }) {
     // Hors de la sonde de réflexion, comme le véhicule.
     <group userData={{ hideInProbe: true }}>
       {stars && <primitive object={stars} visible={on} />}
-      {panels.map((mesh) => (
-        <primitive key={mesh.uuid} object={mesh} visible={on} />
+      {panels.map((panel) => (
+        <primitive key={panel.mesh.uuid} object={panel.mesh} visible={on} />
       ))}
       {light && <pointLight position={light.position as [number, number, number]} color={lightColor} intensity={on ? light.intensity : 0} distance={light.distance} decay={2} />}
     </group>

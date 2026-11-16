@@ -210,8 +210,32 @@ export interface CabinLight {
 }
 
 /**
+ * Instrument vivant porté par un panneau (src/scene/vehicle/tableau.ts) : en sortie de nuit, à la
+ * caméra embarquée, il suit la vitesse du compteur de l'écran (km/h entiers) ou le régime du moteur ;
+ * au garage, il reste à zéro. Aucun identifiant de véhicule dans le code : tout vient d'ici.
+ */
+export interface PanelInstrument {
+  /** Ce qu'il montre : la vitesse (km/h) ou le régime (tr/min). */
+  mesure: 'vitesse' | 'regime';
+  /**
+   * Valeur de fin de plage (km/h ou tr/min). Absente : 240 km/h pour la vitesse, la fin du cadran
+   * du moteur (zones.max du pilote) pour le régime.
+   */
+  max?: number;
+  /** « aiguille » (cadran, graduations) ou « chiffres » (segments). Absent : aiguille sur un disque, chiffres sur un rectangle. */
+  affichage?: 'aiguille' | 'chiffres';
+  /** Cadran : angles de début et de fin du balayage, en degrés depuis le haut, sens horaire (absent : −135 et 135). */
+  balayage?: readonly [number, number];
+  /** Cadran : « antihoraire » renverse le balayage (absent : horaire). */
+  sens?: 'horaire' | 'antihoraire';
+  /** Afficheur de chiffres : ajoute en bas une barre de régime. */
+  barre?: 'regime';
+}
+
+/**
  * Surface rétroéclairée de la planche (cadran, écran) : dessinée par l'app devant son support noir
- * du modèle, allumée en vue intérieure seulement.
+ * du modèle, allumée en vue intérieure seulement. Avec un `instrument`, elle montre une aiguille ou
+ * des chiffres qui suivent la sortie de nuit.
  */
 export interface CabinPanel {
   shape: 'disque' | 'rectangle';
@@ -223,6 +247,13 @@ export interface CabinPanel {
   color: Hex;
   /** Force, de 0 à 1 (absente : 1) : lisible de nuit, sans halo. */
   intensity?: number;
+  /**
+   * Rectangle seulement : largeur du bord haut, en mètres, pour un écran trapézoïdal (`size[0]` est alors
+   * celle du bord bas). Absent : un rectangle.
+   */
+  haut?: number;
+  /** Instrument vivant (vitesse ou régime) ; absent : une surface unie. */
+  instrument?: PanelInstrument;
 }
 
 export interface CabinLighting {

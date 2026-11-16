@@ -197,6 +197,25 @@ function checkView(view: unknown, where: string, problems: string[]): void {
 }
 
 /** Points de vue intérieurs, ciel étoilé et lumière d'habitacle. */
+/** Instrument d'un panneau de planche (cabin.panels[].instrument) : vitesse ou régime, plage, balayage. */
+function checkInstrument(instrument: unknown, shape: string, where: string, problems: string[]): void {
+  if (!isObject(instrument)) {
+    problems.push(`${where} doit être un objet`);
+    return;
+  }
+  const { mesure, max, affichage, balayage, sens, barre } = instrument;
+  if (mesure !== 'vitesse' && mesure !== 'regime') problems.push(`${where}.mesure doit valoir vitesse ou regime`);
+  if (max !== undefined && !positive(max)) problems.push(`${where}.max doit être une valeur positive (km/h ou tr/min)`);
+  if (affichage !== undefined && affichage !== 'aiguille' && affichage !== 'chiffres') problems.push(`${where}.affichage doit valoir aiguille ou chiffres`);
+  if (affichage === 'aiguille' && shape !== 'disque') problems.push(`${where} : l'aiguille demande un panneau en disque`);
+  if (balayage !== undefined) {
+    const ok = Array.isArray(balayage) && balayage.length === 2 && balayage.every((a) => typeof a === 'number' && Number.isFinite(a) && Math.abs(a) <= 360) && balayage[0] !== balayage[1];
+    if (!ok) problems.push(`${where}.balayage doit porter deux angles différents, de −360 à 360 degrés`);
+  }
+  if (sens !== undefined && sens !== 'horaire' && sens !== 'antihoraire') problems.push(`${where}.sens doit valoir horaire ou antihoraire`);
+  if (barre !== undefined && barre !== 'regime') problems.push(`${where}.barre doit valoir regime`);
+}
+
 function checkInterior(raw: Raw, problems: string[]): void {
   if (raw.interiorView !== undefined) checkView(raw.interiorView, 'interiorView', problems);
   if (raw.interiorViews !== undefined) {
@@ -230,6 +249,11 @@ function checkInterior(raw: Raw, problems: string[]): void {
           HEX.test(panel.color) &&
           (panel.intensity === undefined || (typeof panel.intensity === 'number' && panel.intensity >= 0 && panel.intensity <= 1));
         if (!ok) problems.push(`cabin.panels[${i}] doit porter shape (disque ou rectangle), center et normal (trois nombres), size (deux longueurs), color (#rrggbb), intensity de 0 à 1`);
+        else {
+          const raw = panel as Raw;
+          if (raw.haut !== undefined && !(positive(raw.haut) && raw.shape === 'rectangle' && raw.haut <= (size as number[])[0]! * 1.5)) problems.push(`cabin.panels[${i}].haut doit être une largeur positive, sur un rectangle (bord haut d'un écran trapézoïdal)`);
+          if (raw.instrument !== undefined) checkInstrument(raw.instrument, raw.shape as string, `cabin.panels[${i}].instrument`, problems);
+        }
       });
   }
   if (sky !== undefined) {

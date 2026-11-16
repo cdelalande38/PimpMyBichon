@@ -65,6 +65,20 @@
   "interiorView": { "place": "conducteur", "label": "Conducteur", "eye": [0.12, 0.93, 0], "look": { "yaw": 0, "pitch": -10 } },
   "interiorViews": [{ "place": "passager", "label": "Passager", "eye": [-0.54, 0.99, 0.5], "look": { "yaw": -12, "pitch": -8 } }],
   "interior": { "fixed": true, "steeringNode": "InteriorSteeringCylinder" },
+  "cabin": {
+    "panels": [
+      {
+        "shape": "rectangle",
+        "center": [1.016, 0.743, 0.006],
+        "normal": [-0.941, 0.339, 0],
+        "size": [0.363, 0.0766],
+        "haut": 0.241,
+        "color": "#ff9a1a",
+        "intensity": 0.9,
+        "instrument": { "mesure": "vitesse", "affichage": "chiffres", "barre": "regime" }
+      }
+    ]
+  },
   "wheels": {
     "nodes": ["WheelFrontL", "WheelFrontR", "WheelRearL", "WheelRearR"],
     "gap": [0.032, 0.028],

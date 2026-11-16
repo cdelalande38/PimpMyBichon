@@ -87,7 +87,18 @@
     "clearance": { "floor": 0.113, "dash": [0.53, 0.97] }
   },
   "cabin": {
-    "sky": { "center": [-0.27, 1.32, 0], "size": [0.76, 0.6], "crown": 0.05, "count": 260, "color": "#ffd28a", "seed": 11, "on": false }
+    "sky": { "center": [-0.27, 1.32, 0], "size": [0.76, 0.6], "crown": 0.05, "count": 260, "color": "#ffd28a", "seed": 11, "on": false },
+    "panels": [
+      {
+        "shape": "disque",
+        "center": [0.503, 0.865, -0.32],
+        "normal": [-0.992, 0.119, 0],
+        "size": [0.15, 0.15],
+        "color": "#f4f1ea",
+        "intensity": 0.9,
+        "instrument": { "mesure": "vitesse", "max": 160 }
+      }
+    ]
   },
   "wheels": {
     "fit": {

@@ -44,6 +44,7 @@ import { createBeam, createGlare } from './ciel.ts';
 import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 import { DEFAULT_SEAT, placeEye, seatMetrics, type PlacedSeat } from '../../scene/fit.ts';
 import { bodyPoint, STILL_BODY, useBodyPose } from '../../scene/vehicle/wheels.ts';
+import { TableauVivant } from '../../scene/vehicle/tableau.ts';
 import { cockpit } from '../cameras.ts';
 import { bikeSteering, follow, liftStands, rollingWheels, steeringWheelPart, steerParts, wheelSteer, type SteeringPart, type Wheel } from './roues.ts';
 import { PILOT } from '../pilote.ts';
@@ -347,6 +348,7 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   });
 
   useDriver(drive.prepared, vehicle);
+  const tableau = useTableau(vehicle);
 
   const { halfLength, halfWidth, height } = drive.prepared;
   const isBike = vehicle.kind === 'bike';
@@ -414,11 +416,42 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
       <primitive object={shadow.root} dispose={null} />
       <primitive object={rig.body} dispose={null}>
         <primitive object={drive.prepared.root} dispose={null} />
+        {tableau && <primitive object={tableau} dispose={null} />}
         <primitive object={lights.group} dispose={null} />
         {beams && lights.beamMeshes.map((b) => <primitive key={b.uuid} object={b} dispose={null} />)}
       </primitive>
     </primitive>
   );
+}
+
+/**
+ * Tableau de bord vivant (src/scene/vehicle/tableau.ts) : les panneaux de `cabin.panels` du manifeste
+ * qui portent un `instrument` (vitesse ou régime) suivent le pilote de la sortie, à la caméra
+ * embarquée seulement (ailleurs, ils sont masqués et rien n'est redessiné). La vitesse affichée est
+ * celle du compteur de l'écran (même arrondi) ; elle est publiée sur la scène, `data-tableau`, pour
+ * les parcours. Les toiles ne sont réécrites que quand la valeur affichée change, dix fois par
+ * seconde au plus. Suit l'assiette de la caisse comme le garage. Sans allocation par image.
+ */
+function useTableau(vehicle: VehicleManifest): Group | null {
+  const gl = useThree((state) => state.gl);
+  const pose = useBodyPose((state) => state.poses[vehicle.id]) ?? STILL_BODY;
+  const tableau = useMemo(() => {
+    const built = new TableauVivant(vehicle.cabin?.panels ?? []);
+    return built.empty ? null : built;
+  }, [vehicle]);
+  useEffect(() => tableau?.pose(pose.y, pose.pitch), [tableau, pose]);
+  useEffect(() => () => tableau?.dispose(), [tableau]);
+  const stage = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const host = gl.domElement.closest<HTMLElement>(`.${DRIVE_STAGE_CLASS}`);
+    stage.current = host;
+    return () => {
+      if (host) delete host.dataset.tableau;
+      stage.current = null;
+    };
+  }, [gl, tableau]);
+  useFrame(() => tableau?.frame(stage.current, livePilot.current, performance.now()), 0.5);
+  return tableau?.group ?? null;
 }
 
 /** Distance de la caméra à l'œil du conducteur sous laquelle on est « dans sa tête ». */
