@@ -98,6 +98,15 @@ describe('pile des niveaux du dock', () => {
     expect(dock().section).toBe('custom');
     expect(dock().menu).toBe('contenu');
     expect(dock().levels).toEqual([{ kind: 'zone', zone: 'jantes', step: 'couleur' }]);
+    // Fermer ramène le menu à son accueil : rouvert, il montre les sections, la section reste retenue.
+    dock().setClosed(true);
+    expect(dock().menu).toBe('sections');
+    expect(dock().levels).toEqual([]);
+    dock().setClosed(false);
+    expect(dock().menu).toBe('sections');
+    expect(dock().section).toBe('custom');
+    // On y retourne en un appui, et la suite repart de là.
+    dock().openEntry('peinture', 'jantes');
     dock().back();
     dock().back();
     expect(dock().menu).toBe('entrees');

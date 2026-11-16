@@ -1,7 +1,7 @@
 // Navigation du dock : un seul niveau du menu à la fois (sections, entrées d'une section, contenu
 // d'une entrée), la ligne de repère (« Retour », fil, « Fermer le menu »), la pile des niveaux de la
 // peinture (zones → zone, couleur ou finition → nuancier), la pastille « Personnaliser » qui rouvre
-// le dock là où on l'avait laissé, Échap et le focus au clavier, et le tiers bas aux deux tailles
+// le dock à l'accueil du menu, Échap et le focus au clavier, et le tiers bas aux deux tailles
 // d'écran et aux trois tailles de texte, dock ouvert comme fermé. Captures : captures/navigation/.
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -72,7 +72,7 @@ async function touchableHeights(page: Page, selector: string): Promise<Array<{ n
 const dockTop = (page: Page) => dock(page).evaluate((footer) => Math.round(footer.getBoundingClientRect().top));
 
 test.describe('navigation du dock', () => {
-  test('peinture : descendre jusqu’au nuancier, remonter niveau par niveau, fermer, rouvrir au même endroit, recharger', async ({ page }) => {
+  test('peinture : descendre jusqu’au nuancier, remonter niveau par niveau, fermer, rouvrir à l’accueil du menu, recharger', async ({ page }) => {
     test.setTimeout(150_000);
     await openApp(page);
     await waitForScene(page);
@@ -159,12 +159,15 @@ test.describe('navigation du dock', () => {
     await expect(page.locator('.stage')).toHaveAttribute('data-decalage', '0');
     await shot(page, '04-dock-ferme');
 
-    // « Personnaliser » rouvre là où on l'avait laissé : même onglet, même zone.
+    // « Personnaliser » rouvre à l'accueil du menu (retour du 16 novembre 2026) : les sections, pas le
+    // niveau où on l'avait fermé. L'entrée quittée se retrouve en un appui.
     await reopen(page).tap();
     await expect(dock(page)).toHaveAttribute('data-taille', 'compact');
-    await expect(tabs(page)).toHaveCount(0);
-    await expectCrumbs(page, ['Custom', 'Peinture', zone, 'Couleur']);
-    await expect(colors(page)).toBeVisible();
+    await expect(tabs(page)).toBeVisible();
+    await expect(back(page)).toHaveCount(0);
+    await expect(colors(page)).toHaveCount(0);
+    await openEntry(page, 'Peinture');
+    await expect(zones(page).first()).toBeVisible();
 
     // Rechargement : le dock fermé est retrouvé.
     await close(page).tap();

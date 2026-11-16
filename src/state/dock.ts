@@ -148,7 +148,10 @@ export const useDock = create<DockState>()(
       setExpanded: (expanded) => set({ expanded }),
       toggle: () => set((state) => ({ expanded: !state.expanded })),
       setTop: (top) => set((state) => (state.top === top ? state : { top })),
-      setClosed: (closed) => set({ closed }),
+      // Fermer ramène le menu à son accueil (retour du 16 novembre 2026) : rouvert par « Personnaliser »,
+      // il montre les sections, pas le niveau où on l'avait quitté. La section et ses entrées restent
+      // retenues : on y retourne en un appui.
+      setClosed: (closed) => set(closed ? { closed: true, menu: 'sections', levels: [] } : { closed: false }),
       setSection: (section) => set({ section, menu: opensDirectly(section) ? 'contenu' : 'entrees', levels: [] }),
       setEntry: (entry) =>
         set((state) => {
