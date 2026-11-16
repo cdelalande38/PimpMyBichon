@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { countGeometry, countPlacedGeometry, imageSize, measureGlb, parseGlb } from '../../../tools/lib/glb.mjs';
 import { runAssetsCheck } from '../../../tools/lib/assets.mjs';
 import { MODEL_LIMITS } from '../../../tools/lib/models.mjs';
-import { buildVehicle } from '../../../tools/vehicles/build.mjs';
+import { buildVehicle, summarize } from '../../../tools/vehicles/build.mjs';
+import * as kit from '../../../tools/vehicles/kit.mjs';
 import { jpeg, ktx2, makeGlb, manyPrimitives, png, TINY_GLB, webp } from './glb-fixture.ts';
 import { creditsFile, located, messagesOf, useTempTrees } from './helpers.ts';
 import type { GlbSpec } from './glb-fixture.ts';
@@ -114,8 +115,6 @@ describe('GLB — triangles et primitives', () => {
 });
 
 describe('GLB — véhicules du catalogue, construits en mémoire', () => {
-  // Les roues de la Cox et du van sont un maillage posé par quatre nœuds : assets:check doit
-  // compter comme build.mjs (38 et 34 appels), pas un appel par maillage (30 et 22).
   it.each(['cox', 'van'])('compte pour %s les mêmes appels et triangles que build.mjs', async (id) => {
     const { bytes, summary } = await buildVehicle(id);
     const parsed = parseGlb(bytes);
@@ -123,6 +122,23 @@ describe('GLB — véhicules du catalogue, construits en mémoire', () => {
     const stats = measureGlb(parsed.container);
     expect(stats.primitives).toBe(summary.primitives);
     expect(stats.triangles).toBe(summary.triangles);
+  });
+
+  // Un maillage posé par quatre nœuds (roue partagée d'un modèle) : assets:check doit compter
+  // comme build.mjs, un appel par pose, pas un appel par maillage.
+  it('compte un maillage partagé à chaque nœud qui le pose, comme build.mjs', () => {
+    const m = new kit.Model('essai');
+    m.add('caisse', kit.ellipsoid([0, 0.5, 0], [1, 0.4, 0.5], { material: 'paint_caisse' }));
+    m.shared('roue', kit.tire({ outer: 0.3, rim: 0.2, width: 0.2 }));
+    for (const [name, x, z] of [['roue_a', 1, 0.6], ['roue_b', 1, -0.6], ['roue_c', -1, 0.6], ['roue_d', -1, -0.6]] as const) m.instance(name, 'roue', { position: [x, 0.3, z] });
+    const { bytes } = m.toGlb();
+    const summary = summarize(bytes);
+    const parsed = parseGlb(bytes);
+    if (!parsed.ok) throw new Error(parsed.message);
+    const stats = measureGlb(parsed.container);
+    expect(stats.primitives).toBe(summary.primitives);
+    expect(stats.triangles).toBe(summary.triangles);
+    expect(stats.primitives).toBe(5);
     expect(stats.primitives).toBeGreaterThan(countGeometry(parsed.container.json).primitives);
   });
 });

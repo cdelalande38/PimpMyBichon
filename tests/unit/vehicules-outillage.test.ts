@@ -99,18 +99,22 @@ describe('le van', () => {
   it('respecte les conventions : matériaux, zones, origine, cotes de la fiche, budgets', async () => {
     const { bytes, summary } = await buildVehicle('van');
     for (const name of summary.materials) expect(name).toMatch(kit.MATERIAL_NAME);
-    for (const zone of manifest.zones) for (const mat of zone.materials) expect(summary.materials).toContain(mat);
+    // Toutes les zones dans le modèle, sauf celle des jantes : portée par les jantes partagées que l'app pose.
+    for (const zone of manifest.zones) for (const mat of zone.materials) if (zone.id !== manifest.wheels?.fit?.zone) expect(summary.materials).toContain(mat);
+    expect(manifest.wheels?.fit?.zone).toBe('jantes');
     expect(manifest.id).toBe('van');
     expect(manifest.placeholder).toBe('placeholder_van');
     // Budgets : 40 000 à 120 000 triangles, moins de 60 appels de dessin.
     expect(summary.triangles).toBeGreaterThanOrEqual(40_000);
     expect(summary.triangles).toBeLessThanOrEqual(120_000);
     expect(summary.primitives).toBeLessThan(60);
-    // Origine au sol, au centre de l'empattement (3,00 m) ; roues de 0,66 m.
-    expect(summary.min[1]).toBeCloseTo(0, 2);
+    // Origine au sol (caisse seule : sa garde au sol du manifeste), au centre de l'empattement
+    // (3,00 m) ; quatre ancres de roue à 0,33 m, le rayon des roues d'origine.
+    expect(summary.min[1]).toBeCloseTo(manifest.wheels!.floor, 2);
     const json = glbJson(bytes);
     const wheels = json.nodes.filter((n: { name: string }) => n.name.startsWith('roue_'));
     expect(wheels).toHaveLength(4);
+    for (const n of wheels) expect((n.translation as number[])[1]).toBeCloseTo(0.33, 2);
     const xs = wheels.map((n: { translation: number[] }) => n.translation[0]);
     expect(Math.max(...xs) + Math.min(...xs)).toBeCloseTo(0, 3);
     expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(3.0, 2);

@@ -65,6 +65,7 @@ import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
 import { forgetModel, VehicleModel, type VehicleMeasure } from './vehicle/VehicleModel.tsx';
+import { bodyPoint, STILL_BODY, useBodyPose } from './vehicle/wheels.ts';
 
 /** Angle vertical borné de l'orbite (src/data/garage.ts). */
 const { minPolar: MIN_POLAR, maxPolar: MAX_POLAR } = GARAGE.orbit;
@@ -221,6 +222,9 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   const viewMode = useView((state) => state.mode);
   const setViewMode = useView((state) => state.setMode);
   const views = interiorViewsOf(vehicle);
+  // Caisse posée par l'assiette et les roues (src/scene/vehicle/wheels.ts) : la vue intérieure et
+  // l'habitacle allumé la suivent.
+  const body = useBodyPose((state) => state.poses[vehicle.id]) ?? STILL_BODY;
   const seat = useView((state) => state.seat);
   const interiorView = views[Math.min(seat, views.length - 1)];
   const wantInside = viewMode === 'interieur' && interiorView !== undefined && !photo && !measuring;
@@ -376,7 +380,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
         else rig.savedTarget.set(...target);
         rig.vehicle = vehicle.id;
       }
-      const pose = interiorPose(interiorView, turn);
+      const pose = interiorPose({ ...interiorView, eye: bodyPoint(interiorView.eye, body), target: bodyPoint(interiorView.target, body) }, turn);
       rig.eye.set(...pose.eye);
       rig.base = lookFrom(pose.eye, pose.target);
       rig.look = { ...rig.base };
@@ -402,7 +406,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       rig.view = null;
       invalidate();
     }
-  }, [wantInside, interiorView, turn, width, height, instant, getThree, target, invalidate, vehicle.id]);
+  }, [wantInside, interiorView, turn, width, height, instant, getThree, target, invalidate, vehicle.id, body]);
   // Le champ de la vue intérieure suit la forme de l'écran.
   const viewFov = interiorView?.fov;
   useEffect(() => {
@@ -562,7 +566,11 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
           </SceneBoundary>
         )}
         {/* Ciel étoilé et lumière d'habitacle : montés avec le véhicule qui les déclare, allumés en vue intérieure seulement. */}
-        {vehicle.cabin && <CabinLights key={vehicle.id} cabin={vehicle.cabin} on={!outside} />}
+        {vehicle.cabin && (
+          <group position-y={body.y} rotation-z={body.pitch}>
+            <CabinLights key={vehicle.id} cabin={vehicle.cabin} on={!outside} />
+          </group>
+        )}
       </group>
 
       <PostChain ambiance={ambiance} profile={profile} accumulate={accumulate} vignette={vignette} floatTargets={floatTargets} />

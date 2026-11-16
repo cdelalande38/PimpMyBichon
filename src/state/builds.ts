@@ -126,11 +126,45 @@ function sanitizeBuild(raw: unknown): Build {
     }
     if (Object.keys(kept).length > 0) build.parts = kept;
   }
+  const { tune, partPaints } = raw as Record<string, unknown>;
+  if (typeof tune === 'object' && tune !== null) {
+    const kept: Record<string, number> = {};
+    for (const [param, value] of Object.entries(tune).slice(0, MAX_SLOTS)) {
+      if (ID.test(param) && typeof value === 'number' && Number.isFinite(value) && Math.abs(value) < 1e6) kept[param] = value;
+    }
+    if (Object.keys(kept).length > 0) build.tune = kept;
+  }
+  if (typeof partPaints === 'object' && partPaints !== null) {
+    const kept: Record<string, PaintChoice> = {};
+    for (const [slot, value] of Object.entries(partPaints).slice(0, MAX_SLOTS)) {
+      const choice = ID.test(slot) ? sanitizeChoice(value) : null;
+      if (choice) {
+        delete choice.linked;
+        if (Object.keys(choice).length > 0) kept[slot] = choice;
+      }
+    }
+    if (Object.keys(kept).length > 0) build.partPaints = kept;
+  }
   return build;
 }
 
 function isEmpty(build: Build): boolean {
-  return Object.keys(build.paints).length === 0 && build.parts === undefined;
+  return Object.keys(build.paints).length === 0 && build.parts === undefined && build.tune === undefined && build.partPaints === undefined;
+}
+
+/** Retire une clé d'un dictionnaire du build ; le dictionnaire vidé disparaît. */
+function withEntry<T>(map: Record<string, T> | undefined, key: string, value: T | null): Record<string, T> | undefined {
+  const next = Object.fromEntries(Object.entries(map ?? {}).filter(([id]) => id !== key));
+  if (value !== null) next[key] = value;
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+/** Pose un champ facultatif du build : absent quand il est vide. */
+function withField<K extends 'parts' | 'tune' | 'partPaints'>(build: Build, key: K, value: Build[K] | undefined): Build {
+  const next: Build = { ...build };
+  if (value === undefined) delete next[key];
+  else next[key] = value;
+  return next;
 }
 
 export interface BuildsData {
@@ -187,9 +221,13 @@ export interface BuildsState extends BuildsData {
   setLinked: (vehicle: VehicleId, zone: string, linked: boolean, seed?: Paint) => void;
   /** Monte une option sur un poste (§ 5.4) ; `null` rend le poste à son origine. */
   setPart: (vehicle: VehicleId, slot: string, option: string | null) => void;
+  /** Règle un curseur (§ 6, tune) ; `null` le rend à son origine. */
+  setTune: (vehicle: VehicleId, param: string, value: number | null) => void;
+  /** Couleur propre d'une pièce (§ 6, partPaints : la marque du pneu) ; `null` : celle d'origine. */
+  setPartPaint: (vehicle: VehicleId, slot: string, patch: Partial<Paint> | null) => void;
   /** Range une couleur en tête des dernières couleurs (à appeler quand un choix est posé). */
   rememberColor: (color: Hex) => void;
-  /** Rend au véhicule son état d'origine : peintures et pièces. */
+  /** Rend au véhicule son état d'origine : peintures, pièces, curseurs. */
   resetVehicle: (vehicle: VehicleId) => void;
 }
 
@@ -221,11 +259,20 @@ export const useBuilds = create<BuildsState>()(
       setPart: (vehicle, slot, option) =>
         set((state) => {
           const build = state.builds[vehicle] ?? { paints: {} };
-          const parts = Object.fromEntries(Object.entries(build.parts ?? {}).filter(([id]) => id !== slot));
-          if (option !== null) parts[slot] = option;
-          const next: Build = { paints: build.paints };
-          if (Object.keys(parts).length > 0) next.parts = parts;
-          return { builds: { ...state.builds, [vehicle]: next } };
+          return { builds: { ...state.builds, [vehicle]: withField(build, 'parts', withEntry(build.parts, slot, option)) } };
+        }),
+      setTune: (vehicle, param, value) =>
+        set((state) => {
+          const build = state.builds[vehicle] ?? { paints: {} };
+          const kept = value === null || !Number.isFinite(value) ? null : value;
+          if ((build.tune?.[param] ?? null) === kept) return {};
+          return { builds: { ...state.builds, [vehicle]: withField(build, 'tune', withEntry(build.tune, param, kept)) } };
+        }),
+      setPartPaint: (vehicle, slot, patch) =>
+        set((state) => {
+          const build = state.builds[vehicle] ?? { paints: {} };
+          const choice = patch === null ? null : sanitizeChoice({ ...build.partPaints?.[slot], ...patch });
+          return { builds: { ...state.builds, [vehicle]: withField(build, 'partPaints', withEntry(build.partPaints, slot, choice)) } };
         }),
       rememberColor: (color) =>
         set((state) => {

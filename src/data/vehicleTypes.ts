@@ -162,6 +162,56 @@ export interface CabinLighting {
   panels?: readonly CabinPanel[];
 }
 
+/** Cote d'une roue : diamètre de jante (pouces), largeur du pneu (mm), série (hauteur du flanc, % de la largeur). */
+export interface WheelSize {
+  diameter: number;
+  width: number;
+  aspect: number;
+}
+
+/**
+ * Jantes et pneus au choix (§ 5.4), posés par l'app sur les ancres `roue_*` du modèle (une ancre
+ * par roue, axe sur Z local, face extérieure vers +Z, centre au moyeu), depuis le catalogue des
+ * roues partagées (src/data/wheels.ts).
+ */
+export interface WheelFit {
+  /** Zone de peinture des jantes (couleur et finition restent dans Peinture). */
+  zone: string;
+  /** Dessin et pneu d'origine (identifiants du catalogue). */
+  rim: string;
+  tire: string;
+  /** Cotes d'origine, avant ; arrière si elles diffèrent (le décalage est gardé quand on change). */
+  front: WheelSize;
+  rear?: WheelSize;
+  /** Bornes des curseurs : diamètre de jante (pouces), série (%). */
+  diameter: readonly [number, number];
+  aspect: readonly [number, number];
+  /** Largeur du pneu avant (voitures : l'arrière suit avec son décalage d'origine), en mm. */
+  width?: readonly [number, number];
+  /** Largeur du pneu arrière seul (motos), en mm. */
+  rearWidth?: readonly [number, number];
+  /** Dessins admis ; absent : toutes les jantes du genre du véhicule. */
+  rims?: readonly string[];
+}
+
+/** Roues et assiette d'un véhicule. */
+export interface VehicleWheels {
+  /** Jantes et pneus au choix ; absent : le modèle garde les siens, seule l'assiette se règle. */
+  fit?: WheelFit;
+  /** Nœuds de roue d'un modèle qui ne suit pas la convention `roue_*` (modèle adapté). */
+  nodes?: readonly string[];
+  /** Nœuds posés au sol qui ne suivent pas la caisse (béquille). */
+  grounded?: readonly string[];
+  /**
+   * Place au-dessus du pneu d'origine, avant et arrière, en mètres : jusqu'où la roue peut monter
+   * dans le passage de roue ou sous le garde-boue sans traverser l'aile. Borne le diamètre et
+   * l'assiette.
+   */
+  gap: readonly [number, number];
+  /** Hauteur du point le plus bas de la caisse, à l'origine, en mètres (béquille exclue). */
+  floor: number;
+}
+
 export interface VehicleManifest {
   /** Égal au nom du dossier. */
   id: VehicleId;
@@ -204,13 +254,20 @@ export interface VehicleManifest {
    */
   presentSide?: 'gauche' | 'droite';
   adapt?: VehicleAdapt;
+  /** Roues (jantes, pneus, cotes) et assiette ; absent : ni l'un ni l'autre ne se règle. */
+  wheels?: VehicleWheels;
 }
 
 /**
- * Ce que l'utilisateur a fait d'un véhicule. Aujourd'hui : ses peintures, zone par zone, et ses
- * pièces et préparations, poste par poste (§ 5.4 ; pour l'instant la préparation du moteur).
+ * Ce que l'utilisateur a fait d'un véhicule : ses peintures, zone par zone ; ses pièces et
+ * préparations, poste par poste (§ 5.4 : préparation du moteur, jantes, pneus) ; ses curseurs
+ * (cotes des roues, assiette) et la couleur de ses pneus.
  */
 export interface Build {
   paints: Record<string /* id de zone */, PaintChoice>;
   parts?: Record<string /* id de poste */, string /* id d'option */>;
+  /** Curseurs (§ 6) : diamètre de jante, largeur et série du pneu, assiette… */
+  tune?: Record<string /* id de curseur */, number>;
+  /** Couleur propre d'une pièce (§ 6) : la marque du pneu (liseré, flanc blanc, lettres). */
+  partPaints?: Record<string /* id de poste */, Partial<Paint>>;
 }

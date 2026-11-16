@@ -564,82 +564,12 @@ export default function cox(k) {
     ...mirror,
   ]);
 
-  // Roues : jante alliage à 8 branches droites, pneus plus larges à l'arrière. Deux maillages partagés.
-  m.shared('roue_av', coxWheel(k, 0.165));
-  m.shared('roue_ar', coxWheel(k, 0.185));
-  m.instance('roue_avant_droite', 'roue_av', { position: [AXLES[0], WHEEL_R, TRACK_Z[0]] });
-  m.instance('roue_avant_gauche', 'roue_av', { position: [AXLES[0], WHEEL_R, -TRACK_Z[0]], rotation: [0, Math.PI, 0] });
-  m.instance('roue_arriere_droite', 'roue_ar', { position: [AXLES[1], WHEEL_R, TRACK_Z[1]] });
-  m.instance('roue_arriere_gauche', 'roue_ar', { position: [AXLES[1], WHEEL_R, -TRACK_Z[1]], rotation: [0, Math.PI, 0] });
+  // Roues : quatre ancres (axe Z, face extérieure vers +Z) ; l'app y pose la jante et les pneus
+  // choisis dans le catalogue partagé (d'origine : huit branches, 165 à l'avant et 185 à l'arrière).
+  m.anchor('roue_avant_droite', { position: [AXLES[0], WHEEL_R, TRACK_Z[0]] });
+  m.anchor('roue_avant_gauche', { position: [AXLES[0], WHEEL_R, -TRACK_Z[0]], rotation: [0, Math.PI, 0] });
+  m.anchor('roue_arriere_droite', { position: [AXLES[1], WHEEL_R, TRACK_Z[1]] });
+  m.anchor('roue_arriere_gauche', { position: [AXLES[1], WHEEL_R, -TRACK_Z[1]], rotation: [0, Math.PI, 0] });
   return m;
 }
 
-/**
- * Roue de la Cox : pneu taille basse du kit, jante alliage polie de 15 pouces à huit branches
- * DROITES, larges et bombées (environ 22° chacune au rebord, plus étroites vers le moyeu), posées à
- * plat en retrait de 4 cm derrière le rebord extérieur ; moyeu de 0,12 à quatre écrous apparents.
- * Axe Z, face extérieure vers +Z, centre à l'origine.
- * @param {Kit} k
- * @param {number} width  largeur du pneu
- * @returns {Parts}
- */
-function coxWheel(k, width) {
-  const outer = WHEEL_R;
-  const r = 0.1905; // jante de 15 pouces
-  const w = width / 2;
-  const mat = 'paint_jantes';
-  /** @type {Parts} */
-  const parts = [...k.tire({ outer, rim: r, width })];
-  // Fût et rebords, visibles des deux côtés.
-  const barrel = k.lathe(
-    [
-      [r - 0.012, -w + 0.006],
-      [r + 0.012, -w + 0.004],
-      [r + 0.014, -w + 0.012],
-      [r - 0.006, -w + 0.02],
-      [r - 0.014, -w * 0.3],
-      [r - 0.014, w * 0.45],
-      [r - 0.004, w - 0.024],
-      [r + 0.016, w - 0.014],
-      [r + 0.014, w - 0.003],
-      [r - 0.014, w - 0.006],
-    ],
-    { material: mat, segments: 56, crease: 55 },
-  );
-  for (const p of barrel) parts.push({ material: p.material, geometry: k.doubleSided(p.geometry) });
-  // Rebord extérieur creux : paroi polie du rebord jusqu'au plan des branches, 4 cm plus bas.
-  const zLip = w - 0.008;
-  const zS = zLip - 0.04; // plan des branches
-  parts.push(...k.lathe([[r - 0.014, zLip - 0.002], [r - 0.02, zLip - 0.012], [r - 0.026, zS + 0.004], [r - 0.034, zS - 0.004]], { material: mat, segments: 56, crease: 55 }));
-  // Fond sombre derrière les branches (on voit le tambour entre elles).
-  parts.push(...k.lathe([[r - 0.03, zS - 0.016], [0.07, zS - 0.024], [0.05, zS - 0.03]], { material: 'black', segments: 48, crease: 70 }));
-  // Huit branches droites, radiales, bombées (bord arrondi), à plat dans le plan zS.
-  const rIn = 0.05;
-  const rOut = r - 0.026;
-  const halfIn = 0.02;
-  const halfOut = rOut * Math.tan((12.5 * Math.PI) / 180);
-  /** @type {P2[]} */
-  const outline = [];
-  for (let i = 0; i <= 4; i += 1) {
-    const t = i / 4;
-    outline.push([lerp(rIn, rOut, t), -lerp(halfIn, halfOut, t ** 0.85)]);
-  }
-  for (let i = 4; i >= 0; i -= 1) {
-    const t = i / 4;
-    outline.push([lerp(rIn, rOut, t), lerp(halfIn, halfOut, t ** 0.85)]);
-  }
-  const spoke = k.roundedExtrude(outline, { material: mat, depth: 0.024, bevel: 0.011, bevelSegments: 3 });
-  for (let i = 0; i < 8; i += 1) parts.push(...k.place(spoke, { position: [0, 0, zS], rotation: [0, 0, (2 * Math.PI * i) / 8 + Math.PI / 8] }));
-  // Moyeu poli bombé (diamètre 0,12) et quatre écrous apparents.
-  const hubR = 0.06;
-  parts.push(...k.lathe([[hubR, zS - 0.01], [hubR, zS + 0.014], [hubR * 0.78, zS + 0.026], [0, zS + 0.032]], { material: mat, segments: 40, crease: 50 }));
-  for (let i = 0; i < 4; i += 1) {
-    const a = (2 * Math.PI * i) / 4 + Math.PI / 4;
-    const rr = hubR * 0.6;
-    parts.push(...k.rod([rr * Math.cos(a), rr * Math.sin(a), zS + 0.016], [rr * Math.cos(a), rr * Math.sin(a), zS + 0.038], 0.0085, { material: 'chrome', radial: 6 }));
-  }
-  parts.push(...k.lathe([[0.012, zS + 0.03], [0.012, zS + 0.04], [0, zS + 0.042]], { material: 'black', segments: 16 }));
-  // Disque de frein dans l'ombre, derrière la jante.
-  parts.push(...k.lathe([[r * 0.35, -w + 0.03], [r * 0.85, -w + 0.03], [r * 0.85, -w + 0.045], [r * 0.35, -w + 0.045]], { material: 'black', segments: 40, crease: 50 }));
-  return parts;
-}

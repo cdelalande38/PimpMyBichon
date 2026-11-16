@@ -16,12 +16,11 @@
 //   balayés le long de courbes (outils.mjs). Roues : pneus de la boîte à outils, jantes à trois
 //   branches dédoublées (outils.mjs).
 
-import { disc, motoRim, ovalHalf, ovalProfile, rectProfile, sweep } from './outils.mjs';
+import { disc, ovalHalf, ovalProfile, rectProfile, sweep } from './outils.mjs';
 
 const AX = 0.705; // demi-empattement
 const RF = 0.3; // rayon du pneu avant
 const RR = 0.315; // rayon du pneu arrière
-const RIM = 0.216; // jante de 17 pouces
 const RAKE = (23.5 * Math.PI) / 180;
 const DIR = /** @type {const} */ ([-Math.sin(RAKE), Math.cos(RAKE)]); // axe de direction, vers le haut
 const FORK_Z = 0.105; // demi-écartement des tubes de fourche
@@ -331,21 +330,20 @@ export default function sportive(k) {
   m.add('bequille', stand);
 
   // --- Roues ------------------------------------------------------------------------------------
+  // Deux ancres (axe Z) : l'app y pose la jante et le pneu choisis (d'origine : bâtons orange).
+  // Restent dans l'ancre, et tournent avec elle, les disques de frein et la couronne.
   /** @type {*[]} */
-  const front = [...k.tire({ outer: RF, rim: RIM, width: 0.12, moto: true }), ...motoRim(k, { rim: RIM, width: 0.12, material: 'paint_jantes', hubWidth: 0.17 })];
+  const front = [];
   for (const sz of [-1, 1]) {
     front.push(...k.place(disc(k, { ri: 0.105, ro: 0.155, e: 0.005, material: 'chrome', holes: 12 }), { position: [0, 0, 0.072 * sz] }));
     front.push(...k.place(disc(k, { ri: 0.05, ro: 0.108, e: 0.006, material: 'alu', holes: 5 }), { position: [0, 0, 0.07 * sz] }));
   }
-  m.shared('roue_avant', front);
-  m.instance('roue_avant', 'roue_avant', { position: [AX, RF, 0] });
-
+  m.anchor('roue_avant', { position: [AX, RF, 0] }, front);
   /** @type {*[]} */
-  const rear = [...k.tire({ outer: RR, rim: RIM, width: 0.19, moto: true }), ...motoRim(k, { rim: RIM, width: 0.19, material: 'paint_jantes', hubWidth: 0.2 })];
+  const rear = [];
   rear.push(...k.place(disc(k, { ri: 0.06, ro: 0.11, e: 0.005, material: 'chrome', holes: 8 }), { position: [0, 0, 0.075] }));
   rear.push(...k.place(disc(k, { ri: 0.055, ro: 0.1, e: 0.006, material: 'paint_fourche', teeth: 42, holes: 5 }), { position: [0, 0, zc] }));
-  m.shared('roue_arriere', rear);
-  m.instance('roue_arriere', 'roue_arriere', { position: [-AX, RR, 0] });
+  m.anchor('roue_arriere', { position: [-AX, RR, 0] }, rear);
 
   return m;
 }

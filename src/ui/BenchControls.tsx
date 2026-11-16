@@ -18,6 +18,8 @@ import { PaintControls } from './paint/PaintControls.tsx';
 import { useLevelScroll, useRevealPressed } from './scroll.ts';
 import { SortieEntree } from './drive/SortieEntree.tsx';
 import { VehiclePicker } from './vehicles/VehiclePicker.tsx';
+import { SuspensionPanel } from './wheels/SuspensionPanel.tsx';
+import { WheelsPanel } from './wheels/WheelsPanel.tsx';
 
 function AmbianceChoices() {
   const current = useBench((state) => state.ambiance);
@@ -41,6 +43,8 @@ function AmbianceChoices() {
 export const ENTRY_BODIES: Partial<Record<EntryId, () => ReactNode>> = {
   vehicule: () => <VehiclePicker />,
   peinture: () => <PaintControls />,
+  roues: () => <WheelsPanel />,
+  suspension: () => <SuspensionPanel />,
   preparation: () => <EnginePanel />,
   ambiance: () => <AmbianceChoices />,
   sortie: () => <SortieEntree />,

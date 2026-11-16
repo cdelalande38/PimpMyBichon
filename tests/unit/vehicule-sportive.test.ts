@@ -7,6 +7,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { parseGlb } from '../../tools/lib/glb.mjs';
 import { buildVehicle } from '../../tools/vehicles/build.mjs';
 import * as kit from '../../tools/vehicles/kit.mjs';
+import { buildRim, buildTire, readCatalogue } from '../../tools/vehicles/roues.mjs';
+import { outerRadius } from '../../src/data/wheels.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
 
@@ -14,6 +16,13 @@ const manifest = JSON.parse(readFileSync(new URL('../../public/assets/vehicles/s
 
 /** Écart relatif sous 5 %. */
 const near = (value: number, expected: number) => expect(Math.abs(value - expected) / expected).toBeLessThan(0.05);
+
+/** Matériaux des roues partagées que l'app pose sur les ancres (jantes du genre, tous les pneus). */
+function sharedWheelMaterials(kind: 'car' | 'bike'): string[] {
+  const catalogue = readCatalogue();
+  const parts = [...catalogue.rims.filter((rim) => rim.kind === kind).flatMap((rim) => buildRim(rim, catalogue)), ...catalogue.tires.flatMap((tire) => buildTire(tire, kind, catalogue))];
+  return [...new Set(parts.map((part) => part.material))];
+}
 
 describe('manifeste de la sportive', () => {
   it('décrit le substitut déclaré, moto au rang 40 de la vague 1', () => {
@@ -93,8 +102,13 @@ describe('modèle de la sportive', () => {
       expect(name).toMatch(kit.MATERIAL_NAME);
       if (name.startsWith('paint_')) expect(zoneMaterials).toContain(name);
     }
-    for (const mat of zoneMaterials) expect(summary.materials).toContain(mat);
-    for (const role of ['glass', 'lamp', 'tail', 'signal', 'chrome', 'rubber', 'black', 'alu']) expect(summary.materials).toContain(role);
+    // La zone des jantes est portée par les jantes partagées (tools/vehicles/roues.mjs), que l'app pose sur les ancres.
+    const fitZone = manifest.wheels?.fit?.zone;
+    expect(fitZone).toBeDefined();
+    for (const zone of manifest.zones) for (const mat of zone.materials) if (zone.id !== fitZone) expect(summary.materials).toContain(mat);
+    const wheelMaterials = sharedWheelMaterials(manifest.kind);
+    expect(wheelMaterials).toContain(`paint_${fitZone}`);
+    for (const role of ['glass', 'lamp', 'tail', 'signal', 'chrome', 'rubber', 'black', 'alu']) expect([...summary.materials, ...wheelMaterials]).toContain(role);
   });
 
   it('tient les budgets : 40 000 à 120 000 triangles, moins de 60 appels de dessin', () => {
@@ -104,19 +118,21 @@ describe('modèle de la sportive', () => {
   });
 
   it('pose ses roues sur l’empattement de 1,41 m, aux diamètres de la fiche', () => {
-    expect(summary.min[1]).toBeCloseTo(0, 2);
+    // Les roues sont posées par l'app : la béquille d'atelier seule touche le sol.
+    expect(nodeBox('bequille').min[1]).toBeLessThan(0.01);
+    expect(manifest.wheels!.grounded).toContain('bequille');
     const wheels = json.nodes.filter((n: { name: string }) => n.name.startsWith('roue_'));
     expect(wheels.map((n: { name: string }) => n.name).sort()).toEqual(['roue_arriere', 'roue_avant']);
     const at = (name: string) => wheels.find((n: { name: string }) => n.name === name).translation as number[];
     near(at('roue_avant')[0]! - at('roue_arriere')[0]!, 1.41);
     expect(at('roue_avant')[0]! + at('roue_arriere')[0]!).toBeCloseTo(0, 3);
     expect(at('roue_avant')[2]).toBeCloseTo(0, 3);
-    const front = nodeBox('roue_avant');
-    const rear = nodeBox('roue_arriere');
-    near(front.max[1]! - front.min[1]!, 0.6);
-    near(rear.max[1]! - rear.min[1]!, 0.63);
-    expect(front.min[1]).toBeCloseTo(0, 2);
-    expect(rear.min[1]).toBeCloseTo(0, 2);
+    // Diamètres d'origine du manifeste (0,60 et 0,63), centre de chaque ancre à son rayon : au sol.
+    const fit = manifest.wheels!.fit!;
+    near(2 * outerRadius(fit.front), 0.6);
+    near(2 * outerRadius(fit.rear!), 0.63);
+    expect(at('roue_avant')[1]!).toBeCloseTo(outerRadius(fit.front), 2);
+    expect(at('roue_arriere')[1]!).toBeCloseTo(outerRadius(fit.rear!), 2);
   });
 
   it('a les cotes du gabarit à 5 % près', () => {

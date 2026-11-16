@@ -6,6 +6,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { parseGlb } from '../../tools/lib/glb.mjs';
 import { buildVehicle } from '../../tools/vehicles/build.mjs';
 import * as kit from '../../tools/vehicles/kit.mjs';
+import { buildRim, buildTire, readCatalogue } from '../../tools/vehicles/roues.mjs';
+import { outerRadius } from '../../src/data/wheels.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
 
@@ -13,6 +15,13 @@ const manifest = JSON.parse(readFileSync(new URL('../../public/assets/vehicles/v
 
 /** Écart relatif sous 5 %. */
 const near = (value: number, expected: number) => expect(Math.abs(value - expected) / expected).toBeLessThan(0.05);
+
+/** Matériaux des roues partagées que l'app pose sur les ancres (jantes du genre, tous les pneus). */
+function sharedWheelMaterials(kind: 'car' | 'bike'): string[] {
+  const catalogue = readCatalogue();
+  const parts = [...catalogue.rims.filter((rim) => rim.kind === kind).flatMap((rim) => buildRim(rim, catalogue)), ...catalogue.tires.flatMap((tire) => buildTire(tire, kind, catalogue))];
+  return [...new Set(parts.map((part) => part.material))];
+}
 
 describe('manifeste du van', () => {
   it('décrit le substitut déclaré, au rang 20 de la vague 1', () => {
@@ -106,8 +115,13 @@ describe('modèle du van', () => {
       expect(name).toMatch(kit.MATERIAL_NAME);
       if (name.startsWith('paint_')) expect(zoneMaterials).toContain(name);
     }
-    for (const mat of zoneMaterials) expect(summary.materials).toContain(mat);
-    for (const role of ['glass', 'lamp', 'tail', 'signal', 'chrome', 'rubber', 'black', 'leather']) expect(summary.materials).toContain(role);
+    // La zone des jantes est portée par les jantes partagées (tools/vehicles/roues.mjs), que l'app pose sur les ancres.
+    const fitZone = manifest.wheels?.fit?.zone;
+    expect(fitZone).toBeDefined();
+    for (const zone of manifest.zones) for (const mat of zone.materials) if (zone.id !== fitZone) expect(summary.materials).toContain(mat);
+    const wheelMaterials = sharedWheelMaterials(manifest.kind);
+    expect(wheelMaterials).toContain(`paint_${fitZone}`);
+    for (const role of ['glass', 'lamp', 'tail', 'signal', 'chrome', 'rubber', 'black', 'leather']) expect([...summary.materials, ...wheelMaterials]).toContain(role);
   });
 
   it('tient les budgets : 40 000 à 120 000 triangles, moins de 60 appels de dessin', () => {
@@ -117,7 +131,8 @@ describe('modèle du van', () => {
   });
 
   it('pose ses roues de 0,66 au centre de l’empattement de 3,00 m, sur des voies de 1,63', () => {
-    expect(summary.min[1]).toBeCloseTo(0, 2);
+    // Caisse seule (les roues sont posées par l'app) : son point le plus bas est la garde au sol du manifeste.
+    expect(summary.min[1]).toBeCloseTo(manifest.wheels!.floor, 2);
     const wheels = json.nodes.filter((n: { name: string }) => n.name.startsWith('roue_'));
     expect(wheels.map((n: { name: string }) => n.name).sort()).toEqual(['roue_arriere_droite', 'roue_arriere_gauche', 'roue_avant_droite', 'roue_avant_gauche']);
     const at = (name: string) => wheels.find((n: { name: string }) => n.name === name).translation as number[];
@@ -125,9 +140,11 @@ describe('modèle du van', () => {
     expect(at('roue_arriere_droite')[0]).toBeCloseTo(-1.5, 3);
     near(at('roue_avant_droite')[2]! - at('roue_avant_gauche')[2]!, 1.63);
     near(at('roue_arriere_droite')[2]! - at('roue_arriere_gauche')[2]!, 1.63);
-    const wheel = nodeBox('roue_avant_droite');
-    near(wheel.max[1]! - wheel.min[1]!, 0.66);
-    expect(wheel.min[1]).toBeCloseTo(0, 2);
+    // Ancres sans maillage ; roue d'origine de 0,66 (cotes du manifeste), centre à son rayon : au sol.
+    expect(wheels.every((n: { mesh?: number }) => n.mesh === undefined)).toBe(true);
+    const radius = outerRadius(manifest.wheels!.fit!.front);
+    near(2 * radius, 0.66);
+    for (const n of wheels) expect((n.translation as number[])[1]!).toBeCloseTo(radius, 2);
   });
 
   it('a les cotes du gabarit à 5 % près (caisse hors rétroviseurs)', () => {

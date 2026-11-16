@@ -1,0 +1,24 @@
+{
+  "about": "Roues partagées entre véhicules (§ 5.4, § 8). Une jante ou un pneu = une ligne ici ; npm run vehicles:build fabrique ses fichiers (tools/vehicles/roues.mjs), l'app les pose sur les ancres roue_* des véhicules compatibles. Substituts déclarés : placeholder_jantes, placeholder_pneus (TODO_ASSETS.md).",
+  "reference": {
+    "car": { "rim": 0.2, "outer": 0.3, "width": 0.2 },
+    "bike": { "rim": 0.2, "outer": 0.32, "width": 0.15 }
+  },
+  "rims": [
+    { "id": "tole", "kind": "car", "style": "tole", "label": "Tôle et enjoliveur", "hint": "La jante d'usine, voile percé et chapeau chromé", "holes": 8 },
+    { "id": "huit_branches", "kind": "car", "style": "branches_plates", "label": "Huit branches", "hint": "Alliage poli, huit branches droites", "spokes": 8 },
+    { "id": "flasque", "kind": "car", "style": "flasque", "label": "Flasque pleine", "hint": "Un disque lisse, l'air des records de vitesse" },
+    { "id": "cinq_batons", "kind": "car", "style": "batons", "label": "Cinq bâtons", "hint": "Cinq barres franches, disque de frein en vue", "spokes": 5 },
+    { "id": "rayons_fils", "kind": "car", "style": "rayons", "label": "Rayons fils", "hint": "Soixante-douze rayons croisés, écrou central", "spokes": 72 },
+    { "id": "deport_profond", "kind": "car", "style": "deport", "label": "Déport profond", "hint": "Grande lèvre chromée, centre enfoncé", "spokes": 10 },
+    { "id": "moto_rayons", "kind": "bike", "style": "rayons", "label": "Rayons", "hint": "Quarante rayons fils, moyeu alu", "spokes": 40 },
+    { "id": "moto_batons", "kind": "bike", "style": "batons", "label": "Bâtons", "hint": "Cinq bâtons coulés, moyeu large", "spokes": 5 },
+    { "id": "moto_pleine", "kind": "bike", "style": "pleine", "label": "Pleine", "hint": "Flasque plein, des deux côtés" }
+  ],
+  "tires": [
+    { "id": "route", "label": "Route", "hint": "Pneu de tous les jours, un liseré fin", "mark": "lisere", "color": "#2e2e32", "colorLabel": "Couleur du liseré" },
+    { "id": "flanc_blanc", "label": "Flanc blanc", "hint": "Le flanc large des années cinquante", "mark": "flanc", "color": "#efece2", "colorLabel": "Couleur du flanc" },
+    { "id": "lettrage", "label": "Lettrage blanc", "hint": "Lettres en relief sur le flanc", "mark": "lettres", "color": "#efece2", "colorLabel": "Couleur des lettres" },
+    { "id": "tout_terrain", "label": "Tout-terrain", "hint": "Gros pavés, pour la terre et la boue", "mark": "lisere", "tread": "pavés", "color": "#2e2e32", "colorLabel": "Couleur du liseré" }
+  ]
+}

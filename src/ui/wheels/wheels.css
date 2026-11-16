@@ -1,0 +1,177 @@
+/* Entrées « Roues » et « Suspension » du dock : rangées qui défilent, curseurs, commandes de 48 px
+   au moins, dans le tiers bas. Un volet à la fois : la hauteur du menu ne bouge pas d'un choix à
+   l'autre. */
+
+.wheels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.wheels-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.wheels-volets {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.wheels-volet {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 0.5rem;
+  border: 1px solid var(--edge);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  color: var(--chrome);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.wheels-volet[aria-pressed='true'] {
+  border-color: var(--ambre);
+  color: var(--ambre);
+}
+
+.wheels-reset {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+}
+
+.wheels-note {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.75rem;
+}
+
+.wheels-note > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.wheels-link {
+  flex: none;
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+}
+
+.wheels-empty {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.875rem;
+}
+
+.wheels-swatches {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.wheels-swatches::-webkit-scrollbar {
+  display: none;
+}
+
+.wheels-swatch-label {
+  flex: none;
+  margin-right: 0.25rem;
+  color: var(--mute);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.wheels-swatch {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 2px solid var(--edge);
+  border-radius: 50%;
+  color: var(--night);
+  font-weight: 700;
+}
+
+.wheels-swatch[aria-pressed='true'] {
+  border-color: var(--ambre);
+  box-shadow: 0 0 0 2px var(--night) inset;
+}
+
+.wheels-swatch-free span {
+  pointer-events: none;
+  text-shadow: 0 0 3px var(--chrome);
+}
+
+.wheels-swatch-free input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.wheels-slider > .wheels-size {
+  flex: none;
+  width: 6.5rem;
+  min-width: 0;
+  color: var(--chrome);
+  font-family: var(--display);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Puces des cotes : nom et valeur sur deux lignes, plus étroites que les puces de choix. */
+.wheels-cote {
+  min-width: 4.5rem;
+  padding: 0.375rem 0.75rem;
+}
+
+/* Dock compact : les indices des puces se taisent (la valeur des cotes reste). */
+footer.dock[data-taille='compact'] .wheels .chip:not(.wheels-cote) small {
+  display: none;
+}
+
+.wheels-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.wheels-slider > span {
+  flex: none;
+  min-width: 5.5rem;
+}
+
+.wheels-slider input {
+  flex: 1;
+  min-width: 0;
+  height: var(--tap);
+  accent-color: var(--ambre);
+}
+
+.wheels-slider output {
+  min-width: 4.5rem;
+  color: var(--mute);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

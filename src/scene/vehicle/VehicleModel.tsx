@@ -2,7 +2,9 @@
 // la demande d'après son manifeste. Un modèle aux conventions du § 8 est habillé par le nom de ses
 // matériaux (src/data/materialRoles.ts) ; un modèle qui ne les suit pas (le banc d'essai,
 // placeholder_banc) l'est par la section « adapt » de son manifeste. Ce composant ne connaît
-// aucun véhicule ni aucun nom de matériau propre à un modèle.
+// aucun véhicule ni aucun nom de matériau propre à un modèle. Les roues (nœuds roue_*, ou ceux du
+// manifeste) sont rangées à part de la caisse : l'atelier y pose la jante et le pneu choisis, et
+// l'assiette déplace la caisse seule (src/scene/vehicle/wheels.ts).
 
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
@@ -35,6 +37,9 @@ import { useRenderStats } from '../../render/renderStats.ts';
 import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
 import { useBench } from '../../state/bench.ts';
 import { resolvePaints, useBuilds } from '../../state/builds.ts';
+import { resolveWheels, TIRE_PAINT, WHEEL_SLOTS, wheelFiles } from '../../data/wheels.ts';
+import type { Build } from '../../data/vehicleTypes.ts';
+import { createMarkMaterial, mergeGround, mountWheels, preloadWheels, useBodyPose, useWheelMounts, useWheelSources, type WheelAnchor, type WheelMount, type WheelRig } from './wheels.ts';
 
 const BASE = import.meta.env.BASE_URL;
 
@@ -69,6 +74,8 @@ export interface Prepared extends VehicleMeasure {
   paints: MeshPhysicalMaterial[];
   /** Matériau de peinture de chaque zone du manifeste présente dans le modèle. */
   zones: ReadonlyMap<string, MeshPhysicalMaterial>;
+  /** Caisse, roues et ancres : ce que l'assiette et le choix des roues déplacent. */
+  wheels: WheelRig;
   /**
    * Ce que la préparation a créé, à libérer quand le modèle change ou quitte la scène. Le reste
    * (géométries d'origine, matériaux, textures, dont les cartes de normales reprises par la
@@ -132,6 +139,27 @@ function makeLamp(material: Material, color: string, intensity: number): void {
   material.emissiveIntensity = intensity;
 }
 
+/** Nœuds de roue : convention de nommage des modèles (aucun identifiant de véhicule). */
+export const WHEEL_NODE = /^(roue|wheel)_/i;
+
+/**
+ * Nœuds rangés à part de la caisse : roues (convention `roue_*`, ou liste `wheels.nodes` du
+ * manifeste) et pièces posées au sol (`wheels.grounded` : béquille). Nœuds de tête seulement.
+ */
+function looseNodes(scene: Object3D, vehicle: VehicleManifest): { wheels: Object3D[]; grounded: Object3D[] } {
+  const named = new Set(vehicle.wheels?.nodes ?? []);
+  const grounded = new Set(vehicle.wheels?.grounded ?? []);
+  const isWheel = (node: Object3D) => WHEEL_NODE.test(node.name) || named.has(node.name);
+  const found = { wheels: [] as Object3D[], grounded: [] as Object3D[] };
+  const visit = (node: Object3D) => {
+    if (isWheel(node)) found.wheels.push(node);
+    else if (grounded.has(node.name)) found.grounded.push(node);
+    else for (const child of node.children) visit(child);
+  };
+  visit(scene);
+  return found;
+}
+
 /** Copie le modèle, pose peinture, rôles et adaptation, le pose au sol, centré, longueur sur X. */
 export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   const scene = source.clone(true);
@@ -139,6 +167,14 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   scene.traverse((object) => {
     if (object instanceof Mesh) meshes.push(object);
   });
+  // Roues et pièces au sol : jamais fusionnées avec la caisse, qui bouge sans elles.
+  const loose = looseNodes(scene, vehicle);
+  const apart = new Set<Mesh>();
+  for (const node of [...loose.wheels, ...loose.grounded]) {
+    node.traverse((object) => {
+      if (object instanceof Mesh) apart.add(object);
+    });
+  }
   const all = new Set<Material>();
   for (const mesh of meshes) for (const material of materialsOf(mesh)) all.add(material);
   const owned: Material[] = [];
@@ -165,6 +201,15 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
       if (Array.isArray(mesh.material)) mesh.material[index] = paint;
       else mesh.material = paint;
     });
+  }
+  // Zone des jantes posées par l'atelier : son matériau existe même si le modèle n'a pas de jante.
+  const rimZone = vehicle.wheels?.fit?.zone;
+  const rimZoneData = vehicle.zones.find((zone) => zone.id === rimZone);
+  if (rimZoneData && !zones.has(rimZoneData.id)) {
+    const stub = new MeshStandardMaterial();
+    stub.name = rimZoneData.materials[0] ?? `paint_${rimZoneData.id}`;
+    zones.set(rimZoneData.id, createPaintMaterial(stub));
+    stub.dispose();
   }
   const paints = [...zones.values()];
   owned.push(...paints);
@@ -198,7 +243,7 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   scene.updateMatrixWorld(true);
   const groups = new Map<string, Mesh[]>();
   for (const mesh of meshes) {
-    if (Array.isArray(mesh.material)) continue;
+    if (Array.isArray(mesh.material) || apart.has(mesh)) continue;
     const { geometry } = mesh;
     const signature = [
       mesh.material.uuid,
@@ -232,7 +277,13 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   const turn = new Group();
   // Les pièces fusionnées sont déjà dans le repère du parent du modèle : elles vont à côté.
   turn.add(scene, merged);
-  root.add(turn);
+  // La caisse (que l'assiette déplace) et, à côté, les roues et ce qui reste au sol.
+  const body = new Group();
+  body.name = 'caisse';
+  body.add(turn);
+  const ground = new Group();
+  ground.name = 'au_sol';
+  root.add(body, ground);
   // Ordre de dessin : les pièces opaques du véhicule avant le décor (il occupe le milieu de l'image,
   // le décor caché derrière lui n'est plus calculé) ; les vitrages, transparents, gardent le leur.
   turn.traverse((object) => {
@@ -245,9 +296,32 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   turn.rotation.y = (quarterTurns * Math.PI) / 2;
   turn.updateMatrixWorld(true);
   const box = new Box3().setFromObject(turn, true);
+  // Ancre sans maillage (la roue est posée par l'atelier) : la roue d'origine compte dans la boîte,
+  // son centre à son rayon au-dessus du sol (modèle aux conventions, au sol).
+  const at = new Vector3();
+  for (const node of loose.wheels) {
+    if (new Box3().setFromObject(node, true).isEmpty()) {
+      node.getWorldPosition(at);
+      const r = Math.max(0.05, at.y - box.min.y);
+      box.expandByPoint(at.clone().addScalar(r));
+      box.expandByPoint(at.clone().subScalar(r));
+    }
+  }
   size = box.getSize(new Vector3());
   const center = box.getCenter(new Vector3());
   turn.position.set(-center.x, -box.min.y, -center.z);
+
+  // Roues et pièces au sol rangées à part, à la même place.
+  root.updateMatrixWorld(true);
+  const anchors: WheelAnchor[] = [];
+  const own = vehicle.wheels?.fit === undefined;
+  for (const node of loose.wheels) {
+    const solid = new Box3().setFromObject(node, true);
+    const middle = solid.isEmpty() ? node.getWorldPosition(new Vector3()) : solid.getCenter(new Vector3());
+    ground.attach(node);
+    anchors.push({ node, base: { x: node.position.x, y: node.position.y, z: node.position.z }, front: middle.x > 0, own });
+  }
+  for (const node of loose.grounded) ground.attach(node);
 
   return {
     root,
@@ -256,8 +330,64 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
     halfLength: size.x / 2,
     halfWidth: size.z / 2,
     height: size.y,
+    wheels: { body, ground, anchors },
     owned: { geometries: mergedGeometries, materials: owned },
   };
+}
+
+/** Ce qui, dans un build, touche aux roues posées (la couleur du pneu à part) : une clé stable. */
+function wheelSignature(build: Build | undefined): string {
+  return JSON.stringify({
+    parts: { [WHEEL_SLOTS.rim]: build?.parts?.[WHEEL_SLOTS.rim], [WHEEL_SLOTS.tire]: build?.parts?.[WHEEL_SLOTS.tire] },
+    tune: build?.tune ?? {},
+  });
+}
+
+const NO_MOUNT: WheelMount = Object.freeze({ stamp: 0, spins: [] });
+
+/**
+ * Roues et assiette du véhicule préparé, d'après son build : pose la jante et le pneu choisis sur
+ * chaque ancre, à la cote choisie, et la caisse à sa hauteur. Rend un tampon qui change à chaque
+ * pose (l'ombre de contact se refait) et les nœuds qui tournent (sortie de nuit). `merge` : au
+ * garage, les roues immobiles sont fusionnées par matériau.
+ */
+
+export function useVehicleWheels(prepared: Prepared, vehicle: VehicleManifest, invalidate: () => void, options: { merge: boolean }): WheelMount {
+  const { merge } = options;
+  const signature = useBuilds((state) => wheelSignature(state.builds[vehicle.id]));
+  const color = useBuilds((state) => state.builds[vehicle.id]?.partPaints?.[TIRE_PAINT]?.color);
+  const resolved = useMemo(() => resolveWheels(vehicle, JSON.parse(signature) as Build), [vehicle, signature]);
+  const sources = useWheelSources(wheelFiles(vehicle, resolved));
+  const mark = useMemo(() => createMarkMaterial(), []);
+  useEffect(() => () => mark.dispose(), [mark]);
+  useEffect(() => {
+    if (vehicle.wheels?.fit) preloadWheels(vehicle);
+  }, [vehicle]);
+  const key = prepared.root.uuid;
+  const mount = useWheelMounts((state) => state.mounts[key]) ?? NO_MOUNT;
+  useLayoutEffect(() => {
+    if (!resolved) return undefined;
+    const rimPaint = vehicle.wheels?.fit ? prepared.zones.get(vehicle.wheels.fit.zone) : undefined;
+    const mounted = mountWheels(prepared.wheels, vehicle, resolved, sources ? { rim: sources.rim, tire: sources.tire, rimPaint, mark } : null);
+    // Au garage, rien ne tourne : roues et pièces au sol fusionnées par matériau.
+    const unmerge = merge ? mergeGround(prepared.wheels) : null;
+    useBodyPose.getState().setPose(vehicle.id, mounted.pose);
+    useWheelMounts.getState().publish(key, mounted.spins);
+    invalidate();
+    return () => {
+      unmerge?.();
+      mounted.dispose();
+    };
+  }, [prepared, key, vehicle, resolved, sources, mark, invalidate, merge]);
+  useEffect(() => () => useWheelMounts.getState().publish(key, null), [key]);
+  // Couleur de la marque du pneu : repeinte sans reposer les roues.
+  const tireColor = resolved?.swap ? (color ?? resolved.tire?.color ?? '#efece2') : null;
+  useLayoutEffect(() => {
+    if (tireColor === null) return;
+    mark.color.set(tireColor);
+    invalidate();
+  }, [mark, tireColor, invalidate]);
+  return mount;
 }
 
 /** Libère ce que `prepare` a créé (revue n° 12), sans toucher à ce que le cache de chargement partage. */
@@ -321,7 +451,7 @@ export function forgetModel(vehicle: Pick<VehicleManifest, 'id' | 'glb'>): void 
  * première image après sa pose ; remontée à chaque contexte WebGL rendu (clé d'époque), libérée au
  * démontage. Ses trois programmes sont lancés d'avance, avec ceux du véhicule.
  */
-function VehicleShadow({ caster, halfLength, halfWidth, height }: VehicleMeasure & { caster: Object3D }) {
+function VehicleShadow({ caster, halfLength, halfWidth, height, stamp }: VehicleMeasure & { caster: Object3D; stamp: number }) {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   const invalidate = useThree((state) => state.invalidate);
@@ -332,7 +462,7 @@ function VehicleShadow({ caster, halfLength, halfWidth, height }: VehicleMeasure
     pending.current = true;
     rig.compile(gl);
     invalidate();
-  }, [gl, rig, caster, invalidate]);
+  }, [gl, rig, caster, invalidate, stamp]);
   useFrame(() => {
     if (!pending.current) return;
     pending.current = false;
@@ -378,6 +508,9 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   // Cible liée pendant les compilations d'avance : la clé de programme dépend d'une cible non nulle.
   const warmTarget = useMemo(() => new WebGLRenderTarget(1, 1, { depthBuffer: false }), []);
   useEffect(() => () => warmTarget.dispose(), [warmTarget]);
+
+  // Roues et assiette : posées avant la première image et avant la compilation d'avance, reposées à chaque choix.
+  const { stamp } = useVehicleWheels(prepared, vehicle, invalidate, { merge: true });
 
   // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
   // vernis), et compilerait pour rien une variante de plus pendant le démarrage. Rendu à la
@@ -454,7 +587,7 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
           avec le modèle déjà en place. */}
       {/* Hors de la sonde : elle n'y entrerait qu'aux captures faites après le modèle (revue n° 7). */}
       <group userData={{ hideInProbe: true }}>
-        <VehicleShadow key={epoch} caster={prepared.root} halfLength={halfLength} halfWidth={halfWidth} height={height} />
+        <VehicleShadow key={epoch} caster={prepared.root} halfLength={halfLength} halfWidth={halfWidth} height={height} stamp={stamp} />
       </group>
     </>
   );

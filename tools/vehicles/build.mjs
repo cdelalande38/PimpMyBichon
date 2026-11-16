@@ -1,20 +1,27 @@
 // @ts-check
 // Générateur des véhicules substituts : lit assets-src/vehicles/<id>/model.mjs, écrit
 // public/assets/vehicles/<id>/body.glb et affiche, par véhicule : triangles, matériaux, nœuds,
-// boîte englobante, poids. Node seul, déterministe. Mode d'emploi : assets-src/vehicles/LISEZ-MOI.md.
+// boîte englobante, poids. Fabrique aussi les roues partagées (jantes et pneus du catalogue
+// public/assets/shared/wheels/catalogue.json, modelés par tools/vehicles/roues.mjs) et compte le
+// véhicule complet, roues posées comprises, contre les budgets du § 8. Node seul, déterministe.
+// Mode d'emploi : assets-src/vehicles/LISEZ-MOI.md.
 //
 //   node tools/vehicles/build.mjs [id…]      (sans id : tous les dossiers qui ont un model.mjs)
 //   npm run vehicles:build [-- id…]
 
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { countGeometry, parseGlb } from '../lib/glb.mjs';
 import * as kit from './kit.mjs';
+import { buildRim, buildTire, readCatalogue, rimFile, tireFile } from './roues.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, 'assets-src', 'vehicles');
 const OUT = join(ROOT, 'public', 'assets', 'vehicles');
+const WHEELS_OUT = join(ROOT, 'public', 'assets', 'shared', 'wheels');
+/** Budgets d'un véhicule complet à l'écran (§ 8) : maximum, roues posées comprises. */
+export const VEHICLE_MAX = Object.freeze({ triangles: 400_000, drawCalls: 80 });
 
 /**
  * Construit un véhicule et rend ses octets et son résumé.
@@ -95,6 +102,50 @@ function rotate(p, q) {
   return [ix * qw + iw * -qx + iy * -qz - iz * -qy, iy * qw + iw * -qy + iz * -qx - ix * -qz, iz * qw + iw * -qz + ix * -qy - iy * -qx];
 }
 
+/**
+ * Fabrique les roues partagées : une jante par dessin, un pneu par type et par genre.
+ * @returns {Map<string, ReturnType<typeof summarize>>} résumé par nom de fichier
+ */
+export function buildWheels() {
+  const catalogue = readCatalogue();
+  /** @type {Map<string, ReturnType<typeof summarize>>} */
+  const out = new Map();
+  mkdirSync(WHEELS_OUT, { recursive: true });
+  /** @param {string} file @param {string} node @param {import('./kit.mjs').Parts} parts */
+  const write = (file, node, parts) => {
+    const m = new kit.Model(file.replace(/\.glb$/, ''));
+    m.add(node, parts);
+    const { bytes } = m.toGlb();
+    writeFileSync(join(WHEELS_OUT, file), bytes);
+    out.set(file, summarize(bytes));
+  };
+  for (const rim of catalogue.rims) write(rimFile(rim.id), 'jante', buildRim(rim, catalogue));
+  for (const tire of catalogue.tires) for (const kind of /** @type {const} */ (['car', 'bike'])) write(tireFile(tire.id, kind), 'pneu', buildTire(tire, kind, catalogue));
+  return out;
+}
+
+/**
+ * Véhicule complet, pire cas : la caisse et, sur chaque ancre roue_*, la jante et le pneu les plus
+ * lourds de son genre.
+ * @param {string} id @param {ReturnType<typeof summarize>} body @param {Map<string, ReturnType<typeof summarize>>} wheels
+ */
+function withWheels(id, body, wheels) {
+  const manifest = JSON.parse(readFileSync(join(OUT, id, 'vehicle.json'), 'utf8'));
+  const fit = manifest.wheels?.fit;
+  if (!fit) return null;
+  const catalogue = readCatalogue();
+  const kind = manifest.kind === 'bike' ? 'bike' : 'car';
+  const rims = catalogue.rims.filter((r) => r.kind === kind && (!fit.rims || fit.rims.includes(r.id))).map((r) => wheels.get(rimFile(r.id)));
+  const tires = catalogue.tires.map((t) => wheels.get(tireFile(t.id, kind)));
+  const worst = (/** @type {(ReturnType<typeof summarize> | undefined)[]} */ list, /** @type {'triangles' | 'primitives'} */ key) => Math.max(0, ...list.map((s) => s?.[key] ?? 0));
+  const anchors = body.nodes.filter((n) => /^roue_/.test(n)).length;
+  return {
+    anchors,
+    triangles: body.triangles + anchors * (worst(rims, 'triangles') + worst(tires, 'triangles')),
+    drawCalls: body.primitives + anchors * (worst(rims, 'primitives') + worst(tires, 'primitives')),
+  };
+}
+
 async function main() {
   const args = process.argv.slice(2).filter((a) => !a.startsWith('-'));
   const ids = args.length > 0 ? args : existsSync(SRC) ? readdirSync(SRC).filter((d) => existsSync(join(SRC, d, 'model.mjs'))).sort() : [];
@@ -103,6 +154,18 @@ async function main() {
     return;
   }
   let failed = 0;
+  /** @type {Map<string, ReturnType<typeof summarize>>} */
+  let wheels = new Map();
+  try {
+    const started = Date.now();
+    wheels = buildWheels();
+    const list = [...wheels].map(([file, s]) => `${file.replace(/\.glb$/, '')} ${s.triangles.toLocaleString('fr-FR')} tr. ${s.primitives} app.`);
+    console.log(`roues partagées : ${wheels.size} fichiers en ${((Date.now() - started) / 1000).toFixed(1)} s → ${relative(ROOT, WHEELS_OUT)}`);
+    console.log(`  ${list.join(' · ')}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`roues partagées : ${error instanceof Error ? error.message : error}`);
+  }
   for (const id of ids) {
     const started = Date.now();
     try {
@@ -116,6 +179,15 @@ async function main() {
           `boîte ${size} m (x ${s.min[0]} à ${s.max[0]}, y ${s.min[1]} à ${s.max[1]}, z ${s.min[2]} à ${s.max[2]}) · ${(s.bytes / 1024).toFixed(0)} Kio · ${((Date.now() - started) / 1000).toFixed(1)} s`,
       );
       console.log(`  matériaux : ${s.materials.join(', ')}`);
+      const full = withWheels(id, s, wheels);
+      if (full) {
+        const over = full.triangles > VEHICLE_MAX.triangles || full.drawCalls > VEHICLE_MAX.drawCalls;
+        const line = `  complet, roues les plus lourdes sur ${full.anchors} ancres : ${full.triangles.toLocaleString('fr-FR')} triangles · ${full.drawCalls} appels de dessin (maximum § 8 : ${VEHICLE_MAX.triangles.toLocaleString('fr-FR')} et ${VEHICLE_MAX.drawCalls})`;
+        if (over) {
+          failed += 1;
+          console.error(`${line} : HORS BUDGET`);
+        } else console.log(line);
+      }
       console.log(`  → ${relative(ROOT, out)}`);
     } catch (error) {
       failed += 1;

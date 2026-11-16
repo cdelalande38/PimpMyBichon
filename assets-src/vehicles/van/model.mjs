@@ -357,10 +357,10 @@ export default function van(k) {
   m.add('accessoires', [...k.symmetric([...mirror, ...handles, ...repeater, ...fog]), ...front, ...flap, ...rest]);
 
   // Roues : jante tôle à 16 trous, moyeu noir ; un maillage partagé posé quatre fois.
-  m.shared('roue', k.wheel({ outer: WHEEL_R, rim: 0.216, width: 0.215, style: 'tole', material: 'paint_jantes', holes: 16, hubRadius: 0.12, segments: 40 }));
-  m.instance('roue_avant_droite', 'roue', { position: [AXLES[0], WHEEL_R, TRACK_Z] });
-  m.instance('roue_avant_gauche', 'roue', { position: [AXLES[0], WHEEL_R, -TRACK_Z], rotation: [0, Math.PI, 0] });
-  m.instance('roue_arriere_droite', 'roue', { position: [AXLES[1], WHEEL_R, TRACK_Z] });
-  m.instance('roue_arriere_gauche', 'roue', { position: [AXLES[1], WHEEL_R, -TRACK_Z], rotation: [0, Math.PI, 0] });
+  // Roues : quatre ancres ; l'app y pose la jante et les pneus choisis (d'origine : tôle, 215/55 R17).
+  m.anchor('roue_avant_droite', { position: [AXLES[0], WHEEL_R, TRACK_Z] });
+  m.anchor('roue_avant_gauche', { position: [AXLES[0], WHEEL_R, -TRACK_Z], rotation: [0, Math.PI, 0] });
+  m.anchor('roue_arriere_droite', { position: [AXLES[1], WHEEL_R, TRACK_Z] });
+  m.anchor('roue_arriere_gauche', { position: [AXLES[1], WHEEL_R, -TRACK_Z], rotation: [0, Math.PI, 0] });
   return m;
 }

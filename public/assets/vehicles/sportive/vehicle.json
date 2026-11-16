@@ -83,5 +83,20 @@
     "boost": "atmo",
     "power": 172,
     "sound": "quatre-en-ligne-moto"
+  },
+  "wheels": {
+    "fit": {
+      "zone": "jantes",
+      "rim": "moto_batons",
+      "tire": "route",
+      "front": { "diameter": 17, "width": 120, "aspect": 70 },
+      "rear": { "diameter": 17, "width": 190, "aspect": 52 },
+      "diameter": [16, 18],
+      "rearWidth": [150, 200],
+      "aspect": [40, 80]
+    },
+    "grounded": ["bequille"],
+    "gap": [0.03, 0.03],
+    "floor": 0.165
   }
 }

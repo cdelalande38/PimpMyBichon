@@ -68,5 +68,20 @@
     "power": 67,
     "sound": "bicylindre-v"
   },
-  "presentSide": "droite"
+  "presentSide": "droite",
+  "wheels": {
+    "fit": {
+      "zone": "jantes",
+      "rim": "moto_rayons",
+      "tire": "route",
+      "front": { "diameter": 16, "width": 130, "aspect": 90 },
+      "rear": { "diameter": 16, "width": 150, "aspect": 81 },
+      "diameter": [15, 19],
+      "rearWidth": [130, 150],
+      "aspect": [50, 95]
+    },
+    "grounded": ["bequille"],
+    "gap": [0.02, 0.03],
+    "floor": 0.149
+  }
 }

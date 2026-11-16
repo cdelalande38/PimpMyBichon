@@ -63,5 +63,18 @@
       { "shape": "disque", "center": [1.317, 1.1904, -0.402], "normal": [-0.94, 0.34, 0], "size": [0.1, 0.1], "color": "#f4f1ea", "intensity": 0.9 },
       { "shape": "rectangle", "center": [1.253, 1.2107, 0], "normal": [-0.94, 0.34, 0], "size": [0.22, 0.13], "color": "#2f7bff", "intensity": 0.85 }
     ]
+  },
+  "wheels": {
+    "fit": {
+      "zone": "jantes",
+      "rim": "tole",
+      "tire": "route",
+      "front": { "diameter": 17, "width": 215, "aspect": 53 },
+      "diameter": [15, 20],
+      "width": [185, 265],
+      "aspect": [30, 75]
+    },
+    "gap": [0.05, 0.05],
+    "floor": 0.221
   }
 }

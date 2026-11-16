@@ -61,5 +61,10 @@
       { "material": "Tireside", "maps": ["map", "normalMap"], "color": "#1a1a1c" }
     ]
   },
-  "interiorView": { "eye": [0.2, 1.0, 0], "target": [1.3, 0.78, 0] }
+  "interiorView": { "eye": [0.2, 1.0, 0], "target": [1.3, 0.78, 0] },
+  "wheels": {
+    "nodes": ["WheelFrontL", "WheelFrontR", "WheelRearL", "WheelRearR"],
+    "gap": [0.04, 0.04],
+    "floor": 0.1
+  }
 }

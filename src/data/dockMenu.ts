@@ -8,6 +8,7 @@ export type SectionId = 'vehicule' | 'custom' | 'mecanique' | 'garage';
 export type EntryId =
   | 'vehicule'
   | 'peinture'
+  | 'roues'
   | 'stickers'
   | 'carrosserie'
   | 'phares'
@@ -48,11 +49,13 @@ export const DOCK_MENU: readonly DockSection[] = [
     label: 'Custom',
     entries: [
       { id: 'peinture', label: 'Peinture', available: true },
+      // Jantes, pneus et leurs cotes ; l'assiette (§ 5.4), dans Suspension.
+      { id: 'roues', label: 'Roues', available: true },
+      { id: 'suspension', label: 'Suspension', available: true },
       { id: 'stickers', label: 'Stickers', available: false },
       { id: 'carrosserie', label: 'Carrosserie', available: false },
       { id: 'phares', label: 'Phares', available: false },
       { id: 'ailerons', label: 'Ailerons', available: false },
-      { id: 'suspension', label: 'Suspension', available: false },
     ],
   },
   {

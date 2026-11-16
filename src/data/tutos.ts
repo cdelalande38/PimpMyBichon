@@ -90,6 +90,29 @@ export const TUTOS: readonly Tuto[] = [
     ],
   },
   {
+    id: 'roues',
+    ecrans: ['entree:roues'],
+    titre: 'Les roues',
+    but: 'Ici, tu choisis tes jantes, tes pneus et leurs cotes, et tu les vois aussitôt sur le véhicule.',
+    etapes: [
+      { texte: 'Trois volets : Jantes pour le dessin, Pneus pour le type et sa couleur, Cotes pour les tailles.', cible: 'footer.dock .wheels-volets' },
+      { texte: 'Touche un dessin de jante pour le monter. La couleur et la finition des jantes se règlent dans Peinture.' },
+      { texte: 'Dans Pneus : route, flanc blanc, lettrage ou tout-terrain. Les pastilles colorent le liseré, le flanc ou les lettres.' },
+      { texte: 'Dans Cotes : diamètre de jante, largeur et flanc. Le pneu ne dépasse jamais du passage de roue, la caisse suit.' },
+    ],
+  },
+  {
+    id: 'suspension',
+    ecrans: ['entree:suspension'],
+    titre: 'La suspension',
+    but: 'Ici, tu règles l’assiette : la hauteur de caisse, de l’origine jusqu’au ras du sol.',
+    etapes: [
+      { texte: 'Trois réglages tout prêts : origine, rabaissée, posée au sol.', cible: 'footer.dock [aria-label="Assiette"]' },
+      { texte: 'Le curseur Hauteur règle au centimètre entre les deux. Les roues restent au sol, c’est la caisse qui descend.' },
+      { texte: 'Plus les roues sont grandes, moins il reste de place sous les ailes : le curseur s’arrête avant que ça frotte.' },
+    ],
+  },
+  {
     id: 'preparation',
     ecrans: ['entree:preparation'],
     titre: 'La préparation moteur',

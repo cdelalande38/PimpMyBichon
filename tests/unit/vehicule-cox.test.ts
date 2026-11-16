@@ -6,6 +6,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { parseGlb } from '../../tools/lib/glb.mjs';
 import { buildVehicle } from '../../tools/vehicles/build.mjs';
 import * as kit from '../../tools/vehicles/kit.mjs';
+import { buildRim, buildTire, readCatalogue } from '../../tools/vehicles/roues.mjs';
+import { outerRadius } from '../../src/data/wheels.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
 
@@ -13,6 +15,13 @@ const manifest = JSON.parse(readFileSync(new URL('../../public/assets/vehicles/c
 
 /** Écart relatif sous 5 %. */
 const near = (value: number, expected: number) => expect(Math.abs(value - expected) / expected).toBeLessThan(0.05);
+
+/** Matériaux des roues partagées que l'app pose sur les ancres (jantes du genre, tous les pneus). */
+function sharedWheelMaterials(kind: 'car' | 'bike'): string[] {
+  const catalogue = readCatalogue();
+  const parts = [...catalogue.rims.filter((rim) => rim.kind === kind).flatMap((rim) => buildRim(rim, catalogue)), ...catalogue.tires.flatMap((tire) => buildTire(tire, kind, catalogue))];
+  return [...new Set(parts.map((part) => part.material))];
+}
 
 describe('manifeste de la Cox', () => {
   it('décrit le substitut déclaré, au rang 10 de la vague 1', () => {
@@ -121,8 +130,13 @@ describe('modèle de la Cox', () => {
       expect(name).toMatch(kit.MATERIAL_NAME);
       if (name.startsWith('paint_')) expect(zoneMaterials).toContain(name);
     }
-    for (const mat of zoneMaterials) expect(summary.materials).toContain(mat);
-    for (const role of ['glass', 'lamp', 'tail', 'signal', 'chrome', 'rubber', 'black']) expect(summary.materials).toContain(role);
+    // La zone des jantes est portée par les jantes partagées (tools/vehicles/roues.mjs), que l'app pose sur les ancres.
+    const fitZone = manifest.wheels?.fit?.zone;
+    expect(fitZone).toBeDefined();
+    for (const zone of manifest.zones) for (const mat of zone.materials) if (zone.id !== fitZone) expect(summary.materials).toContain(mat);
+    const wheelMaterials = sharedWheelMaterials(manifest.kind);
+    expect(wheelMaterials).toContain(`paint_${fitZone}`);
+    for (const role of ['glass', 'lamp', 'tail', 'signal', 'chrome', 'rubber', 'black']) expect([...summary.materials, ...wheelMaterials]).toContain(role);
   });
 
   // Budget relevé pour la Cox (habitacle complet pour la vue intérieure) : 150 000 triangles.
@@ -155,7 +169,8 @@ describe('modèle de la Cox', () => {
   });
 
   it('pose ses roues au centre de l’empattement de 2,40 m, sur les voies de la fiche', () => {
-    expect(summary.min[1]).toBeCloseTo(0, 2);
+    // Caisse seule (les roues sont posées par l'app) : son point le plus bas est la garde au sol du manifeste.
+    expect(summary.min[1]).toBeCloseTo(manifest.wheels!.floor, 2);
     const wheels = json.nodes.filter((n: { name: string }) => n.name.startsWith('roue_'));
     expect(wheels.map((n: { name: string }) => n.name).sort()).toEqual(['roue_arriere_droite', 'roue_arriere_gauche', 'roue_avant_droite', 'roue_avant_gauche']);
     const at = (name: string) => wheels.find((n: { name: string }) => n.name === name).translation as number[];
@@ -163,10 +178,19 @@ describe('modèle de la Cox', () => {
     expect(at('roue_avant_droite')[0]! + at('roue_arriere_droite')[0]!).toBeCloseTo(0, 3);
     near(at('roue_avant_droite')[2]! - at('roue_avant_gauche')[2]!, 1.31);
     near(at('roue_arriere_droite')[2]! - at('roue_arriere_gauche')[2]!, 1.35);
-    // Roue de 0,60 m de diamètre, centre à l'origine de son maillage.
-    const wheel = nodeBox('roue_avant_droite');
-    near(wheel.max[1]! - wheel.min[1]!, 0.6);
-    expect(wheel.min[1]).toBeCloseTo(0, 2);
+    // Ancres sans maillage ; roues d'origine de 0,60 m de diamètre (cotes du manifeste, avant et
+    // arrière), centre de chaque ancre à son rayon : la roue posée touche le sol.
+    for (const name of ['roue_avant_droite', 'roue_avant_gauche', 'roue_arriere_droite', 'roue_arriere_gauche']) {
+      expect(wheels.find((n: { name: string }) => n.name === name).mesh).toBeUndefined();
+    }
+    const fit = manifest.wheels!.fit!;
+    near(2 * outerRadius(fit.front), 0.6);
+    near(2 * outerRadius(fit.rear!), 0.6);
+    expect(at('roue_avant_droite')[1]!).toBeCloseTo(outerRadius(fit.front), 2);
+    expect(at('roue_arriere_droite')[1]!).toBeCloseTo(outerRadius(fit.rear!), 2);
+    // Pneus plus larges à l'arrière (165 et 185 de la fiche).
+    expect(fit.front.width).toBe(165);
+    expect(fit.rear!.width).toBe(185);
   });
 
   it('a les cotes de la fiche à 5 % près (caisse hors rétroviseur)', () => {

@@ -5,6 +5,7 @@
 // le premier est le véhicule de départ. Aucun identifiant de véhicule n'est écrit dans le code.
 
 import { FINISHES } from './finishes.ts';
+import { WHEEL_CATALOGUE } from './wheels.ts';
 import type { EngineSpec, InteriorView, Paint, SkyMotif, VehicleId, VehicleManifest, Zone, ZoneGroup } from './vehicleTypes.ts';
 
 /** Dossier des véhicules, sous le socle de l'app. */
@@ -83,6 +84,57 @@ function checkEngine(raw: unknown, problems: string[]): void {
   if (!FEEDS.includes(raw.feed as EngineSpec['feed'])) problems.push(`engine.feed doit valoir ${FEEDS.join(' ou ')}`);
   if (!BOOSTS.includes(raw.boost as EngineSpec['boost'])) problems.push(`engine.boost doit valoir ${BOOSTS.join(', ')}`);
   if (!positive(raw.power)) problems.push('engine.power doit être un nombre de chevaux positif');
+}
+
+function range(value: unknown, min: number, max: number): value is [number, number] {
+  return Array.isArray(value) && value.length === 2 && value.every((n) => typeof n === 'number' && n >= min && n <= max) && (value[0] as number) <= (value[1] as number);
+}
+
+function wheelSize(value: unknown): boolean {
+  return isObject(value) && positive(value.diameter) && positive(value.width) && positive(value.aspect);
+}
+
+/** Roues et assiette (§ 5.4) : cotes d'origine dans les bornes, dessins et pneus connus du catalogue. */
+function checkWheels(raw: Raw, problems: string[]): void {
+  const wheels = raw.wheels;
+  if (wheels === undefined) return;
+  if (!isObject(wheels)) {
+    problems.push('wheels doit être un objet');
+    return;
+  }
+  const gap = wheels.gap;
+  if (!(Array.isArray(gap) && gap.length === 2 && gap.every((n) => typeof n === 'number' && n >= 0 && n < 1))) problems.push('wheels.gap doit porter deux longueurs (avant, arrière), en mètres');
+  if (!(typeof wheels.floor === 'number' && wheels.floor >= 0 && wheels.floor < 2)) problems.push('wheels.floor doit être une hauteur en mètres');
+  for (const key of ['nodes', 'grounded'] as const) {
+    if (wheels[key] !== undefined && !strings(wheels[key])) problems.push(`wheels.${key} doit être une liste de noms de nœuds`);
+  }
+  const fit = wheels.fit;
+  if (fit === undefined) return;
+  if (!isObject(fit)) {
+    problems.push('wheels.fit doit être un objet');
+    return;
+  }
+  const zones = Array.isArray(raw.zones) ? raw.zones : [];
+  if (!zones.some((zone: unknown) => isObject(zone) && zone.id === fit.zone)) problems.push(`wheels.fit.zone « ${String(fit.zone)} » : aucune zone de ce nom`);
+  const kind = raw.kind === 'bike' ? 'bike' : 'car';
+  const rims = WHEEL_CATALOGUE.rims.filter((rim) => rim.kind === kind);
+  if (!rims.some((rim) => rim.id === fit.rim)) problems.push(`wheels.fit.rim « ${String(fit.rim)} » : jante inconnue pour ce genre de véhicule`);
+  if (fit.rims !== undefined && (!strings(fit.rims) || !fit.rims.every((id) => rims.some((rim) => rim.id === id)))) problems.push('wheels.fit.rims : une jante inconnue pour ce genre de véhicule');
+  if (!WHEEL_CATALOGUE.tires.some((tire) => tire.id === fit.tire)) problems.push(`wheels.fit.tire « ${String(fit.tire)} » : pneu inconnu`);
+  if (!range(fit.diameter, 10, 24)) problems.push('wheels.fit.diameter doit porter deux diamètres de jante, de 10 à 24 pouces');
+  if (!range(fit.aspect, 20, 100)) problems.push('wheels.fit.aspect doit porter deux séries, de 20 à 100 %');
+  if (fit.width !== undefined && !range(fit.width, 80, 400)) problems.push('wheels.fit.width doit porter deux largeurs, de 80 à 400 mm');
+  if (fit.rearWidth !== undefined && !range(fit.rearWidth, 80, 400)) problems.push('wheels.fit.rearWidth doit porter deux largeurs, de 80 à 400 mm');
+  for (const axle of ['front', 'rear'] as const) {
+    const size = fit[axle];
+    if (size === undefined && axle === 'rear') continue;
+    if (!wheelSize(size)) {
+      problems.push(`wheels.fit.${axle} doit porter diameter, width et aspect`);
+      continue;
+    }
+    const s = size as Raw;
+    if (axle === 'front' && range(fit.diameter, 10, 24) && ((s.diameter as number) < fit.diameter[0] || (s.diameter as number) > fit.diameter[1])) problems.push('wheels.fit.front.diameter hors des bornes de wheels.fit.diameter');
+  }
 }
 
 function point(value: unknown): boolean {
@@ -209,6 +261,7 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
       problems.push('presentSide doit valoir « gauche » ou « droite »');
     }
     checkInterior(raw, problems);
+    checkWheels(raw, problems);
   }
   if (problems.length > 0) {
     throw new Error(`Manifeste de véhicule invalide, ${manifestPath(folder)} : ${problems.join(' ; ')}.`);

@@ -6,6 +6,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { parseGlb } from '../../tools/lib/glb.mjs';
 import { buildVehicle } from '../../tools/vehicles/build.mjs';
 import * as kit from '../../tools/vehicles/kit.mjs';
+import { buildRim, buildTire, readCatalogue } from '../../tools/vehicles/roues.mjs';
+import { outerRadius } from '../../src/data/wheels.ts';
 import { FINISHES } from '../../src/data/finishes.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
 
@@ -13,6 +15,13 @@ const manifest = JSON.parse(readFileSync(new URL('../../public/assets/vehicles/b
 
 /** Écart relatif sous 5 %. */
 const near = (value: number, expected: number) => expect(Math.abs(value - expected) / expected).toBeLessThan(0.05);
+
+/** Matériaux des roues partagées que l'app pose sur les ancres (jantes du genre, tous les pneus). */
+function sharedWheelMaterials(kind: 'car' | 'bike'): string[] {
+  const catalogue = readCatalogue();
+  const parts = [...catalogue.rims.filter((rim) => rim.kind === kind).flatMap((rim) => buildRim(rim, catalogue)), ...catalogue.tires.flatMap((tire) => buildTire(tire, kind, catalogue))];
+  return [...new Set(parts.map((part) => part.material))];
+}
 
 describe('manifeste du bobber', () => {
   it('décrit le substitut déclaré, moto au rang 30 de la vague 1, sans vue intérieure', () => {
@@ -93,8 +102,13 @@ describe('modèle du bobber', () => {
       expect(name).toMatch(kit.MATERIAL_NAME);
       if (name.startsWith('paint_')) expect(zoneMaterials).toContain(name);
     }
-    for (const mat of zoneMaterials) expect(summary.materials).toContain(mat);
-    for (const role of ['chrome', 'rubber', 'black', 'lamp', 'tail', 'glass']) expect(summary.materials).toContain(role);
+    // La zone des jantes est portée par les jantes partagées (tools/vehicles/roues.mjs), que l'app pose sur les ancres.
+    const fitZone = manifest.wheels?.fit?.zone;
+    expect(fitZone).toBeDefined();
+    for (const zone of manifest.zones) for (const mat of zone.materials) if (zone.id !== fitZone) expect(summary.materials).toContain(mat);
+    const wheelMaterials = sharedWheelMaterials(manifest.kind);
+    expect(wheelMaterials).toContain(`paint_${fitZone}`);
+    for (const role of ['chrome', 'rubber', 'black', 'lamp', 'tail', 'glass']) expect([...summary.materials, ...wheelMaterials]).toContain(role);
   });
 
   it('tient les budgets : 40 000 à 120 000 triangles, moins de 60 appels de dessin', () => {
@@ -104,24 +118,37 @@ describe('modèle du bobber', () => {
   });
 
   it('pose ses deux roues à ±0,82 m, sur le sol, avec les pneus de la fiche', () => {
-    expect(summary.min[1]).toBeCloseTo(0, 2);
+    // Les roues sont posées par l'app : la béquille seule touche le sol ; le reste de la caisse est à
+    // la garde au sol du manifeste.
+    expect(nodeBox('bequille').min[1]).toBeLessThan(0.01);
+    expect(manifest.wheels!.grounded).toContain('bequille');
+    const lowest = Math.min(...json.nodes.filter((n: { name: string; mesh?: number }) => n.mesh !== undefined && !/^roue_|^bequille$/.test(n.name)).map((n: { name: string }) => nodeBox(n.name).min[1]!));
+    expect(lowest).toBeCloseTo(manifest.wheels!.floor, 2);
     const wheels = json.nodes.filter((n: { name: string }) => n.name.startsWith('roue_'));
     expect(wheels.map((n: { name: string }) => n.name).sort()).toEqual(['roue_arriere', 'roue_avant']);
     const at = (name: string) => wheels.find((n: { name: string }) => n.name === name).translation as number[];
     expect(at('roue_avant')).toEqual([0.82, 0.32, 0]);
     expect(at('roue_arriere')).toEqual([-0.82, 0.325, 0]);
-    const front = nodeBox('roue_avant');
-    near(front.max[1]! - front.min[1]!, 0.64);
-    near(front.max[2]! - front.min[2]!, 0.13);
-    const rear = nodeBox('roue_arriere');
-    near(rear.max[1]! - rear.min[1]!, 0.65);
-    expect(front.min[1]).toBeCloseTo(0, 2);
-    expect(rear.min[1]).toBeCloseTo(0, 2);
+    // Pneus d'origine du manifeste : 0,64 et 0,65 de diamètre, 130 de large devant ; centre de
+    // chaque ancre à son rayon : au sol. Les ancres ne portent que disques, axe et poulie (plus petits que la jante).
+    const fit = manifest.wheels!.fit!;
+    near(2 * outerRadius(fit.front), 0.64);
+    near(2 * outerRadius(fit.rear!), 0.65);
+    near(fit.front.width / 1000, 0.13);
+    expect(at('roue_avant')[1]!).toBeCloseTo(outerRadius(fit.front), 2);
+    expect(at('roue_arriere')[1]!).toBeCloseTo(outerRadius(fit.rear!), 2);
+    for (const name of ['roue_avant', 'roue_arriere']) {
+      const parts = nodeBox(name);
+      expect(Math.max(parts.max[1]! - parts.min[1]!, parts.max[0]! - parts.min[0]!) / 2).toBeLessThan((fit.diameter[0] * 0.0254) / 2);
+    }
   });
 
   it('a les cotes du gabarit : longueur, guidon, selle, réservoir, phare', () => {
-    near(summary.max[0] - summary.min[0], 2.29);
-    expect(summary.max[0] + summary.min[0]).toBeCloseTo(0, 1);
+    // Longueur hors tout, roues d'origine posées comprises.
+    const fit = manifest.wheels!.fit!;
+    const ends = [0.82 + outerRadius(fit.front), -0.82 - outerRadius(fit.rear!), summary.max[0], summary.min[0]];
+    near(Math.max(...ends) - Math.min(...ends), 2.29);
+    expect(Math.max(...ends) + Math.min(...ends)).toBeCloseTo(0, 1);
     const bar = nodeBox('guidon');
     near(bar.max[2]! - bar.min[2]!, 0.85);
     expect(Math.abs(bar.max[1]! - 1.22)).toBeLessThan(0.025);

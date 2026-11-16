@@ -1060,7 +1060,7 @@ export class Model {
     this.id = id;
     /** @type {Map<string, MaterialOverride>} */
     this.overrides = new Map();
-    /** @type {Map<string, { parts: Parts, position?: P3, rotation?: P3, mesh?: string }>} */
+    /** @type {Map<string, { parts: Parts, position?: P3, rotation?: P3, mesh?: string, anchor?: boolean }>} */
     this.nodes = new Map();
     /** @type {Map<string, Parts>} */
     this.meshes = new Map();
@@ -1112,6 +1112,21 @@ export class Model {
     return this;
   }
 
+  /**
+   * Pose une ancre : un nœud placé et tourné (angles d'Euler XYZ, radians), sans maillage ou avec
+   * les pièces données, dans son repère à lui. Roues : un nœud roue_* par roue, centre sur l'axe,
+   * face extérieure vers +Z local ; l'app y pose la jante et le pneu choisis (§ 8, « une géométrie,
+   * quatre ancres ») et fait tourner le nœud entier, pièces comprises (disque, poulie).
+   * @param {string} node @param {{ position?: P3, rotation?: P3 }} t @param {Parts} [parts]
+   */
+  anchor(node, t, parts = []) {
+    checkNode(node);
+    for (const p of parts) checkMaterial(p.material);
+    if (this.nodes.has(node)) throw new Error(`nœud « ${node} » déjà pris`);
+    this.nodes.set(node, { parts: [...parts], anchor: true, position: t.position, rotation: t.rotation });
+    return this;
+  }
+
   /** Écrit le GLB et rend ses octets avec un résumé chiffré. */
   toGlb() {
     /** @type {string[]} */
@@ -1159,7 +1174,8 @@ export class Model {
     for (const [name, n] of this.nodes) {
       /** @type {{ name: string, mesh?: number, translation?: number[], rotation?: number[] }} */
       const node = { name };
-      node.mesh = n.mesh ? meshIndex.get(n.mesh) : buildMesh(name, n.parts);
+      if (n.mesh) node.mesh = meshIndex.get(n.mesh);
+      else if (!n.anchor || n.parts.length > 0) node.mesh = buildMesh(name, n.parts);
       if (n.position) node.translation = [...n.position];
       if (n.rotation) {
         const q = new Quaternion().setFromEuler(new Euler(...n.rotation));

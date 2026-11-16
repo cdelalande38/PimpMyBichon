@@ -22,9 +22,9 @@ export default function cox(k) {
   const m = new k.Model('cox');          // l'identifiant doit être le nom du dossier
   m.material('paint_carrosserie', { color: '#8fd3c8' }); // valeur d'origine dans le GLB (l'app peint par-dessus)
   m.add('carrosserie', k.loft({ /* … */ material: 'paint_carrosserie' }));
-  m.shared('roue', k.wheel({ outer: 0.3, rim: 0.19, width: 0.16, style: 'tole', material: 'paint_jantes' }));
-  m.instance('roue_avant_droite', 'roue', { position: [1.2, 0.3, 0.65] });
-  m.instance('roue_avant_gauche', 'roue', { position: [1.2, 0.3, -0.65], rotation: [0, Math.PI, 0] });
+  // Roues : des ancres ; l'app y pose la jante et le pneu choisis (section « wheels » du manifeste).
+  m.anchor('roue_avant_droite', { position: [1.2, 0.3, 0.65] });
+  m.anchor('roue_avant_gauche', { position: [1.2, 0.3, -0.65], rotation: [0, Math.PI, 0] });
   return m;
 }
 ```
@@ -91,6 +91,7 @@ const caisse = k.loft({ sectionAt: (x) => k.mirrorSection(half(x)), xs: k.sample
   - `material` : un `paint_jantes` (ou autre `paint_<zone>`) pour que la jante se colore ; `barrelMaterial` pour le fût s'il diffère.
 - `k.tire({ outer, rim, width, moto })` seul : pneu à flanc bombé ; `moto: true` donne une section ronde. 17 pouces : `rim: 0.216`.
 - Toujours `m.shared('roue', …)` puis `m.instance(...)` : la roue n'est écrite qu'une fois dans le GLB.
+- **Véhicules du catalogue (depuis la vague N)** : ils ne portent plus leurs roues. Chaque roue est une ancre, `m.anchor('roue_<nom>', { position, rotation }, pièces?)` : un nœud au centre du moyeu, axe Z, face extérieure vers +Z (côté gauche : `rotation: [0, Math.PI, 0]`), à la hauteur du rayon de la roue d'origine. Les pièces facultatives (disque de frein, poulie, couronne) tournent avec la roue ; elles doivent tenir dans la plus petite jante permise. L'app y pose la jante et le pneu du catalogue partagé (`tools/vehicles/roues.mjs`, `public/assets/shared/wheels/catalogue.json`), à la cote choisie ; le manifeste dit les cotes d'origine, les bornes, la place au-dessus du pneu (`gap`) et la garde au sol (`floor`). Ajouter un dessin de jante : une ligne au catalogue (style existant et ses réglages), ou un style de plus dans `roues.mjs` ; aucun code d'interface.
 
 ### Optiques
 

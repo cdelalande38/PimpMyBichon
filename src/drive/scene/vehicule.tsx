@@ -4,17 +4,16 @@
 // allumés (deux projecteurs et leurs faisceaux dans l'air), ses feux arrière et stop, et son ombre
 // de contact. La scène le pose sur le rail à chaque image par `DriveRig` (aucune allocation).
 //
-// Roues : tout nœud du modèle nommé `roue_*` ou `wheel_*` (convention des modèles du dépôt) est
-// une roue, axe sur la largeur du véhicule, centre à l'origine du nœud. `prepare` fusionne les
-// pièces par matériau : chaque maillage de roue reçoit un attribut marqueur qui lui est propre,
-// pour qu'aucune fusion ne l'emporte, et garde ainsi son nœud. Un modèle sans tels nœuds roule
-// roues fixes (dit par `rig.wheels.length === 0`).
+// Roues : celles que l'atelier pose sur les ancres roue_* (jante, pneu et cote du build, assiette
+// comprise : src/scene/vehicle/wheels.ts), ou celles du modèle (nœuds roue_*, wheel_* ou listés par
+// le manifeste) ; `prepare` les range à part de la caisse, jamais fusionnées. Chaque roue tourne
+// autour de son axe (Z de son nœud), centre à l'origine du nœud ; une roue dont le pivot est loin du
+// centre reste fixe. Un modèle sans roue roule roues fixes (dit par `rig.wheels.length === 0`).
 
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   Box3,
-  BufferAttribute,
   Group,
   Mesh,
   MeshStandardMaterial,
@@ -35,12 +34,11 @@ import { modelUrl } from '../../data/vehicles.ts';
 import type { VehicleManifest } from '../../data/vehicleTypes.ts';
 import { ATMOSPHERE_LAYER } from '../../render/layers.ts';
 import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
-import { disposePrepared, paintZones, prepare, type Prepared } from '../../scene/vehicle/VehicleModel.tsx';
+import { disposePrepared, paintZones, prepare, useVehicleWheels, WHEEL_NODE, type Prepared } from '../../scene/vehicle/VehicleModel.tsx';
 import { resolvePaints, useBuilds } from '../../state/builds.ts';
 import { createBeam } from './ciel.ts';
 
-/** Nœuds de roue : convention de nommage des modèles (aucun identifiant de véhicule). */
-export const WHEEL_NODE = /^(roue|wheel)_/i;
+export { WHEEL_NODE };
 
 /**
  * Chargeur propre à la sortie : son cache (useLoader, clé de classe) est distinct de celui du
@@ -119,54 +117,40 @@ export function rollWheels(rig: DriveRig, meters: number): void {
 
 interface DrivePrepared {
   prepared: Prepared;
-  wheels: Wheel[];
   tails: MeshStandardMaterial[];
   owned: { geometries: BufferGeometry[]; materials: Material[] };
 }
 
-/** `prepare` du garage, roues gardées à part, feux à nous. */
-export function prepareForDrive(source: Group, vehicle: VehicleManifest): DrivePrepared {
-  const copy = source.clone(true);
-  const geometries: BufferGeometry[] = [];
-  const marked = new Set<Mesh>();
-  let k = 0;
-  copy.traverse((node) => {
-    if (!WHEEL_NODE.test(node.name)) return;
-    node.traverse((part) => {
-      if (!(part instanceof Mesh) || marked.has(part)) return;
-      marked.add(part);
-      const g = (part.geometry as BufferGeometry).clone();
-      g.setAttribute(`pmbRoue${k}`, new BufferAttribute(new Uint8Array(g.getAttribute('position').count), 1));
-      k += 1;
-      part.geometry = g;
-      geometries.push(g);
-    });
-  });
-  const prepared = prepare(copy, vehicle);
+/**
+ * Roues qui tournent, d'après les nœuds rangés à part par `prepare` (et garnis par l'atelier) :
+ * axe Z du parent, rayon de la roue posée.
+ */
+export function rollingWheels(prepared: Prepared, spins: ReadonlyArray<{ node: Object3D; radius: number }>): Wheel[] {
   prepared.root.updateMatrixWorld(true);
-  // Roues : nœuds de tête seulement (une roue n'est pas comptée deux fois).
   const wheels: Wheel[] = [];
   const box = new Box3();
   const center = new Vector3();
   const origin = new Vector3();
   const parentQ = new Quaternion();
-  prepared.root.traverse((node) => {
-    if (!WHEEL_NODE.test(node.name) || !node.parent) return;
-    let up: Object3D | null = node.parent;
-    while (up) {
-      if (WHEEL_NODE.test(up.name)) return;
-      up = up.parent;
-    }
+  for (const { node, radius } of spins) {
+    if (!node.parent) continue;
     box.setFromObject(node, true);
-    if (box.isEmpty()) return;
+    if (box.isEmpty()) continue;
     box.getCenter(center);
     node.getWorldPosition(origin);
     // Un pivot loin du centre ferait voiler la roue : elle reste fixe.
-    if (origin.distanceTo(center) > 0.05) return;
+    if (origin.distanceTo(center) > 0.05) continue;
     node.parent.getWorldQuaternion(parentQ);
     const axis = new Vector3(0, 0, 1).applyQuaternion(parentQ.invert()).normalize();
-    wheels.push({ node, base: node.quaternion.clone(), axis, radius: Math.max(0.1, (box.max.y - box.min.y) / 2) });
-  });
+    wheels.push({ node, base: node.quaternion.clone(), axis, radius: Math.max(0.1, radius) });
+  }
+  return wheels;
+}
+
+/** `prepare` du garage (roues rangées à part), feux à nous. */
+export function prepareForDrive(source: Group, vehicle: VehicleManifest): DrivePrepared {
+  const prepared = prepare(source, vehicle);
+  prepared.root.updateMatrixWorld(true);
   // Feux arrière : une copie de la matière par modèle, pour les allumer au freinage sans toucher au
   // garage (les matières des rôles sont partagées par le cache de chargement).
   const tailClones = new Map<Material, MeshStandardMaterial>();
@@ -182,7 +166,7 @@ export function prepareForDrive(source: Group, vehicle: VehicleManifest): DriveP
     o.material = clone;
   });
   const tails = [...tailClones.values()];
-  return { prepared, wheels, tails, owned: { geometries, materials: tails } };
+  return { prepared, tails, owned: { geometries: [], materials: tails } };
 }
 
 function disposeDrive(p: DrivePrepared): void {
@@ -236,6 +220,10 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   const build = useBuilds((state) => state.builds[vehicle.id]);
   const paints = useMemo(() => resolvePaints(vehicle, build), [vehicle, build]);
   useLayoutEffect(() => paintZones(drive.prepared.zones, paints, bodyEnv), [drive, paints, bodyEnv]);
+  // Jantes, pneus et assiette du build, posés comme au garage ; les roues tournent avec leur ancre.
+  const invalidate = useThree((state) => state.invalidate);
+  const { stamp, spins } = useVehicleWheels(drive.prepared, vehicle, invalidate, { merge: false });
+  const wheels = useMemo(() => rollingWheels(drive.prepared, spins), [drive, spins]);
 
   const { halfLength, halfWidth, height } = drive.prepared;
   const isBike = vehicle.kind === 'bike';
@@ -286,7 +274,7 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   useLayoutEffect(() => {
     pending.current = true;
     shadow.compile(gl);
-  }, [gl, shadow]);
+  }, [gl, shadow, stamp]);
   useFrame(() => {
     if (!pending.current) return;
     pending.current = false;
@@ -294,9 +282,9 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   });
 
   useLayoutEffect(() => {
-    onModel({ wheels: drive.wheels, tails: drive.tails, tailLight: lights.tail, measure: { halfLength, halfWidth, height }, head: new Vector3(lights.x, lights.y, 0) });
+    onModel({ wheels, tails: drive.tails, tailLight: lights.tail, measure: { halfLength, halfWidth, height }, head: new Vector3(lights.x, lights.y, 0) });
     return () => onModel(null);
-  }, [drive, lights, halfLength, halfWidth, height, onModel]);
+  }, [drive, wheels, lights, halfLength, halfWidth, height, onModel]);
 
   return (
     <primitive object={rig.group} dispose={null}>

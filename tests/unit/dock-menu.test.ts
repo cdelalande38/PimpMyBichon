@@ -9,8 +9,10 @@ describe('arbre du dock', () => {
     expect(direct('garage')).toBeUndefined();
     expect(direct('custom')).toBeUndefined();
     expect(direct('mecanique')).toBeUndefined();
-    // Sans les « bientôt », Custom n'aurait plus qu'une entrée : elle s'ouvrirait directement.
-    expect(directEntry(DOCK_MENU.find((section) => section.id === 'custom')!, false)?.id).toBe('peinture');
+    // Sans les « bientôt », Custom garde trois entrées (Peinture, Roues, Suspension) : il les montre.
+    expect(directEntry(DOCK_MENU.find((section) => section.id === 'custom')!, false)).toBeUndefined();
+    // Une section à une seule entrée disponible, sans « bientôt », s'ouvre directement.
+    expect(directEntry({ id: 'custom', label: 'Custom', entries: [{ id: 'peinture', label: 'Peinture', available: true }, { id: 'stickers', label: 'Stickers', available: false }] }, false)?.id).toBe('peinture');
   });
 
   it('quatre sections dans l’ordre, chacune au moins une entrée disponible, identifiants uniques', () => {
@@ -23,16 +25,17 @@ describe('arbre du dock', () => {
     }
   });
 
-  it('les entrées prévues : Peinture puis cinq « bientôt » ; Préparation puis Moteur et Échappement ; Ambiance et Sortie de nuit', () => {
+  it('les entrées prévues : Peinture, Roues et Suspension puis quatre « bientôt » ; Préparation puis Moteur et Échappement ; Ambiance et Sortie de nuit', () => {
     const custom = DOCK_MENU.find((section) => section.id === 'custom');
     const mecanique = DOCK_MENU.find((section) => section.id === 'mecanique');
     expect(custom && sectionEntries(custom).map((entry) => [entry.label, entry.available])).toEqual([
       ['Peinture', true],
+      ['Roues', true],
+      ['Suspension', true],
       ['Stickers', false],
       ['Carrosserie', false],
       ['Phares', false],
       ['Ailerons', false],
-      ['Suspension', false],
     ]);
     expect(mecanique && sectionEntries(mecanique).map((entry) => entry.label)).toEqual(['Préparation', 'Moteur', 'Échappement']);
     // Garage : l'ambiance, puis la sortie de nuit (§ 5.5), toutes deux disponibles.
@@ -42,7 +45,7 @@ describe('arbre du dock', () => {
       ['Sortie de nuit', true],
     ]);
     // Masquées d'un coup : il ne reste que les entrées disponibles.
-    expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture']);
+    expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture', 'roues', 'suspension']);
   });
 
   it('« Mécanique » n’existe que pour un véhicule à moteur déclaré', () => {

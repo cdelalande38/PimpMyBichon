@@ -27,7 +27,6 @@ const AX_F = 0.82;
 const AX_R = -0.82;
 const R_F = 0.32;
 const R_R = 0.325;
-const RIM = 0.205; // jantes de 16 pouces
 // Direction : u monte le long de l'axe (vers l'arrière), n en est la normale vers l'avant.
 const RAKE = 30 * DEG;
 const U = /** @type {P2} */ ([-Math.sin(RAKE), Math.cos(RAKE)]);
@@ -63,39 +62,19 @@ export default function bobber(k) {
   m.material('paint_selle', { color: '#121214', roughness: 0.75 });
 
   // --- Roues -------------------------------------------------------------------------------------
-  // Avant : 40 rayons fils sur jante noire, moyeu de 8 cm, disque de 29 cm à gauche.
+  // Deux ancres (axe Z) : l'app y pose la jante et le pneu choisis (d'origine : rayons noirs à
+  // l'avant, roue pleine à l'arrière). Restent dans l'ancre, et tournent avec elle, le disque de
+  // frein avant, l'axe, le disque arrière et la poulie de courroie.
   /** @type {Parts} */
-  const front = [...k.wheel({ outer: R_F, rim: RIM, width: 0.13, style: 'rayons', spokes: 40, material: 'paint_jantes', hubRadius: 0.04, moto: true })];
-  front.push(...disc(k, 0.145, 0.1, -0.058, 'alu'));
+  const front = [...disc(k, 0.145, 0.1, -0.058, 'alu')];
   front.push(...k.lathe([[0.1, -0.052], [0.1, -0.048], [0.04, -0.044], [0.04, -0.052]], { material: 'black', segments: 32 }));
-  m.shared('roue_avant', front);
-  m.instance('roue_avant', 'roue_avant', { position: [AX_F, R_F, 0] });
-  // Arrière : flasque plein, noir ; poulie de courroie à gauche, disque à droite.
+  m.anchor('roue_avant', { position: [AX_F, R_F, 0] }, front);
   /** @type {Parts} */
-  const rear = [...k.tire({ outer: R_R, rim: RIM, width: 0.15, moto: true }), ...barrel(k, RIM, 0.15, 'paint_jantes')];
-  rear.push(
-    ...k.lathe(
-      [
-        [0, -0.072],
-        [0.045, -0.072],
-        [0.07, -0.062],
-        [0.15, -0.05],
-        [RIM - 0.012, -0.046],
-        [RIM - 0.012, 0.046],
-        [0.15, 0.05],
-        [0.07, 0.062],
-        [0.045, 0.072],
-        [0, 0.072],
-      ],
-      { material: 'paint_jantes', segments: 64, crease: 40 },
-    ),
-  );
-  rear.push(...k.lathe([[0, -0.085], [0.035, -0.085], [0.035, 0.085], [0, 0.085]], { material: 'alu', segments: 24 }));
+  const rear = [...k.lathe([[0, -0.085], [0.035, -0.085], [0.035, 0.085], [0, 0.085]], { material: 'alu', segments: 24 })];
   rear.push(...disc(k, 0.11, 0.07, 0.084, 'alu'));
   rear.push(...k.lathe([[0.07, 0.081], [0.07, 0.086], [0.035, 0.09], [0.035, 0.081]], { material: 'black', segments: 32 }));
   rear.push(...pulley(k, 0.13, -0.086, 64));
-  m.shared('roue_arriere', rear);
-  m.instance('roue_arriere', 'roue_arriere', { position: [AX_R, R_R, 0] });
+  m.anchor('roue_arriere', { position: [AX_R, R_R, 0] }, rear);
 
   // --- Fourche et direction ------------------------------------------------------------------------
   /** @type {Parts} */
@@ -655,26 +634,3 @@ function pulley(k, r, z0, teeth) {
   );
 }
 
-/**
- * Fût de jante (rebords et creux), vu des deux côtés.
- * @param {Kit} k @param {number} r @param {number} width @param {string} material
- */
-function barrel(k, r, width, material) {
-  const w = width / 2;
-  const parts = k.lathe(
-    [
-      [r - 0.012, -w + 0.006],
-      [r + 0.012, -w + 0.004],
-      [r + 0.014, -w + 0.012],
-      [r - 0.006, -w + 0.02],
-      [r - 0.014, -w * 0.3],
-      [r - 0.014, w * 0.4],
-      [r - 0.006, w - 0.02],
-      [r + 0.014, w - 0.012],
-      [r + 0.012, w - 0.004],
-      [r - 0.012, w - 0.006],
-    ],
-    { material, segments: 64, crease: 55 },
-  );
-  return parts.map((p) => ({ material: p.material, geometry: k.doubleSided(p.geometry) }));
-}
