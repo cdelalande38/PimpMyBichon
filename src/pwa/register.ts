@@ -2,8 +2,9 @@
 // Aucune de ces étapes n'est bloquante : l'app s'affiche tout de suite, le cache se remplit derrière.
 
 import { registerSW } from 'virtual:pwa-register';
-import { peutAppliquerDoffice } from './majAuto.ts';
-import { isPrecacheProgress } from './messages.ts';
+import { preparerMiseAJour } from './avantMiseAJour.ts';
+import { MAJ_AUTO, peutAppliquerDoffice } from './majAuto.ts';
+import { isPrecacheProgress, SKIP_WAITING } from './messages.ts';
 import { usePwa, setInstallLater } from './pwaStore.ts';
 
 /** Événement non standard de Chrome qui permet de proposer l'installation depuis l'app. */
@@ -13,14 +14,35 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 const UPDATE_CHECK_EVERY_MS = 30 * 60 * 1000;
-/** Si la version en attente ne prend pas la main dans ce délai, on recharge quand même. */
-const RELOAD_FALLBACK_MS = 5000;
+/**
+ * Si la version en attente n'a pas pris la main dans ce délai, on repropose la mise à jour, SANS
+ * recharger. Elle peut tarder : le navigateur attend que l'ancienne version ait fini de servir les
+ * requêtes en cours (les modèles du garage au lancement, un morceau de la radio). Recharger à
+ * l'aveugle à ce moment-là fait s'activer la nouvelle version pendant que la page se décharge, et la
+ * navigation reste alors bloquée sur un écran vide (constaté le 16 novembre 2026, une fois sur quatre
+ * dans le parcours « sans aucun geste »). On ne recharge donc qu'au changement de version effectif
+ * (`controllerchange`) ; `reloadRequested` reste vrai, il rechargera quand elle s'activera.
+ */
+const REOFFER_AFTER_MS = 20_000;
 
 let skipWaiting: (() => Promise<void>) | null = null;
 let installEvent: BeforeInstallPromptEvent | null = null;
 let started = false;
 /** Vrai dès que la mise à jour est demandée (par l'utilisateur, ou d'office avant son premier geste) : seul cas où la page se recharge. */
 let reloadRequested = false;
+/**
+ * Vrai dès qu'un rechargement est parti. Jamais deux : un second `reload()` lancé pendant que la page
+ * se décharge (le rechargement de secours, puis `controllerchange` dans la page mourante) croise le
+ * premier et laisse la page bloquée sur un écran vide (constaté le 16 novembre 2026, une fois sur huit
+ * dans le parcours « sans aucun geste »).
+ */
+let reloading = false;
+
+function reloadOnce(): void {
+  if (reloading) return;
+  reloading = true;
+  window.location.reload();
+}
 /** Vrai dès le premier geste dans la page : au-delà, plus de rechargement sans accord. */
 let interacted = false;
 const bootAt = Date.now();
@@ -33,6 +55,17 @@ function watchInteraction(): void {
   };
   for (const type of ['pointerdown', 'keydown', 'touchstart'] as const) {
     window.addEventListener(type, mark, { once: true, capture: true, passive: true });
+  }
+}
+
+/** Une mise à jour d'office vient d'être demandée dans cet onglet, et l'utilisateur n'a encore rien touché. */
+function autoUpdatePending(): boolean {
+  if (interacted) return false;
+  try {
+    const last = Number(window.sessionStorage.getItem(AUTO_UPDATE_KEY));
+    return Number.isFinite(last) && last > 0 && Date.now() - last < MAJ_AUTO.gardeMs;
+  } catch {
+    return false;
   }
 }
 
@@ -169,8 +202,10 @@ function watchServiceWorker(): void {
   // première session, et rechargerait sans prévenir une fenêtre restée ouverte à côté.
   let hadController = Boolean(navigator.serviceWorker.controller);
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (reloadRequested) {
-      window.location.reload();
+    // Demandée ici, ou d'office juste avant un rechargement parti trop tôt (la page a été rechargée
+    // avant que la nouvelle version ait pris la main) : on recharge.
+    if (reloadRequested || autoUpdatePending()) {
+      reloadOnce();
       return;
     }
     // Mise à jour activée depuis une autre fenêtre : on propose de recharger, sans l'imposer.
@@ -225,19 +260,27 @@ export function startPwa(): void {
 export async function applyUpdate(): Promise<void> {
   reloadRequested = true;
   usePwa.setState({ updateReady: false });
+  // Les flux qui durent (la radio) sont lâchés d'abord : sans cela l'ancienne version reste occupée et
+  // la nouvelle n'est jamais activée.
+  preparerMiseAJour();
   try {
     const registration = await navigator.serviceWorker.getRegistration();
-    if (registration?.waiting && skipWaiting) {
+    const waiting = registration?.waiting;
+    if (waiting) {
       // La version en attente s'active, `controllerchange` recharge la page.
-      window.setTimeout(() => window.location.reload(), RELOAD_FALLBACK_MS);
-      await skipWaiting();
+      window.setTimeout(() => {
+        if (!reloading) usePwa.setState({ updateReady: true });
+      }, REOFFER_AFTER_MS);
+      if (skipWaiting) await skipWaiting();
+      // Enregistrement pas encore connu de la bibliothèque : on s'adresse au service worker lui-même.
+      else waiting.postMessage({ type: SKIP_WAITING });
       return;
     }
   } catch {
     // Pas de service worker joignable : un simple rechargement fera l'affaire.
   }
   // Rien en attente (version déjà activée ailleurs) : il suffit de recharger.
-  window.location.reload();
+  reloadOnce();
 }
 
 /** Ouvre la fenêtre d'installation du navigateur, si elle est disponible. */

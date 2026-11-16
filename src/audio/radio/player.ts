@@ -22,6 +22,7 @@ import type { Station, Track } from './catalog.ts';
 import { trackUrl } from './opfs.ts';
 import { PlayQueue } from './order.ts';
 import { clampPosition } from './position.ts';
+import { avantMiseAJour } from '../../pwa/avantMiseAJour.ts';
 
 /** Durée du fondu enchaîné, en secondes. */
 const FADE_S = 2;
@@ -607,6 +608,23 @@ export function setShuffle(shuffle: boolean): void {
   // La file a changé : l'adresse préparée est libérée et refaite pour le nouveau suivant.
   if (queue) prepareNext();
 }
+
+/**
+ * Lâche les flux audio avant une mise à jour de l'app (src/pwa/avantMiseAJour.ts) : un morceau en
+ * lecture ou en cours de mise en tampon garde une requête ouverte chez le service worker, qui empêche
+ * la nouvelle version de prendre la main. La page se recharge juste après : l'état de la radio (station,
+ * morceau, position gardée) n'est pas touché.
+ */
+export function libererFlux(): void {
+  if (!decks) return;
+  for (const deck of decks) {
+    deck.el.pause();
+    deck.el.removeAttribute('src');
+    deck.el.load();
+  }
+}
+
+avantMiseAJour(libererFlux);
 
 /** Arrête tout (station supprimée ou remplacée). Sans argument : quelle que soit la station. */
 export function stopPlayback(stationIds?: readonly string[]): void {
