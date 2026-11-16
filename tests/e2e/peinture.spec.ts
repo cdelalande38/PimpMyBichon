@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { changedRatio, openApp, openEntry, sceneBand, waitForScene, waitForStill } from './helpers.ts';
+import { changedRatio, openApp, openEntry, reloadSaved, sceneBand, waitForScene, waitForStill } from './helpers.ts';
 
 // Jalon 3 (§ 5.2) : l'onglet « Peinture » du dock. Zone, couleur saisie en hexadécimal,
 // finition, zone détachée de la carrosserie : tout est retrouvé après rechargement. Le cadenas :
@@ -139,7 +139,7 @@ test.describe('peinture', () => {
     await shot(page, '05-zone-detachee');
 
     // Rechargement : la sauvegarde est relue.
-    await page.reload();
+    await reloadSaved(page);
     await waitForScene(page);
     await openPaintTab(page);
     await expect(zones(page).first()).toBeVisible({ timeout: 120_000 });
@@ -290,7 +290,7 @@ test.describe('peinture', () => {
     expect(await body.evaluate((element) => element.scrollTop), 'agrandi : position inchangée').toBe(top);
 
     // Rechargement : la zone est retrouvée refermée, avec la peinture de la carrosserie.
-    await page.reload();
+    await reloadSaved(page);
     await waitForScene(page);
     await openPaintTab(page);
     await expect(paint(page).locator('.paint-zone-pair').first().locator('.paint-lock')).toHaveAttribute('data-cadenas', 'ferme', {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { capture, changedRatio, openApp, openEntry, sceneBand, waitForBench, waitForStill } from './helpers.ts';
+import { capture, changedRatio, openApp, openEntry, reloadSaved, sceneBand, waitForBench, waitForStill } from './helpers.ts';
 
 // Roues et assiette (§ 5.4) : Custom · Roues (jantes, pneus, cotes) et Custom · Suspension. Les
 // choix entrent dans le build du véhicule, se voient tout de suite, survivent au rechargement et à
@@ -58,7 +58,7 @@ test.describe('roues et assiette', () => {
     test.setTimeout(240_000);
     await openApp(page);
     await writeBuilds(page, { current: 'cox', builds: {}, recents: [] });
-    await page.reload();
+    await reloadSaved(page);
     await waitForBench(page);
     await openEntry(page, 'Roues');
     const body = dock(page).locator('.dock-tab[data-onglet="roues"]');
@@ -105,7 +105,7 @@ test.describe('roues et assiette', () => {
       .toMatchObject({ parts: { jantes: 'deport_profond', pneus: 'flanc_blanc' }, tune: { jante: 18, assiette: 1 }, partPaints: { pneus: { color: '#ff2d3f' } } });
 
     // Rechargement : tout est là.
-    await page.reload();
+    await reloadSaved(page);
     await waitForBench(page);
     await openEntry(page, 'Roues');
     await expect(body.locator('[data-jante="deport_profond"]')).toHaveAttribute('aria-pressed', 'true');
@@ -124,7 +124,7 @@ test.describe('roues et assiette', () => {
     test.setTimeout(150_000);
     await openApp(page);
     await writeBuilds(page, { current: 'van', builds: {}, recents: [] });
-    await page.reload();
+    await reloadSaved(page);
     await openEntry(page, 'Roues');
     const body = dock(page).locator('.dock-tab[data-onglet="roues"]');
     await expect(body).toContainText('Peinture');
@@ -141,7 +141,7 @@ test.describe('roues et assiette', () => {
       builds: { bobber: { paints: {}, parts: { jantes: 'jante_disparue', pneus: 'slick' }, tune: { jante: 99 } }, concept: { paints: {}, tune: { assiette: 1 } } },
       recents: [],
     });
-    await page.reload();
+    await reloadSaved(page);
     await openEntry(page, 'Roues');
     const body = dock(page).locator('.dock-tab[data-onglet="roues"]');
     await expect(body.locator('[data-jante="moto_rayons"]')).toHaveAttribute('aria-pressed', 'true');
@@ -155,7 +155,7 @@ test.describe('roues et assiette', () => {
     await expect(body.getByTestId('roues-diametre')).toHaveCount(0);
 
     await writeBuilds(page, { ...(await readBuilds(page))!, current: 'concept' });
-    await page.reload();
+    await reloadSaved(page);
     await waitForBench(page);
     await openEntry(page, 'Roues');
     await expect(dock(page).locator('.dock-tab[data-onglet="roues"]')).toContainText('garde ses roues');
@@ -168,7 +168,7 @@ test.describe('roues et assiette', () => {
     test.setTimeout(240_000);
     await openApp(a);
     await writeBuilds(a, { current: 'van', builds: {}, recents: [] });
-    await a.reload();
+    await reloadSaved(a);
     const b = await context.newPage();
     await openApp(b);
 

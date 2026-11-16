@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { backToSections, openApp, openEntry, quick, waitForBench, waitForScene } from './helpers.ts';
+import { backToSections, openApp, openEntry, quick, reloadSaved, waitForBench, waitForScene } from './helpers.ts';
 
 // Menu agrandi : la poignée du dock fait monter le menu (60 % de l'écran au plus) et passe les
 // options de l'onglet sur plusieurs lignes, sans défilement en largeur. Elle ne paraît que là où
@@ -181,7 +181,7 @@ test.describe('menu agrandi', () => {
 
     // La préférence est retenue d'une ouverture à l'autre.
     await page.waitForTimeout(400);
-    await page.reload();
+    await reloadSaved(page);
     await waitForBench(page);
     // Au lancement, le menu montre les sections : resté « agrandi », il s'y affiche compact, sans
     // poignée ni grand vide. Dans la peinture, le dock agrandi remonte, la vue se décale.

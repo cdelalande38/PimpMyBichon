@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { capture, openApp, openAtelier, quick, VIEWPORT, waitForScene } from './helpers.ts';
+import { capture, openApp, openAtelier, quick, reloadSaved, VIEWPORT, waitForScene } from './helpers.ts';
 
 async function expectControlsInThumbZone(page: Page, height: number = VIEWPORT.height): Promise<void> {
   const buttons = page.locator('dialog[open] button:visible');
@@ -67,7 +67,7 @@ test.describe('panneaux', () => {
     await capture(page, '05-garage-texte-tres-grand');
 
     // Reprise : la sauvegarde IndexedDB est relue au lancement suivant.
-    await page.reload();
+    await reloadSaved(page);
     await expect(page.locator('html')).toHaveAttribute('data-text', 'tres-grand');
     await openAtelier(page, 'Réglages');
     await expect(
@@ -114,12 +114,12 @@ test.describe('panneaux', () => {
     await capture(page, '06-commande');
 
     await openApp(page, '#b=PMB2.eJyrVkrLz1eyUkpKLFKqBQAdegQ0');
-    await page.reload();
+    await reloadSaved(page);
     await expect(page.getByRole('dialog', { name: 'Tu as reçu un build' })).toBeVisible();
     await capture(page, '07-lien-de-build');
 
     await openApp(page, '#d=PMB2.eJyrVkrLz1eyUkpKLFKqBQAdegQ0');
-    await page.reload();
+    await reloadSaved(page);
     await expect(page.getByRole('dialog', { name: 'Tu as reçu une commande' })).toBeVisible();
 
     // Fermer un panneau ouvert par un lien direct ramène au garage sans quitter l'app.

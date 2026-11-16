@@ -6,7 +6,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { openApp, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { openApp, reloadSaved, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
 const pins = (page: Page) => page.locator('.piece-pin');
@@ -134,7 +134,7 @@ test.describe('pièce cliquable', () => {
     await expect(page).not.toHaveURL(/#\/[a-z]/);
 
     // Le glissement a tourné la vue : on revient au cadrage de départ avant de viser le véhicule.
-    await page.reload();
+    await reloadSaved(page);
     await ready(page);
     await page.touchscreen.tap(x, y);
     // Custom · Peinture, sur la zone touchée : le fil le dit, sections et entrées sont masquées.

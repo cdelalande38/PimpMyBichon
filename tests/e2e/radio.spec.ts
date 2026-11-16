@@ -5,7 +5,7 @@
 
 import type { Server } from 'node:http';
 import { expect, test, type Page } from '@playwright/test';
-import { openAtelier, waitOfflineReady } from './helpers.ts';
+import { openAtelier, reloadSaved, waitOfflineReady } from './helpers.ts';
 import { buildZip } from '../radio/fixtures.ts';
 import { noiseWav, smallPack, startPackServer, type PackSource } from '../radio/server.ts';
 
@@ -166,7 +166,7 @@ test('import par fichier, lecture, suivant, rechargement, suppression', async ({
   await page.screenshot({ path: 'test-results/radio-dock.png' });
 
   // Rechargement : le mini-lecteur est resté déployé ; son titre ouvre le panneau.
-  await page.reload();
+  await reloadSaved(page);
   await page.locator('.radio-mini-title').click();
   await expect(station(page, 'Électro')).toBeVisible();
   await expect(station(page, 'Rock')).toBeVisible();
@@ -742,7 +742,7 @@ test('bouton rond : station d’accueil au premier lancement, déployer, pack, r
   await radioButton(page).click();
   await expect(mini).toBeVisible();
   await expect.poll(() => savedMiniOpen(page)).toBe(true);
-  await page.reload();
+  await reloadSaved(page);
   await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('.radio-mini')).toBeVisible();
 
@@ -1126,7 +1126,7 @@ test('hors ligne : un morceau d’accueil déjà entendu rejoue, les autres sont
   await page.goto('./');
   await waitOfflineReady(page);
   // Page sous le contrôle du service worker : le morceau qui joue est gardé à sa première écoute.
-  await page.reload();
+  await reloadSaved(page);
   await openRadio(page);
   await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise');
   const kept = () =>
@@ -1139,7 +1139,7 @@ test('hors ligne : un morceau d’accueil déjà entendu rejoue, les autres sont
   await expect.poll(kept, { timeout: 30_000 }).toEqual(['midnight-cruise.mp3']);
 
   await context.setOffline(true);
-  await page.reload();
+  await reloadSaved(page);
   await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise', { timeout: 30_000 });
   await expect.poll(() => clockSeconds(page), { timeout: 45_000 }).toBeGreaterThanOrEqual(2);
   // Les trois autres n'ont jamais été entendus : sautés l'un après l'autre, retour au morceau gardé.

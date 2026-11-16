@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { backToSections, capture, changedRatio, openApp, openEntry, paintAndReload, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { backToSections, capture, changedRatio, openApp, openEntry, paintAndReload, readBuilds, reloadSaved, sceneBand, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 // L'atelier dans le dock : onglets Véhicule, Peinture, Ambiance. L'ambiance se change au pouce ;
 // la peinture est posée par la sauvegarde des builds (l'interface de peinture a ses propres parcours).
@@ -51,7 +51,7 @@ test.describe('atelier', () => {
     await capture(page, '03-banc-violet-candy-atelier');
 
     // Reprise : les sauvegardes IndexedDB sont relues au lancement suivant.
-    await page.reload();
+    await reloadSaved(page);
     await waitForBench(page);
     expect(await pressed(page, 'Ambiance')).toBe('Atelier');
     expect((await readBuilds(page))?.builds[vehicle]?.paints.carrosserie).toEqual({ color: '#5b1a8e', finish: 'candy' });

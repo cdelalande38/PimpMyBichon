@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { capture, openApp, openEntry } from './helpers.ts';
+import { capture, openApp, openEntry, reloadSaved } from './helpers.ts';
 
 // Son du moteur au garage (§ 9) : démarrer, ralenti, coup de gaz, couper ; changer de véhicule
 // coupe le moteur. L'état se lit dans data-moteur des commandes (Mécanique · Préparation).
@@ -45,7 +45,7 @@ test.describe('son du moteur', () => {
     });
     await openApp(page);
     await putOnScreen(page, 'sportive');
-    await page.reload();
+    await reloadSaved(page);
     await openEntry(page, 'Préparation');
 
     const panel = controls(page);
@@ -115,7 +115,7 @@ test.describe('son du moteur', () => {
     test.setTimeout(120_000);
     await openApp(page);
     await putOnScreen(page, 'cox');
-    await page.reload();
+    await reloadSaved(page);
     await openEntry(page, 'Préparation');
     const panel = controls(page);
     await panel.getByRole('button', { name: 'Démarrer' }).tap();

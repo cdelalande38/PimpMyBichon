@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry } from './helpers.ts';
+import { openApp, openEntry, reloadSaved } from './helpers.ts';
 
 // Son du moteur en sortie de nuit (§ 5.5, § 9) : au départ le moteur démarre et tourne, le régime
 // publié monte avec la vitesse et passe des rapports, le bouton « Moteur » coupe et remet (choix
@@ -78,7 +78,7 @@ test.describe('son du moteur en sortie', () => {
     const sounds = watchSounds(page);
     await openApp(page);
     await putOnScreen(page, 'sportive');
-    await page.reload();
+    await reloadSaved(page);
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
     expect(sounds).toEqual([]);
 

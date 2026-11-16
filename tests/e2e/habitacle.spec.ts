@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { backToSections, changedRatio, openApp, openEntry, waitForBench, waitForStill } from './helpers.ts';
+import { backToSections, changedRatio, openApp, openEntry, reloadSaved, waitForBench, waitForStill } from './helpers.ts';
 
 // Habitacle (§ 5.4) : Custom · Intérieur. Ouvrir l'entrée fait entrer dans la vue intérieure ;
 // volant, pommeau, sièges et ciel étoilé se voient tout de suite, entrent dans le build, survivent
@@ -73,7 +73,7 @@ test.describe('habitacle', () => {
     test.setTimeout(300_000);
     await openApp(page);
     await writeSaved(page, { current: 'cox', builds: {}, recents: [] });
-    await page.reload();
+    await reloadSaved(page);
     await waitForBench(page);
     const stage = page.locator('.stage');
     await expect(stage).toHaveAttribute('data-vue', 'atelier');
@@ -133,7 +133,7 @@ test.describe('habitacle', () => {
     await expect(stage).toHaveAttribute('data-vue', 'atelier', { timeout: 15_000 });
 
     // Rechargement : on retrouve les choix.
-    await page.reload();
+    await reloadSaved(page);
     await waitForBench(page);
     await openEntry(page, 'Intérieur');
     await expect(stage).toHaveAttribute('data-vue', 'interieur', { timeout: 15_000 });
@@ -154,7 +154,7 @@ test.describe('habitacle', () => {
     test.setTimeout(180_000);
     await openApp(page);
     await writeSaved(page, { current: 'van', builds: { van: { paints: {}, parts: { volant: 'volant_inconnu', sieges: 'trone', ciel: 'clignotant' }, tune: { ciel_densite: 9 } } }, recents: [] });
-    await page.reload();
+    await reloadSaved(page);
     await waitForBench(page);
     await openEntry(page, 'Intérieur');
     const body = dock(page).locator('.dock-tab[data-onglet="interieur"]');

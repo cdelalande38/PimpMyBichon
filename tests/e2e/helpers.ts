@@ -144,7 +144,7 @@ export async function paintAndReload(page: Page, vehicle: string, paints: SavedB
       }),
     next,
   );
-  await page.reload();
+  await reloadSaved(page);
   await waitForBench(page);
 }
 
@@ -189,4 +189,57 @@ export async function changedRatio(a: Buffer, b: Buffer): Promise<number> {
     if (delta > 24) changed += 1;
   }
   return changed / (rawA.length / 3);
+}
+
+/**
+ * Attend que tout ce que la page a commencé d'écrire dans IndexedDB soit sur le disque. Les
+ * sauvegardes de l'app sont asynchrones et un rechargement les interrompt : sur une machine lente
+ * (rendu logiciel partagé), un parcours qui recharge aussitôt après un geste perdait ce geste.
+ * Une transaction en écriture ne démarre qu'après celles ouvertes avant elle sur les mêmes
+ * magasins : en ouvrir une vide sur chaque base et attendre sa fin suffit. Deux tours, pour une
+ * écriture qui en enchaînerait une autre.
+ */
+export async function settleStorage(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    for (let round = 0; round < 2; round += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const bases = await indexedDB.databases();
+      await Promise.all(
+        bases.map(
+          (base) =>
+            new Promise<void>((resolve) => {
+              if (!base.name) {
+                resolve();
+                return;
+              }
+              const open = indexedDB.open(base.name);
+              open.onerror = () => resolve();
+              open.onblocked = () => resolve();
+              open.onsuccess = () => {
+                const database = open.result;
+                const stores = Array.from(database.objectStoreNames);
+                const done = () => {
+                  database.close();
+                  resolve();
+                };
+                if (stores.length === 0) {
+                  done();
+                  return;
+                }
+                const transaction = database.transaction(stores, 'readwrite');
+                transaction.oncomplete = done;
+                transaction.onerror = done;
+                transaction.onabort = done;
+              };
+            }),
+        ),
+      );
+    }
+  });
+}
+
+/** Recharge la page une fois ses sauvegardes en cours terminées (voir `settleStorage`). */
+export async function reloadSaved(page: Page): Promise<void> {
+  await settleStorage(page);
+  await page.reload();
 }

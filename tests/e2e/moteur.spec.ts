@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { capture, openApp, openEntry } from './helpers.ts';
+import { capture, openApp, openEntry, reloadSaved } from './helpers.ts';
 
 // Met le van à l'écran par la sauvegarde des builds (même base que l'app : idb-keyval), sans
 // dépendre de l'écran du catalogue.
@@ -51,7 +51,7 @@ test.describe('fiche moteur', () => {
     test.setTimeout(150_000);
     await openApp(page);
     await putVanOnScreen(page);
-    await page.reload();
+    await reloadSaved(page);
     await openEntry(page, 'Préparation');
 
     // La fiche vit dans Mécanique · Préparation, seule sous la ligne de repère du dock compact.
@@ -102,7 +102,7 @@ test.describe('fiche moteur', () => {
 
     // L'écriture dans IndexedDB est asynchrone : on lui laisse le temps de se poser.
     await page.waitForTimeout(500);
-    await page.reload();
+    await reloadSaved(page);
     await openEntry(page, 'Préparation');
     await expect(sheet.getByTestId('moteur-prepare')).toHaveText(/^175\s*ch$/);
     await expect(sheet.getByRole('button', { name: /^Stage 3/ })).toHaveAttribute('aria-pressed', 'true');

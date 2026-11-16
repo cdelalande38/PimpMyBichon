@@ -6,7 +6,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { openApp, openEntry, waitForScene } from './helpers.ts';
+import { openApp, openEntry, reloadSaved, waitForScene } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
 const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
@@ -169,7 +169,7 @@ test.describe('navigation du dock', () => {
     // Rechargement : le dock fermé est retrouvé.
     await close(page).tap();
     await expect(reopen(page)).toBeVisible();
-    await page.reload();
+    await reloadSaved(page);
     await expect(reopen(page)).toBeVisible();
     await expect(dock(page)).toHaveAttribute('data-taille', 'ferme');
     await reopen(page).tap();
@@ -395,7 +395,7 @@ test.describe('navigation du dock', () => {
         }),
       { recents, current },
     );
-    await page.reload();
+    await reloadSaved(page);
     await waitForScene(page);
     await openEntry(page, 'Peinture');
     await zones(page).first().tap();

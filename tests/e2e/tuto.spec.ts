@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { TUTOS } from '../../src/data/tutos.ts';
-import { openEntry, quick } from './helpers.ts';
+import { openEntry, quick, reloadSaved } from './helpers.ts';
 
 const ACCUEIL = TUTOS.find((tuto) => tuto.id === 'accueil');
 
@@ -112,7 +112,7 @@ test.describe('tutoriels', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
 
     // Il ne revient pas au rechargement.
-    await page.reload();
+    await reloadSaved(page);
     await chargementParti(page);
     await page.waitForTimeout(2_500);
     await expect(page.getByRole('dialog')).toHaveCount(0);

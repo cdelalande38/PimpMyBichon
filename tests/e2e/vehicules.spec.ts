@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
-import { backToSections, capture, changedRatio, openApp, openEntry, paintAndReload, quick, readBuilds, sceneBand, waitForBench, waitForScene, waitForStill, waitOfflineReady } from './helpers.ts';
+import { backToSections, capture, changedRatio, openApp, openEntry, paintAndReload, quick, readBuilds, reloadSaved, sceneBand, waitForBench, waitForScene, waitForStill, waitOfflineReady } from './helpers.ts';
 
 // Jalon 2 : le catalogue des véhicules. Changer de véhicule et revenir (chacun garde ses peintures),
 // retrouver le véhicule après rechargement, un modèle absent annoncé, le dock et ses actions,
@@ -120,7 +120,7 @@ test.describe('catalogue des véhicules', () => {
     // Rechargement : le véhicule courant est retrouvé.
     await chooseVehicle(page, other);
     await waitForBench(page);
-    await page.reload();
+    await reloadSaved(page);
     await expect(stage(page)).toHaveAttribute('data-vehicle', other.id);
     await waitForBench(page);
     await expect(dock(page).locator('.dock-vehicle')).toHaveText(other.name);
