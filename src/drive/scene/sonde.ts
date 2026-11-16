@@ -4,7 +4,7 @@
 // posée (needsPMREMUpdate). Le véhicule, la pluie et les faisceaux en sont masqués.
 
 import { CubeCamera, HalfFloatType, WebGLCubeRenderTarget, type Camera, type Object3D, type Scene, type Vector3, type WebGLRenderer } from 'three';
-import { NO_MIRROR_LAYER } from '../../render/layers.ts';
+import { NO_MIRROR_LAYER, PROBE_ONLY_LAYER } from '../../render/layers.ts';
 
 export class MovingProbe {
   readonly target: WebGLCubeRenderTarget;
@@ -15,7 +15,10 @@ export class MovingProbe {
   constructor(size: number, far: number) {
     this.target = new WebGLCubeRenderTarget(size, { type: HalfFloatType, generateMipmaps: false });
     this.cube = new CubeCamera(0.5, far, this.target);
-    for (const child of this.cube.children) child.layers.enable(NO_MIRROR_LAYER);
+    for (const child of this.cube.children) {
+      child.layers.enable(NO_MIRROR_LAYER);
+      child.layers.enable(PROBE_ONLY_LAYER);
+    }
   }
 
   private renderFace(gl: WebGLRenderer, scene: Scene): void {

@@ -56,9 +56,13 @@ const frames = (n: number) =>
     requestAnimationFrame(tick);
   });
 
+let premier = true;
+
 async function aller(v: Aller): Promise<void> {
-  // La pluie monte et descend en deux secondes environ : on attend qu'elle soit posée.
-  const meteoChange = v.meteo !== undefined && v.meteo !== useDrive.getState().weather;
+  // La pluie monte et descend en deux secondes environ : on attend qu'elle soit posée (et au premier
+  // plan, la météo enregistrée du joueur peut encore s'effacer).
+  const meteoChange = premier || (v.meteo !== undefined && v.meteo !== useDrive.getState().weather);
+  premier = false;
   appliquer(v);
   if (typeof v.s === 'number') driveDebug.seek?.(v.s);
   const limite = performance.now() + 60_000;
@@ -101,7 +105,7 @@ async function demarrer() {
   appliquer({ camera: params.get('camera') ?? 'poursuite', meteo: params.get('meteo') ?? 'sec' });
   const s = params.get('s');
   if (s !== null) void ready().then(() => driveDebug.seek?.(Number(s)));
-  (window as unknown as { pmbSortie: unknown }).pmbSortie = { aller, mesurer: () => driveDebug.measure?.(), cadence, pret: () => driveDebug.settled?.() ?? false };
+  (window as unknown as { pmbSortie: unknown }).pmbSortie = { aller, mesurer: () => driveDebug.measure?.(), cadence, pret: () => driveDebug.settled?.() ?? false, debug: driveDebug, drive: useDrive };
   createRoot(document.getElementById('racine') as HTMLElement).render(
     <StrictMode>
       <DriveCanvas map={map} vehicle={vehicle} />

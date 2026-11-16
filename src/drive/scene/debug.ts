@@ -25,6 +25,9 @@ export interface DriveDebug {
   /** La scène three et les uniformes de nuit, pour un diagnostic à la main (page d'aperçu). */
   scene?: unknown;
   uniforms?: unknown;
+  /** La caméra de la scène et la sonde de terrain (garde au sol), pour un diagnostic. */
+  camera?: unknown;
+  relief?: unknown;
 }
 
 export const driveDebug: DriveDebug = {};

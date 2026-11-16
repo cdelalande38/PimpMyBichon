@@ -2,6 +2,7 @@
 // ciel, part du reflet sur la carrosserie. Données, sans code de rendu.
 
 import { AMBIANCES, type Ambiance } from '../../data/ambiances.ts';
+import { MOON } from './materiaux.ts';
 
 /**
  * Ambiance de la chaîne d'image pour la sortie : seuls l'étalonnage, l'exposition et le bloom y
@@ -16,13 +17,13 @@ export const NIGHT_AMBIANCE: Ambiance = {
 
 export const NIGHT_LIGHTS = {
   /** Ciel et sol de la lumière d'ambiance : juste de quoi détacher les formes, le noir reste noir. */
-  sky: '#22305a',
-  ground: '#050507',
-  ambient: 0.5,
-  /** Lune basse, bleutée. */
-  moon: '#9fb2e0',
-  moonIntensity: 0.5,
-  moonDirection: [0.5, 0.7, -0.35] as const,
-  /** Reflet de l'environnement sur la carrosserie (la sonde voit une nuit sombre). */
-  bodyEnv: 5,
+  sky: '#2a3a6c',
+  ground: '#07070a',
+  ambient: 0.6,
+  /** Lune basse, bleutée, du côté où elle est dessinée dans le ciel : elle modèle le relief. */
+  moon: '#a9bcf0',
+  moonIntensity: 0.8,
+  moonDirection: MOON.direction,
+  /** Reflet de l'environnement sur la carrosserie (la sonde voit le ciel, la lune, les lampadaires). */
+  bodyEnv: 5.5,
 } as const;

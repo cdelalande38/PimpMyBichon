@@ -35,6 +35,9 @@ export const MAX_LAMPS = 16;
  */
 export const REAL_LAMPS = 2;
 
+/** Enseignes au néon les plus proches dont la lumière colorée est calculée au sol et sur les murs. */
+export const MAX_NEONS = 6;
+
 export interface NightUniforms {
   pmbTime: { value: number };
   /** 0 : sec (chaussée humide) ; 1 : pluie. */
@@ -44,10 +47,30 @@ export interface NightUniforms {
   pmbHeadPos: { value: Vector3 };
   pmbHeadDir: { value: Vector3 };
   pmbHeadOn: { value: number };
+  /** Haut et droite du véhicule (repère de la carte), demi-écart des deux phares (0 : un seul phare, moto). */
+  pmbHeadUp: { value: Vector3 };
+  pmbHeadRight: { value: Vector3 };
+  pmbHeadSpread: { value: number };
+  /** Intensité d'un phare au cœur du faisceau (candelas, à l'échelle de la scène). */
+  pmbHeadPower: { value: number };
+  pmbHeadColor: { value: Color };
+  /** Lune (direction vers elle) et ciel, pour le reflet calculé de l'eau. */
+  pmbMoonDir: { value: Vector3 };
+  pmbMoonColor: { value: Color };
+  pmbSkyHorizon: { value: Color };
+  pmbSkyZenith: { value: Color };
+  /** Brume au sol : hauteur de sa base (plan d'eau ou creux), densité à la base (1/m), teinte. */
+  pmbMistBase: { value: number };
+  pmbMistDensity: { value: number };
+  pmbMistColor: { value: Color };
   /** Têtes des lampadaires proches (3 nombres chacun) et leur nombre. */
   pmbLamps: { value: Float32Array };
   pmbLampCount: { value: number };
   pmbLampColor: { value: Color };
+  /** Enseignes proches : position (3 nombres) et teinte linéaire (3 nombres) de chacune, et leur nombre. */
+  pmbNeons: { value: Float32Array };
+  pmbNeonColors: { value: Float32Array };
+  pmbNeonCount: { value: number };
   // Reflet planaire : mêmes noms que la réflexion du garage (src/render/planarReflection.ts).
   pmbReflection: { value: Texture | null };
   pmbReflectionBlur: { value: Texture | null };
@@ -55,6 +78,23 @@ export interface NightUniforms {
   pmbReflectionStrength: { value: number };
   pmbReflectionTexel: { value: Vector2 };
 }
+
+/**
+ * Feux de croisement (calculés dans les nuanceurs, pas de vraie lumière) : intensité au cœur du
+ * faisceau, teinte halogène. La forme (coupure, lobes) est dans HEAD_BEAM plus bas.
+ */
+export const HEADLIGHT = { power: 17000, color: '#ffe9cc' } as const;
+
+/** Lune basse au sud-est (devant le véhicule sur la plus grande partie du parcours) et ciel qu'elle éclaire. */
+export const MOON = {
+  direction: [0.42, 0.25, 0.87] as const,
+  color: '#c9d6ff',
+  horizon: '#33497f',
+  zenith: '#060b1e',
+} as const;
+
+/** Brume au sol : densité à sa base (1/m), épaisseur (m, décroissance exponentielle), teinte éclairée par la lune. */
+export const MIST = { density: 0.014, thickness: 3.2, color: '#3a4870' } as const;
 
 const BLACK = new DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
 BLACK.needsUpdate = true;
@@ -67,9 +107,24 @@ export function createNightUniforms(): NightUniforms {
     pmbHeadPos: { value: new Vector3() },
     pmbHeadDir: { value: new Vector3(1, 0, 0) },
     pmbHeadOn: { value: 1 },
+    pmbHeadUp: { value: new Vector3(0, 1, 0) },
+    pmbHeadRight: { value: new Vector3(0, 0, 1) },
+    pmbHeadSpread: { value: 0.65 },
+    pmbHeadPower: { value: HEADLIGHT.power },
+    pmbHeadColor: { value: new Color(HEADLIGHT.color) },
+    pmbMoonDir: { value: new Vector3(...MOON.direction).normalize() },
+    pmbMoonColor: { value: new Color(MOON.color) },
+    pmbSkyHorizon: { value: new Color(MOON.horizon) },
+    pmbSkyZenith: { value: new Color(MOON.zenith) },
+    pmbMistBase: { value: -1e4 },
+    pmbMistDensity: { value: MIST.density },
+    pmbMistColor: { value: new Color(MIST.color) },
     pmbLamps: { value: new Float32Array(MAX_LAMPS * 3) },
     pmbLampCount: { value: 0 },
     pmbLampColor: { value: new Color('#ffa457') },
+    pmbNeons: { value: new Float32Array(MAX_NEONS * 3) },
+    pmbNeonColors: { value: new Float32Array(MAX_NEONS * 3) },
+    pmbNeonCount: { value: 0 },
     pmbReflection: { value: BLACK },
     pmbReflectionBlur: { value: BLACK },
     pmbReflectionMatrix: { value: new Matrix4() },
@@ -105,6 +160,58 @@ const VERTEX_BODY = /* glsl */ `
 }
 `;
 
+/**
+ * Feux de croisement, pour la droite de la chaussée : intensité relative dans la direction `dir`
+ * (unitaire, du phare vers le point). Coupure nette juste sous l'horizontale du véhicule à gauche,
+ * relevée de 15° à droite (le bas-côté) ; point chaud juste sous la coupure, un peu à droite, qui
+ * porte loin ; avant-champ faible (le sol au pied du véhicule n'est pas une flaque blanche) ; large
+ * nappe latérale pour les bas-côtés. Le faisceau suit la caisse : sa portée suit la pente.
+ */
+const HEAD_BEAM = /* glsl */ `
+float pmbBeamShape( vec3 dir ) {
+  float fwd = dot( dir, pmbHeadDir );
+  if ( fwd <= 0.05 ) return 0.0;
+  float av = dot( dir, pmbHeadUp );
+  // Tangente de l'angle horizontal (assez proche de l'angle dans le faisceau, et sans atan).
+  float ah = dot( dir, pmbHeadRight ) / fwd;
+  float cut = -0.011 + clamp( ah, 0.0, 0.16 ) * 0.27;
+  float above = smoothstep( cut - 0.002, cut + 0.005, av );
+  float dv = ( av - cut + 0.004 ) / 0.03;
+  float hv = exp( -dv * dv ) + 0.012 * exp( -av * av * 20.0 );
+  float h1 = ( ah - 0.03 ) / 0.16;
+  float h2 = ah / 0.62;
+  float hh = 0.7 * exp( -h1 * h1 ) + 0.3 * exp( -h2 * h2 );
+  return hv * hh * mix( 1.0, 0.02, above ) * smoothstep( 0.05, 0.35, fwd );
+}
+// Éclairement des deux phares au point P (normale N, vue V) : diffus dans .x, reflet dans .y.
+vec2 pmbHeadLight( vec3 P, vec3 N, vec3 V, float shin ) {
+  vec2 sum = vec2( 0.0 );
+  // Au-delà de 160 m, le faisceau ne compte plus (et derrière le véhicule, il n'éclaire rien).
+  vec3 rel = P - pmbHeadPos;
+  if ( dot( rel, rel ) > 25600.0 || dot( rel, pmbHeadDir ) < -1.0 ) return sum;
+  for ( int k = 0; k < 2; k ++ ) {
+    float side = k == 0 ? 1.0 : -1.0;
+    if ( k == 1 && pmbHeadSpread <= 0.0 ) break;
+    vec3 Lp = pmbHeadPos + pmbHeadRight * pmbHeadSpread * side;
+    vec3 v = P - Lp;
+    float d2 = max( dot( v, v ), 0.25 );
+    vec3 dir = v * inversesqrt( d2 );
+    float I = pmbBeamShape( dir ) * pmbHeadPower / d2;
+    vec3 L = -dir;
+    sum.x += I * max( dot( N, L ), 0.0 );
+    vec3 H = normalize( L + V );
+    sum.y += I * pow( max( dot( N, H ), 0.0 ), shin ) * ( shin + 2.0 ) * 0.04;
+  }
+  return sum * pmbHeadOn;
+}
+vec3 pmbSky( vec3 R ) {
+  float y = clamp( R.y, 0.0, 1.0 );
+  vec3 c = mix( pmbSkyHorizon, pmbSkyZenith, smoothstep( 0.0, 0.45, y ) );
+  float m = max( dot( R, pmbMoonDir ), 0.0 );
+  return c + pmbMoonColor * ( pow( m, 14.0 ) * 0.22 + pow( m, 600.0 ) * 40.0 );
+}
+`;
+
 const FRAGMENT_HEAD = /* glsl */ `
 #define PMB_GLARE_MAX 3.0
 #define PMB_REAL_LAMPS ${REAL_LAMPS}
@@ -119,33 +226,50 @@ uniform float pmbRain;
 uniform vec3 pmbHeadPos;
 uniform vec3 pmbHeadDir;
 uniform float pmbHeadOn;
+uniform vec3 pmbHeadUp;
+uniform vec3 pmbHeadRight;
+uniform float pmbHeadSpread;
+uniform float pmbHeadPower;
+uniform vec3 pmbHeadColor;
+uniform vec3 pmbMoonDir;
+uniform vec3 pmbMoonColor;
+uniform vec3 pmbSkyHorizon;
+uniform vec3 pmbSkyZenith;
+uniform float pmbMistBase;
+uniform float pmbMistDensity;
+uniform vec3 pmbMistColor;
 uniform vec3 pmbLamps[ ${MAX_LAMPS} ];
 uniform int pmbLampCount;
 uniform vec3 pmbLampColor;
+uniform vec3 pmbNeons[ ${MAX_NEONS} ];
+uniform vec3 pmbNeonColors[ ${MAX_NEONS} ];
+uniform int pmbNeonCount;
 uniform sampler2D pmbReflection;
 uniform sampler2D pmbReflectionBlur;
 uniform mat4 pmbReflectionMatrix;
 uniform float pmbReflectionStrength;
-float pmbHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+// Hachage sans sinus (le sinus d'un grand nombre se dégrade en aplats sur le processeur graphique),
+// périodique sur 1024 cases : sans couture, sans motif visible à l'échelle de la carte.
+float pmbHash( vec2 p ) {
+  p = mod( p, 1024.0 );
+  vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
+  p3 += dot( p3, p3.yzx + 33.33 );
+  return fract( ( p3.x + p3.y ) * p3.z );
+}
 float pmbNoise( vec2 p ) {
   vec2 i = floor( p );
   vec2 f = fract( p );
   f = f * f * ( 3.0 - 2.0 * f );
   return mix( mix( pmbHash( i ), pmbHash( i + vec2( 1.0, 0.0 ) ), f.x ), mix( pmbHash( i + vec2( 0.0, 1.0 ) ), pmbHash( i + vec2( 1.0, 1.0 ) ), f.x ), f.y );
 }
+${HEAD_BEAM}
 `;
 
-// Après l'éclairage direct : reflet direct borné (éblouissement des phares vu de face), et champ
-// proche des phares adouci comme celui d'un vrai code (le faisceau coupe vers le bas : le sol au pied
-// du véhicule reçoit bien moins que la pleine intensité d'un projecteur rond).
+// Après l'éclairage direct : le reflet direct des vraies lumières (lune, lampadaires proches, feux
+// arrière) est atténué sur le mouillé et borné (la lune basse ferait sinon une nappe blanche), pour qu'un reflet vu de face ne blanchisse pas l'image.
 const HEADLIGHT_PATCH = /* glsl */ `
 #ifdef PMB_DIRECT_SPEC
-reflectedLight.directSpecular = min( reflectedLight.directSpecular * PMB_DIRECT_SPEC, vec3( 0.06 ) );
-{
-  vec3 hv = vPmbWorld - pmbHeadPos;
-  float front = step( 0.0, dot( hv, pmbHeadDir ) ) * pmbHeadOn;
-  reflectedLight.directDiffuse *= mix( 1.0, mix( 0.18, 1.0, smoothstep( 2.0, 16.0, length( hv ) ) ), front );
-}
+reflectedLight.directSpecular = min( reflectedLight.directSpecular * PMB_DIRECT_SPEC, vec3( 0.05 ) );
 #endif
 `;
 
@@ -158,6 +282,21 @@ pmbPuddle = pmbRain * smoothstep( 0.5, 0.78, pmbNoise( vPmbWorld.xz * 0.055 ) * 
 roughnessFactor = mix( roughnessFactor, PMB_WET_ROUGH, pmbWet );
 roughnessFactor = mix( roughnessFactor, 0.035, pmbPuddle );
 diffuseColor.rgb *= 1.0 - 0.75 * pmbWet - 0.2 * pmbPuddle;
+#endif
+float pmbGrain = 0.5;
+#ifdef PMB_GRAIN
+{
+  // Enrobé : granulats (fins, effacés au loin), reprises et usure en plaques ; rien de téléchargé.
+  vec2 q = vPmbWorld.xz;
+  float px = length( fwidth( q ) );
+  float fine = 1.0 - smoothstep( 0.006, 0.03, px );
+  float g1 = pmbNoise( q * 7.0 );
+  float g2 = pmbHash( floor( q * 55.0 ) );
+  float patchy = pmbNoise( q * 0.21 + 3.7 ) * 0.6 + pmbNoise( q * 0.9 ) * 0.4;
+  pmbGrain = mix( 0.5, g2, fine * 0.8 ) * 0.6 + g1 * 0.4;
+  diffuseColor.rgb *= ( 0.62 + 0.76 * pmbGrain ) * ( 0.8 + 0.4 * patchy );
+  roughnessFactor = clamp( roughnessFactor * ( 0.8 + 0.45 * g1 ), 0.03, 1.0 );
+}
 #endif
 pmbGloss = clamp( 1.0 - roughnessFactor * 1.6, 0.0, 1.0 );
 `;
@@ -196,6 +335,12 @@ const OUTPUT_PATCH = /* glsl */ `
   vec3 pmbNw = normalize( vPmbNormal );
   float pmbF = 0.03 + 0.97 * pow( 1.0 - clamp( dot( pmbNw, pmbV ), 0.0, 1.0 ), 5.0 );
   vec3 pmbExtra = vec3( 0.0 );
+  {
+    // Phares du véhicule : diffus sur tout le décor, reflet sur le mouillé (vu de face, la traînée).
+    float hShin = mix( 8.0, 260.0, pmbGloss );
+    vec2 hl = pmbHeadLight( pW, pmbNw, pmbV, hShin );
+    pmbExtra += pmbHeadColor * ( diffuseColor.rgb * hl.x * PMB_HEAD_DIFFUSE + hl.y * pmbF * PMB_HEAD_SPEC * ( 0.2 + 0.8 * pmbRain ) * ( 0.55 + 0.9 * pmbGrain ) );
+  }
   #ifdef PMB_LAMPS
   {
     float shin = mix( 12.0, 340.0, pmbGloss );
@@ -213,6 +358,18 @@ const OUTPUT_PATCH = /* glsl */ `
       sum += vec3( pmbF * pow( max( dot( pmbNw, H ), 0.0 ), shin ) * att * shin * 0.012 * PMB_LAMP_SPEC * ( 0.3 + 0.7 * down ) );
     }
     pmbExtra += sum * pmbLampColor;
+    // Enseignes au néon proches : leur lumière colorée sur la chaussée et les murs, et son reflet.
+    vec3 neon = vec3( 0.0 );
+    for ( int i = 0; i < ${MAX_NEONS}; i ++ ) {
+      if ( i >= pmbNeonCount ) break;
+      vec3 Lv = pmbNeons[ i ] - pW;
+      float d2 = dot( Lv, Lv );
+      vec3 L = Lv * inversesqrt( d2 );
+      float att = 10.0 / max( d2, 3.0 );
+      vec3 H = normalize( L + pmbV );
+      neon += pmbNeonColors[ i ] * att * ( diffuseColor.rgb * max( dot( pmbNw, L ), 0.0 ) * PMB_LAMP_DIFFUSE * 0.6 + vec3( pmbF * pow( max( dot( pmbNw, H ), 0.0 ), shin ) * shin * 0.012 * PMB_LAMP_SPEC ) );
+    }
+    pmbExtra += neon;
   }
   #endif
   #ifdef PMB_RETRO
@@ -220,8 +377,26 @@ const OUTPUT_PATCH = /* glsl */ `
     vec3 Lh = pmbHeadPos - pW;
     float dh2 = dot( Lh, Lh );
     vec3 Lhn = Lh * inversesqrt( dh2 );
-    float cone = smoothstep( 0.82, 0.96, dot( -Lhn, pmbHeadDir ) );
-    pmbExtra += diffuseColor.rgb * pow( max( dot( Lhn, pmbV ), 0.0 ), 10.0 ) * cone * pmbHeadOn * PMB_RETRO / ( 1.0 + dh2 * 0.006 );
+    float cone = min( 1.0, pmbBeamShape( -Lhn ) * 1.6 );
+    pmbExtra += pmbHeadColor * diffuseColor.rgb * pow( max( dot( Lhn, pmbV ), 0.0 ), 10.0 ) * cone * pmbHeadOn * PMB_RETRO / ( 1.0 + dh2 * 0.004 );
+  }
+  #endif
+  #ifdef PMB_WATER
+  {
+    // Eau : rides animées, reflet du ciel calculé (l'horizon clair dessine les lacs sur la rive
+    // sombre) et chemin de lune qui scintille.
+    vec2 q = pW.xz;
+    float t = pmbTime;
+    vec2 e = vec2( 0.6, 0.0 );
+    #define PMB_RIPPLE( p ) ( pmbNoise( ( p ) * 0.3 + vec2( t * 0.07, t * 0.04 ) ) + 0.5 * pmbNoise( ( p ) * 1.3 - vec2( t * 0.13, -t * 0.09 ) ) + 0.25 * pmbNoise( ( p ) * 4.1 + vec2( t * 0.3, t * 0.21 ) ) )
+    float r0 = PMB_RIPPLE( q );
+    float gx = PMB_RIPPLE( q + e.xy ) - r0;
+    float gz = PMB_RIPPLE( q + e.yx ) - r0;
+    vec3 Nw = normalize( vec3( -gx * PMB_WATER, 1.0, -gz * PMB_WATER ) );
+    vec3 R = reflect( -pmbV, Nw );
+    R.y = abs( R.y );
+    float Fw = 0.02 + 0.98 * pow( 1.0 - clamp( dot( Nw, pmbV ), 0.0, 1.0 ), 5.0 );
+    pmbExtra += pmbSky( R ) * Fw;
   }
   #endif
   #ifdef PMB_REFLECT
@@ -243,6 +418,31 @@ const OUTPUT_PATCH = /* glsl */ `
 #include <opaque_fragment>
 `;
 
+// Brume : celle de three (FogExp2, l'horizon), puis la brume au sol, dense à sa base (plan d'eau
+// proche ou creux sous la route) et qui s'efface en quelques mètres de hauteur ; sa densité est
+// intégrée le long du rayon de vue (formule fermée d'une densité exponentielle en hauteur).
+const FOG_PATCH = /* glsl */ `
+#ifdef USE_FOG
+{
+  #ifdef FOG_EXP2
+  float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
+  #else
+  float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
+  #endif
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor );
+  vec3 ray = vPmbWorld - cameraPosition;
+  float L = length( ray );
+  float b = 1.0 / ${MIST.thickness.toFixed(2)};
+  float y0 = max( cameraPosition.y - pmbMistBase, 0.0 );
+  float y1 = max( vPmbWorld.y - pmbMistBase, 0.0 );
+  float dy = y1 - y0;
+  float col = abs( dy ) > 0.01 ? ( exp( -b * y0 ) - exp( -b * y1 ) ) / ( b * dy ) : exp( -b * y0 );
+  float mist = 1.0 - exp( -pmbMistDensity * L * col );
+  gl_FragColor.rgb = mix( gl_FragColor.rgb, pmbMistColor, mist * ( 1.0 - fogFactor ) );
+}
+#endif
+`;
+
 export interface NightPatch {
   lamps?: { diffuse: number; spec: number };
   wet?: { rough: number };
@@ -250,6 +450,12 @@ export interface NightPatch {
   retro?: number;
   windows?: boolean;
   emit?: boolean;
+  /** Enrobé de la chaussée (grain procédural). */
+  grain?: boolean;
+  /** Eau : force des rides du reflet calculé. */
+  water?: number;
+  /** Part des phares : diffus et reflet (1 par défaut). */
+  head?: { diffuse: number; spec: number };
 }
 
 const fixed = (value: number) => value.toFixed(4);
@@ -269,11 +475,15 @@ export function patchNight<T extends MeshStandardMaterial>(material: T, uniforms
   // Reflet direct des vraies lumières (phares surtout) atténué sur le mouillé et borné partout : vus
   // de face et en rasant, les phares feraient sinon un éblouissement qui blanchit le bas de l'image.
   // Les reflets des lampadaires (calculés plus bas) et le reflet planaire restent entiers.
-  defines.PMB_DIRECT_SPEC = patch.wet ? '0.3' : '1.0';
+  defines.PMB_DIRECT_SPEC = patch.wet ? '0.25' : '1.0';
   if (patch.reflect) defines.PMB_REFLECT = '';
   if (patch.retro !== undefined) defines.PMB_RETRO = fixed(patch.retro);
   if (patch.windows) defines.PMB_WINDOWS = '';
   if (patch.emit) defines.PMB_EMIT = '';
+  if (patch.grain) defines.PMB_GRAIN = '';
+  if (patch.water !== undefined) defines.PMB_WATER = fixed(patch.water);
+  defines.PMB_HEAD_DIFFUSE = fixed(patch.head?.diffuse ?? 1);
+  defines.PMB_HEAD_SPEC = fixed(patch.head?.spec ?? 1);
   material.defines = { ...material.defines, ...defines };
   const key = `pmb-nuit:${Object.entries(defines)
     .map(([k, v]) => `${k}=${v}`)
@@ -288,12 +498,17 @@ export function patchNight<T extends MeshStandardMaterial>(material: T, uniforms
         .replace('#include <roughnessmap_fragment>', ROUGHNESS_PATCH)
         .replace('#include <emissivemap_fragment>', EMISSIVE_PATCH)
         .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + HEADLIGHT_PATCH)
-        .replace('#include <opaque_fragment>', OUTPUT_PATCH);
+        .replace('#include <opaque_fragment>', OUTPUT_PATCH)
+        .replace('#include <fog_fragment>', FOG_PATCH);
   };
   return material;
 }
 
-/** Réglage de chaque rôle : teinte de nuit, rugosité, métal, ajouts. Données, pas de code. */
+/**
+ * Réglage de chaque rôle : teinte de nuit, rugosité, métal, ajouts. Données, pas de code. La chaussée
+ * prend peu de la sonde (faite pour la caisse : elle y verrait la bande d'horizon en miroir) ; son
+ * reflet vient du reflet planaire.
+ */
 interface RoleLook {
   color: string;
   roughness: number;
@@ -305,17 +520,17 @@ interface RoleLook {
 }
 
 export const ROLE_LOOKS: Readonly<Record<MapMaterialRole, RoleLook>> = {
-  chaussee: { color: '#2a2b2f', roughness: 0.42, envMapIntensity: 0.35, patch: { lamps: { diffuse: 3, spec: 6 }, wet: { rough: 0.08 }, reflect: true }, noMirror: true },
-  voie: { color: '#242528', roughness: 0.6, envMapIntensity: 0.3, patch: { lamps: { diffuse: 3, spec: 2.4 }, wet: { rough: 0.18 }, reflect: true }, noMirror: true },
-  marquage: { color: '#8e8c85', roughness: 0.5, envMapIntensity: 0.3, patch: { lamps: { diffuse: 1.6, spec: 1.6 }, wet: { rough: 0.22 }, reflect: true, retro: 7 }, noMirror: true },
-  accotement: { color: '#1e1c19', roughness: 0.92, envMapIntensity: 0.15, patch: { lamps: { diffuse: 7, spec: 0.3 }, wet: { rough: 0.5 } }, noMirror: true },
-  terrain: { color: '#182017', roughness: 1, envMapIntensity: 0.08, patch: { lamps: { diffuse: 6, spec: 0 } } },
-  eau: { color: '#010207', roughness: 0.05, envMapIntensity: 3, patch: { lamps: { diffuse: 0, spec: 2.5 } }, noMirror: true },
-  mur: { color: '#2a2724', roughness: 0.9, envMapIntensity: 0.15, patch: { lamps: { diffuse: 5, spec: 0.1 } } },
-  toit: { color: '#161414', roughness: 0.85, envMapIntensity: 0.15, patch: {} },
+  chaussee: { color: '#2c2d31', roughness: 0.5, envMapIntensity: 0.1, patch: { lamps: { diffuse: 1.9, spec: 6 }, wet: { rough: 0.08 }, reflect: true, grain: true, head: { diffuse: 1, spec: 0.3 } }, noMirror: true },
+  voie: { color: '#28292d', roughness: 0.6, envMapIntensity: 0.1, patch: { lamps: { diffuse: 1.9, spec: 2.4 }, wet: { rough: 0.18 }, reflect: true, grain: true, head: { diffuse: 1, spec: 0.3 } }, noMirror: true },
+  marquage: { color: '#a19f97', roughness: 0.5, envMapIntensity: 0.12, patch: { lamps: { diffuse: 1.6, spec: 1.6 }, wet: { rough: 0.22 }, reflect: true, retro: 9 }, noMirror: true },
+  accotement: { color: '#24211d', roughness: 0.92, envMapIntensity: 0.08, patch: { lamps: { diffuse: 7, spec: 0.3 }, wet: { rough: 0.5 }, head: { diffuse: 0.7, spec: 0.3 } }, noMirror: true },
+  terrain: { color: '#26301f', roughness: 1, envMapIntensity: 0.1, patch: { lamps: { diffuse: 6, spec: 0 }, head: { diffuse: 0.6, spec: 0 } } },
+  eau: { color: '#010207', roughness: 0.05, envMapIntensity: 0.5, patch: { lamps: { diffuse: 0, spec: 2.5 }, water: 0.5, head: { diffuse: 0, spec: 1 } }, noMirror: true },
+  mur: { color: '#3a3530', roughness: 0.9, envMapIntensity: 0.15, patch: { lamps: { diffuse: 5, spec: 0.1 } } },
+  toit: { color: '#1c1a1a', roughness: 0.85, envMapIntensity: 0.15, patch: {} },
   fenetre: { color: '#20242c', roughness: 0.12, envMapIntensity: 0.8, patch: { windows: true } },
-  ouvrage: { color: '#25262a', roughness: 0.85, envMapIntensity: 0.15, patch: { lamps: { diffuse: 5, spec: 0.2 } } },
-  glissiere: { color: '#7d8186', roughness: 0.35, metalness: 0.75, envMapIntensity: 0.7, patch: { retro: 3.5 } },
+  ouvrage: { color: '#3a3b40', roughness: 0.85, envMapIntensity: 0.15, patch: { lamps: { diffuse: 5, spec: 0.2 }, retro: 2 } },
+  glissiere: { color: '#8d9196', roughness: 0.35, metalness: 0.75, envMapIntensity: 0.7, patch: { retro: 6, head: { diffuse: 1, spec: 2 } } },
 };
 
 /** Les matières des rôles, une par rôle, partagées par tous les tronçons. */

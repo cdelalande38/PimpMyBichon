@@ -1,15 +1,23 @@
 // Moteur de la scène de sortie : tout ce qui vit d'image en image, hors de React (aucune allocation
 // par image). La scène React (Scene.tsx) le crée pour une route et un niveau de qualité, l'accroche
 // à la scène three, et l'appelle à chaque image. Il tient la boucle du contrat
-// (src/drive/contrat.ts) : le pilote avance, le rail donne la pose, la caméra prend son plan, le
-// décor suit, la télémétrie part quatre fois par seconde au plus.
+// (src/drive/contrat.ts) : le pilote avance, le rail donne la pose, la caméra prend son plan (gardé
+// au-dessus du terrain par la sonde du décor), le décor suit, la brume au sol se cale sur le plan
+// d'eau ou le creux le plus proche, la télémétrie part quatre fois par seconde au plus.
 
 import {
+  Box3,
   Color,
   FogExp2,
+  Matrix4,
   Object3D,
   PointLight,
   Vector3,
+  type BufferGeometry,
+  type DataTexture,
+  type InstancedMesh,
+  type Points,
+  type ShaderMaterial,
   type Fog,
   type PerspectiveCamera,
   type Scene,
@@ -20,25 +28,101 @@ import { resolveStart } from '../../data/maps.ts';
 import type { MapRoute } from '../../data/mapTypes.ts';
 import type { VehicleManifest } from '../../data/vehicleTypes.ts';
 import type { SurfaceUniforms } from '../../render/floor.ts';
-import { ATMOSPHERE_LAYER, CAMERA_LAYERS } from '../../render/layers.ts';
+import { ATMOSPHERE_LAYER, CAMERA_LAYERS, PROBE_ONLY_LAYER } from '../../render/layers.ts';
 import { PlanarReflection } from '../../render/planarReflection.ts';
 import type { QualityLevel } from '../../render/quality.ts';
 import { useDrive } from '../../state/drive.ts';
-import { cameraShot } from '../cameras.ts';
-import type { CameraShot, Director, DriveTelemetry, Pilot, Rail, RailPose, VehicleFrame } from '../contrat.ts';
+import { cameraShot, guardShot } from '../cameras.ts';
+import type { CameraId, CameraShot, Director, DriveTelemetry, Pilot, Rail, RailPose, VehicleFrame } from '../contrat.ts';
 import { createPilot } from '../pilote.ts';
-import { createRail } from '../rail.ts';
+import { createPose, createRail } from '../rail.ts';
 import { createDirector } from '../realisateur.ts';
-import { createRain, createSky, SKY } from './ciel.ts';
+import { createFarLights, createProbeBand, createRain, createSky, createTownGlow, SKY } from './ciel.ts';
 import type { DriveMeasure } from './debug.ts';
-import { Decor, DecorKit } from './decor.ts';
-import { createNightUniforms, createRoleMaterials, MAX_LAMPS, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
+import { Decor, DecorKit, LAMP_HEAD } from './decor.ts';
+import { createSignAtlas, createSignMaterial } from './enseignes.ts';
+import type { Relief } from './relief.ts';
+import { createNightUniforms, createRoleMaterials, MAX_LAMPS, MAX_NEONS, MIST, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
 import { DRIVE_PROFILES, due, fogDensity, nearestLamps, stepOf, type DriveProfile } from './profil.ts';
 import { MovingProbe } from './sonde.ts';
 import { createRig, rollWheels, type DriveModel, type DriveRig } from './vehicule.tsx';
 
 /** Intensité des vraies lumières des lampadaires, en candelas : même éclairement que la flaque calculée (PMB_LAMP_DIFFUSE de la chaussée × 64 × π). */
-const LAMP_CANDELA = 600;
+const LAMP_CANDELA = 380;
+
+/** Feux arrière : intensité au repos et au freinage, en candelas (lueur rouge sur la chaussée). */
+const TAIL_CANDELA = { rest: 5, brake: 18 } as const;
+
+/** Force de la bande d'horizon vue par la sonde (reflet clair qui dessine la caisse). */
+const PROBE_BAND_GAIN = 0.5;
+
+/**
+ * Brume au sol : sa base se cale sur le plan d'eau chargé le plus proche s'il est à moins de
+ * `waterReach` m sous la route, sinon `hollow` m sous la route (les creux) ; elle y glisse en
+ * quelques secondes.
+ */
+const MIST_BASE = { waterReach: 30, hollow: 6, rate: 0.6 } as const;
+
+/**
+ * Mesures du véhicule pour les caméras, roues comprises : des roues larges qui débordent de la caisse
+ * ne doivent pas avaler la caméra rasante.
+ */
+function withWheels(model: DriveModel, rig: DriveRig): { halfLength: number; halfWidth: number; height: number } {
+  const m = { ...model.measure };
+  rig.body.updateWorldMatrix(true, false);
+  const inverse = new Matrix4().copy(rig.body.matrixWorld).invert();
+  const box = new Box3();
+  for (const w of model.wheels) {
+    w.node.updateWorldMatrix(true, true);
+    box.setFromObject(w.node, true).applyMatrix4(inverse);
+    if (box.isEmpty()) continue;
+    m.halfWidth = Math.max(m.halfWidth, Math.abs(box.min.z), Math.abs(box.max.z));
+    m.halfLength = Math.max(m.halfLength, Math.abs(box.min.x), Math.abs(box.max.x));
+  }
+  return m;
+}
+
+/** Têtes de tous les lampadaires de la carte (3 nombres chacune), d'après route.json. */
+function routeLampHeads(route: MapRoute): Float32Array {
+  const out: number[] = [];
+  for (const chunk of route.chunks) {
+    const l = chunk.instances.lampadaire ?? [];
+    for (let o = 0; o + 4 < l.length; o += 5) {
+      const scale = l[o + 3] ?? 1;
+      const cap = l[o + 4] ?? 0;
+      out.push(
+        chunk.origin[0] + (l[o] ?? 0) + Math.sin(cap) * LAMP_HEAD.reach * scale,
+        chunk.origin[1] + (l[o + 1] ?? 0) + LAMP_HEAD.height * scale,
+        chunk.origin[2] + (l[o + 2] ?? 0) + Math.cos(cap) * LAMP_HEAD.reach * scale,
+      );
+    }
+  }
+  return new Float32Array(out);
+}
+
+/** Points au sol des agglomérations de la carte, tous les 700 m (lueur des villages au loin). */
+function townCenters(route: MapRoute, rail: Rail): Float32Array {
+  const out: number[] = [];
+  let from = -1;
+  let to = -1;
+  const flush = () => {
+    if (from < 0) return;
+    const n = Math.max(1, Math.round((to - from) / 700));
+    for (let k = 0; k < n; k += 1) {
+      const p = rail.poseAt(from + ((k + 0.5) * (to - from)) / n, createPose()).position;
+      out.push(p[0], p[1], p[2]);
+    }
+    from = -1;
+  };
+  for (const section of route.sections) {
+    if (section.urban) {
+      if (from < 0) from = section.from;
+      to = section.to;
+    } else flush();
+  }
+  flush();
+  return new Float32Array(out);
+}
 
 /** Pose un attribut `data-*` sans toucher au DOM si rien ne change. */
 function putData(element: HTMLElement | null, key: string, value: string): void {
@@ -61,6 +145,18 @@ export class DriveEngine {
   private readonly reflection: PlanarReflection | null;
   private readonly floor = new Object3D();
   private readonly lampLights: PointLight[] = [];
+  private readonly farLights: Points<BufferGeometry, ShaderMaterial>;
+  private readonly townGlow: InstancedMesh | null;
+  private readonly signAtlas: DataTexture | null;
+  private readonly signMaterial: ShaderMaterial | null;
+  private readonly viewProj = new Matrix4();
+  private readonly lastCamera = new Vector3();
+  private lastCameraId: CameraId | null = null;
+  private mistBase = Number.NaN;
+  /** Mouvement réduit (réglage du système) : pas de traînées lumineuses (§ 5.5). */
+  private readonly reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** Bande d'horizon de la sonde (src/drive/scene/ciel.ts, createProbeBand). */
+  private readonly band = createProbeBand({ value: PROBE_BAND_GAIN });
   private readonly kind: VehicleManifest['kind'];
   private readonly level: QualityLevel;
   private readonly route: MapRoute;
@@ -110,12 +206,21 @@ export class DriveEngine {
     this.rail = createRail(route);
     this.pilot = createPilot(this.rail);
     this.director = createDirector();
+    // Lumières lointaines : les lampadaires de toute la carte, la lueur des villages.
+    this.farLights = createFarLights(routeLampHeads(route), this.uniforms.pmbLampColor.value);
+    this.townGlow = createTownGlow(townCenters(route, this.rail), new Color('#ff8a3a'));
+    // Enseignes au néon (atlas dessiné par le navigateur ; sans document, pas d'enseigne).
+    this.signAtlas = typeof document === 'undefined' ? null : createSignAtlas();
+    this.signMaterial = this.signAtlas ? createSignMaterial(this.signAtlas, this.uniforms.pmbTime, this.profile.fogFar) : null;
+    if (this.signMaterial) this.decor.signs = { material: this.signMaterial, rail: this.rail };
   }
 
   /** Accroche le décor, le ciel, la brume et la sonde à la scène ; règle la caméra. */
   attach(scene: Scene, camera: PerspectiveCamera): void {
     this.attached = { scene, fog: scene.fog, environment: scene.environment };
-    scene.add(this.decor.root, this.sky, this.rain, ...this.lampLights);
+    this.band.layers.set(PROBE_ONLY_LAYER);
+    scene.add(this.decor.root, this.sky, this.rain, this.farLights, this.band, ...this.lampLights);
+    if (this.townGlow) scene.add(this.townGlow);
     scene.fog = new FogExp2(new Color(SKY.fog), fogDensity(this.profile.fogFar));
     scene.environment = this.probe.target.texture;
     camera.near = 0.15;
@@ -128,7 +233,8 @@ export class DriveEngine {
   detach(): void {
     const a = this.attached;
     if (!a) return;
-    a.scene.remove(this.decor.root, this.sky, this.rain, ...this.lampLights);
+    a.scene.remove(this.decor.root, this.sky, this.rain, this.farLights, this.band, ...this.lampLights);
+    if (this.townGlow) a.scene.remove(this.townGlow);
     a.scene.fog = a.fog;
     a.scene.environment = a.environment;
     this.attached = null;
@@ -157,7 +263,11 @@ export class DriveEngine {
     rig.tails = model?.tails ?? [];
     rig.tailBase = model?.tails[0]?.emissiveIntensity ?? 10;
     rig.tailLight = model?.tailLight ?? null;
-    if (model) rig.headLocal.copy(model.head);
+    if (model) {
+      rig.headLocal.copy(model.head);
+      rig.headSpread = model.headSpread;
+      rig.measure = withWheels(model, rig);
+    }
   }
 
   vehicleFailedNow(): void {
@@ -192,7 +302,7 @@ export class DriveEngine {
     rollWheels(rig, motion.speed * dt);
     const brake = motion.braking ? 3.2 : 1;
     for (let i = 0; i < rig.tails.length; i += 1) (rig.tails[i] as { emissiveIntensity: number }).emissiveIntensity = rig.tailBase * brake;
-    if (rig.tailLight) rig.tailLight.intensity = motion.braking ? 10 : 2.5;
+    if (rig.tailLight) rig.tailLight.intensity = motion.braking ? TAIL_CANDELA.brake : TAIL_CANDELA.rest;
     rig.group.updateMatrixWorld();
 
     // Plan de la caméra.
@@ -210,6 +320,9 @@ export class DriveEngine {
     }
     const cameraId = drive.director ? this.director.pick(this.time, motion, pose) : drive.camera;
     const shot = cameraShot(cameraId, frame, motion, this.rail, this.time, drive.orbit, this.shot);
+    // Garde au sol : jamais sous le terrain, dans un bâtiment ni derrière un talus (hors tunnel, où
+    // le relief au-dessus de la voûte fausserait la sonde).
+    if (pose.ground !== 'tunnel') guardShot(shot, decor.relief);
     camera.position.set(shot.position[0], shot.position[1], shot.position[2]);
     camera.lookAt(shot.target[0], shot.target[1], shot.target[2]);
     if (camera.fov !== shot.fov) {
@@ -217,6 +330,15 @@ export class DriveEngine {
       camera.updateProjectionMatrix();
     }
     camera.updateMatrixWorld();
+    // Traînées des halos : déplacement à l'écran depuis l'image précédente, nul à une coupe.
+    const halo = this.kit.haloMaterial.uniforms;
+    const cut = cameraId !== this.lastCameraId || this.lastCamera.distanceToSquared(camera.position) > 36;
+    (halo.uPrevViewProj as { value: Matrix4 }).value.copy(this.viewProj);
+    (halo.uTrail as { value: number }).value = cut || dt <= 0 || this.reducedMotion ? 0 : Math.min(6, 0.06 / Math.max(delta, 1 / 240));
+    (halo.uAspect as { value: number }).value = camera.aspect;
+    this.viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.lastCamera.copy(camera.position);
+    this.lastCameraId = cameraId;
 
     // Décor autour du véhicule.
     const now = performance.now();
@@ -227,10 +349,24 @@ export class DriveEngine {
     this.wet = this.wet < 0 ? wetGoal : this.wet + (wetGoal - this.wet) * Math.min(1, delta * 1.2);
     const wet = this.wet;
     uniforms.pmbTime.value = elapsed;
-    uniforms.pmbWet.value = 0.35 + 0.65 * wet;
+    uniforms.pmbWet.value = 0.2 + 0.8 * wet;
     uniforms.pmbRain.value = wet;
     uniforms.pmbHeadPos.value.copy(rig.headLocal).applyMatrix4(rig.body.matrixWorld);
     uniforms.pmbHeadDir.value.copy(rig.headDirLocal).transformDirection(rig.body.matrixWorld);
+    uniforms.pmbHeadUp.value.set(0, 1, 0).transformDirection(rig.body.matrixWorld);
+    uniforms.pmbHeadRight.value.set(0, 0, 1).transformDirection(rig.body.matrixWorld);
+    uniforms.pmbHeadSpread.value = rig.headSpread;
+    // Brume au sol : plan d'eau proche sous la route, sinon les creux.
+    const water = decor.relief.waterNear(py - 4);
+    const mistGoal = water === water && water < py + 2 && water > py - MIST_BASE.waterReach ? water : py - MIST_BASE.hollow;
+    // Elle glisse vers sa base, sauf après un saut (départ choisi, retour en arrière) où elle s'y pose ;
+    // et jamais au-dessus de la route : la base au-dessus de la caméra noierait toute l'image.
+    const glide = this.mistBase === this.mistBase && Math.abs(mistGoal - this.mistBase) < 12;
+    this.mistBase = glide ? this.mistBase + (mistGoal - this.mistBase) * Math.min(1, delta * MIST_BASE.rate) : mistGoal;
+    this.mistBase = Math.min(this.mistBase, py - 1.5);
+    uniforms.pmbMistBase.value = this.mistBase;
+    // Économie : pas de brume au sol (§ 8 : le niveau économie coupe la brume ; l'horizon garde la sienne).
+    uniforms.pmbMistDensity.value = this.level === 'eco' ? 0 : MIST.density * (1 + 0.3 * wet);
     this.lampTick += 1;
     if (this.lampTick % 4 === 1) {
       // Les plus proches d'un point 10 m devant le véhicule. Les deux premiers sont aussi de vraies
@@ -243,11 +379,25 @@ export class DriveEngine {
         light.position.set(lamps[i * 3] ?? 0, (lamps[i * 3 + 1] ?? 0) - 0.3, lamps[i * 3 + 2] ?? 0);
       }
       uniforms.pmbLampCount.value = n;
+      // Enseignes les plus proches du même point : leur lumière colorée.
+      const m = nearestLamps(decor.neonPositions, decor.neonCount, px + (tx / hl) * 10, pz + (tz / hl) * 10, MAX_NEONS, uniforms.pmbNeons.value, this.order, this.dist);
+      const colors = uniforms.pmbNeonColors.value;
+      for (let k = 0; k < m; k += 1) {
+        const i = this.order[k] ?? 0;
+        colors[k * 3] = decor.neonColors[i * 3] ?? 0;
+        colors[k * 3 + 1] = decor.neonColors[i * 3 + 1] ?? 0;
+        colors[k * 3 + 2] = decor.neonColors[i * 3 + 2] ?? 0;
+      }
+      uniforms.pmbNeonCount.value = m;
     }
     const sky = this.sky.material.uniforms;
     this.sky.position.copy(camera.position);
     (sky.uTime as { value: number }).value = elapsed;
     (sky.uStars as { value: number }).value = 1 - 0.9 * wet;
+    (sky.uClouds as { value: number }).value = 1 + 0.6 * wet;
+    const far = this.farLights.material.uniforms;
+    (far.uTime as { value: number }).value = elapsed;
+    (far.uPixel as { value: number }).value = gl.getPixelRatio();
     this.rain.visible = wet > 0.03;
     if (this.rain.visible) {
       const rain = this.rain.material.uniforms;
@@ -255,17 +405,26 @@ export class DriveEngine {
       (rain.uCenter as { value: Vector3 }).value.copy(camera.position);
       (rain.uWind as { value: Vector3 }).value.set(-tx * motion.speed * 0.7, 0, -tz * motion.speed * 0.7);
     }
-    rig.beamGain.value = 0.012 + 0.06 * wet;
+    rig.beamGain.value = 0.012 + 0.022 * wet;
+    rig.glareGain.value = 1 + 0.6 * wet;
 
     // Sonde (une face par image) et reflet planaire de la chaussée.
     this.probeAt.set(px, py + 1.1, pz);
+    this.band.position.set(px, py, pz);
     const primeNow = !this.primed && decor.status.complete;
     this.probe.step(gl, scene, this.probeAt, this.hidden, this.degraded ? profile.probeEvery * 4 : profile.probeEvery, primeNow);
     if (primeNow) this.primed = true;
     if (this.reflection && !this.degraded) {
       this.floor.position.set(0, py, 0);
+      // La caméra du reflet est sous la chaussée : la brume au sol, calculée depuis elle, voilerait
+      // tout le reflet. Elle n'y est pas.
+      const mist = uniforms.pmbMistDensity.value;
+      uniforms.pmbMistDensity.value = 0;
       this.reflection.update(gl, scene, camera, this.floor);
-      uniforms.pmbReflectionStrength.value = 2.5 + 6 * wet;
+      uniforms.pmbMistDensity.value = mist;
+      // Miroir de la chaussée : au plus un peu plus que le Fresnel (plus fort, le ciel clair de l'horizon
+      // y ferait une nappe blanche) ; les lampes et les néons, très lumineux, s'y lisent quand même.
+      uniforms.pmbReflectionStrength.value = 1.1 + 1.7 * wet;
     }
     this.frames += 1;
     this.watchCadence(delta);
@@ -325,6 +484,11 @@ export class DriveEngine {
     this.onDegrade = callback;
   }
 
+  /** Sol et bâti des tronçons chargés (garde des caméras). */
+  get relief(): Relief {
+    return this.decor.relief;
+  }
+
   /** Vrai si la scène s'est allégée faute de cadence. */
   isDegraded(): boolean {
     return this.degraded;
@@ -371,6 +535,17 @@ export class DriveEngine {
     this.rain.material.dispose();
     this.probe.dispose();
     this.reflection?.dispose();
+    this.band.geometry.dispose();
+    this.band.material.dispose();
+    this.farLights.geometry.dispose();
+    this.farLights.material.dispose();
+    if (this.townGlow) {
+      this.townGlow.geometry.dispose();
+      (this.townGlow.material as ShaderMaterial).dispose();
+      this.townGlow.dispose();
+    }
+    this.signMaterial?.dispose();
+    this.signAtlas?.dispose();
     for (const l of this.lampLights) l.dispose();
   }
 }

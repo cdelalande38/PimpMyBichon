@@ -168,6 +168,88 @@ export function cameraShot(
   }
 }
 
+/**
+ * Sonde du terrain : hauteur du sol (chaussée, terrain, eau, ouvrages) et du bâti (toits) au point
+ * (x, z), NaN là où rien n'est connu. Le sol est celui de qui se trouve à la hauteur `y` (sous un pont,
+ * la route du dessous). Fournie par la scène (src/drive/scene/relief.ts).
+ */
+export interface GroundSampler {
+  ground(x: number, z: number, y?: number): number;
+  built(x: number, z: number): number;
+}
+
+/** Garde au sol des caméras : marges et limites, en mètres. */
+export const CAMERA_GUARD = {
+  /** Hauteur minimale de la caméra au-dessus du sol. */
+  clearance: 0.28,
+  /** Marge de la ligne de visée au-dessus du sol (talus entre la caméra et le véhicule). */
+  sight: 0.2,
+  /** Relevé maximal de la caméra pour voir par-dessus un talus ; au-delà, elle se rapproche. */
+  lift: 3,
+  /** Points sondés sur la ligne de visée. */
+  steps: 12,
+  /** Distance minimale au point visé quand la caméra se rapproche. */
+  minDistance: 1.5,
+} as const;
+
+/** Relevé nécessaire au point (x, y, z) pour passer `margin` au-dessus du sol (et des toits si `built`). */
+function blockedAt(sampler: GroundSampler, x: number, y: number, z: number, margin: number, built: boolean): number {
+  const g = sampler.ground(x, z, y);
+  let need = g === g ? g + margin - y : -Infinity;
+  if (built) {
+    const b = sampler.built(x, z);
+    if (b === b && b + margin - y > need) need = b + margin - y;
+  }
+  return need;
+}
+
+/**
+ * Garde au sol d'un plan : aucune caméra sous le terrain, dans un bâtiment ni derrière un talus qui
+ * cache le véhicule. Dans l'ordre : la caméra se relève au-dessus du sol au point où elle est ; si
+ * le sol ou un toit coupe la ligne de visée, elle se relève (de `CAMERA_GUARD.lift` au plus) ; si
+ * cela ne suffit pas, elle avance vers le point visé jusqu'au dernier point libre (recul limité), puis
+ * se relève de nouveau au-dessus du sol. Une sonde muette (NaN partout) laisse le plan tel quel.
+ * Fonction pure, sans allocation : modifie `shot` et le rend.
+ */
+export function guardShot(shot: CameraShot, sampler: GroundSampler): CameraShot {
+  const p = shot.position;
+  const t = shot.target;
+  const G = CAMERA_GUARD;
+  // 1. Au-dessus du sol au point de la caméra (une caméra dans un bâtiment est traitée en 2 et 3).
+  let need = blockedAt(sampler, p[0], p[1], p[2], G.clearance, false);
+  if (need > 0) p[1] += need;
+  // 2. Ligne de visée : relevé nécessaire pour passer chaque point sondé.
+  let lift = 0;
+  let first = 0;
+  for (let i = G.steps; i >= 1; i -= 1) {
+    const k = i / G.steps;
+    const y = t[1] + (p[1] - t[1]) * k;
+    const n = blockedAt(sampler, t[0] + (p[0] - t[0]) * k, y, t[2] + (p[2] - t[2]) * k, G.sight, true);
+    if (n > 0) {
+      lift = Math.max(lift, n / k);
+      first = i;
+    }
+  }
+  if (lift <= 0) return shot;
+  if (lift <= G.lift) {
+    p[1] += lift;
+    return shot;
+  }
+  // 3. Trop haut : la caméra se rapproche du point visé, juste avant le premier obstacle.
+  const dx = p[0] - t[0];
+  const dy = p[1] - t[1];
+  const dz = p[2] - t[2];
+  const length = Math.hypot(dx, dy, dz);
+  const keep = Math.max((first - 1) / G.steps, Math.min(1, G.minDistance / Math.max(1e-6, length)));
+  p[0] = t[0] + dx * keep;
+  p[1] = t[1] + dy * keep;
+  p[2] = t[2] + dz * keep;
+  // Encore dans un bâtiment (toit débordant sur la chaussée dans les données) : au-dessus du toit.
+  need = blockedAt(sampler, p[0], p[1], p[2], G.clearance, true);
+  if (need > 0) p[1] += need;
+  return shot;
+}
+
 /** Plan neuf, à allouer une fois. */
 export function createShot(): CameraShot {
   return { position: [0, 0, 0], target: [0, 0, 0], fov: 50 };

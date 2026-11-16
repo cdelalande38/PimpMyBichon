@@ -101,12 +101,16 @@ export function DriveScene({ map, vehicle, level, floatTargets, stage }: DriveSc
     driveDebug.measure = () => engine.measure(gl, scene, camera);
     driveDebug.scene = scene;
     driveDebug.uniforms = engine.uniforms;
+    driveDebug.camera = camera;
+    driveDebug.relief = engine.relief;
     return () => {
       delete driveDebug.seek;
       delete driveDebug.measure;
       delete driveDebug.settled;
       delete driveDebug.scene;
       delete driveDebug.uniforms;
+      delete driveDebug.camera;
+      delete driveDebug.relief;
     };
   }, [engine, gl, scene, camera]);
 

@@ -110,6 +110,25 @@ test.describe('sortie de nuit', () => {
     }
   });
 
+  test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les deux météos', async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error' && /shader|webglprogram|glsl|program/i.test(message.text())) errors.push(message.text().slice(0, 300));
+    });
+    await page.goto('./#/sortie');
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 60_000 });
+    // Quelques secondes de route : enseignes, lumières lointaines, brume au sol, garde des caméras.
+    await expect.poll(() => numberAttr(page, 'data-s'), { timeout: 30_000 }).toBeGreaterThan(20);
+    // L'autre météo (celle du joueur est enregistrée : pluie par défaut).
+    const before = await stage(page).getAttribute('data-meteo');
+    await bar(page).getByRole('button', { name: /^Météo/ }).tap();
+    await expect(stage(page)).toHaveAttribute('data-meteo', before === 'pluie' ? 'sec' : 'pluie');
+    await page.waitForTimeout(2_000);
+    expect(errors).toEqual([]);
+  });
+
   test('route introuvable : un message clair, « Réessayer » et le retour au garage', async ({ page }) => {
     await page.route('**/assets/maps/*/route.json', (route) => route.abort());
     await page.goto('./#/sortie');
