@@ -1,5 +1,5 @@
 // Bouton rond « Radio » de la colonne du haut de l'écran. Radio vide : il ouvre le panneau Radio.
-// Radio garnie : il déploie ou replie le mini-lecteur à sa gauche (titre qui ouvre le panneau, fine
+// Radio garnie (la station d'accueil, servie par l'app, compte) : il déploie ou replie le mini-lecteur à sa gauche (titre qui ouvre le panneau, fine
 // barre de progression, lecture ou pause, suivant) ; le choix est retenu d'une ouverture à l'autre,
 // replié par défaut. « Touche pour lancer la musique » reste visible, même replié, tant que le
 // navigateur attend un geste. Monté en permanence hors mode photo : c'est aussi lui qui démarre la

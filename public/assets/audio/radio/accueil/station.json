@@ -1,0 +1,11 @@
+{
+  "format": "pmb-station",
+  "version": 1,
+  "nom": "Atelier FM",
+  "morceaux": [
+    { "fichier": "midnight-cruise.mp3", "titre": "Midnight Cruise", "duree": 150.05 },
+    { "fichier": "midnight-glide.mp3", "titre": "Midnight Glide", "duree": 150.05 },
+    { "fichier": "midnight-lanes.mp3", "titre": "Midnight Lanes", "duree": 145.03 },
+    { "fichier": "midnight-runway.mp3", "titre": "Midnight Runway", "duree": 150.05 }
+  ]
+}

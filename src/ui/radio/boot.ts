@@ -4,9 +4,20 @@
 // seul. Exceptions : économie de données demandée par le navigateur (le pack attend un appui) et
 // pack déjà là au même poids (une requête HEAD, rien n'est retéléchargé, il joue). Une adresse
 // refusée (illisible, pas en https, machine locale ou réseau privé) ne déclenche aucune requête.
+// Tant qu'aucun pack n'est là (premier lancement, pack en route ou en attente d'un appui), la station
+// d'accueil, servie par l'app, joue ; elle laisse la place au pack dès qu'il est prêt.
 
 import { openSheet } from '../../app/useRoute.ts';
-import { autoStartOnOpen, downloadPack, findPackByUrl, initRadio, remoteSize, settingsReady, startPack } from '../../audio/radio/library.ts';
+import {
+  autoStartOnOpen,
+  downloadPack,
+  findPackByUrl,
+  initRadio,
+  remoteSize,
+  settingsReady,
+  startPack,
+  startWelcome,
+} from '../../audio/radio/library.ts';
 import { readPackLink, stripPackLink } from '../../audio/radio/link.ts';
 import { useRadio } from '../../state/radio.ts';
 
@@ -29,6 +40,8 @@ export function bootRadio(): void {
 
   window.history.replaceState(window.history.state, '', stripPackLink(pathname, search, hash));
   openSheet({ name: 'radio' });
+  // Sans pack sur le téléphone : la station d'accueil (rien si un pack est déjà là).
+  void startWelcome();
   if (!link.ok) {
     useRadio.setState({
       job: {

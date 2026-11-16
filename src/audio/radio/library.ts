@@ -4,10 +4,21 @@
 // Garde-fous : plafond de 2 Gio (téléchargement, ZIP, morceaux décompressés), place vérifiée avant
 // d'écrire, CRC contrôlé en flux ; après un refus, rien ne reste dans le stockage privé. Chaque import
 // tient un verrou « pmb-radio-ecrit:<pack> » : le ménage d'un autre onglet ne touche pas à ses fichiers.
+// Station d'accueil (servie par l'app, accueil.ts) : elle joue tant qu'aucun pack n'est là et laisse
+// la place au premier pack prêt, en fondu ; la règle est écrite en tête d'accueil.ts.
 
 import { askPersistentStorage } from '../../state/persistence.ts';
 import { useSettings } from '../../state/store.ts';
 import { adoptCatalog, commitCatalog, loadPrefs, useRadio, type FailCode, type FailInfo, type Job } from '../../state/radio.ts';
+import {
+  isBuiltinId,
+  noteStationChoice,
+  packStations,
+  shouldStartPack,
+  shouldStartWelcome,
+  welcomeStation,
+  welcomeTouched,
+} from './accueil.ts';
 import {
   loadCatalog,
   newId,
@@ -202,7 +213,7 @@ async function reloadCatalog(): Promise<void> {
     await withIndexLock(async () => {
       const fresh = await loadCatalog();
       const ids = new Set(fresh.stations.map((station) => station.id));
-      const gone = useRadio.getState().catalog.stations.filter((station) => !ids.has(station.id));
+      const gone = useRadio.getState().catalog.stations.filter((station) => !station.builtin && !ids.has(station.id));
       if (gone.length > 0) stopPlayback(gone.map((station) => station.id));
       adoptCatalog(fresh);
     });
@@ -410,6 +421,7 @@ export async function importFiles(list: FileList | File[]): Promise<void> {
   const files = Array.from(list);
   const zips = files.filter(isZip);
   const songs = files.filter((file) => !isZip(file) && isAudioFile(file));
+  if (zips.length > 0 || songs.length > 0) void startWelcome();
   const messages: string[] = [];
   for (const zip of zips) {
     const packId = newId('pack');
@@ -518,16 +530,69 @@ export function settingsReady(): Promise<void> {
   });
 }
 
-function autoPlayAllowed(): boolean {
-  return useSettings.getState().autoPlay && !useRadio.getState().now?.playing;
-}
-
-/** Après un import réussi : la station de départ joue, si le réglage le permet et si rien ne joue. */
+/**
+ * Après un import réussi : la station de départ joue, si le réglage le permet et si rien ne joue ;
+ * sur la station d'accueil lancée par l'app (et pas touchée depuis), la radio passe au pack en fondu.
+ */
 function autoStart(stations: Station[], depart?: string): void {
-  if (!autoPlayAllowed()) return;
+  const { now, catalog } = useRadio.getState();
+  const onWelcome = now !== null && isBuiltinId(catalog, now.stationId);
+  if (!shouldStartPack({ autoPlay: useSettings.getState().autoPlay, now, onWelcome, touched: welcomeTouched() })) return;
   const index = pickStart(stations.map((station) => ({ folder: station.folder, count: station.tracks.length })), depart);
   const first = stations[index];
-  if (first) void playStation(first.id);
+  if (first) void playStation(first.id, undefined, onWelcome);
+}
+
+/** Morceau d'accueil jouable : hors ligne, seulement un morceau déjà gardé par le service worker. */
+async function playableWelcomeTrack(station: Station, preferred: string | null): Promise<string | null> {
+  const ordered = [...station.tracks].sort((a, b) => Number(b.id === preferred) - Number(a.id === preferred));
+  if (typeof navigator === 'undefined' || navigator.onLine !== false) return ordered[0]?.id ?? null;
+  try {
+    for (const track of ordered) {
+      if (track.src && (await caches.match(new URL(track.src, window.location.href).href, { ignoreVary: true }))) return track.id;
+    }
+  } catch {
+    // Pas d'accès aux caches : aucune requête hors ligne, la station attend le réseau.
+  }
+  return null;
+}
+
+let welcomeStarting: Promise<void> | null = null;
+
+/**
+ * Station d'accueil, si la radio n'a encore aucun pack et que rien n'est chargé : à l'ouverture de
+ * l'app, au début d'un téléchargement ou d'un import. Elle reprend le morceau où l'on s'était arrêté.
+ * Deux appels rapprochés (lien de pack : ouverture puis début du téléchargement) n'en font qu'un.
+ */
+export function startWelcome(): Promise<void> {
+  welcomeStarting ??= runWelcome().finally(() => {
+    welcomeStarting = null;
+  });
+  return welcomeStarting;
+}
+
+async function runWelcome(): Promise<void> {
+  await Promise.all([initRadio(), settingsReady()]);
+  const { catalog, now, lastStationId, lastTrackId } = useRadio.getState();
+  const welcome = welcomeStation(catalog);
+  const go = shouldStartWelcome({
+    autoPlay: useSettings.getState().autoPlay,
+    now,
+    touched: welcomeTouched(),
+    hasWelcome: welcome !== undefined,
+    hasPacks: packStations(catalog).length > 0,
+  });
+  if (!go || !welcome) return;
+  const trackId = await playableWelcomeTrack(welcome, lastStationId === welcome.id ? lastTrackId : null);
+  // Entre-temps, un pack ou un geste a pu prendre la main.
+  if (trackId === null || useRadio.getState().now !== null || welcomeTouched()) return;
+  await playStation(welcome.id, trackId);
+}
+
+/** Choix d'une station ou d'un morceau par l'utilisateur : sur la station d'accueil, la bascule s'efface. */
+export function chooseStation(stationId: string, trackId?: string): Promise<void> {
+  noteStationChoice(isBuiltinId(useRadio.getState().catalog, stationId));
+  return playStation(stationId, trackId);
 }
 
 /** Lien vers un pack déjà là : ses stations jouent, comme après un import. */
@@ -537,12 +602,20 @@ export function startPack(packId: string): void {
   autoStart(catalog.stations.filter((station) => station.packId === packId), pack?.depart);
 }
 
-/** Ouverture de l'app : reprise de la dernière station (et de son morceau), sinon la station de départ. */
+/**
+ * Ouverture de l'app : reprise de la dernière station de pack (et de son morceau), sinon la station
+ * de départ ; sans aucun pack, la station d'accueil. Avec un pack, l'accueil ne s'impose jamais.
+ */
 export async function autoStartOnOpen(): Promise<void> {
   await Promise.all([initRadio(), settingsReady()]);
-  if (!autoPlayAllowed()) return;
-  const { catalog, lastStationId, lastTrackId } = useRadio.getState();
-  if (catalog.stations.length === 0) return;
+  if (!useSettings.getState().autoPlay || useRadio.getState().now?.playing) return;
+  const { catalog: full, lastStationId, lastTrackId } = useRadio.getState();
+  const stations = packStations(full);
+  if (stations.length === 0) {
+    await startWelcome();
+    return;
+  }
+  const catalog = { ...full, stations };
   const last = catalog.stations.find((station) => station.id === lastStationId);
   if (last) {
     const track = last.tracks.some((item) => item.id === lastTrackId) ? (lastTrackId ?? undefined) : undefined;
@@ -665,6 +738,7 @@ export async function downloadPack(rawUrl: string, mode: 'neuf' | 'reprise' = 'n
   }
   const job: Job = { kind: 'adresse', label: host, url, phase: 'telechargement', done: p.received, total: p.total };
   setJob(job);
+  void startWelcome();
   controller = new AbortController();
   const { signal } = controller;
   void holdScreen(true);
@@ -844,9 +918,9 @@ async function dropStations(drop: (station: Station) => boolean): Promise<void> 
   void refreshStorage();
 }
 
-/** Supprime une station ; le pack part avec sa dernière station, et sa place est libérée. */
+/** Supprime une station ; le pack part avec sa dernière station, et sa place est libérée. Une station de base reste. */
 export async function deleteStation(stationId: string): Promise<void> {
-  await dropStations((station) => station.id === stationId);
+  await dropStations((station) => station.id === stationId && !station.builtin);
 }
 
 /** Supprime un pack entier (toutes ses stations) et libère sa place. */

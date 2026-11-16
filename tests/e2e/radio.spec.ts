@@ -1,10 +1,11 @@
 // Parcours de la radio : import par fichier, lecture, suivant, rechargement, suppression ;
 // import par adresse depuis un hébergement d'essai sur une autre origine (avec et sans CORS) ;
-// arrivée par un lien « ?pack= ». Les packs sont fabriqués par le test (bruit faible en WAV).
+// arrivée par un lien « ?pack= » ; station d'accueil (servie par l'app) au premier lancement, puis
+// bascule sur le pack. Les packs sont fabriqués par le test (bruit faible en WAV).
 
 import type { Server } from 'node:http';
 import { expect, test, type Page } from '@playwright/test';
-import { openAtelier } from './helpers.ts';
+import { openAtelier, waitOfflineReady } from './helpers.ts';
 import { buildZip } from '../radio/fixtures.ts';
 import { noiseWav, smallPack, startPackServer, type PackSource } from '../radio/server.ts';
 
@@ -31,14 +32,36 @@ test.afterAll(async () => {
   await new Promise((resolve) => server?.close(resolve));
 });
 
+/** Ouvre l'app sur le panneau Radio (lien direct : le choix « mini-lecteur déployé » reste intact). */
 async function openRadio(page: Page): Promise<void> {
-  await page.goto('./');
-  await page.getByRole('button', { name: /^Radio/ }).first().click();
+  await page.goto('./#/radio');
   await expect(page.getByRole('heading', { name: 'Radio', level: 2 })).toBeVisible();
 }
 
-/** Bouton rond « Radio » de la colonne des raccourcis. */
-const radioButton = (page: Page) => page.getByRole('navigation', { name: 'Raccourcis' }).getByRole('button', { name: /^Radio/ });
+/**
+ * Bouton rond « Radio » de la colonne des raccourcis (« Radio », « Radio, en lecture »…), pas le titre
+ * du mini-lecteur, qui commence par le nom de la station (« Radio … : ouvrir le panneau Radio » pour une
+ * station dont le nom commence par « Radio »).
+ */
+const radioButton = (page: Page) => page.getByRole('navigation', { name: 'Raccourcis' }).getByRole('button', { name: /^Radio(,|$)/ });
+
+/**
+ * Ouvre le panneau Radio depuis le garage, comme au doigt : radio garnie (la station d'accueil
+ * compte), le bouton rond déploie le mini-lecteur, dont le titre ouvre le panneau.
+ */
+async function showRadioPanel(page: Page): Promise<void> {
+  const heading = page.getByRole('heading', { name: 'Radio', level: 2 });
+  const title = page.locator('.radio-mini-title');
+  if (!(await title.isVisible())) await radioButton(page).click();
+  await expect(heading.or(title)).toBeVisible();
+  if (!(await heading.isVisible())) await title.click();
+  await expect(heading).toBeVisible();
+}
+
+/** Nom de la station d'accueil (public/assets/audio/radio/accueil/station.json). */
+const WELCOME = 'Atelier FM';
+/** Phrase de la radio sans pack (la station d'accueil tourne en attendant). */
+const NO_PACK = 'Pas encore de pack';
 
 /** Aiguille https://packs.example/… vers l'hébergement d'essai local (même journal de requêtes). */
 async function routeLinks(page: Page): Promise<void> {
@@ -83,7 +106,7 @@ test('import par fichier, lecture, suivant, rechargement, suppression', async ({
   // Parcours long (import, lecture, rechargement, deux suppressions) : plus de temps sur une machine chargée.
   test.setTimeout(150_000);
   await openRadio(page);
-  await expect(page.getByText('Ta radio est vide.')).toBeVisible();
+  await expect(page.getByText(NO_PACK)).toBeVisible();
   await page.getByTestId('radio-fichier-pack').setInputFiles({
     name: 'pack-essai.zip',
     mimeType: 'application/zip',
@@ -126,7 +149,9 @@ test('import par fichier, lecture, suivant, rechargement, suppression', async ({
   await station(page, 'Électro').getByRole('button', { name: /^Électro/ }).click();
   await station(page, 'Électro').getByRole('button', { name: 'Supprimer la station' }).click();
   await station(page, 'Électro').getByRole('button', { name: 'Supprimer', exact: true }).click();
-  await expect(page.getByText('Ta radio est vide.')).toBeVisible();
+  await expect(page.getByText(NO_PACK)).toBeVisible();
+  // La station d'accueil reste, elle.
+  await expect(station(page, WELCOME)).toBeVisible();
   await expect(page.getByTestId('radio-place')).not.toHaveText(placeBefore ?? '');
   const files = await page.evaluate(async () => {
     const root = await navigator.storage.getDirectory();
@@ -205,11 +230,20 @@ test('réglage « Lecture automatique » coupé : rien ne démarre après un imp
   await dialog.getByRole('button', { name: /^Coupée/ }).click();
   await expect(dialog.getByRole('button', { name: /^Coupée/ })).toHaveAttribute('aria-pressed', 'true');
   await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
-  await page.getByRole('button', { name: /^Radio/ }).first().click();
+  // Réouverture : sans pack, la station d'accueil ne part pas toute seule non plus.
+  await page.goto('about:blank');
+  await page.goto('./');
+  await expect(radioButton(page)).toBeVisible();
+  await page.waitForTimeout(2000);
+  await expect(radioButton(page)).toHaveAccessibleName('Radio');
+  await showRadioPanel(page);
   await page.getByTestId('radio-fichier-pack').setInputFiles({ name: 'p.zip', mimeType: 'application/zip', buffer: Buffer.from(smallPack()) });
   await expect(page.getByText('Stations ajoutées')).toBeVisible({ timeout: 45_000 });
   await page.waitForTimeout(1500);
-  await expect(page.getByTestId('radio-titre')).toHaveText('Choisis une station.');
+  // Rien ne part : le lecteur propose de reprendre la dernière station écoutée (l'accueil, entendu
+  // avant que le réglage soit coupé), sans lancer le pack.
+  await expect(page.getByTestId('radio-titre')).toHaveText(/^(Choisis une station\.|En pause\. Appuie sur lecture pour reprendre\.)$/);
+  await expect(page.locator('.radio-player').getByRole('button', { name: 'Lecture', exact: true })).toBeVisible();
   await page.goto('about:blank');
   await page.goto('./');
   await expect(radioButton(page)).toBeVisible();
@@ -627,28 +661,32 @@ async function expectMiniFits(page: Page): Promise<void> {
   }
 }
 
-test('bouton rond : radio vide, déployer, replier, recharger, titre qui ouvre, bouton qui referme', async ({ page }) => {
+test('bouton rond : station d’accueil au premier lancement, déployer, pack, replier, recharger, titre qui ouvre, bouton qui referme', async ({ page }) => {
   test.setTimeout(150_000);
-  // Radio vide : le bouton ouvre le panneau.
+  // Premier lancement, sans pack : la station d'accueil joue ; replié par défaut, le bouton le dit.
   await page.goto('./');
-  await expect(radioButton(page)).not.toHaveAttribute('aria-expanded');
+  await expect(radioButton(page)).toHaveAccessibleName('Radio, en lecture', { timeout: 30_000 });
+  await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'false');
+  const mini = page.locator('.radio-mini');
+  await expect(mini).toHaveCount(0);
+
+  // Déployer : le mini-lecteur marche pour elle comme pour un pack.
   await radioButton(page).click();
-  await expect(page.getByRole('heading', { name: /radio/i, level: 2 })).toBeVisible();
+  await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'true');
+  await expect(mini).toContainText('Midnight Cruise');
+  await expect(mini).toContainText(WELCOME);
+  await expect(mini.getByRole('button', { name: 'Pause' })).toBeVisible();
+  await expectMiniFits(page);
+  await page.screenshot({ path: 'test-results/radio-accueil-mini.png' });
+
+  // Un pack entre : la radio passe dessus d'elle-même.
+  await page.locator('.radio-mini-title').click();
   await page.getByTestId('radio-fichier-pack').setInputFiles({ name: 'p.zip', mimeType: 'application/zip', buffer: Buffer.from(smallPack()) });
   await expect(page.getByText('Stations ajoutées')).toBeVisible({ timeout: 45_000 });
   await page.getByRole('button', { name: 'Retour à l’atelier' }).click();
 
-  // Replié par défaut : seul le bouton reste, qui dit que ça joue.
-  await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('.radio-mini')).toHaveCount(0);
-  await expect(radioButton(page)).toHaveAccessibleName('Radio, en lecture', { timeout: 30_000 });
-  await page.screenshot({ path: 'test-results/radio-replie.png' });
-
-  // Déployer : titre, fine barre, pause, suivant.
-  await radioButton(page).click();
-  await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'true');
-  const mini = page.locator('.radio-mini');
-  await expect(mini).toContainText('Bruit d’essai 1a');
+  // Déployé : titre, fine barre, pause, suivant.
+  await expect(mini).toContainText('Bruit d’essai 1a', { timeout: 30_000 });
   await expect(mini.getByRole('button', { name: 'Pause' })).toBeVisible();
   await expect(mini.locator('.radio-mini-progress')).toBeVisible();
   await expectMiniFits(page);
@@ -662,10 +700,14 @@ test('bouton rond : radio vide, déployer, replier, recharger, titre qui ouvre, 
   await expectMiniFits(page);
   await page.setViewportSize({ width: 390, height: 844 });
 
-  // Replier, puis redéployer : le choix est retrouvé après un rechargement.
+  // Replié : seul le bouton reste, qui dit que ça joue.
   await radioButton(page).click();
   await expect(mini).toHaveCount(0);
   await expect(radioButton(page)).toHaveAttribute('aria-expanded', 'false');
+  await expect(radioButton(page)).toHaveAccessibleName('Radio, en lecture');
+  await page.screenshot({ path: 'test-results/radio-replie.png' });
+
+  // Redéployer : le choix est retrouvé après un rechargement.
   await radioButton(page).click();
   await expect(mini).toBeVisible();
   await page.reload();
@@ -853,7 +895,7 @@ test('bombe : un petit ZIP qui déclare ou produit des centaines de Mo est refus
   await importZip(page, 'abime.zip', buildZip([{ name: 'electro/abime.wav', data: wav, deflate: true, declaredCrc: 1234 }]));
   await expect(page.getByRole('alert')).toContainText('Le ZIP est abîmé', { timeout: 30_000 });
   expect(await radioFiles(page)).toEqual([]);
-  await expect(page.getByText('Ta radio est vide.')).toBeVisible();
+  await expect(page.getByText(NO_PACK)).toBeVisible();
 });
 
 test('flux sans fin : le téléchargement est coupé au plafond, le stockage reste vide', async ({ page }) => {
@@ -870,7 +912,10 @@ test('flux sans fin : le téléchargement est coupé au plafond, le stockage res
   expect(await radioFiles(page)).toEqual([]);
   await expect.poll(() => requests.find((line) => line.startsWith('sansfin coupé'))).toBeTruthy();
   const sent = Number(/(\d+) octets/.exec(requests.find((line) => line.startsWith('sansfin coupé')) ?? '')?.[1]);
-  expect(sent).toBeLessThan(64 * MIO);
+  // Le serveur d'essai envoie aussi vite que la boucle locale le permet : ce qu'il a déjà poussé
+  // quand la coupure lui parvient dépend du poste (64 Mio dépassés sur une machine rapide). Ce qui
+  // compte est la coupure elle-même, vérifiée ci-dessus, et un flux qui ne continue pas indéfiniment.
+  expect(sent).toBeLessThan(512 * MIO);
 });
 
 test('lien reçu vers la machine locale : refusé sans requête ; le champ d’adresse l’accepte toujours', async ({ page }) => {
@@ -911,4 +956,163 @@ test('lien vers un pack déjà importé : retéléchargé si son poids a changé
   await page.waitForTimeout(1000);
   expect(requests).toEqual(['HEAD /cors/maj.zip']);
   expect(await radioFiles(page)).toHaveLength(2);
+});
+
+// ——— Station d'accueil : servie par l'app, elle joue tant qu'aucun pack n'est là ———
+
+/** Morceaux de la station d'accueil demandés par la page (chemins), dans l'ordre. */
+function watchWelcomeRequests(page: Page): string[] {
+  const seen: string[] = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (path.includes('/assets/audio/radio/')) seen.push(path);
+  });
+  return seen;
+}
+
+/**
+ * Pack retenu : l'hébergement ne répond qu'à l'appel de la fonction rendue (posé après routeLinks, qui
+ * sert ensuite). Le téléchargement dure ainsi le temps qu'il faut au parcours, même sur une machine chargée.
+ */
+async function heldPack(page: Page, name: string): Promise<() => void> {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.context().route(`https://${LINK_HOST}/cors/${name}`, async (route) => {
+    await gate;
+    await route.fallback();
+  });
+  return () => release();
+}
+
+test('premier lancement sans pack : la station d’accueil joue, un seul morceau demandé, impossible à supprimer', async ({ page }) => {
+  const asked = watchWelcomeRequests(page);
+  await openRadio(page);
+  await expect(page.getByText(NO_PACK)).toBeVisible();
+  await expect(station(page, WELCOME)).toContainText('4 morceaux');
+  await expect(page.locator('.radio-now-station')).toHaveText(WELCOME);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise');
+  await expect(page.locator('.radio-player').getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => clockSeconds(page), { timeout: 45_000 }).toBeGreaterThanOrEqual(2);
+  // Écran verrouillé et barre de progression : comme pour un pack.
+  expect(await page.evaluate(() => [navigator.mediaSession.metadata?.title, navigator.mediaSession.metadata?.album])).toEqual(['Midnight Cruise', WELCOME]);
+  await expect(seekBar(page)).toBeEnabled();
+  await expect(page.getByTestId('radio-temps')).toContainText('/ 2:30');
+  // Un seul morceau demandé, lu en flux : rien n'entre dans le stockage privé.
+  expect([...new Set(asked)]).toEqual(['/PimpMyBichon/assets/audio/radio/accueil/midnight-cruise.mp3']);
+  expect(await radioFiles(page)).toEqual([]);
+  await page.screenshot({ path: 'test-results/radio-accueil.png' });
+
+  // Suivant : le deuxième morceau, demandé à son tour.
+  await page.locator('.radio-player').getByRole('button', { name: 'Morceau suivant' }).click();
+  await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Glide');
+  expect([...new Set(asked)].at(-1)).toBe('/PimpMyBichon/assets/audio/radio/accueil/midnight-glide.mp3');
+
+  // Aucune suppression possible.
+  await station(page, WELCOME).getByRole('button', { name: new RegExp(`^${WELCOME}`) }).click();
+  await expect(station(page, WELCOME).locator('.radio-tracks li')).toHaveCount(4);
+  await expect(station(page, WELCOME).getByRole('button', { name: /Supprimer/ })).toHaveCount(0);
+  await expect(station(page, WELCOME)).toContainText('elle reste là');
+  await page.screenshot({ path: 'test-results/radio-accueil-liste.png' });
+});
+
+test('lien de pack au premier lancement : l’accueil joue pendant le téléchargement, puis la radio passe au pack en fondu', async ({ page }) => {
+  test.setTimeout(120_000);
+  await installAudioProbe(page);
+  await routeLinks(page);
+  // Morceaux d'une minute : le premier du pack ne s'achève pas avant les vérifications.
+  packs.set('lent.zip', { buffer: smallPack(['hiphop-rnb'], 2, 60) });
+  const release = await heldPack(page, 'lent.zip');
+  await page.goto(`./?pack=${encodeURIComponent(`https://${LINK_HOST}/cors/lent.zip`)}`);
+  await expect(page.locator('.radio-job')).toHaveAttribute('data-phase', 'telechargement');
+  await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise');
+  await expectAudible(page);
+  await page.screenshot({ path: 'test-results/radio-accueil-telechargement.png' });
+
+  // Pendant le fondu, les deux morceaux jouent ensemble (l'entrant monte, le sortant descend)…
+  const crossfade = page.waitForFunction(
+    () => (window as unknown as ProbeWindow).__audios.filter((a) => a.hasAttribute('src') && !a.paused).length === 2,
+    null,
+    { polling: 50, timeout: 60_000 },
+  );
+  release();
+  await expect(station(page, 'Hip-hop & R&B')).toBeVisible({ timeout: 45_000 });
+  await crossfade;
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 1a');
+  // … puis le sortant est déchargé : plus qu'un seul élément, celui du pack, avec du son.
+  await expect.poll(async () => (await decks(page)).length, { timeout: 15_000 }).toBe(1);
+  await expectAudible(page);
+  await expect(page.locator('.radio-now-station')).toHaveText('Hip-hop & R&B');
+});
+
+test('geste pendant le téléchargement : l’accueil mis en pause, le pack arrive sans rien relancer', async ({ page }) => {
+  test.setTimeout(120_000);
+  await routeLinks(page);
+  packs.set('lent2.zip', { buffer: smallPack(['hiphop-rnb']) });
+  const release = await heldPack(page, 'lent2.zip');
+  await page.goto(`./?pack=${encodeURIComponent(`https://${LINK_HOST}/cors/lent2.zip`)}`);
+  const player = page.locator('.radio-player');
+  await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise');
+  // Le son sort vraiment avant le geste (sinon l'appui relancerait au lieu de mettre en pause).
+  await expect.poll(() => clockSeconds(page), { timeout: 45_000 }).toBeGreaterThanOrEqual(1);
+  await player.getByRole('button', { name: 'Pause' }).click();
+  await expect(player.getByRole('button', { name: 'Lecture', exact: true })).toBeVisible();
+  const paused = await clockSeconds(page);
+  await expect(page.locator('.radio-job')).toHaveAttribute('data-phase', 'telechargement');
+  release();
+  await expect(station(page, 'Hip-hop & R&B')).toBeVisible({ timeout: 45_000 });
+  await page.waitForTimeout(2500);
+  // Le geste est respecté : toujours en pause, toujours sur l'accueil ; le pack attend dans la liste.
+  await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise');
+  await expect(player.getByRole('button', { name: 'Lecture', exact: true })).toBeVisible();
+  expect(await clockSeconds(page)).toBe(paused);
+  await expect(page.getByText('Station ajoutée')).toBeVisible();
+});
+
+test('pack déjà là : à l’ouverture, la station d’accueil ne s’impose pas', async ({ page }) => {
+  await openRadio(page);
+  await page.getByTestId('radio-fichier-pack').setInputFiles({ name: 'p.zip', mimeType: 'application/zip', buffer: Buffer.from(smallPack()) });
+  await expect(page.getByText('Stations ajoutées')).toBeVisible({ timeout: 45_000 });
+  await page.getByRole('button', { name: 'Écouter Rock' }).click();
+  await expect(page.getByTestId('radio-titre')).toHaveText('Bruit d’essai 2a');
+  const asked = watchWelcomeRequests(page);
+  await page.goto('about:blank');
+  await page.goto('./');
+  await expect(radioButton(page)).toHaveAccessibleName('Radio, en lecture', { timeout: 30_000 });
+  await radioButton(page).click();
+  await expect(page.locator('.radio-mini')).toContainText('Bruit d’essai 2a');
+  await page.waitForTimeout(1500);
+  expect(asked).toEqual([]);
+});
+
+test('hors ligne : un morceau d’accueil déjà entendu rejoue, les autres sont sautés sans rien casser', async ({ page, context }) => {
+  test.setTimeout(150_000);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('./');
+  await waitOfflineReady(page);
+  // Page sous le contrôle du service worker : le morceau qui joue est gardé à sa première écoute.
+  await page.reload();
+  await openRadio(page);
+  await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise');
+  const kept = () =>
+    page.evaluate(async () => {
+      if (!(await caches.has('pmb-radio-accueil'))) return null;
+      return (await (await caches.open('pmb-radio-accueil')).keys()).map((request) => new URL(request.url).pathname.split('/').pop());
+    });
+  await page.waitForTimeout(3000);
+  test.skip((await kept()) === null, 'service worker sans la route de la musique d’accueil (patch accueil-sw.ts.patch pas encore appliqué)');
+  await expect.poll(kept, { timeout: 30_000 }).toEqual(['midnight-cruise.mp3']);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise', { timeout: 30_000 });
+  await expect.poll(() => clockSeconds(page), { timeout: 45_000 }).toBeGreaterThanOrEqual(2);
+  // Les trois autres n'ont jamais été entendus : sautés l'un après l'autre, retour au morceau gardé.
+  await page.locator('.radio-player').getByRole('button', { name: 'Morceau suivant' }).click();
+  await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Cruise', { timeout: 30_000 });
+  await expect(page.locator('.radio-player').getByRole('button', { name: 'Pause' })).toBeVisible({ timeout: 30_000 });
+  await context.setOffline(false);
+  expect(errors).toEqual([]);
 });

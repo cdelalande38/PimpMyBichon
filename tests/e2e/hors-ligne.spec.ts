@@ -16,7 +16,13 @@ test.describe('hors ligne et installation', () => {
     await waitForScene(page);
 
     const failed: string[] = [];
-    page.on('requestfailed', (request) => failed.push(request.url()));
+    // La musique d'accueil se lit en flux : un morceau en cours de lecture au rechargement est coupé
+    // par le navigateur (net::ERR_ABORTED, ancienne page). Ce n'est pas une ressource manquante hors
+    // ligne ; un morceau demandé hors ligne sans copie en cache échouerait autrement et serait compté.
+    page.on('requestfailed', (request) => {
+      const streamCut = request.failure()?.errorText === 'net::ERR_ABORTED' && new URL(request.url()).pathname.includes('/assets/audio/radio/');
+      if (!streamCut) failed.push(request.url());
+    });
 
     await context.setOffline(true);
     await page.reload();

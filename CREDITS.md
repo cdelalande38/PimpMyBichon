@@ -36,4 +36,9 @@ Le code s'appuie sur des bibliothèques libres installées par npm (three.js, Re
 
 ## Audio
 
-Aucun fichier audio n'est embarqué pour l'instant. Quand il y en aura, chaque fichier sera tracé ici avec sa source, sa licence, sa date et, pour la musique générée, la preuve d'abonnement (§ 9 du cahier des charges).
+Un seul jeu de fichiers audio est embarqué : la **musique d'accueil**, qui joue pendant le chargement du premier pack de musique puis lui laisse la place (exception décidée par le commanditaire le 15 novembre 2026, § 9 et § 18 du cahier des charges). Ce ne sont pas des titres du commerce : le commanditaire les a générés lui-même et en a les droits d'usage. La licence « droits du commanditaire » n'est admise que pour `public/assets/audio/radio/accueil/` (`tools/lib/credits.mjs`) ; toute autre musique passe par les packs et par l'import sur le téléphone. Les moteurs et les bruitages viendront avec leur source, leur licence et leur date.
+
+| Fichier(s) | Origine | Auteur | Licence | Date | Note |
+|---|---|---|---|---|---|
+| `public/assets/audio/radio/accueil/midnight-cruise.mp3`, `public/assets/audio/radio/accueil/midnight-glide.mp3`, `public/assets/audio/radio/accueil/midnight-lanes.mp3`, `public/assets/audio/radio/accueil/midnight-runway.mp3` | quatre morceaux générés avec un outil de génération musicale (MP3, 192 kbit/s, environ 2 min 30 chacun, 14,3 Mo en tout) | le commanditaire | droits du commanditaire | 2026-11-15 | station « Atelier FM » ; titres « Midnight Cruise », « Midnight Glide », « Midnight Lanes », « Midnight Runway » ; lus en flux, hors du précache du service worker ; preuve de l'abonnement à l'outil de génération conservée par le commanditaire, hors du dépôt |
+| `public/assets/audio/radio/accueil/station.json` | écrit pour le projet | projet PimpMyBichon | création projet | 2026-11-15 | manifeste de la station d'accueil (nom, ordre, titres, durées), lu au build par `src/audio/radio/accueil.ts` et contrôlé par `npm run audio:check` |

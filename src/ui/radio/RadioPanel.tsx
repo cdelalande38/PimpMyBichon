@@ -1,10 +1,11 @@
 // Corps du panneau Radio : offre reçue par lien, import en cours, lecteur, stations et morceaux,
-// ajout d'un pack (fichier ou adresse) ou de morceaux, place occupée sur le téléphone.
+// ajout d'un pack (fichier ou adresse) ou de morceaux, place occupée sur le téléphone. La station
+// d'accueil (servie par l'app) figure parmi les stations, sans bouton de suppression.
 
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent } from 'react';
 import type { Station } from '../../audio/radio/catalog.ts';
-import { cancelDownload, deletePack, deleteStation, dismissJob, downloadPack, importFiles } from '../../audio/radio/library.ts';
-import { next, playStation, previous, seekTo, setShuffle, setVolume, togglePlay } from '../../audio/radio/player.ts';
+import { cancelDownload, chooseStation, deletePack, deleteStation, dismissJob, downloadPack, importFiles } from '../../audio/radio/library.ts';
+import { next, previous, seekTo, setShuffle, setVolume, togglePlay } from '../../audio/radio/player.ts';
 import { spokenTime } from '../../audio/radio/position.ts';
 import { closeSheet } from '../../app/useRoute.ts';
 import { useRadio, type Job } from '../../state/radio.ts';
@@ -256,7 +257,7 @@ function StationItem({ station, packStations }: { station: Station; packStations
           className="btn radio-icon"
           aria-label={`Écouter ${station.name}`}
           aria-current={playingHere || undefined}
-          onClick={() => void playStation(station.id)}
+          onClick={() => void chooseStation(station.id)}
         >
           <IconPlay />
         </button>
@@ -269,7 +270,7 @@ function StationItem({ station, packStations }: { station: Station; packStations
                 <button
                   type="button"
                   aria-current={now?.trackId === track.id || undefined}
-                  onClick={() => void playStation(station.id, track.id)}
+                  onClick={() => void chooseStation(station.id, track.id)}
                 >
                   <span className="radio-track-title">{track.title}</span>
                   <span className="radio-track-meta">
@@ -279,7 +280,9 @@ function StationItem({ station, packStations }: { station: Station; packStations
               </li>
             ))}
           </ol>
-          {confirm === null ? (
+          {station.builtin ? (
+            <p className="radio-note">Livrée avec l’atelier : elle tourne en attendant ton pack, et elle reste là.</p>
+          ) : confirm === null ? (
             <div className="radio-row">
               <button type="button" className="btn" onClick={() => setConfirm('station')}>
                 Supprimer la station
@@ -317,7 +320,7 @@ function StationItem({ station, packStations }: { station: Station; packStations
   );
 }
 
-function AddMusic({ empty }: { empty: boolean }) {
+function AddMusic({ empty, welcome }: { empty: boolean; welcome: string | null }) {
   const packInput = useRef<HTMLInputElement>(null);
   const songsInput = useRef<HTMLInputElement>(null);
   const [address, setAddress] = useState('');
@@ -338,8 +341,9 @@ function AddMusic({ empty }: { empty: boolean }) {
       <h3 id="radio-add-title">Ajouter un pack</h3>
       {empty && (
         <p className="radio-empty">
-          Ta radio est vide. Fabrique un pack sur ton ordi avec <code>npm run radio:pack</code>, puis ajoute-le ici
-          depuis un fichier ou une adresse ; tu peux aussi prendre des morceaux déjà sur ton téléphone.
+          {welcome ? `Pas encore de pack : en attendant, c’est «\u00a0${welcome}\u00a0» qui tourne, la station livrée avec l’app. ` : 'Ta radio est vide. '}
+          Ta musique à toi arrive par un pack : fabrique-le sur ton ordi avec <code>npm run radio:pack</code>, puis
+          ajoute-le ici depuis un fichier ou une adresse ; tu peux aussi prendre des morceaux déjà sur ton téléphone.
         </p>
       )}
       <div className="radio-row">
@@ -459,7 +463,7 @@ function RadioPanelBody() {
           </ul>
         </section>
       )}
-      <AddMusic empty={stations.length === 0} />
+      <AddMusic empty={!stations.some((station) => !station.builtin)} welcome={stations.find((station) => station.builtin)?.name ?? null} />
       <StorageLine />
     </div>
   );

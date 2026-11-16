@@ -11,8 +11,10 @@ export interface Track {
   path: string;
   title: string;
   artist?: string;
-  /** Fichier du stockage privé qui porte le morceau. */
+  /** Fichier du stockage privé qui porte le morceau (station de base : son nom dans le dossier de la station). */
   file: string;
+  /** Morceau servi par l'app (station de base) : son adresse, lue en flux ; absente : stockage privé. */
+  src?: string;
   /** Tranche du fichier (morceau stocké dans le ZIP) ; absente : le fichier entier. */
   start?: number;
   end?: number;
@@ -27,6 +29,8 @@ export interface Station {
   folder: string;
   name: string;
   tracks: Track[];
+  /** Station de base, servie par l'app (accueil.ts) : jamais enregistrée dans l'index, jamais supprimée. */
+  builtin?: boolean;
 }
 
 export type PackOrigin = 'adresse' | 'fichier' | 'morceaux';

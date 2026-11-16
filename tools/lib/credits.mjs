@@ -37,6 +37,26 @@ export function cellKey(text) {
 }
 
 const ALLOWED_KEYS = new Set(ALLOWED_LICENSES.map(cellKey));
+
+/**
+ * Licences admises sur un seul dossier, jamais ailleurs. « droits du commanditaire » : la musique
+ * d'accueil, générée par le commanditaire qui en a les droits d'usage (décision du 15 novembre 2026,
+ * § 9 et § 18 du cahier des charges) ; partout ailleurs, la ligne est refusée comme toute autre.
+ * @type {ReadonlyArray<Readonly<{ license: string, scope: string }>>}
+ */
+export const SCOPED_LICENSES = Object.freeze([
+  Object.freeze({ license: 'droits du commanditaire', scope: 'public/assets/audio/radio/accueil/' }),
+]);
+
+/**
+ * Dossier où une licence à portée limitée est admise, ou null si elle ne l'est nulle part.
+ * @param {string} cell
+ * @returns {string | null}
+ */
+export function licenseScope(cell) {
+  const key = cellKey(cell);
+  return SCOPED_LICENSES.find((item) => cellKey(item.license) === key)?.scope ?? null;
+}
 const FILE_HEADERS = ['fichier', 'chemin', 'motif', 'file', 'path'];
 const LICENSE_HEADERS = ['licence', 'license'];
 
@@ -52,6 +72,7 @@ export function isAllowedLicense(cell) {
  * @property {string[]} patterns  chemins ou motifs, tels qu'ils sont écrits entre accents graves
  * @property {string} license     contenu de la cellule « Licence »
  * @property {boolean} allowed    la licence fait partie de la liste admise
+ * @property {string | null} scope  licence admise sur ce seul dossier (SCOPED_LICENSES), sinon null
  * @property {(rel: string) => boolean} covers
  */
 
@@ -199,6 +220,7 @@ export function parseCredits(markdown) {
         patterns,
         license,
         allowed: isAllowedLicense(license),
+        scope: licenseScope(license),
         covers: (rel) => matchers.some((matches) => matches(rel)),
       });
     }
@@ -250,7 +272,7 @@ export function checkLicenseCoverage({ files, credits, rule }) {
       );
     }
     for (const row of rows) {
-      if (row.allowed) continue;
+      if (row.allowed || (row.scope !== null && rel.startsWith(row.scope))) continue;
       const hits = refused.get(row) ?? [];
       hits.push(rel);
       refused.set(row, hits);
@@ -262,7 +284,9 @@ export function checkLicenseCoverage({ files, credits, rule }) {
         CREDITS_FILE,
         row.line,
         rule,
-        `licence « ${row.license || 'vide'} » hors de la liste admise dans un dépôt public (${allowed}) : ` +
+        (row.scope !== null
+          ? `licence « ${row.license} » admise sous ${row.scope} seulement : `
+          : `licence « ${row.license || 'vide'} » hors de la liste admise dans un dépôt public (${allowed}) : `) +
           `elle couvre ${countLabel(hits.length, 'fichier')}, par exemple ${hits[0]}`,
       ),
     );

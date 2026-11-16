@@ -5,8 +5,10 @@ import {
   ALLOWED_LICENSES,
   checkLicenseCoverage,
   isAllowedLicense,
+  licenseScope,
   loadCredits,
   parseCredits,
+  SCOPED_LICENSES,
   splitTableRow,
 } from '../../../tools/lib/credits.mjs';
 import { matchesPath } from '../../../tools/lib/glob.mjs';
@@ -22,6 +24,30 @@ describe('CREDITS.md — licences admises', () => {
   it('refuse tout le reste, y compris une licence admise accompagnée d’autre chose', () => {
     const refused = ['', 'CC0', 'CC-BY', 'CC-BY-NC-4.0', 'CC-BY-SA-4.0', 'CC-BY-4.0 ou plus', 'MIT', 'libre de droits'];
     for (const license of refused) expect(isAllowedLicense(license), license).toBe(false);
+  });
+});
+
+describe('CREDITS.md — licence admise sur un seul dossier', () => {
+  const MUSIC = 'public/assets/audio/radio/accueil/midnight-cruise.mp3';
+
+  it('« droits du commanditaire » n’entre pas dans la liste générale', () => {
+    expect(SCOPED_LICENSES).toEqual([{ license: 'droits du commanditaire', scope: 'public/assets/audio/radio/accueil/' }]);
+    expect(isAllowedLicense('droits du commanditaire')).toBe(false);
+    expect(licenseScope('Droits du commanditaire')).toBe('public/assets/audio/radio/accueil/');
+    expect(licenseScope('CC0-1.0')).toBeNull();
+  });
+
+  it('couvre la musique d’accueil, et rien d’autre', () => {
+    const credits = parseCredits(creditsFile(['public/assets/audio/**', 'droits du commanditaire']));
+    expect(checkLicenseCoverage({ files: [MUSIC], credits: { present: true, ...credits }, rule: 'licence' }).errors).toEqual([]);
+    const elsewhere = checkLicenseCoverage({
+      files: [MUSIC, 'public/assets/audio/radio/autre/titre.mp3', 'public/assets/audio/moteur/idle.opus'],
+      credits: { present: true, ...credits },
+      rule: 'licence',
+    }).errors;
+    expect(located(elsewhere)).toEqual(['CREDITS.md:5 licence']);
+    expect(elsewhere[0]?.message).toContain('admise sous public/assets/audio/radio/accueil/ seulement');
+    expect(elsewhere[0]?.message).toContain('2 fichiers');
   });
 });
 

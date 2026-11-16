@@ -90,3 +90,12 @@ export async function trackBlob(track: { file: string; start?: number; end?: num
     ? file.slice(track.start, track.end, track.mime)
     : file.slice(0, file.size, track.mime);
 }
+
+/**
+ * Adresse à poser sur l'élément audio : celle d'un morceau servi par l'app (lu en flux), sinon une
+ * adresse d'objet du stockage privé (à libérer ; libérer l'adresse d'un morceau servi ne fait rien).
+ */
+export async function trackUrl(track: { src?: string; file: string; start?: number; end?: number; mime: string }): Promise<string> {
+  if (track.src) return track.src;
+  return URL.createObjectURL(await trackBlob(track));
+}

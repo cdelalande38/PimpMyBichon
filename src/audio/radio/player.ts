@@ -17,8 +17,9 @@
 //   peut être ralentie ou gelée). Une seule adresse préparée à la fois, libérée si la file change.
 
 import { recordDuration, setPrefs, useRadio } from '../../state/radio.ts';
+import { noteWelcomeGesture } from './accueil.ts';
 import type { Station, Track } from './catalog.ts';
-import { trackBlob } from './opfs.ts';
+import { trackUrl } from './opfs.ts';
 import { PlayQueue } from './order.ts';
 import { clampPosition } from './position.ts';
 
@@ -88,10 +89,13 @@ function prepareNext(): void {
   if (!target || !station) return;
   const my = prepareToken;
   const stationId = station.id;
-  void trackBlob(target.track).then(
-    (blob) => {
-      if (my !== prepareToken) return;
-      prepared = { stationId, index: target.index, trackId: target.track.id, url: URL.createObjectURL(blob) };
+  void trackUrl(target.track).then(
+    (url) => {
+      if (my !== prepareToken) {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      prepared = { stationId, index: target.index, trackId: target.track.id, url };
     },
     () => undefined,
   );
@@ -279,7 +283,7 @@ async function startTrack(index: number, fade: boolean): Promise<void> {
   let url: string | null = takePrepared(index, track);
   if (!url) releasePrepared();
   try {
-    url ??= URL.createObjectURL(await trackBlob(track));
+    url ??= await trackUrl(track);
   } catch {
     // Fichier disparu du stockage privé : on passe au suivant, sans boucler.
     errors += 1;
@@ -456,15 +460,18 @@ function recoverOnVisible(): void {
   }
 }
 
-/** Lance une station (sur un geste), éventuellement sur un morceau précis. */
-export async function playStation(stationId: string, trackId?: string): Promise<void> {
+/**
+ * Lance une station, éventuellement sur un morceau précis. `fade` : fondu enchaîné depuis le morceau
+ * en cours (bascule de la station d'accueil vers un pack ; page cachée, l'enchaînement reste sec).
+ */
+export async function playStation(stationId: string, trackId?: string, fade = false): Promise<void> {
   const target = useRadio.getState().catalog.stations.find((item) => item.id === stationId);
   if (!target) return;
   station = target;
   errors = 0;
   const start = Math.max(0, trackId ? target.tracks.findIndex((track) => track.id === trackId) : 0);
   queue = new PlayQueue(target.tracks.length, useRadio.getState().shuffle, start);
-  await startTrack(queue.current, false);
+  await startTrack(queue.current, fade);
 }
 
 /** Lecture : reprend le morceau en pause, sinon la dernière station écoutée. */
@@ -490,6 +497,7 @@ export async function resume(): Promise<void> {
 }
 
 export function pause(): void {
+  noteWelcomeGesture(station?.builtin === true);
   wanted = false;
   if (fadingOut) finishFade();
   activeDeck()?.el.pause();
@@ -504,10 +512,12 @@ export async function togglePlay(): Promise<void> {
 }
 
 export async function next(): Promise<void> {
+  noteWelcomeGesture(station?.builtin === true);
   await advance(1, false);
 }
 
 export async function previous(): Promise<void> {
+  noteWelcomeGesture(station?.builtin === true);
   const deck = activeDeck();
   if (deck && deck.el.currentTime > 3) {
     deck.el.currentTime = 0;

@@ -3,6 +3,7 @@
 
 import { create } from 'zustand';
 import { createStore, get, set, type UseStore } from 'idb-keyval';
+import { withBuiltins } from '../audio/radio/accueil.ts';
 import { EMPTY_CATALOG, updateCatalog, withDurations, type Catalog } from '../audio/radio/catalog.ts';
 
 export type RadioStatus = 'chargement' | 'pret' | 'indisponible';
@@ -141,9 +142,12 @@ export function setPrefs(patch: Partial<RadioPrefs>): void {
 // Durées lues mais pas encore enregistrées : reportées sur tout index relu entre-temps.
 const pendingDurations = new Map<string, number>();
 
-/** Prend un index relu sur le disque (après une écriture, ou quand un autre onglet l'a changé). */
+/**
+ * Prend un index relu sur le disque (après une écriture, ou quand un autre onglet l'a changé). Les
+ * stations de base (servies par l'app) s'y ajoutent en mémoire, jamais sur le disque.
+ */
 export function adoptCatalog(catalog: Catalog): void {
-  useRadio.setState({ catalog: pendingDurations.size > 0 ? withDurations(catalog, pendingDurations) : catalog });
+  useRadio.setState({ catalog: withBuiltins(pendingDurations.size > 0 ? withDurations(catalog, pendingDurations) : catalog) });
 }
 
 /**
