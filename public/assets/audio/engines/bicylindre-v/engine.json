@@ -1,0 +1,132 @@
+{
+  "format": "pmb-engine-sons",
+  "version": 1,
+  "famille": "bicylindre-v",
+  "nom": "Bicylindre en V (le bobber)",
+  "provisoire": true,
+  "ralenti": 1000,
+  "gaz": "boucles",
+  "boucles": [
+    {
+      "emplacement": "idle",
+      "fichier": "idle.ogg",
+      "empreinte": "571faa83b3",
+      "duree": 6.011875,
+      "gain": 0,
+      "gainFabrication": 6,
+      "credit": 0,
+      "regime": 1000,
+      "boucle": [
+        0,
+        6.011875
+      ]
+    },
+    {
+      "emplacement": "low",
+      "fichier": "low.ogg",
+      "empreinte": "b6db0f7e12",
+      "duree": 5.992208333333333,
+      "gain": 0,
+      "gainFabrication": 4.8,
+      "credit": 0,
+      "regime": 1500,
+      "boucle": [
+        0,
+        5.992208333333333
+      ]
+    },
+    {
+      "emplacement": "mid",
+      "fichier": "mid.ogg",
+      "empreinte": "5e9818a790",
+      "duree": 5.985979166666667,
+      "gain": 0,
+      "gainFabrication": -6.2,
+      "credit": 1,
+      "regime": 2800,
+      "boucle": [
+        0,
+        5.985979166666667
+      ]
+    }
+  ],
+  "ponctuels": [
+    {
+      "emplacement": "start",
+      "fichier": "start.ogg",
+      "empreinte": "9dce5c0984",
+      "duree": 7,
+      "gain": 0,
+      "gainFabrication": 2,
+      "credit": 0
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-1.ogg",
+      "empreinte": "5882ca2ae0",
+      "duree": 9.2,
+      "gain": 0,
+      "gainFabrication": 0.1,
+      "credit": 0
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-2.ogg",
+      "empreinte": "e1de8eb728",
+      "duree": 7.7,
+      "gain": 0,
+      "gainFabrication": -0.7,
+      "credit": 0
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-3.ogg",
+      "empreinte": "83ead6a49e",
+      "duree": 7.2,
+      "gain": 0,
+      "gainFabrication": 2.6,
+      "credit": 0
+    },
+    {
+      "emplacement": "stop",
+      "fichier": "stop.ogg",
+      "empreinte": "cf569fc26b",
+      "duree": 9.9,
+      "gain": 0,
+      "gainFabrication": 7,
+      "credit": 0
+    },
+    {
+      "emplacement": "sweep_up",
+      "fichier": "sweep_up.ogg",
+      "empreinte": "23d8e15f17",
+      "duree": 11,
+      "gain": 0,
+      "gainFabrication": -6.1,
+      "credit": 1
+    },
+    {
+      "emplacement": "sweep_down",
+      "fichier": "sweep_down.ogg",
+      "empreinte": "9833fe2e27",
+      "duree": 13.8,
+      "gain": 0,
+      "gainFabrication": -5.5,
+      "credit": 1
+    }
+  ],
+  "credits": [
+    {
+      "auteur": "demodave",
+      "licence": "CC0-1.0",
+      "source": "Freesound 502690",
+      "citer": false
+    },
+    {
+      "auteur": "BranCorvus",
+      "licence": "CC0-1.0",
+      "source": "Freesound 743981",
+      "citer": false
+    }
+  ]
+}

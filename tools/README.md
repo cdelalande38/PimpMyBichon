@@ -179,7 +179,7 @@ Non contrôlé à ce jalon : budgets de triangles et de draw calls des décors (
 ```
 
 - **Fichier(s)** : un ou plusieurs chemins ou motifs **entre accents graves**, relatifs à la racine du dépôt. Une ligne sans accent grave ne couvre rien (avertissement).
-- **Licence** : l'une des licences admises dans un dépôt public, et rien d'autre dans la cellule : `CC0-1.0`, `CC-BY-4.0`, `OFL-1.1` ou `création projet`. La casse, les accents et la ponctuation ne comptent pas (« CC BY 4.0 » convient) ; un lien Markdown est lu par son libellé.
+- **Licence** : l'une des licences admises dans un dépôt public, et rien d'autre dans la cellule : `CC0-1.0`, `CC-BY-3.0`, `CC-BY-4.0`, `OFL-1.1` ou `création projet`. La casse, les accents et la ponctuation ne comptent pas (« CC BY 4.0 » convient) ; un lien Markdown est lu par son libellé.
 - Les autres colonnes sont libres : elles servent à la traçabilité (source, auteur, date d'entrée, preuve d'abonnement pour la musique générée).
 
 Motifs reconnus, sensibles à la casse :
@@ -335,6 +335,8 @@ Hors des trois contrôles ci-dessus.
 |---|---|---|
 | `npm run vehicles:build [-- <id>…]` | `tools/vehicles/build.mjs` | importe `assets-src/vehicles/<id>/model.mjs` et écrit `public/assets/vehicles/<id>/body.glb` (jamais versionné) ; affiche triangles, appels de dessin, matériaux, nœuds, boîte englobante, poids et durée. Lancé d'office avant `npm run dev`, avant `npm run build` et dans `npm run check` |
 | `node tools/captures/vehicule.mjs <id> [--port <n>]` | `tools/captures/vehicule.mjs` | page d'aperçu `src/dev/vehicule/` (peinture de l'app, studio à deux barres néon) sur la vraie carte : six vues, `planche.png` et la vignette `thumb.webp` dans `captures/vehicules/<id>/` |
+| `npm run sons:ecoute [-- --port <n>]` | `tools/sons/ecoute.mjs` | page d'écoute locale (127.0.0.1:4950, jamais publiée) : par famille et par emplacement, les découpes du dossier privé `.private-assets/sons/` avec description, durée, régime estimé et licence ; écoute, boucle réglable, choix écrit dans `assets-src/sons/choix.json`. Mode d'emploi : `tools/sons/LISEZ-MOI.md` |
+| `npm run sons:build [-- --famille <id>] [-- --verifier]` | `tools/sons/build.mjs` | fabrique les sons d'après le choix : `public/assets/audio/engines/<famille>/` (Opus mono 48 kHz, boucles sans clic, niveaux égalisés, `engine.json`) et `public/assets/audio/sfx/<famille>/`, puis `src/audio/engine/familles.json` et la section « Sons » de `CREDITS.md` ; versionnés (la CI n'a pas le dossier privé). Sans dossier privé ni ffmpeg : ne fait rien et le dit |
 | `npm run radio:pack -- <source> <sortie> [--par-station]` | `tools/radio/pack.mjs` | fabrique un pack de musique (ZIP sans compression, noms UTF-8) : un ZIP version 2 pour tous les sous-dossiers de `<source>` (un sous-dossier = une station), ou un ZIP version 1 par station ; jamais versionné |
 
 - **Générateur** : boîte à outils `tools/vehicles/kit.mjs` (loft, révolution, tube, symétrie, roues voiture et moto, optiques), écrivain GLB `tools/vehicles/glb-writer.mjs` ; elle refuse tout matériau hors des conventions du § 8. Mode d'emploi et exemple : `assets-src/vehicles/LISEZ-MOI.md`. Le build est déterministe (octets identiques d'un build à l'autre).

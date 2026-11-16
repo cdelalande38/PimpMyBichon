@@ -1,0 +1,113 @@
+{
+  "format": "pmb-engine-sons",
+  "version": 1,
+  "famille": "quatre-en-ligne-moto",
+  "nom": "4 cylindres en ligne de moto (la sportive)",
+  "provisoire": true,
+  "ralenti": 1350,
+  "gaz": "boucles",
+  "boucles": [
+    {
+      "emplacement": "idle",
+      "fichier": "idle.ogg",
+      "empreinte": "1c67797ba2",
+      "duree": 5.995020833333333,
+      "gain": 0,
+      "gainFabrication": 1.4,
+      "credit": 0,
+      "regime": 1350,
+      "boucle": [
+        0,
+        5.995020833333333
+      ]
+    },
+    {
+      "emplacement": "low",
+      "fichier": "low.ogg",
+      "empreinte": "1211881d95",
+      "duree": 6.0149791666666665,
+      "gain": 0,
+      "gainFabrication": -1.6,
+      "credit": 0,
+      "regime": 2500,
+      "boucle": [
+        0,
+        6.0149791666666665
+      ]
+    },
+    {
+      "emplacement": "mid",
+      "fichier": "mid.ogg",
+      "empreinte": "ab7f065357",
+      "duree": 5.980104166666667,
+      "gain": 0,
+      "gainFabrication": -7.6,
+      "credit": 0,
+      "regime": 4000,
+      "boucle": [
+        0,
+        5.980104166666667
+      ]
+    },
+    {
+      "emplacement": "high",
+      "fichier": "high.ogg",
+      "empreinte": "b370a4af19",
+      "duree": 5.996833333333333,
+      "gain": 0,
+      "gainFabrication": -3.6,
+      "credit": 0,
+      "regime": 5300,
+      "boucle": [
+        0,
+        5.996833333333333
+      ]
+    }
+  ],
+  "ponctuels": [
+    {
+      "emplacement": "start",
+      "fichier": "start.ogg",
+      "empreinte": "758d4928ec",
+      "duree": 12,
+      "gain": 0,
+      "gainFabrication": -0.8,
+      "credit": 0
+    },
+    {
+      "emplacement": "stop",
+      "fichier": "stop.ogg",
+      "empreinte": "c670d7dda6",
+      "duree": 13,
+      "gain": 0,
+      "gainFabrication": -0.4,
+      "credit": 0
+    },
+    {
+      "emplacement": "sweep_up",
+      "fichier": "sweep_up.ogg",
+      "empreinte": "7d51ec21e2",
+      "duree": 14.5,
+      "gain": 0,
+      "gainFabrication": -7.5,
+      "credit": 0
+    },
+    {
+      "emplacement": "sweep_down",
+      "fichier": "sweep_down.ogg",
+      "empreinte": "b55af09ac4",
+      "duree": 21,
+      "gain": 0,
+      "gainFabrication": -3.5,
+      "credit": 0
+    }
+  ],
+  "credits": [
+    {
+      "auteur": "bodhistone",
+      "licence": "CC0-1.0",
+      "source": "Freesound 855305",
+      "citer": false
+    }
+  ]
+}

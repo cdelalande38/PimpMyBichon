@@ -1,0 +1,106 @@
+{
+  "format": "pmb-engine-sons",
+  "version": 1,
+  "famille": "diesel-turbo",
+  "nom": "4 cylindres turbo diesel (le van)",
+  "provisoire": true,
+  "ralenti": 850,
+  "gaz": "prises",
+  "boucles": [
+    {
+      "emplacement": "idle",
+      "fichier": "idle.ogg",
+      "empreinte": "bde36dfb48",
+      "duree": 6.009354166666666,
+      "gain": 0,
+      "gainFabrication": 2.1,
+      "credit": 1,
+      "regime": 850,
+      "boucle": [
+        0,
+        6.009354166666666
+      ]
+    },
+    {
+      "emplacement": "mid",
+      "fichier": "mid.ogg",
+      "empreinte": "026509e3c3",
+      "duree": 6.002354166666667,
+      "gain": 0,
+      "gainFabrication": 3,
+      "credit": 2,
+      "regime": 2000,
+      "boucle": [
+        0,
+        6.002354166666667
+      ]
+    }
+  ],
+  "ponctuels": [
+    {
+      "emplacement": "start",
+      "fichier": "start.ogg",
+      "empreinte": "fb41d395e8",
+      "duree": 7.5,
+      "gain": 0,
+      "gainFabrication": 2.6,
+      "credit": 0
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-1.ogg",
+      "empreinte": "e6116bd40f",
+      "duree": 4,
+      "gain": 0,
+      "gainFabrication": -2.4,
+      "credit": 1
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-2.ogg",
+      "empreinte": "088e578f2e",
+      "duree": 4.7,
+      "gain": 0,
+      "gainFabrication": -2.5,
+      "credit": 1
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-3.ogg",
+      "empreinte": "1f24b8f948",
+      "duree": 7.5,
+      "gain": 0,
+      "gainFabrication": -1.1,
+      "credit": 1
+    },
+    {
+      "emplacement": "stop",
+      "fichier": "stop.ogg",
+      "empreinte": "b5b962cbdc",
+      "duree": 7.3,
+      "gain": 0,
+      "gainFabrication": 9.4,
+      "credit": 0
+    }
+  ],
+  "credits": [
+    {
+      "auteur": "Soundholder",
+      "licence": "CC-BY-3.0",
+      "source": "Freesound 425845",
+      "citer": true
+    },
+    {
+      "auteur": "Sadiquecat",
+      "licence": "CC0-1.0",
+      "source": "Freesound 819018",
+      "citer": false
+    },
+    {
+      "auteur": "DangerLaef",
+      "licence": "CC0-1.0",
+      "source": "Freesound 690388",
+      "citer": false
+    }
+  ]
+}

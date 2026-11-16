@@ -87,6 +87,11 @@ export interface EngineSpec {
   boost: 'atmo' | 'turbo' | 'compresseur';
   /** Puissance d'origine, en chevaux. */
   power: number;
+  /**
+   * Famille de sons du moteur : dossier public/assets/audio/engines/<famille>/ (fabriqué par
+   * `npm run sons:build`). Absente, ou sans sons fabriqués : le moteur reste muet.
+   */
+  sound?: string;
 }
 
 /** Point en mètres, dans le repère du véhicule (avant vers +X, haut vers +Y, droite vers +Z). */

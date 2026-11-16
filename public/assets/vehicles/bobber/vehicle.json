@@ -65,7 +65,8 @@
     "fuel": "essence",
     "feed": "carburateur",
     "boost": "atmo",
-    "power": 67
+    "power": 67,
+    "sound": "bicylindre-v"
   },
   "presentSide": "droite"
 }

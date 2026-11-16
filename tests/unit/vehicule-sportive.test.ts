@@ -54,7 +54,7 @@ describe('manifeste de la sportive', () => {
   });
 
   it('donne le moteur de la fiche', () => {
-    expect(manifest.engine).toEqual({ label: '4 cylindres en ligne', fuel: 'essence', feed: 'injection', boost: 'atmo', power: 172 });
+    expect(manifest.engine).toEqual({ label: '4 cylindres en ligne', fuel: 'essence', feed: 'injection', boost: 'atmo', power: 172, sound: 'quatre-en-ligne-moto' });
   });
 });
 

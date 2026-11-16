@@ -73,8 +73,16 @@ Le garage est généré par le code (`src/scene/garage/`, d'après `src/data/gar
 
 ## Emplacements audio
 
-Tous muets : aucun module audio n'existe avant le jalon 9. Rien n'est synthétisé pour combler le vide.
+**Sons des moteurs : choix provisoire, fait sans écoute (2026-11-16).** Les cinq familles (la Cox, le van, le bobber, la sportive, le V8) sonnent au garage avec des prises réelles sous licences libres, choisies d'après leur description et une analyse du signal (durée, stabilité, écrêtage), puis découpées, bouclées et mises à niveau par `npm run sons:build` (`public/assets/audio/engines/<famille>/`, choix dans `assets-src/sons/choix.json`). **À corriger à l'oreille par le commanditaire** avec `npm run sons:ecoute` (mode d'emploi : `tools/sons/LISEZ-MOI.md`), au casque puis sur le haut-parleur du téléphone ; verdict attendu : « on dirait un vrai ». Le détail prise par prise et ce qui manque sont dans `docs/SOURCING_AUDIO.md`. En bref, encore muets :
+- la Cox : régimes tenus (`low`, `mid`, `high`), montée, descente, retours de flamme ;
+- le van : `low`, `high`, montée, descente, sifflement de turbo, retours de flamme ;
+- le bobber : `high`, retours de flamme ; le régime moyen vient d'une autre moto ;
+- la sportive : coup de gaz à vide (une prise attend l'accord du commanditaire), régimes tenus au-dessus de 6 100 tr/min, retours de flamme ;
+- le V8 : `mid`, `high`, montée, descente ; une seule coupure ; retours de flamme d'une voiture à anti-lag ;
+- toutes : couches en charge et en décélération (`_on`, `_off`), jeu « échappement libre », sifflement et soupape de turbo, saturation par pièce d'échappement.
+
+Bruitages d'atelier, d'interface et de route : découpés dans le dossier privé, traités par le même outil (familles `route`, `atelier`, `interface`, sortie `public/assets/audio/sfx/<famille>/`), **pas encore choisis ni branchés** : muets. Volumes séparés moteur, musique et bruitages, et baisse de la musique quand le moteur monte : pas faits. Rien n'est synthétisé pour combler le vide.
 
 ## Licences
 
-Toute fourniture arrive avec sa source et sa licence, notées dans `CREDITS.md`. Rien n'entre dans le dépôt public sans licence qui l'autorise explicitement (CC0, ou création faite pour le projet).
+Toute fourniture arrive avec sa source et sa licence, notées dans `CREDITS.md`. Rien n'entre dans le dépôt public sans licence qui l'autorise explicitement (CC0, CC BY 3.0 ou 4.0 avec l'auteur cité, ou création faite pour le projet).

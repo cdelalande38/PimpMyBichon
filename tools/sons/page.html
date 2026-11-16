@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Écoute des prises</title>
+<style>
+  :root { --fond: #121218; --carte: #1c1c26; --ligne: #34344a; --texte: #ecebf2; --gris: #a3a1b4; --rouge: #ff3b4e; --vert: #4fd18b; --jaune: #f2c94c; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 15px/1.4 system-ui, sans-serif; padding-bottom: 300px; }
+  header { padding: 12px 16px; border-bottom: 1px solid var(--ligne); }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--gris); }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px; }
+  button { font: inherit; color: var(--texte); background: var(--carte); border: 1px solid var(--ligne); border-radius: 4px; padding: 6px 10px; cursor: pointer; min-height: 36px; }
+  button:hover { border-color: var(--texte); }
+  button[aria-pressed="true"] { background: var(--rouge); border-color: var(--rouge); color: #000; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  main { padding: 0 16px; max-width: 1200px; }
+  section.empl { border: 1px solid var(--ligne); border-radius: 6px; margin: 12px 0; background: var(--carte); }
+  section.empl > h2 { margin: 0; padding: 8px 12px; font-size: 16px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  section.empl > h2 small { color: var(--gris); font-weight: 400; }
+  .retenue { padding: 4px 12px 8px; color: var(--vert); }
+  .retenue .vide { color: var(--jaune); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td, th { border-top: 1px solid var(--ligne); padding: 6px 8px; vertical-align: top; text-align: left; }
+  th { color: var(--gris); font-weight: 400; }
+  td.num { white-space: nowrap; }
+  .accord { color: var(--rouge); font-weight: 700; }
+  .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  details { margin: 8px 12px 12px; }
+  summary { cursor: pointer; color: var(--gris); }
+  #atelier { position: fixed; left: 0; right: 0; bottom: 0; background: #0b0b10; border-top: 2px solid var(--rouge); padding: 10px 16px; display: grid; gap: 8px; }
+  #atelier .ligne { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  #atelier label { display: flex; gap: 4px; align-items: center; color: var(--gris); }
+  #atelier input, #atelier select { font: inherit; width: 90px; background: var(--carte); color: var(--texte); border: 1px solid var(--ligne); border-radius: 4px; padding: 4px; }
+  #atelier select { width: auto; }
+  #etat { color: var(--gris); min-height: 1.4em; }
+  #etat.erreur { color: var(--rouge); }
+  .gaz { padding: 4px 12px 8px; color: var(--gris); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Écoute des prises</h1>
+  <p>Choisis une famille, écoute les découpes de chaque emplacement, règle la boucle et retiens une prise. Le choix va dans <code>assets-src/sons/choix.json</code> ; ensuite <code>npm run sons:build</code>.</p>
+</header>
+<nav id="familles" aria-label="Familles"></nav>
+<main id="contenu"></main>
+
+<div id="atelier" aria-label="Atelier d’écoute">
+  <div class="ligne"><strong id="titre">Choisis une découpe ou une prise brute.</strong></div>
+  <div class="ligne">
+    <label>Emplacement <select id="emplacement"></select></label>
+    <label title="en secondes dans la prise">Début <input id="debut" type="number" step="0.05" min="0"></label>
+    <label title="en secondes dans la prise">Fin <input id="fin" type="number" step="0.05" min="0"></label>
+    <label title="en secondes depuis le début de l’extrait">Boucle de <input id="bd" type="number" step="0.01" min="0"></label>
+    <label>à <input id="bf" type="number" step="0.01" min="0"></label>
+    <label title="fondu de bouclage, en secondes">Fondu <input id="fondu" type="number" step="0.01" min="0.01" value="0.12"></label>
+    <label title="tr/min">Régime <input id="regime" type="number" step="50" min="0"></label>
+    <label title="dB ajoutés au niveau égalisé">Gain <input id="gain" type="number" step="0.5" value="0"></label>
+  </div>
+  <div class="ligne">
+    <button id="ecouter" type="button">Écouter l’extrait</button>
+    <button id="boucle" type="button">Écouter fabriqué (en boucle si c’est une boucle)</button>
+    <button id="arreter" type="button">Arrêter</button>
+    <button id="retenir" type="button">Retenir pour l’emplacement</button>
+    <button id="variante" type="button">Ajouter en variante</button>
+    <span id="etat" role="status"></span>
+  </div>
+</div>
+
+<script type="module">
+const $ = (id) => document.getElementById(id);
+let donnees = null;
+let familleActive = null;
+let selection = null;
+let contexte = null;
+let source = null;
+
+const etat = (texte, erreur = false) => { $('etat').textContent = texte; $('etat').className = erreur ? 'erreur' : ''; };
+const fmt = (v, n = 1) => (v === null || v === undefined || Number.isNaN(v) ? '—' : Number(v).toFixed(n).replace('.', ','));
+
+async function charger() {
+  const r = await fetch('/api/catalogue');
+  donnees = await r.json();
+  if (!familleActive) familleActive = donnees.familles[0].id;
+  dessiner();
+  if (donnees.problemes.length) etat(`Choix à corriger : ${donnees.problemes.join(' ; ')}`, true);
+}
+
+function retenuesDe(fam, empl) {
+  return donnees.choix.familles?.[fam]?.emplacements?.[empl] ?? [];
+}
+
+function decrireRetenue(r) {
+  const d = donnees.decoupes.find((x) => x.prise === r.prise && Math.abs(x.debut - r.debut) < 0.01 && Math.abs(x.fin - r.fin) < 0.01);
+  const nom = d ? d.nom : `${donnees.prises.find((p) => p.id === r.prise)?.nom ?? r.prise} ${fmt(r.debut, 2)}–${fmt(r.fin, 2)} s`;
+  const boucle = r.boucle ? `, boucle ${fmt(r.boucle.debut, 2)}–${fmt(r.boucle.fin, 2)} s` : '';
+  return `${nom}${r.regime ? `, ${r.regime} tr/min` : ''}${boucle}, gain ${fmt(r.gain ?? 0)} dB${r.provisoire ? ' — provisoire' : ''}${r.pourquoi ? ` (${r.pourquoi})` : ''}`;
+}
+
+function ligneDecoupe(d, empl) {
+  const tr = document.createElement('tr');
+  const accord = d.accord ? '<div class="accord">demande l’accord du commanditaire</div>' : '';
+  tr.innerHTML = `<td>${d.nom}${accord}</td><td>${d.contenu}</td><td class="num">${fmt(d.duree)} s</td><td class="num">${d.regime ? d.regime + ' tr/min' : '—'}</td><td>${d.licence}<br><small>${d.auteur}</small></td><td><div class="actions"></div></td>`;
+  const actions = tr.querySelector('.actions');
+  const ecouter = document.createElement('button');
+  ecouter.textContent = 'Écouter';
+  ecouter.onclick = () => { choisir({ prise: d.prise, debut: d.debut, fin: d.fin, regime: d.regime, nom: d.nom, accord: d.accord }, empl); jouer(false); };
+  const prise = () => ({ prise: d.prise, debut: d.debut, fin: d.fin, regime: d.regime, nom: d.nom, accord: d.accord });
+  const boucle = document.createElement('button');
+  boucle.textContent = 'En boucle';
+  boucle.title = 'écouter fabriqué : bouclé, fondu de bouclage, niveau égalisé ; règle la boucle en bas';
+  boucle.onclick = () => { choisir(prise(), empl); jouer(true); };
+  const regler = document.createElement('button');
+  regler.textContent = 'Régler';
+  regler.onclick = () => choisir(prise(), empl);
+  const retenirBouton = document.createElement('button');
+  retenirBouton.textContent = 'Retenir';
+  retenirBouton.disabled = Boolean(d.accord);
+  retenirBouton.title = d.accord ? 'demande l’accord du commanditaire' : `retenir pour ${empl}`;
+  retenirBouton.onclick = () => { choisir(prise(), empl); retenir('remplacer'); };
+  actions.append(ecouter, boucle, regler, retenirBouton);
+  return tr;
+}
+
+function table(lignes) {
+  const t = document.createElement('table');
+  t.innerHTML = '<thead><tr><th>Découpe</th><th>Contenu</th><th>Durée</th><th>Régime</th><th>Licence</th><th></th></tr></thead>';
+  const b = document.createElement('tbody');
+  lignes.forEach((l) => b.append(l));
+  t.append(b);
+  return t;
+}
+
+function dessiner() {
+  const nav = $('familles');
+  nav.innerHTML = '';
+  for (const f of donnees.familles) {
+    const b = document.createElement('button');
+    b.textContent = f.nom;
+    b.setAttribute('aria-pressed', String(f.id === familleActive));
+    b.onclick = () => { familleActive = f.id; dessiner(); };
+    nav.append(b);
+  }
+  const fam = donnees.familles.find((f) => f.id === familleActive);
+  const main = $('contenu');
+  main.innerHTML = '';
+  if (fam.genre === 'moteur') {
+    const gaz = document.createElement('div');
+    gaz.className = 'gaz';
+    const actuel = donnees.choix.familles?.[fam.id]?.gaz ?? 'auto';
+    gaz.innerHTML = `Coup de gaz au garage : `;
+    for (const [mode, texte] of [['boucles', 'par les boucles (le régime monte tant qu’on appuie)'], ['prises', 'par un coup de gaz enregistré'], ['auto', 'automatique']]) {
+      const b = document.createElement('button');
+      b.textContent = texte;
+      b.setAttribute('aria-pressed', String(actuel === mode));
+      b.onclick = () => envoyer({ action: 'gaz', famille: fam.id, gaz: mode === 'auto' ? null : mode });
+      gaz.append(b, ' ');
+    }
+    main.append(gaz);
+  }
+  const decoupes = donnees.decoupes.filter((d) => d.famille === fam.id || (d.emplacement === 'backfire' && fam.genre === 'moteur'));
+  for (const empl of fam.emplacements) {
+    const s = document.createElement('section');
+    s.className = 'empl';
+    s.innerHTML = `<h2>${empl.id} <small>${empl.nom} · ${empl.genre === 'boucle' ? 'boucle' : 'son ponctuel'}${empl.variantes > 1 ? ` · ${empl.variantes} variantes au plus` : ''}</small></h2>`;
+    const ret = document.createElement('div');
+    ret.className = 'retenue';
+    const retenues = retenuesDe(fam.id, empl.id);
+    if (retenues.length === 0) ret.innerHTML = '<span class="vide">Rien de retenu : emplacement muet.</span>';
+    retenues.forEach((r, rang) => {
+      const p = document.createElement('div');
+      p.textContent = `Retenue${retenues.length > 1 ? ` ${rang + 1}` : ''} : ${decrireRetenue(r)} `;
+      const reecouter = document.createElement('button');
+      reecouter.textContent = 'Régler';
+      reecouter.onclick = () => choisir({ ...r, nom: decrireRetenue(r) }, empl.id);
+      const retirer = document.createElement('button');
+      retirer.textContent = 'Retirer';
+      retirer.onclick = () => envoyer({ action: 'retirer', famille: fam.id, emplacement: empl.id, rang });
+      p.append(reecouter, ' ', retirer);
+      ret.append(p);
+    });
+    s.append(ret);
+    const proposees = decoupes.filter((d) => d.emplacement === empl.id);
+    if (proposees.length) s.append(table(proposees.map((d) => ligneDecoupe(d, empl.id))));
+    main.append(s);
+  }
+  const autres = decoupes.filter((d) => !fam.emplacements.some((e) => e.id === d.emplacement));
+  const det = document.createElement('details');
+  det.innerHTML = `<summary>Séquences à écouter avant de leur donner un emplacement (${autres.length})</summary>`;
+  det.append(table(autres.map((d) => ligneDecoupe(d, fam.emplacements[0].id))));
+  main.append(det);
+  const brutes = document.createElement('details');
+  brutes.innerHTML = `<summary>Prises brutes de la famille : couper entre deux bornes choisies à l’écoute (${donnees.prises.filter((p) => p.famille === fam.id).length})</summary>`;
+  const t = document.createElement('table');
+  t.innerHTML = '<thead><tr><th>Prise</th><th>Remarques</th><th>Source</th><th>Licence</th><th></th></tr></thead>';
+  const tb = document.createElement('tbody');
+  for (const p of donnees.prises.filter((x) => x.famille === fam.id)) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${p.nom}${p.accord ? '<div class="accord">demande l’accord du commanditaire</div>' : ''}</td><td>${p.remarques}</td><td>${p.source}</td><td>${p.licenceCourte}<br><small>${p.auteur}</small></td><td></td>`;
+    const b = document.createElement('button');
+    b.textContent = 'Couper dedans';
+    b.onclick = () => choisir({ prise: p.id, debut: 0, fin: 10, regime: null, nom: p.nom, accord: p.accord }, fam.emplacements[0].id);
+    tr.lastChild.append(b);
+    tb.append(tr);
+  }
+  t.append(tb);
+  brutes.append(t);
+  main.append(brutes);
+}
+
+function choisir(r, empl) {
+  selection = r;
+  const fam = donnees.familles.find((f) => f.id === familleActive);
+  $('titre').textContent = `${r.nom}${r.accord ? ' — demande l’accord du commanditaire : écoute seulement' : ''}`;
+  const sel = $('emplacement');
+  sel.innerHTML = fam.emplacements.map((e) => `<option value="${e.id}">${e.id} · ${e.nom}</option>`).join('');
+  sel.value = empl;
+  $('debut').value = r.debut;
+  $('fin').value = r.fin;
+  $('bd').value = r.boucle?.debut ?? '';
+  $('bf').value = r.boucle?.fin ?? '';
+  $('fondu').value = r.fondu ?? 0.12;
+  $('regime').value = r.regime ?? '';
+  $('gain').value = r.gain ?? 0;
+  $('retenir').disabled = Boolean(r.accord);
+  $('variante').disabled = Boolean(r.accord);
+  etat('');
+}
+
+function parametres() {
+  const q = new URLSearchParams({ prise: selection.prise, debut: $('debut').value, fin: $('fin').value, famille: familleActive, emplacement: $('emplacement').value, fondu: $('fondu').value, gain: $('gain').value });
+  if ($('bd').value !== '' && $('bf').value !== '') { q.set('bd', $('bd').value); q.set('bf', $('bf').value); }
+  return q;
+}
+
+function arreter() {
+  if (source) { try { source.stop(); } catch {} source = null; }
+}
+
+async function jouer(fabrique) {
+  if (!selection) return etat('Choisis d’abord une découpe.', true);
+  arreter();
+  etat('Lecture…');
+  contexte ??= new AudioContext();
+  await contexte.resume();
+  const r = await fetch(`/api/${fabrique ? 'apercu' : 'extrait'}?${parametres()}`);
+  if (!r.ok) return etat((await r.json()).erreur ?? 'erreur', true);
+  const info = r.headers.get('x-fabrication');
+  const tampon = await contexte.decodeAudioData(await r.arrayBuffer());
+  source = contexte.createBufferSource();
+  source.buffer = tampon;
+  const empl = donnees.familles.find((f) => f.id === familleActive).emplacements.find((e) => e.id === $('emplacement').value);
+  source.loop = fabrique && empl?.genre === 'boucle';
+  source.connect(contexte.destination);
+  source.start();
+  if (info) {
+    const f = JSON.parse(info);
+    if (f.boucle) { $('bd').value = f.boucle.debut.toFixed(3); $('bf').value = f.boucle.fin.toFixed(3); }
+    etat(`${fmt(tampon.duration, 2)} s · niveau réglé de ${fmt(f.gainDb)} dB${f.limite ? ' (limité par la crête)' : ''}${f.boucle ? ` · raccord ${f.boucle.correlation}` : ''} · écrêtage de la prise ${f.analyse.ecretage} % · stabilité ±${f.analyse.stabiliteDb} dB`);
+  } else {
+    etat(`${fmt(tampon.duration, 2)} s, prise brute`);
+  }
+}
+
+async function envoyer(demande) {
+  const r = await fetch('/api/choix', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(demande) });
+  const rep = await r.json();
+  if (!r.ok) return etat(rep.erreur ?? 'refusé', true);
+  donnees.choix = rep.choix;
+  dessiner();
+  etat('Choix enregistré dans assets-src/sons/choix.json.');
+}
+
+function retenir(action) {
+  if (!selection) return;
+  const retenue = { prise: selection.prise, debut: Number($('debut').value), fin: Number($('fin').value), gain: Number($('gain').value || 0), fondu: Number($('fondu').value || 0.12), regime: $('regime').value === '' ? null : Number($('regime').value) };
+  if ($('bd').value !== '' && $('bf').value !== '') retenue.boucle = { debut: Number($('bd').value), fin: Number($('bf').value) };
+  envoyer({ action, famille: familleActive, emplacement: $('emplacement').value, retenue });
+}
+
+$('ecouter').onclick = () => jouer(false);
+$('boucle').onclick = () => jouer(true);
+$('arreter').onclick = arreter;
+$('retenir').onclick = () => retenir('remplacer');
+$('variante').onclick = () => retenir('ajouter');
+charger().catch((e) => etat(String(e), true));
+</script>
+</body>
+</html>

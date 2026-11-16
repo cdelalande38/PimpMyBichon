@@ -15,7 +15,7 @@ import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { RangeRequestsPlugin } from 'workbox-range-requests';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
-import { CacheFirst } from 'workbox-strategies';
+import { CacheFirst, NetworkFirst } from 'workbox-strategies';
 import { PRECACHE_PROGRESS, SKIP_WAITING, type PrecacheProgressMessage } from './messages.ts';
 
 declare const self: ServiceWorkerGlobalScope & {
@@ -130,6 +130,34 @@ async function mapFile(request: Request, url: URL): Promise<Response> {
 registerRoute(
   ({ url, request }) => isMapFile(url, request),
   ({ url, request }) => mapFile(request, url),
+);
+
+// Sons des moteurs et bruitages (assets/audio/engines/<famille>/, assets/audio/sfx/<famille>/, hors
+// du précache) : demandés au premier démarrage du moteur, gardés pour rejouer hors ligne. Le
+// manifeste du réseau d'abord (un nouveau choix de prises arrive au déploiement suivant), le cache
+// en secours ; les sons du cache d'abord : leur adresse porte l'empreinte du fichier (?v=…), un son
+// refait a donc une autre adresse.
+const SOUNDS_CACHE = 'pmb-sons-v1';
+const SOUNDS_PATHS = ['assets/audio/engines/', 'assets/audio/sfx/'].map((dir) => new URL(dir, self.registration.scope).pathname);
+
+function isSoundFile(url: URL, request: Request): boolean {
+  return request.method === 'GET' && url.origin === self.location.origin && SOUNDS_PATHS.some((path) => url.pathname.startsWith(path));
+}
+
+registerRoute(
+  ({ url, request }) => isSoundFile(url, request) && url.pathname.endsWith('.json'),
+  new NetworkFirst({ cacheName: SOUNDS_CACHE, plugins: [new CacheableResponsePlugin({ statuses: [200] })] }),
+);
+registerRoute(
+  ({ url, request }) => isSoundFile(url, request) && !url.pathname.endsWith('.json'),
+  new CacheFirst({
+    cacheName: SOUNDS_CACHE,
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [200] }),
+      // Cinq moteurs d'une douzaine de sons, et leurs versions passées qui finissent par partir.
+      new ExpirationPlugin({ maxEntries: 120 }),
+    ],
+  }),
 );
 
 // Mise à jour : la nouvelle version attend que la page le demande (geste de l'utilisateur)

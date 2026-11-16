@@ -82,7 +82,7 @@ describe('manifeste de la Cox', () => {
   });
 
   it('donne le moteur de la fiche', () => {
-    expect(manifest.engine).toEqual({ label: '4 cylindres à plat refroidi par air', fuel: 'essence', feed: 'carburateur', boost: 'atmo', power: 50 });
+    expect(manifest.engine).toEqual({ label: '4 cylindres à plat refroidi par air', fuel: 'essence', feed: 'carburateur', boost: 'atmo', power: 50, sound: 'quatre-a-plat' });
   });
 });
 

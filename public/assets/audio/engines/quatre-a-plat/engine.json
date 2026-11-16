@@ -1,0 +1,86 @@
+{
+  "format": "pmb-engine-sons",
+  "version": 1,
+  "famille": "quatre-a-plat",
+  "nom": "4 cylindres à plat (la Cox)",
+  "provisoire": true,
+  "ralenti": 900,
+  "gaz": "prises",
+  "boucles": [
+    {
+      "emplacement": "idle",
+      "fichier": "idle.ogg",
+      "empreinte": "ff4b39185d",
+      "duree": 5.978875,
+      "gain": 0,
+      "gainFabrication": -8.8,
+      "credit": 0,
+      "regime": 900,
+      "boucle": [
+        0,
+        5.978875
+      ]
+    }
+  ],
+  "ponctuels": [
+    {
+      "emplacement": "start",
+      "fichier": "start.ogg",
+      "empreinte": "8c11e49ca1",
+      "duree": 5,
+      "gain": 0,
+      "gainFabrication": -8.5,
+      "credit": 0
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-1.ogg",
+      "empreinte": "246854257c",
+      "duree": 3.6,
+      "gain": 0,
+      "gainFabrication": -7.8,
+      "credit": 0
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-2.ogg",
+      "empreinte": "84943c6d60",
+      "duree": 14,
+      "gain": 0,
+      "gainFabrication": 13,
+      "credit": 1
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-3.ogg",
+      "empreinte": "ab6dc54f37",
+      "duree": 14,
+      "gain": 0,
+      "gainFabrication": 12,
+      "credit": 1
+    },
+    {
+      "emplacement": "stop",
+      "fichier": "stop.ogg",
+      "empreinte": "86ac7b38cd",
+      "duree": 4.675020833333333,
+      "gain": 0,
+      "gainFabrication": -4.6,
+      "credit": 0
+    }
+  ],
+  "credits": [
+    {
+      "auteur": "yfjesse",
+      "licence": "CC0-1.0",
+      "source": "Freesound 734252",
+      "citer": false
+    },
+    {
+      "auteur": "be_a_hero_not_a_patriot",
+      "licence": "CC0-1.0",
+      "source": "Freesound 331707",
+      "citer": false
+    }
+  ]
+}

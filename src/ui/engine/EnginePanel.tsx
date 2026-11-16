@@ -17,6 +17,7 @@ import {
 import type { Build, VehicleId } from '../../data/vehicleTypes.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { useBuilds } from '../../state/builds.ts';
+import { EngineSoundControls } from './EngineSoundControls.tsx';
 import './engine.css';
 
 const NBSP = ' ';
@@ -81,6 +82,7 @@ export function EnginePanel() {
   if (!vehicle || !engine || !prep) {
     return (
       <div className="engine">
+        <EngineSoundControls />
         <p className="engine-empty">
           {vehicle ? `${vehicle.name} n’a pas encore de moteur déclaré` : 'Aucun véhicule à l’écran'}
           &nbsp;: pas de fiche de préparation pour l’instant.
@@ -95,6 +97,7 @@ export function EnginePanel() {
 
   return (
     <div className="engine" data-agrandir="toujours">
+      <EngineSoundControls />
       <p className="engine-spec">
         <strong>{engine.label}</strong>
         <span>

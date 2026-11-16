@@ -1,0 +1,517 @@
+{
+  "format": "pmb-sons-choix",
+  "version": 1,
+  "accordRequis": [
+    "prise-600a122eae"
+  ],
+  "familles": {
+    "quatre-a-plat": {
+      "gaz": "prises",
+      "emplacements": {
+        "start": [
+          {
+            "prise": "freesound-734252",
+            "debut": 0,
+            "fin": 5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "début de la prise de démarrage : même enregistrement que le ralenti et la coupure"
+          }
+        ],
+        "idle": [
+          {
+            "prise": "freesound-734252",
+            "debut": 3.2,
+            "fin": 12.2,
+            "regime": 900,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "plage stable de 8,8 s de la prise de démarrage (niveau à ±0,5 dB) ; régime supposé, la fondamentale mesurée (44 Hz) est ambiguë",
+            "boucle": {
+              "debut": 2.5,
+              "fin": 8.48
+            },
+            "fondu": 0.12
+          }
+        ],
+        "rev": [
+          {
+            "prise": "freesound-734252",
+            "debut": 12.6,
+            "fin": 16.2,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "le seul coup de gaz de la prise de démarrage (bosse à 13,5 s)"
+          },
+          {
+            "prise": "freesound-331707",
+            "debut": 33.5,
+            "fin": 47.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "montée, régime tenu, retombée ; micro de contact, timbre différent"
+          },
+          {
+            "prise": "freesound-331707",
+            "debut": 19.5,
+            "fin": 33.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "deux montées ; micro de contact"
+          }
+        ],
+        "stop": [
+          {
+            "prise": "freesound-734252",
+            "debut": 15.2,
+            "fin": 19.9,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "fin de la prise de démarrage : le niveau retombe à zéro vers 18,5 s"
+          }
+        ]
+      }
+    },
+    "diesel-turbo": {
+      "gaz": "prises",
+      "emplacements": {
+        "start": [
+          {
+            "prise": "freesound-425845",
+            "debut": 32.5,
+            "fin": 40,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "seul démarrage découpé (CC BY 3.0) ; le début de prise du fourgon, plus bas, reste à écouter"
+          }
+        ],
+        "idle": [
+          {
+            "prise": "freesound-819018",
+            "debut": 25,
+            "fin": 45,
+            "regime": 850,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "ralenti de 20 s le plus stable (±0,25 dB sur 6 s), sous l'échappement ; mêmes prises que les coups de gaz",
+            "boucle": {
+              "debut": 12.3,
+              "fin": 18.309
+            },
+            "fondu": 0.12
+          }
+        ],
+        "rev": [
+          {
+            "prise": "freesound-819018",
+            "debut": 55.8,
+            "fin": 59.8,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "coup de gaz bref et fort, même enregistrement que le ralenti"
+          },
+          {
+            "prise": "freesound-819018",
+            "debut": 60.3,
+            "fin": 65,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "variante"
+          },
+          {
+            "prise": "freesound-819018",
+            "debut": 13,
+            "fin": 20.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "coup de gaz long"
+          }
+        ],
+        "stop": [
+          {
+            "prise": "freesound-425845",
+            "debut": 82.9,
+            "fin": 90.2,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "coupure, seconde position de micro, plus forte que la première"
+          }
+        ],
+        "mid": [
+          {
+            "prise": "freesound-690388",
+            "debut": 90,
+            "fin": 110,
+            "regime": 2000,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "seul régime tenu : croisière entendue de l'habitacle ; régime supposé ; pour la sortie de nuit",
+            "boucle": {
+              "debut": 3.3,
+              "fin": 9.302
+            },
+            "fondu": 0.12
+          }
+        ]
+      }
+    },
+    "bicylindre-v": {
+      "gaz": "boucles",
+      "emplacements": {
+        "start": [
+          {
+            "prise": "freesound-502690",
+            "debut": 0,
+            "fin": 7,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "démarrage dès le début, même enregistrement que le ralenti, les coups de gaz et la coupure"
+          }
+        ],
+        "idle": [
+          {
+            "prise": "freesound-502690",
+            "debut": 138,
+            "fin": 149.5,
+            "regime": 1000,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "ralenti le plus stable de la prise (±1 dB) ; régime supposé",
+            "boucle": {
+              "debut": 0.3,
+              "fin": 6.312
+            },
+            "fondu": 0.12
+          }
+        ],
+        "rev": [
+          {
+            "prise": "freesound-502690",
+            "debut": 80.3,
+            "fin": 89.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "coup de gaz long, sans écrêtage"
+          },
+          {
+            "prise": "freesound-502690",
+            "debut": 130.3,
+            "fin": 138,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "variante"
+          },
+          {
+            "prise": "freesound-502690",
+            "debut": 40.8,
+            "fin": 48,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "coup de gaz franc"
+          }
+        ],
+        "stop": [
+          {
+            "prise": "freesound-502690",
+            "debut": 152,
+            "fin": 161.9,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "ralenti puis coupure vers 7,5 s"
+          }
+        ],
+        "low": [
+          {
+            "prise": "freesound-502690",
+            "debut": 52.5,
+            "fin": 65,
+            "regime": 1500,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "régime tenu à l'arrêt, très stable (±0,2 dB) ; régime estimé au rapport des pics de spectre avec le ralenti",
+            "boucle": {
+              "debut": 4.5,
+              "fin": 10.492
+            },
+            "fondu": 0.12
+          }
+        ],
+        "mid": [
+          {
+            "prise": "freesound-743981",
+            "debut": 164.5,
+            "fin": 182.5,
+            "regime": 2800,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "croisière tenue 18 s (±0,24 dB), autre moto, source MP3 ; régime supposé",
+            "boucle": {
+              "debut": 7.5,
+              "fin": 13.486
+            },
+            "fondu": 0.12
+          }
+        ],
+        "sweep_up": [
+          {
+            "prise": "freesound-743981",
+            "debut": 146.8,
+            "fin": 157.8,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "montée en charge, même prise que la croisière"
+          }
+        ],
+        "sweep_down": [
+          {
+            "prise": "freesound-743981",
+            "debut": 183.5,
+            "fin": 197.3,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "descente, même prise"
+          }
+        ]
+      }
+    },
+    "quatre-en-ligne-moto": {
+      "gaz": "boucles",
+      "emplacements": {
+        "start": [
+          {
+            "prise": "freesound-855305",
+            "debut": 381,
+            "fin": 393,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "démarrage, même enregistrement que les quatre boucles"
+          }
+        ],
+        "idle": [
+          {
+            "prise": "freesound-855305",
+            "debut": 515,
+            "fin": 530,
+            "regime": 1350,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "ralenti chaud, étalon des régimes estimés de la prise",
+            "boucle": {
+              "debut": 8.8,
+              "fin": 14.795
+            },
+            "fondu": 0.12
+          }
+        ],
+        "low": [
+          {
+            "prise": "freesound-855305",
+            "debut": 898.5,
+            "fin": 918,
+            "regime": 2500,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "régime tenu le plus stable du bas (±0,3 dB)",
+            "boucle": {
+              "debut": 0.2,
+              "fin": 6.215
+            },
+            "fondu": 0.12
+          }
+        ],
+        "mid": [
+          {
+            "prise": "freesound-855305",
+            "debut": 2507,
+            "fin": 2515,
+            "regime": 4000,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "régime tenu, ±0,6 dB",
+            "boucle": {
+              "debut": 2,
+              "fin": 7.98
+            },
+            "fondu": 0.12
+          }
+        ],
+        "high": [
+          {
+            "prise": "freesound-855305",
+            "debut": 2112.5,
+            "fin": 2121,
+            "regime": 5300,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "le plus haut régime tenu sans écrêtage (6 100 tr/min écrête 1,4 % des échantillons)",
+            "boucle": {
+              "debut": 0.6,
+              "fin": 6.597
+            },
+            "fondu": 0.12
+          }
+        ],
+        "stop": [
+          {
+            "prise": "freesound-855305",
+            "debut": 3417,
+            "fin": 3430,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "ralenti puis coupure vers 9 s"
+          }
+        ],
+        "sweep_up": [
+          {
+            "prise": "freesound-855305",
+            "debut": 2571,
+            "fin": 2585.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "montée de 1 500 à 6 000 tr/min, la moins écrêtée des trois"
+          }
+        ],
+        "sweep_down": [
+          {
+            "prise": "freesound-855305",
+            "debut": 1921.5,
+            "fin": 1942.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "descente lente de 3 500 à 1 400 tr/min, sans écrêtage"
+          }
+        ]
+      }
+    },
+    "v8": {
+      "gaz": "prises",
+      "emplacements": {
+        "start": [
+          {
+            "prise": "freesound-610773",
+            "debut": 0,
+            "fin": 10,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "démarrage puis ralenti accéléré, même enregistrement que le ralenti"
+          }
+        ],
+        "idle": [
+          {
+            "prise": "freesound-610773",
+            "debut": 70,
+            "fin": 90,
+            "regime": 650,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "ralenti de 20 s très stable (±0,4 dB) ; régime supposé",
+            "boucle": {
+              "debut": 7.7,
+              "fin": 13.694
+            },
+            "fondu": 0.12
+          }
+        ],
+        "rev": [
+          {
+            "prise": "freesound-205509",
+            "debut": 18,
+            "fin": 22,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "petit coup de gaz isolé, sans écrêtage"
+          },
+          {
+            "prise": "freesound-146832",
+            "debut": 9.5,
+            "fin": 14.8,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "coup de gaz, ambiance de rassemblement"
+          }
+        ],
+        "stop": [
+          {
+            "prise": "freesound-69211",
+            "debut": 114,
+            "fin": 122,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "ralenti puis coupure vers 11,7 s (CC BY 4.0)"
+          }
+        ],
+        "low": [
+          {
+            "prise": "freesound-157144",
+            "debut": 0.2,
+            "fin": 5.9,
+            "regime": 3000,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "régime tenu à 3 000 tr/min d'après l'auteur, autre V8",
+            "boucle": {
+              "debut": 0.4,
+              "fin": 5.667
+            },
+            "fondu": 0.12
+          }
+        ],
+        "backfire": [
+          {
+            "prise": "freesound-797835",
+            "debut": 5.17,
+            "fin": 5.9,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "détonation isolée ; aucun retour de flamme propre à un V8"
+          },
+          {
+            "prise": "freesound-797835",
+            "debut": 6.63,
+            "fin": 8.2,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "deux détonations"
+          },
+          {
+            "prise": "freesound-797835",
+            "debut": 0.03,
+            "fin": 1,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "salve"
+          }
+        ]
+      }
+    }
+  },
+  "note": "Choix provisoire du 16 novembre 2026, fait sans écoute (descriptions de decoupes.csv et analyse du signal : durée, stabilité du niveau, écrêtage). Le commanditaire le corrige à l'oreille avec npm run sons:ecoute."
+}

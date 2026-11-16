@@ -65,6 +65,9 @@ test.describe('fiche moteur', () => {
     await expect(origin).toHaveText(/^102\s*ch$/);
     await expect(gain).toHaveText(/^\+\s*0\s*ch$/);
     await expect(sheet.getByText('4 cylindres turbo diesel')).toBeVisible();
+    // En tête de fiche, les commandes du son du moteur (tests/e2e/sons.spec.ts les fait tourner).
+    await expect(sheet.locator('.engine-sound')).toHaveAttribute('data-sons', 'oui');
+    await expect(sheet.locator('.engine-sound')).toHaveAttribute('data-moteur', 'coupe');
     // Moteur à injection : reprogrammation et nitro, pas de carburation.
     await expect(sheet.getByRole('heading', { name: 'Reprogrammation' })).toBeAttached();
     await expect(sheet.getByRole('heading', { name: 'Carburation' })).toHaveCount(0);

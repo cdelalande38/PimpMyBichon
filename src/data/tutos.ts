@@ -95,7 +95,8 @@ export const TUTOS: readonly Tuto[] = [
     titre: 'La préparation moteur',
     but: 'Ici, tu gonfles le moteur et tu vois tout de suite ce que ça donne.',
     etapes: [
-      { texte: 'En haut, le moteur d’origine et trois chiffres : l’origine, le gain et le résultat préparé.' },
+      { texte: 'En haut, « Démarrer » lance le moteur au ralenti. Garde le doigt sur « Coup de gaz » pour le faire monter, « Couper » l’arrête.', cible: 'footer.dock .engine-sound' },
+      { texte: 'Juste dessous, le moteur d’origine et trois chiffres : l’origine, le gain et le résultat préparé.' },
       { texte: 'Chaque poste a sa rangée de puces : reprogrammation, carburation, nitro… selon le moteur.' },
       { texte: 'Touche une puce pour l’essayer : les chiffres suivent aussitôt.' },
       { texte: 'Tes choix restent avec le véhicule, même après avoir fermé l’app.' },

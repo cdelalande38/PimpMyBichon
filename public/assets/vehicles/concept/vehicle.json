@@ -45,7 +45,7 @@
       "paint": { "color": "#7f1408", "finish": "satine" }
     }
   ],
-  "engine": { "label": "V8 central", "fuel": "essence", "feed": "injection", "boost": "atmo", "power": 480 },
+  "engine": { "label": "V8 central", "fuel": "essence", "feed": "injection", "boost": "atmo", "power": 480, "sound": "v8" },
   "adapt": {
     "yawQuarterTurns": 0,
     "glass": { "materials": ["Glass"], "color": "#0c0e14", "opacity": 0.55 },

@@ -66,6 +66,92 @@ Mémo de préparation. Ce fichier cite des titres de banques de sons (donc des n
 - Freesound, filtre CC0 : seuls fichiers qui peuvent rester dans le dépôt public.
 - Bundles GDC de Sonniss : gratuits, libres de redevance, usage commercial sans attribution.
 
+## Prises libres retenues provisoirement (16 novembre 2026)
+
+La collecte a réuni 87 prises sous licences libres (78 CC0, 7 CC BY 4.0, 2 CC BY 3.0) dans le dossier privé `.private-assets/sons/` (jamais versionné) et 189 découpes. **Rien n'a été écouté** : le choix ci-dessous a été fait d'après les descriptions de `decoupes.csv` et une analyse du signal (durée, stabilité du niveau, écrêtage). Il est déclaré provisoire ; le commanditaire le corrige à l'oreille avec `npm run sons:ecoute` (mode d'emploi : `tools/sons/LISEZ-MOI.md`), puis `npm run sons:build` refait les sons.
+
+Le choix versionné (`assets-src/sons/choix.json`) ne nomme aucune prise : il garde un identifiant neutre (`freesound-<numéro>`, ou `prise-<empreinte du chemin>` hors de Freesound) et des bornes en secondes. Les fichiers fabriqués portent le nom de leur emplacement (`idle.ogg`, `rev-2.ogg`…). Les titres et les noms de fichiers ne figurent qu'ici.
+
+Les régimes sont des ordres de grandeur : estimés au spectre par la collecte (sportive), donnés par l'auteur (V8 tenu à 3 000 tr/min), ou supposés (ralentis de la Cox, du bobber et du V8, croisières du van et du bobber). Ils ne servent qu'à accorder les boucles entre elles.
+
+### 4 cylindres à plat (la Cox) (`quatre-a-plat`, coup de gaz : coup de gaz enregistré)
+
+| Emplacement | Découpe ou extrait | Prise (source) | Auteur | Licence | Régime | Pourquoi |
+|---|---|---|---|---|---|---|
+| start | `start.wav` de 0 à 5 s | Freesound 734252 : VW Bug 1974 | yfjesse | CC0 | — | début de la prise de démarrage : même enregistrement que le ralenti et la coupure |
+| idle | `start.wav` de 3,2 à 12,2 s | Freesound 734252 : VW Bug 1974 | yfjesse | CC0 | 900 tr/min | plage stable de 8,8 s de la prise de démarrage (niveau à ±0,5 dB) ; régime supposé, la fondamentale mesurée (44 Hz) est ambiguë |
+| rev | `start.wav` de 12,6 à 16,2 s | Freesound 734252 : VW Bug 1974 | yfjesse | CC0 | — | le seul coup de gaz de la prise de démarrage (bosse à 13,5 s) |
+| rev | `rev3__cox.flac` | Freesound 331707 : VW Bug 1974 | be_a_hero_not_a_patriot | CC0 | — | montée, régime tenu, retombée ; micro de contact, timbre différent |
+| rev | `rev2__cox.flac` | Freesound 331707 : VW Bug 1974 | be_a_hero_not_a_patriot | CC0 | — | deux montées ; micro de contact |
+| stop | `start.wav` de 15,2 à 19,9 s | Freesound 734252 : VW Bug 1974 | yfjesse | CC0 | — | fin de la prise de démarrage : le niveau retombe à zéro vers 18,5 s |
+
+### 4 cylindres turbo diesel (le van) (`diesel-turbo`, coup de gaz : coup de gaz enregistré)
+
+| Emplacement | Découpe ou extrait | Prise (source) | Auteur | Licence | Régime | Pourquoi |
+|---|---|---|---|---|---|---|
+| start | `start__master.flac` | Freesound 425845 : Renault Master F3500 dCi 135 | Soundholder | CC BY 3.0 | — | seul démarrage découpé (CC BY 3.0) ; le début de prise du fourgon, plus bas, reste à écouter |
+| idle | `idle__transit.flac` | Freesound 819018 : Ford Transit 115 T350 | Sadiquecat | CC0 | 850 tr/min | ralenti de 20 s le plus stable (±0,25 dB sur 6 s), sous l'échappement ; mêmes prises que les coups de gaz |
+| rev | `rev2__transit.flac` | Freesound 819018 : Ford Transit 115 T350 | Sadiquecat | CC0 | — | coup de gaz bref et fort, même enregistrement que le ralenti |
+| rev | `rev3__transit.flac` | Freesound 819018 : Ford Transit 115 T350 | Sadiquecat | CC0 | — | variante |
+| rev | `rev1__transit.flac` | Freesound 819018 : Ford Transit 115 T350 | Sadiquecat | CC0 | — | coup de gaz long |
+| stop | `stop__master-2.flac` | Freesound 425845 : Renault Master F3500 dCi 135 | Soundholder | CC BY 3.0 | — | coupure, seconde position de micro, plus forte que la première |
+| mid | `tenu__vw-t5.flac` | Freesound 690388 : VW Transporter T5 diesel | DangerLaef | CC0 | 2000 tr/min | seul régime tenu : croisière entendue de l'habitacle ; régime supposé ; pour la sortie de nuit |
+
+### Bicylindre en V (le bobber) (`bicylindre-v`, coup de gaz : par les boucles)
+
+| Emplacement | Découpe ou extrait | Prise (source) | Auteur | Licence | Régime | Pourquoi |
+|---|---|---|---|---|---|---|
+| start | `start__sportster.flac` | Freesound 502690 : Harley-Davidson Sportster | demodave | CC0 | — | démarrage dès le début, même enregistrement que le ralenti, les coups de gaz et la coupure |
+| idle | `idle__sportster-2.flac` | Freesound 502690 : Harley-Davidson Sportster | demodave | CC0 | 1000 tr/min | ralenti le plus stable de la prise (±1 dB) ; régime supposé |
+| rev | `rev2__sportster.flac` | Freesound 502690 : Harley-Davidson Sportster | demodave | CC0 | — | coup de gaz long, sans écrêtage |
+| rev | `rev3__sportster.flac` | Freesound 502690 : Harley-Davidson Sportster | demodave | CC0 | — | variante |
+| rev | `rev1__sportster.flac` | Freesound 502690 : Harley-Davidson Sportster | demodave | CC0 | — | coup de gaz franc |
+| stop | `stop__sportster.flac` | Freesound 502690 : Harley-Davidson Sportster | demodave | CC0 | — | ralenti puis coupure vers 7,5 s |
+| low | `tenu__sportster.flac` | Freesound 502690 : Harley-Davidson Sportster | demodave | CC0 | 1500 tr/min | régime tenu à l'arrêt, très stable (±0,2 dB) ; régime estimé au rapport des pics de spectre avec le ralenti |
+| mid | `tenu__sportster-roulage.flac` | Freesound 743981 : trajet en Harley-Davidson Sportster | BranCorvus | CC0 | 2800 tr/min | croisière tenue 18 s (±0,24 dB), autre moto, source MP3 ; régime supposé |
+| sweep_up | `sweep_up__sportster-roulage.flac` | Freesound 743981 : trajet en Harley-Davidson Sportster | BranCorvus | CC0 | — | montée en charge, même prise que la croisière |
+| sweep_down | `sweep_down__sportster-roulage.flac` | Freesound 743981 : trajet en Harley-Davidson Sportster | BranCorvus | CC0 | — | descente, même prise |
+
+### 4 cylindres en ligne de moto (la sportive) (`quatre-en-ligne-moto`, coup de gaz : par les boucles)
+
+| Emplacement | Découpe ou extrait | Prise (source) | Auteur | Licence | Régime | Pourquoi |
+|---|---|---|---|---|---|---|
+| start | `start__r6.flac` | Freesound 855305 : Yamaha R6 | bodhistone | CC0 | — | démarrage, même enregistrement que les quatre boucles |
+| idle | `idle__r6.flac` | Freesound 855305 : Yamaha R6 | bodhistone | CC0 | 1350 tr/min | ralenti chaud, étalon des régimes estimés de la prise |
+| stop | `stop__r6.flac` | Freesound 855305 : Yamaha R6 | bodhistone | CC0 | — | ralenti puis coupure vers 9 s |
+| low | `tenu-2500__r6.flac` | Freesound 855305 : Yamaha R6 | bodhistone | CC0 | 2500 tr/min | régime tenu le plus stable du bas (±0,3 dB) |
+| mid | `tenu-4000__r6.flac` | Freesound 855305 : Yamaha R6 | bodhistone | CC0 | 4000 tr/min | régime tenu, ±0,6 dB |
+| high | `tenu-5300__r6.flac` | Freesound 855305 : Yamaha R6 | bodhistone | CC0 | 5300 tr/min | le plus haut régime tenu sans écrêtage (6 100 tr/min écrête 1,4 % des échantillons) |
+| sweep_up | `sweep_up__r6-2.flac` | Freesound 855305 : Yamaha R6 | bodhistone | CC0 | — | montée de 1 500 à 6 000 tr/min, la moins écrêtée des trois |
+| sweep_down | `sweep_down__r6-2.flac` | Freesound 855305 : Yamaha R6 | bodhistone | CC0 | — | descente lente de 3 500 à 1 400 tr/min, sans écrêtage |
+
+### V8 (le concept, plus tard le fastback) (`v8`, coup de gaz : coup de gaz enregistré)
+
+| Emplacement | Découpe ou extrait | Prise (source) | Auteur | Licence | Régime | Pourquoi |
+|---|---|---|---|---|---|---|
+| start | `start__f150.flac` | Freesound 610773 : Ford F150 4.6 V8 | Therancher01 | CC0 | — | démarrage puis ralenti accéléré, même enregistrement que le ralenti |
+| idle | `idle__f150.flac` | Freesound 610773 : Ford F150 4.6 V8 | Therancher01 | CC0 | 650 tr/min | ralenti de 20 s très stable (±0,4 dB) ; régime supposé |
+| rev | `rev2__gt500.flac` | Freesound 205509 : Ford Mustang GT500 | VacekH | CC0 | — | petit coup de gaz isolé, sans écrêtage |
+| rev | `rev1__hotrod.flac` | Freesound 146832 : hot-rod à moteur V8 | Ears68 | CC0 | — | coup de gaz, ambiance de rassemblement |
+| stop | `brut_dodge-1500-demarrage-depart-retour-coupure.wav` de 114 à 122 s | Freesound 69211 : pick-up Dodge 1500 de 2001 | FreqMan | CC BY 4.0 | — | ralenti puis coupure vers 11,7 s (CC BY 4.0) |
+| low | `brut_corvette-ls6-3000.wav` de 0,2 à 5,9 s | Freesound 157144 : vieille Corvette à V8 LS6 tenue à 3 000 tr/min d'après l'auteur | cr4sht3st | CC0 | 3000 tr/min | régime tenu à 3 000 tr/min d'après l'auteur, autre V8 |
+| backfire | `backfire__antilag-3.flac` | Freesound 797835 : voiture avec système anti-lag | modusmogulus | CC0 | — | détonation isolée ; aucun retour de flamme propre à un V8 |
+| backfire | `backfire__antilag-4.flac` | Freesound 797835 : voiture avec système anti-lag | modusmogulus | CC0 | — | deux détonations |
+| backfire | `backfire__antilag-1.flac` | Freesound 797835 : voiture avec système anti-lag | modusmogulus | CC0 | — | salve |
+
+### Ce qui manque, famille par famille
+
+- **La Cox** : aucun régime tenu (`low`, `mid`, `high`) : le roulage pris au micro de contact n'a pas de plage stable au signal ; pas de montée ni de descente, pas de retour de flamme. Le coup de gaz du garage se fait donc par des coups de gaz enregistrés. Prise de secours non découpée : la Coccinelle 1600 du musée (Wikimedia Commons, CC BY 4.0).
+- **Le van** : un seul régime tenu, entendu de l'habitacle (pour la sortie de nuit) ; démarrage et coupure d'un autre fourgon que le ralenti (CC BY 3.0) ; pas de `low` ni de `high`, pas de montée, pas de sifflement de turbo propre à un diesel.
+- **Le bobber** : régimes tenus sans régime mesuré ; le régime moyen vient d'une autre moto (source MP3) ; pas de `high`, pas de retour de flamme.
+- **La sportive** : pas de coup de gaz à vide (le seul clip de supersport à l'arrêt attend l'accord du commanditaire, voir plus bas), rien de tenu au-dessus de 6 100 tr/min (les montées vont jusqu'à 8 200 tr/min environ, en qualité faible) ; le plus haut régime tenu retenu est 5 300 tr/min, faute de mieux sans écrêtage.
+- **Le V8** : une seule coupure (CC BY 4.0, d'un autre V8 que le ralenti), un seul régime tenu (3 000 tr/min, autre V8), pas de `mid` ni de `high` ; retours de flamme d'une voiture à anti-lag, pas d'un V8.
+- **Pour toutes** : pas de couches en charge et en décélération (`_on` / `_off`), pas de jeu « échappement libre ».
+
+### Prise en attente d'accord
+
+`engines/quatre-en-ligne-moto/brut_zx6r-2014-demo-echappement.ogg` (Wikimedia Commons, CC BY 3.0) : l'auteur à citer est un équipementier, ce que les règles du projet interdisent. Elle figure dans `accordRequis` du choix : la page d'écoute la propose, marquée « demande l'accord du commanditaire », sans pouvoir la retenir ; la fabrication la refuse. Son auteur n'est cité nulle part dans le dépôt.
+
 ## Musique
 
 Rien n'est présélectionné. D'après leurs conditions publiées, les formules standard d'Epidemic Sound couvrent des contenus publiés en ligne (vidéos, podcasts) et renvoient les jeux vers une formule Enterprise ; la musique d'Envato Elements doit être synchronisée dans une œuvre plus large et exclut la diffusion de type radio. **Obtenir un accord écrit avant d'en mettre un titre dans la radio de l'app.** Les morceaux personnels passent par « Ma playlist », sur le téléphone.

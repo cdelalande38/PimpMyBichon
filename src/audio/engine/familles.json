@@ -1,0 +1,65 @@
+{
+  "format": "pmb-sons-index",
+  "version": 1,
+  "familles": {
+    "quatre-a-plat": {
+      "nom": "4 cylindres à plat (la Cox)",
+      "genre": "moteur",
+      "provisoire": true,
+      "boucles": 1,
+      "ponctuels": 5
+    },
+    "diesel-turbo": {
+      "nom": "4 cylindres turbo diesel (le van)",
+      "genre": "moteur",
+      "provisoire": true,
+      "boucles": 2,
+      "ponctuels": 5
+    },
+    "bicylindre-v": {
+      "nom": "Bicylindre en V (le bobber)",
+      "genre": "moteur",
+      "provisoire": true,
+      "boucles": 3,
+      "ponctuels": 7
+    },
+    "quatre-en-ligne-moto": {
+      "nom": "4 cylindres en ligne de moto (la sportive)",
+      "genre": "moteur",
+      "provisoire": true,
+      "boucles": 4,
+      "ponctuels": 4
+    },
+    "v8": {
+      "nom": "V8 (le concept, plus tard le fastback)",
+      "genre": "moteur",
+      "provisoire": true,
+      "boucles": 2,
+      "ponctuels": 7
+    }
+  },
+  "bruitages": {},
+  "attributions": [
+    {
+      "famille": "diesel-turbo",
+      "nom": "4 cylindres turbo diesel (le van)",
+      "auteur": "Soundholder",
+      "licence": "CC-BY-3.0",
+      "source": "Freesound 425845",
+      "emplacements": [
+        "start",
+        "stop"
+      ]
+    },
+    {
+      "famille": "v8",
+      "nom": "V8 (le concept, plus tard le fastback)",
+      "auteur": "FreqMan",
+      "licence": "CC-BY-4.0",
+      "source": "Freesound 69211",
+      "emplacements": [
+        "stop"
+      ]
+    }
+  ]
+}

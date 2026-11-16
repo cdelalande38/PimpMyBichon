@@ -1,0 +1,142 @@
+{
+  "format": "pmb-engine-sons",
+  "version": 1,
+  "famille": "v8",
+  "nom": "V8 (le concept, plus tard le fastback)",
+  "provisoire": true,
+  "ralenti": 650,
+  "gaz": "prises",
+  "boucles": [
+    {
+      "emplacement": "idle",
+      "fichier": "idle.ogg",
+      "empreinte": "3a35075b06",
+      "duree": 5.994416666666667,
+      "gain": 0,
+      "gainFabrication": 8.2,
+      "credit": 0,
+      "regime": 650,
+      "boucle": [
+        0,
+        5.994416666666667
+      ]
+    },
+    {
+      "emplacement": "low",
+      "fichier": "low.ogg",
+      "empreinte": "981f5897d1",
+      "duree": 5.26675,
+      "gain": 0,
+      "gainFabrication": -12.6,
+      "credit": 4,
+      "regime": 3000,
+      "boucle": [
+        0,
+        5.26675
+      ]
+    }
+  ],
+  "ponctuels": [
+    {
+      "emplacement": "start",
+      "fichier": "start.ogg",
+      "empreinte": "8b2eed97b1",
+      "duree": 10,
+      "gain": 0,
+      "gainFabrication": -3.3,
+      "credit": 0
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-1.ogg",
+      "empreinte": "8a8abe9304",
+      "duree": 4,
+      "gain": 0,
+      "gainFabrication": 7.9,
+      "credit": 1
+    },
+    {
+      "emplacement": "rev",
+      "fichier": "rev-2.ogg",
+      "empreinte": "eaf86648a3",
+      "duree": 5.3,
+      "gain": 0,
+      "gainFabrication": -5.9,
+      "credit": 2
+    },
+    {
+      "emplacement": "stop",
+      "fichier": "stop.ogg",
+      "empreinte": "c5f7d297b9",
+      "duree": 8,
+      "gain": 0,
+      "gainFabrication": 10.3,
+      "credit": 3
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-1.ogg",
+      "empreinte": "d0933238b3",
+      "duree": 0.73,
+      "gain": 0,
+      "gainFabrication": 4,
+      "credit": 5
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-2.ogg",
+      "empreinte": "297197c61c",
+      "duree": 1.57,
+      "gain": 0,
+      "gainFabrication": 7.1,
+      "credit": 5
+    },
+    {
+      "emplacement": "backfire",
+      "fichier": "backfire-3.ogg",
+      "empreinte": "285d26f559",
+      "duree": 0.97,
+      "gain": 0,
+      "gainFabrication": 4.9,
+      "credit": 5
+    }
+  ],
+  "credits": [
+    {
+      "auteur": "Therancher01",
+      "licence": "CC0-1.0",
+      "source": "Freesound 610773",
+      "citer": false
+    },
+    {
+      "auteur": "VacekH",
+      "licence": "CC0-1.0",
+      "source": "Freesound 205509",
+      "citer": false
+    },
+    {
+      "auteur": "Ears68",
+      "licence": "CC0-1.0",
+      "source": "Freesound 146832",
+      "citer": false
+    },
+    {
+      "auteur": "FreqMan",
+      "licence": "CC-BY-4.0",
+      "source": "Freesound 69211",
+      "citer": true
+    },
+    {
+      "auteur": "cr4sht3st",
+      "licence": "CC0-1.0",
+      "source": "Freesound 157144",
+      "citer": false
+    },
+    {
+      "auteur": "modusmogulus",
+      "licence": "CC0-1.0",
+      "source": "Freesound 797835",
+      "citer": false
+    }
+  ]
+}

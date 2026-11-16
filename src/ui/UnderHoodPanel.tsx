@@ -21,6 +21,7 @@ import { abortCompare, startCompare, startMeter, useRenderStats, type CompareSta
 import { readStorageStatus, type StorageStatus } from '../state/persistence.ts';
 import { useSettings } from '../state/store.ts';
 import { count, formatBytes, offlineDetail, typo } from './labels.ts';
+import { soundCreditsText } from '../audio/engine/manifeste.ts';
 
 function useStorageStatus(): StorageStatus | null {
   const [status, setStatus] = useState<StorageStatus | null>(null);
@@ -254,6 +255,9 @@ const MODEL_CREDITS =
   'Le concept : modèle « Car Concept » d’Eric Chadwick, Darmstadt Graphics Group GmbH (2024), sous licence CC-\u2060BY\u00a04.0. ' +
   'Modifié pour l’atelier : logos retirés, plaque unie. Tous les crédits (polices, bibliothèques) sont dans CREDITS.md.';
 
+/** Crédits des sons de moteur sous licence CC BY (src/audio/engine/familles.json, écrit par sons:build). */
+const SOUND_CREDITS = soundCreditsText();
+
 function substitutesLine(props: { count: number; names: string[] } | null): string {
   const detail = props === null || props.count === 0 ? '' : ` : ${count(props.count, 'objet')} (${props.names.join(', ')}…)`;
   return `Le mobilier du garage, modelé par le code${detail}, et les véhicules substituts (placeholder_banc pour le concept, placeholder_* pour les autres), en attendant les vrais modèles. Liste complète dans TODO_ASSETS.md.`;
@@ -402,6 +406,13 @@ export function UnderHoodPanel() {
 
       <dt>Crédits</dt>
       <dd data-fact="credits">{typo(MODEL_CREDITS)}</dd>
+
+      {SOUND_CREDITS !== '' && (
+        <>
+          <dt>Sons</dt>
+          <dd data-fact="credits-sons">{typo(SOUND_CREDITS)}</dd>
+        </>
+      )}
     </dl>
   );
 }

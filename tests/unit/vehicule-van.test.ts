@@ -43,7 +43,7 @@ describe('manifeste du van', () => {
   });
 
   it('donne le moteur de la fiche', () => {
-    expect(manifest.engine).toEqual({ label: '4 cylindres turbo diesel', fuel: 'diesel', feed: 'injection', boost: 'turbo', power: 102 });
+    expect(manifest.engine).toEqual({ label: '4 cylindres turbo diesel', fuel: 'diesel', feed: 'injection', boost: 'turbo', power: 102, sound: 'diesel-turbo' });
   });
 
   // Vue intérieure retirée le 15 novembre 2026 (habitacle presque noir), revenue avec un habitacle

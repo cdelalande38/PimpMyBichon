@@ -109,7 +109,7 @@ describe('assets-check — licence déclarée dans CREDITS.md', () => {
     const report = runAssetsCheck({ root });
     expect(located(report.errors)).toEqual(['public/assets/stickers/etoile.svg:0 licence']);
     expect(report.errors[0]?.message).toContain('aucune ligne de CREDITS.md ne couvre ce fichier');
-    expect(report.errors[0]?.message).toContain('CC0-1.0, CC-BY-4.0, OFL-1.1, création projet');
+    expect(report.errors[0]?.message).toContain('CC0-1.0, CC-BY-3.0, CC-BY-4.0, OFL-1.1, création projet');
   });
 
   it.each(['CC-BY-NC-4.0', 'CC-BY-SA-4.0', 'licence commerciale', 'tous droits réservés', ''])(

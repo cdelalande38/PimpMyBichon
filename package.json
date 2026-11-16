@@ -28,6 +28,8 @@
     "maps:check": "node tools/maps/check.mjs",
     "radio:pack": "node tools/radio/pack.mjs",
     "radio:accueil": "node tools/radio/accueil.mjs",
+    "sons:ecoute": "node tools/sons/ecoute.mjs",
+    "sons:build": "node tools/sons/build.mjs",
     "check": "npm run typecheck && npm run lint && npm run vehicles:build && npm run maps:build && npm run guard && npm run assets:check && npm run maps:check && npm run audio:check && npm run test"
   },
   "dependencies": {

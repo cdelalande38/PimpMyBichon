@@ -1007,7 +1007,8 @@ test('premier lancement sans pack : la station d’accueil joue, un seul morceau
   // Suivant : le deuxième morceau, demandé à son tour.
   await page.locator('.radio-player').getByRole('button', { name: 'Morceau suivant' }).click();
   await expect(page.getByTestId('radio-titre')).toHaveText('Midnight Glide');
-  expect([...new Set(asked)].at(-1)).toBe('/PimpMyBichon/assets/audio/radio/accueil/midnight-glide.mp3');
+  // Le titre change avant que la requête du morceau parte : on attend qu'elle arrive.
+  await expect.poll(() => [...new Set(asked)].at(-1)).toBe('/PimpMyBichon/assets/audio/radio/accueil/midnight-glide.mp3');
 
   // Aucune suppression possible.
   await station(page, WELCOME).getByRole('button', { name: new RegExp(`^${WELCOME}`) }).click();
