@@ -351,6 +351,9 @@ test.describe('son du moteur en sortie', () => {
       // À la main : le NOS n'est envoyé qu'à la main. Un appui : le coup d'envoi part, une fois.
       await page.getByRole('switch', { name: 'Conduite à la main' }).tap();
       await expect(nos).toBeVisible();
+      // Le départ est donné aux feux : un appui pendant les feux rouges ne compte pas (le véhicule est
+      // tenu sur la ligne). En rendu logiciel les feux durent une demi-minute : on attend le vert.
+      await expect(stage(page)).toHaveAttribute('data-depart', 'parti', { timeout: 150_000 });
       await nos.tap();
       await expect(nos).toHaveAttribute('data-nos', 'envoye', { timeout: 120_000 });
       await expect.poll(bruitages, { timeout: 120_000, intervals: [250] }).toBe(1);
