@@ -23,7 +23,9 @@ async function photo(page: Page, name: string): Promise<void> {
 }
 
 test.describe('annonce des virages', () => {
-  test.setTimeout(480_000);
+  // Délai large : en CI, le pilote automatique repart arrêté de la ligne et met plus de cinq minutes
+  // d'horloge à passer le premier virage (CI du 17 novembre 2026 : 60 m en 300 s).
+  test.setTimeout(1_080_000);
 
   test('la mini-carte est là en course, et data-virage change après un virage', async ({ page }) => {
     const errors: string[] = [];
@@ -75,7 +77,7 @@ test.describe('annonce des virages', () => {
     await (await ouvrirReglages(page)).getByRole('button', { name: 'Pilote automatique' }).tap();
     await expect(reglagesSortie(page)).toHaveCount(0);
     await expect(carte(page)).toHaveAttribute('data-visible', 'true');
-    await expect(carte(page)).not.toHaveAttribute('data-virage-index', premier ?? '', { timeout: 300_000 });
+    await expect(carte(page)).not.toHaveAttribute('data-virage-index', premier ?? '', { timeout: 600_000 });
     await expect(carte(page)).toHaveAttribute('data-virage', /^(gauche|droite):\d+$|^aucun$/);
     await photo(page, 'apres-virage');
     expect(errors).toEqual([]);

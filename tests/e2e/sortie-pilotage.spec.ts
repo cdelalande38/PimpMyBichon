@@ -197,7 +197,9 @@ async function sortir(page: Page, errors: string[]): Promise<void> {
 }
 
 test.describe('sortie de nuit, pilotage au doigt', () => {
-  test.setTimeout(600_000);
+  // Délai large : sur les machines de la CI (rendu logiciel, une image par seconde), le premier parcours
+  // dépasse dix minutes depuis qu'il passe par l'aperçu, les feux et les réglages (CI du 17 novembre 2026).
+  test.setTimeout(1_500_000);
 
   test('chargement, aperçu, course à la main, manche, deux doigts, réglages, pédales au choix, compte-tours, NOS, radio, pilote', async ({ page }) => {
     const errors: string[] = [];
