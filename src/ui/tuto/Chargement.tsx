@@ -3,10 +3,18 @@
 // scène expose déjà (image dessinée, état du véhicule) : aucune attente ajoutée, aucun rendu forcé.
 // Il ne retient jamais l'app : la scène tombe, le véhicule manque ou tout tarde trop, et il cède la
 // place à ce que l'app affiche déjà dans ce cas (alerte, étiquette « en route… », texte d'attente).
-// Il ne prend aucun appui (pointer-events: none) : rien de ce qu'il couvre n'est bloqué.
+// Il ne prend aucun appui (pointer-events: none) : rien de ce qu'il couvre n'est bloqué. Seule
+// exception, le bouton « Plus tard » de la mise à jour.
+//
+// C'est aussi lui qui porte la vérification de version du lancement (src/pwa/lancement.ts) : tant
+// qu'elle n'a pas décidé (quelques secondes au plus : vérification, téléchargement d'une nouvelle
+// version, passage de main), il reste, et dit en une ligne ce qui se passe. La musique d'accueil et
+// tout flux qui dure attendent qu'il soit parti (attendreLancement).
 
 import { useEffect, useState } from 'react';
 import { useMediaQuery } from '../../app/useMediaQuery.ts';
+import { lancementEnCours, pourcentage } from '../../pwa/lancement.ts';
+import { envoyer, useLancement } from '../../pwa/lancementStore.ts';
 import { useRenderStats } from '../../render/renderStats.ts';
 import { useBench } from '../../state/bench.ts';
 import { useTutos } from '../../state/tutos.ts';
@@ -54,11 +62,15 @@ export function Chargement({ sceneFailed }: { sceneFailed: boolean }) {
     return () => window.clearTimeout(timer);
   }, [garage]);
 
+  // Mise à jour du lancement : l'écran reste tant qu'elle n'a pas décidé (ses délais la bornent).
+  const lancement = useLancement();
+  const majEnCours = lancementEnCours(lancement);
+
   const faites = !atelier ? 0 : !garage ? 1 : bench === 'chargement' ? 2 : 3;
   // Une fois fini, il le reste : « Réessayer » ou un autre véhicule remettent le banc en chargement,
   // l'écran de chargement ne revient pas pour autant.
   const [dejaFini, setDejaFini] = useState(false);
-  const fini = dejaFini || sceneFailed || lasse || bench === 'absent' || bench === 'erreur' || faites === 3;
+  const fini = dejaFini || (!majEnCours && (sceneFailed || lasse || bench === 'absent' || bench === 'erreur' || faites === 3));
   if (fini && !dejaFini) setDejaFini(true);
 
   // Fondu quand tout est prêt, sauf en mouvement réduit. S'il cède la place (échec, attente trop
@@ -80,6 +92,17 @@ export function Chargement({ sceneFailed }: { sceneFailed: boolean }) {
 
   if (parti) return null;
   const courante = ETAPES[Math.min(faites, ETAPES.length - 1)] ?? ETAPES[0];
+  const telechargement = lancement.phase === 'telechargement';
+  const pct = pourcentage(lancement);
+  const texte = !majEnCours
+    ? faites >= ETAPES.length
+      ? 'Tout est prêt'
+      : `${courante.enCours}…`
+    : lancement.phase === 'verification'
+      ? 'On vérifie la version…'
+      : telechargement
+        ? `Nouvelle version : téléchargement${lancement.total > 0 ? ` ${pct} %` : '…'}`
+        : 'Nouvelle version prête : on l’allume…';
 
   return (
     <div
@@ -106,9 +129,21 @@ export function Chargement({ sceneFailed }: { sceneFailed: boolean }) {
           ))}
         </ol>
         <div className="tuto-barre">
-          <i style={{ transform: `scaleX(${Math.max(0.06, faites / ETAPES.length)})` }} />
+          <i
+            style={{
+              transform: `scaleX(${Math.max(0.06, telechargement && lancement.total > 0 ? pct / 100 : faites / ETAPES.length)})`,
+            }}
+          />
         </div>
-        <p className="tuto-chargement-texte">{faites >= ETAPES.length ? 'Tout est prêt' : `${courante.enCours}…`}</p>
+        <p className="tuto-chargement-texte" data-maj={majEnCours ? lancement.phase : undefined}>
+          {texte}
+        </p>
+        {telechargement && (
+          // La version s'appliquera au prochain lancement : on entre tout de suite sur celle-ci.
+          <button type="button" className="tuto-plus-tard" onClick={() => envoyer({ type: 'plus-tard' })}>
+            Plus tard
+          </button>
+        )}
       </div>
     </div>
   );

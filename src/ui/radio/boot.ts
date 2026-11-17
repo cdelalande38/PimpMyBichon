@@ -19,6 +19,7 @@ import {
   startWelcome,
 } from '../../audio/radio/library.ts';
 import { readPackLink, stripPackLink } from '../../audio/radio/link.ts';
+import { attendreLancement } from '../../pwa/lancementStore.ts';
 import { useRadio } from '../../state/radio.ts';
 
 let booted = false;
@@ -30,6 +31,13 @@ function saveData(): boolean {
 export function bootRadio(): void {
   if (booted) return;
   booted = true;
+  // Ni musique d'accueil ni téléchargement de pack avant la fin de la vérification de version du
+  // lancement (écran de chargement, src/pwa/lancement.ts) : un flux qui dure retiendrait l'ancienne
+  // version du service worker, et la nouvelle ne prendrait jamais la main. Quelques secondes au plus.
+  void attendreLancement().then(demarrerRadio);
+}
+
+function demarrerRadio(): void {
   const { pathname, search, hash } = window.location;
   const link = readPackLink(search, hash);
   const ready = initRadio();

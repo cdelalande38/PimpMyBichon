@@ -129,6 +129,52 @@
   font-size: 0.875rem;
 }
 
+/* Mise à jour du lancement : « Plus tard » est la seule commande de l'écran, donc la seule qui prend l'appui. */
+.tuto-chargement-texte[data-maj] {
+  color: var(--chrome);
+}
+
+.tuto-plus-tard {
+  align-self: flex-start;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 1.25rem;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--chrome);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.tuto-plus-tard:focus-visible {
+  outline: 2px solid var(--ambre);
+  outline-offset: 2px;
+}
+
+/* Paysage : peu de hauteur, le bas de l'écran garde l'essentiel (marque réduite, marges serrées). */
+@media (orientation: landscape) and (max-height: 480px) {
+  .tuto-chargement {
+    padding-bottom: calc(1rem + var(--safe-b));
+  }
+
+  .tuto-chargement-bas {
+    gap: 0.5rem;
+  }
+
+  .tuto-marque {
+    margin-bottom: 0;
+  }
+
+  .tuto-marque b {
+    font-size: 2.25rem;
+  }
+}
+
 @keyframes tuto-pouls {
   from {
     opacity: 0.45;
