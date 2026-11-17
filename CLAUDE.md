@@ -25,6 +25,12 @@ Atelier de customisation de voitures et de motos en 3D temps réel, sur téléph
 - Routage par hash uniquement, chemins d'assets relatifs, `base` Vite réglé sur `/PimpMyBichon/`.
 - Aucune requête vers un tiers à l'exécution : polices, textures, sons et modèles sont servis par l'app. Deux exceptions : la télé du garage (§ 5.12 du cahier des charges), en option, qui n'ouvre le lecteur YouTube que sur un geste de l'utilisateur et sur la playlist qu'il a lui-même renseignée ; et le pack de musique (§ 9), téléchargé à l'adresse que l'utilisateur a saisie, ou dès l'ouverture d'un lien vers l'app qui porte cette adresse. Aucune adresse externe n'est écrite dans le code.
 
+## Agents
+
+- **Cinq agents au plus à la fois**, chacun dans une copie du dépôt, sans réseau, sans commit ni push. La CI, les secrets, l'API GitHub et les services externes restent dans la boucle principale.
+- **Modèle par tâche** (règle validée par le commanditaire le 17 novembre 2026, après essai sur deux vagues) : **Opus** pour les lots complexes (3D, rendu, physique de conduite, géométrie des cartes, refonte d'écran, fusion délicate) ; **Sonnet** pour le code borné (interface, parcours à adapter, outils, textes) et la recherche. Pas d'agent Haiku : l'essai en lecture seule n'a rien rendu. Fable reste réservé à la boucle principale.
+- Annoncer le modèle de chaque lot quand une vague est lancée.
+
 ## Quota et travail en continu
 
 - **Contrôler le quota en continu.** Dès le début d'une session, et après chaque relance de Claude Code, lire le quota (`claude -p "/usage" --output-format text` : session de 5 heures, semaine, Fable) et lancer une garde de fond qui le relit toutes les cinq minutes. Le relire avant tout lancement d'agents.
