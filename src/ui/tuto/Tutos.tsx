@@ -121,8 +121,10 @@ function TutoDialog() {
   if (paysage) {
     // Paysage : la carte reste dans la zone libre (src/app/paysage.css), en haut si la cible est dans le
     // bas de l'écran (choix de la place, cadrages de la photo), en bas sinon.
+    // Elle s'arrête au-dessus du halo de la cible (6 px de marge du halo, puis 8 px) : le contenu défile
+    // dans la carte plutôt que de la recouvrir (écran de 360 px de haut, texte agrandi).
     if (cible && !liste && cible.top + cible.height / 2 > hauteur / 2) {
-      place = { top: 'calc(var(--gutter) + var(--safe-t))', bottom: 'auto' };
+      place = { top: 'calc(var(--gutter) + var(--safe-t))', bottom: 'auto', maxHeight: `calc(${Math.max(0, Math.round(cible.top - 14))}px - var(--gutter) - var(--safe-t))` };
     }
   } else if (cible && !liste && cible.top + cible.height / 2 > hauteur / 2 && cible.top - 24 >= 200) {
     place = { bottom: `${Math.round(hauteur - cible.top + 12)}px`, maxHeight: `${Math.round(cible.top - 24)}px` };

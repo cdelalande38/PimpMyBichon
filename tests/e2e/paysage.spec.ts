@@ -427,3 +427,230 @@ test.describe('garage en paysage, cadrage par véhicule', () => {
     }
   });
 });
+
+// Tourner le téléphone ne replace plus la caméra : la vue choisie au doigt (azimut, élévation, part du
+// cadrage) est gardée, en atelier, après la vue intérieure et après le mode photo. La scène publie
+// l'orbite dans data-orbite (azimut, élévation en degrés, part de la plage de zoom en %).
+
+type Orbit = { azimuth: number; polar: number; share: number };
+
+async function orbitOf(page: Page): Promise<Orbit | null> {
+  const raw = await stage(page).getAttribute('data-orbite');
+  if (!raw) return null;
+  const [azimuth, polar, share] = raw.split(',').map(Number);
+  if (azimuth === undefined || polar === undefined || share === undefined) return null;
+  return { azimuth, polar, share };
+}
+
+/** Attend que l'orbite ne bouge plus (le rendu logiciel est lent) et la rend. */
+async function settledOrbit(page: Page): Promise<Orbit> {
+  let last = '';
+  let orbit: Orbit | null = null;
+  await expect
+    .poll(
+      async () => {
+        orbit = await orbitOf(page);
+        const key = JSON.stringify(orbit);
+        const same = orbit !== null && key === last;
+        last = key;
+        return same;
+      },
+      { message: 'orbite posée', timeout: 30_000, intervals: [400] },
+    )
+    .toBe(true);
+  if (!orbit) throw new Error('pas d’orbite');
+  return orbit;
+}
+
+/** Écart d'angle en degrés (azimut : sur le cercle). */
+const gap = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
+
+/** Glissé au doigt dans la scène : tourne la vue, relève un peu la caméra. */
+async function dragOrbit(page: Page, from: { x: number; y: number }, by: { dx: number; dy: number }): Promise<void> {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  for (let step = 1; step <= 10; step += 1) await page.mouse.move(from.x + (by.dx * step) / 10, from.y + (by.dy * step) / 10);
+  await page.mouse.up();
+}
+
+function expectSameView(after: Orbit, before: Orbit, label: string): void {
+  expect(gap(after.azimuth, before.azimuth), `${label} : azimut`).toBeLessThanOrEqual(3);
+  expect(Math.abs(after.polar - before.polar), `${label} : élévation`).toBeLessThanOrEqual(3);
+}
+
+test.describe('garage, tourner le téléphone garde la vue choisie au doigt', () => {
+  test('atelier : portrait → paysage → portrait, même azimut, même élévation, véhicule entier dans la zone libre', async ({ page }) => {
+    test.setTimeout(300_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openApp(page);
+    await waitForScene(page);
+    await waitForBench(page);
+    const start = await settledOrbit(page);
+
+    // Vue choisie au doigt, en portrait : tournée vers la droite, un peu relevée.
+    await dragOrbit(page, { x: 120, y: 300 }, { dx: 150, dy: 40 });
+    const chosen = await settledOrbit(page);
+    expect(gap(chosen.azimuth, start.azimuth), 'le glissé a tourné la vue').toBeGreaterThan(20);
+
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(page.locator('.app > footer.dock')).toHaveAttribute('data-taille', 'agrandi');
+    const sideways = await settledOrbit(page);
+    expectSameView(sideways, chosen, 'paysage 844 × 390');
+    // Le véhicule reste entier entre les boutons ronds et le menu.
+    const frame = await settledFrame(page);
+    const rail = await rectOf(page, 'nav.quick');
+    const menu = await rectOf(page, '.app > footer.dock');
+    expect(frame.left, 'à droite des boutons ronds').toBeGreaterThanOrEqual(rail.right - 2);
+    expect(frame.right, 'à gauche du menu').toBeLessThanOrEqual(menu.left + 2);
+    expect(frame.top, 'sous le haut de l’écran').toBeGreaterThanOrEqual(0);
+    expect(frame.bottom, 'au-dessus du bas de l’écran').toBeLessThanOrEqual(390);
+
+    // Une autre taille de paysage, puis le retour : toujours la même vue.
+    await page.setViewportSize({ width: 780, height: 360 });
+    expectSameView(await settledOrbit(page), chosen, 'paysage 780 × 360');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(dock(page)).toHaveAttribute('data-taille', /compact|agrandi/);
+    expectSameView(await settledOrbit(page), chosen, 'retour au portrait');
+    const back = await settledFrame(page);
+    expect(back.left).toBeGreaterThanOrEqual(-2);
+    expect(back.right).toBeLessThanOrEqual(392);
+  });
+
+  test('vue intérieure puis mode photo : la vue d’atelier choisie est retrouvée après la rotation', async ({ page }) => {
+    test.setTimeout(420_000);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openApp(page);
+    await waitForScene(page);
+    await waitForBench(page);
+    await dragOrbit(page, { x: 120, y: 300 }, { dx: -140, dy: -30 });
+    const chosen = await settledOrbit(page);
+
+    // Vue intérieure : on tourne le téléphone dedans, puis on sort en paysage.
+    const withInterior = CATALOG.find((entry) => entry.interiorView);
+    if (withInterior) {
+      await chooseVehicle(page, withInterior.id);
+      await dragOrbit(page, { x: 120, y: 300 }, { dx: -140, dy: -30 });
+    }
+    const beforeInterior = await settledOrbit(page);
+    if (withInterior) {
+      await quick(page).getByRole('button', { name: 'Intérieur', exact: true }).tap();
+      await expect(stage(page)).toHaveAttribute('data-vue', 'interieur');
+      await dragOrbit(page, { x: 100, y: 250 }, { dx: 120, dy: 20 });
+      const gaze = await stage(page).getAttribute('data-regard');
+      await page.setViewportSize({ width: 844, height: 390 });
+      await expect(stage(page)).toHaveAttribute('data-vue', 'interieur');
+      // Le regard au doigt est gardé (à quelques degrés près).
+      await expect
+        .poll(async () => {
+          const [yaw, pitch] = ((await stage(page).getAttribute('data-regard')) ?? '').split(',').map(Number);
+          const [yaw0, pitch0] = (gaze ?? '').split(',').map(Number);
+          return Math.max(Math.abs((yaw ?? 999) - (yaw0 ?? 0)), Math.abs((pitch ?? 999) - (pitch0 ?? 0)));
+        })
+        .toBeLessThanOrEqual(4);
+      await quick(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await expect(stage(page)).toHaveAttribute('data-vue', 'atelier');
+      expectSameView(await settledOrbit(page), beforeInterior, 'sortie de la vue intérieure en paysage');
+      await page.setViewportSize({ width: 390, height: 844 });
+      expectSameView(await settledOrbit(page), beforeInterior, 'retour au portrait');
+    } else {
+      expectSameView(beforeInterior, chosen, 'sans vue intérieure');
+    }
+
+    // Mode photo : entrée en paysage, retour à la vue choisie en sortant.
+    await page.setViewportSize({ width: 844, height: 390 });
+    expectSameView(await settledOrbit(page), beforeInterior, 'paysage avant la photo');
+    await quick(page).getByRole('button', { name: 'Photo', exact: true }).tap();
+    const bar = page.locator('footer.photo-bar');
+    await expect(bar).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(bar).toBeVisible();
+    await bar.getByRole('button', { name: 'Retour', exact: true }).tap();
+    await expect(sectionsNav(page)).toBeVisible();
+    expectSameView(await settledOrbit(page), beforeInterior, 'sortie du mode photo');
+  });
+});
+
+// Ce qui n'avait jamais été regardé en paysage : la carte du tutoriel quand sa cible est en bas (le choix
+// des places) et le message du cadenas de peinture. Dans la zone libre, ni sur le menu ni sur les boutons
+// ronds, sans recouvrir la cible, boutons à 48 px, et tout reste à l'écran, même en texte très grand.
+for (const screen of SCREENS) {
+  test.describe(`garage en paysage, carte du tutoriel et message du cadenas, ${screen.width} × ${screen.height}`, () => {
+    test.use({ viewport: { width: screen.width, height: screen.height } });
+
+    for (const size of ['Normal', 'Très grand'] as const) {
+      test(`la carte du choix des places ne recouvre pas les places (texte ${size.toLowerCase()})`, async ({ page }) => {
+        test.setTimeout(300_000);
+        await openApp(page);
+        await waitForScene(page);
+        await waitForBench(page);
+        const withInterior = CATALOG.find((entry) => entry.interiorView);
+        test.skip(!withInterior, 'aucun véhicule à vue intérieure');
+        if (size !== 'Normal') await setTextSize(page, size);
+        await quick(page).getByRole('button', { name: 'Intérieur', exact: true }).tap();
+        await expect(stage(page)).toHaveAttribute('data-vue', 'interieur');
+        await page.getByRole('button', { name: 'Aide' }).tap();
+        const tuto = page.getByRole('dialog');
+        await expect(tuto).toBeVisible();
+        // Jusqu'à l'étape qui montre les places.
+        for (let step = 0; step < 6 && !/place au pouce/i.test(await tuto.innerText()); step += 1) await tuto.getByRole('button', { name: /Suivant/ }).tap();
+        await expect(tuto).toContainText('place au pouce');
+        await expect(page.locator('.tuto-spot')).toBeVisible();
+        // La cible (le halo), la carte, les boutons ronds et le menu : rien ne se recouvre.
+        await expect.poll(async () => (await page.locator('.tuto-carte').first().boundingBox())?.y ?? 999).toBeLessThan(screen.height / 3);
+        const spot = await rectOf(page, '.tuto-spot');
+        const card = await rectOf(page, '.tuto-carte');
+        const rail = await rectOf(page, 'nav.quick');
+        const menu = await rectOf(page, '.app > footer.dock');
+        expect(intersect(card, spot), `carte ${show(card)} / halo des places ${show(spot)}`).toBe(false);
+        expect(card.left, 'carte à droite des boutons ronds').toBeGreaterThanOrEqual(rail.right - 1);
+        expect(card.right, 'carte à gauche du menu').toBeLessThanOrEqual(menu.left + 1);
+        expect(card.top).toBeGreaterThanOrEqual(0);
+        expect(card.bottom).toBeLessThanOrEqual(screen.height);
+        expect(await smallTargets(page, '.tuto-carte'), 'carte : 48 px').toEqual([]);
+        // « Suivant » reste atteignable (au toucher), même quand le texte défile dans la carte.
+        const next = tuto.getByRole('button', { name: /Suivant|C’est parti/ });
+        const nextBox = await next.boundingBox();
+        expect((nextBox?.y ?? 999) + (nextBox?.height ?? 0)).toBeLessThanOrEqual(screen.height);
+        await tuto.getByRole('button', { name: /Passer|C’est parti/ }).first().tap();
+      });
+    }
+
+    test('le message du cadenas de peinture se pose dans la zone libre, lisible, avec son bouton à 48 px', async ({ page }) => {
+      test.setTimeout(300_000);
+      await openApp(page);
+      await waitForScene(page);
+      await waitForBench(page);
+      for (const size of ['Normal', 'Très grand'] as const) {
+        if (size !== 'Normal') {
+          await quick(page).getByRole('button', { name: 'Atelier', exact: true }).tap();
+          const dialog = page.getByRole('dialog', { name: 'Réglages' });
+          await dialog.getByRole('button', { name: 'Texte' }).click();
+          await dialog.getByRole('button', { name: /^Très grand/ }).click();
+          await dialog.getByRole('button', { name: 'Retour à l’atelier' }).click();
+          await expect(dialog).toBeHidden();
+        }
+        await openEntry(page, 'Peinture');
+        const paint = dock(page).locator('.paint');
+        await expect(paint.locator('.paint-zone').first()).toBeVisible({ timeout: 120_000 });
+        // La zone reste suivie (on n'ouvre son cadenas qu'à la fin) : le même appui montre le message aux deux tailles.
+        await paint.locator('.paint-zone-pair').first().locator('.paint-zone').tap();
+        await paint.getByRole('group', { name: 'Couleurs' }).getByRole('button', { name: 'Bleu nuit', exact: true }).tap({ force: true });
+        const notice = page.locator('.paint-notice');
+        await expect(notice).toContainText('Cette partie suit la carrosserie');
+        const box = await rectOf(page, '.paint-notice');
+        const rail = await rectOf(page, 'nav.quick');
+        const menu = await rectOf(page, '.app > footer.dock');
+        expect(box.left, `${size} : à droite des boutons ronds`).toBeGreaterThanOrEqual(rail.right - 1);
+        expect(box.right, `${size} : à gauche du menu`).toBeLessThanOrEqual(menu.left + 1);
+        expect(box.top, `${size} : le message reste à l'écran (haut)`).toBeGreaterThanOrEqual(0);
+        expect(box.bottom, `${size} : le message reste à l'écran (bas)`).toBeLessThanOrEqual(screen.height);
+        expect(box.bottom - box.top, `${size} : moins de la moitié de l'écran`).toBeLessThanOrEqual(screen.height * 0.5);
+        expect(await smallTargets(page, '.paint-notice'), `${size} : 48 px`).toEqual([]);
+        if (size === 'Très grand') {
+          await notice.getByRole('button', { name: 'Ouvrir le cadenas', exact: true }).tap();
+          await expect(notice).toHaveCount(0);
+        }
+      }
+    });
+  });
+}

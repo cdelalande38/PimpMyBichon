@@ -62,9 +62,11 @@ import {
   lookFrom,
   lookPoint,
   lookTarget,
+  orbitAngles,
   orbitPosition,
   placeEye,
   presentPose,
+  carryOrbit,
   seatMetrics,
   zoneShift,
   type BoxSize,
@@ -72,6 +74,7 @@ import {
   type FreeZone,
   type Look,
   type PlacedSeat,
+  type VehicleFrameInput,
 } from './fit.ts';
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
@@ -254,6 +257,21 @@ function placeSignature(group: Object3D | null, rootName: string, view: Interior
   return [root.uuid, ...view.seat.anchors.map((name) => root.getObjectByName(name)?.children.find((child) => child.name === POSED)?.uuid ?? 'nu')].join('|');
 }
 
+/** Pose de la caméra et de la cible d'orbite d'un coup, les contrôles recalés sur elles (bornes de zoom et d'angle comprises). */
+function seatOrbit(view: Camera, controls: { target: Vector3; update: () => unknown } | null, position: Vector3, target: Vector3): void {
+  view.position.copy(position);
+  if (!controls) return;
+  controls.target.copy(target);
+  controls.update();
+}
+
+/** Vitesse de la rotation lente et amortissement des contrôles d'orbite, réglés sur la durée de l'image. */
+function tuneControls(controls: { autoRotateSpeed: number; dampingFactor: number } | null, delta: number): void {
+  if (!controls) return;
+  controls.autoRotateSpeed = slowSpinSpeed(delta);
+  controls.dampingFactor = controlsDamping(delta);
+}
+
 function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, reducedMotion, stage, compactTop, zone, paysage, menuOpen }: StageProps) {
   const width = useThree((state) => state.size.width);
   const height = useThree((state) => state.size.height);
@@ -286,11 +304,12 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   const bandTop = height * (paysage ? LANDSCAPE_TOP_MARGIN : DOCK_TOP_MARGIN);
   const freeZone = paysage && !photo ? (zone ?? defaultZone(width)) : null;
   const zoneWidth = freeZone ? freeZone.right - freeZone.left : width;
-  const fit = useMemo(() => {
+  const frameInput = useMemo<VehicleFrameInput>(() => {
     const [hl, hw, h] = sizeKey.split(':').map(Number);
     const size: BoxSize = { halfLength: hl ?? 1, halfWidth: hw ?? 1, height: h ?? 1 };
-    return fitVehicle({ width, height, size, turn, azimuth, band: { top: bandTop, bottom: bandBottom }, zoneWidth });
+    return { width, height, size, turn, azimuth, band: { top: bandTop, bottom: bandBottom }, zoneWidth };
   }, [width, height, sizeKey, turn, azimuth, bandBottom, bandTop, zoneWidth]);
+  const fit = useMemo(() => fitVehicle(frameInput), [frameInput]);
   const target = fit.target;
 
   // Ambiance : sources, lumières et étalonnage. La sonde de réflexion se refait à chaque changement.
@@ -334,6 +353,12 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   };
   const position = useMemo(() => orbitPosition(fit.target, fit.distance, fit.azimuth), [fit]);
   const home = useMemo(() => ({ position, target: fit.target, fov: fit.fov }), [position, fit]);
+  // Vue de départ de la caméra et de ses contrôles : elle ne change qu'avec le véhicule, sa mesure
+  // ou son côté de présentation (alors la caméra repart de là). Tourner l'écran change le cadrage
+  // (`fit`) mais ne replace pas la caméra : la vue choisie au doigt est reportée (carryOrbit, plus bas).
+  const viewIdentity = `${vehicle.id}|${sizeKey}|${turn}|${azimuth}`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- volontairement figée entre deux identités
+  const start = useMemo(() => ({ position, target: fit.target }), [viewIdentity]);
 
   // Mode photo : la passe de moyenne vit avec la scène, la chaîne d'image l'accueille en dernier.
   const plan = photoPlan(level);
@@ -494,6 +519,13 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     putData(element, 'oeil', phase === 'in' && rig.rest ? rig.rest.eye.map((v) => Math.round(v * 100)).join(',') : null);
     const p = state.camera.position;
     putData(element, 'camera', phase === 'out' ? `${Math.round(p.x * 100)},${Math.round(p.y * 100)},${Math.round(p.z * 100)}` : null);
+    // Orbite de l'atelier : azimut, élévation (degrés) et part de la plage de zoom (0 : tout près, 100 : tout au loin).
+    if (phase === 'out' && controls.current && !photo) {
+      const t = controls.current.target;
+      const a = orbitAngles([p.x, p.y, p.z], [t.x, t.y, t.z]);
+      const share = ((a.distance - fit.minDistance) / Math.max(1e-6, fit.maxDistance - fit.minDistance)) * 100;
+      putData(element, 'orbite', `${Math.round((a.azimuth * 180) / Math.PI)},${Math.round((a.polar * 180) / Math.PI)},${Math.round(share)}`);
+    } else if (phase === 'out') putData(element, 'orbite', null);
     let frame: string | null = null;
     let across: string | null = null;
     if (measure && phase === 'out') {
@@ -535,6 +567,62 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // Entrée et sortie : on part de la caméra telle qu'elle est (même au milieu d'une transition).
   const instant = reducedMotion || photo;
   const getThree = useThree((state) => state.get);
+  // Vue de l'atelier choisie au doigt : tenue à jour tant que la caméra est en orbite (ni vue
+  // intérieure, ni photo qui la déplacent). Tourner le téléphone la reporte sur le nouveau cadrage.
+  // La mémoire n'est pas rognée par la plage de zoom : un écran de passage (le paysage annoncé avant sa
+  // taille) ne doit pas faire perdre le zoom à l'aller-retour. `applied` : la pose que la caméra avait
+  // quand la mémoire l'a posée ; la mémoire ne relit la caméra que si le doigt l'a déplacée depuis.
+  const orbit = useRef({ position: new Vector3(), target: new Vector3(), applied: new Vector3(), input: null as VehicleFrameInput | null, identity: '' });
+  useFrame((state) => {
+    const memory = orbit.current;
+    if (interior.current.phase !== 'out' || photo || !controls.current) return;
+    if (state.camera.position.distanceToSquared(memory.applied) < 1e-8) return;
+    memory.position.copy(state.camera.position);
+    memory.target.copy(controls.current.target);
+    memory.applied.copy(state.camera.position);
+  }, 3);
+  useLayoutEffect(() => {
+    const memory = orbit.current;
+    const previous = memory.input;
+    const sameView = memory.identity === viewIdentity;
+    memory.input = frameInput;
+    memory.identity = viewIdentity;
+    if (!sameView || !previous) {
+      // Autre véhicule, autre mesure, autre côté : la caméra repart de la vue de départ (props ci-dessus).
+      memory.position.set(...position);
+      memory.target.set(...fit.target);
+      memory.applied.set(...position);
+      return;
+    }
+    if (previous === frameInput) return;
+    const carried = carryOrbit(previous, frameInput, [memory.position.x, memory.position.y, memory.position.z], [memory.target.x, memory.target.y, memory.target.z]);
+    memory.position.set(...carried.position);
+    memory.target.set(...carried.target);
+    const rig = interior.current;
+    if (photo) return;
+    if (rig.phase === 'out') {
+      const view = getThree().camera as Camera;
+      seatOrbit(view, controls.current, memory.position, memory.target);
+      memory.applied.copy(view.position);
+    } else {
+      // Vue intérieure : en sortant, la caméra rejoint la vue d'atelier reportée.
+      rig.savedPosition.copy(memory.position);
+      rig.savedTarget.copy(memory.target);
+    }
+    invalidate();
+  }, [frameInput, viewIdentity, photo, position, fit.target, getThree, invalidate]);
+  // Sortie du mode photo : la caméra retrouve la vue que le doigt avait choisie (et non la vue de départ).
+  const wasPhoto = useRef(photo);
+  useEffect(() => {
+    const memory = orbit.current;
+    const leaving = wasPhoto.current && !photo;
+    wasPhoto.current = photo;
+    if (!leaving || interior.current.phase !== 'out' || memory.identity !== viewIdentity) return;
+    const view = getThree().camera as Camera;
+    seatOrbit(view, controls.current, memory.position, memory.target);
+    memory.applied.copy(view.position);
+    invalidate();
+  }, [photo, viewIdentity, getThree, invalidate]);
   // Œil de la place posé dans la pièce : `keepLook` garde l'écart du regard au doigt (siège changé).
   const seatEye = useCallback(
     (rig: InteriorRig, view: InteriorView, keepLook: boolean): boolean => {
@@ -724,11 +812,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     }
   }, 0);
 
-  useFrame((_, delta) => {
-    if (!controls.current) return;
-    controls.current.autoRotateSpeed = slowSpinSpeed(delta);
-    controls.current.dampingFactor = controlsDamping(delta);
-  }, -2);
+  useFrame((_, delta) => tuneControls(controls.current, delta), -2);
 
   return (
     <>
@@ -736,11 +820,11 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       <color attach="background" args={[ambiance.night]} />
       {profile.atmosphere && <fog attach="fog" args={[ambiance.night, GARAGE.fog.near, GARAGE.fog.far]} />}
 
-      <PerspectiveCamera makeDefault fov={fit.fov} near={NEAR} far={80} position={position} />
+      <PerspectiveCamera makeDefault fov={fit.fov} near={NEAR} far={80} position={start.position} />
       <OrbitControls
         ref={controls}
         makeDefault
-        target={target}
+        target={start.target}
         enabled={outside}
         enablePan={false}
         enableDamping

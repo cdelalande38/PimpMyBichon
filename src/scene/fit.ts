@@ -201,6 +201,8 @@ export interface VehicleFrameInput {
   size: BoxSize;
   turn: number;
   azimuth: number;
+  /** Élévation de la caméra (angle depuis la verticale) ; absente : celle de départ. */
+  polar?: number;
   /** Partie libre de l'écran (sous la marque, au-dessus du dock compact), en pixels CSS. */
   band: { top: number; bottom: number };
   /**
@@ -231,7 +233,7 @@ function bisect(lo: number, hi: number, tooLow: (value: number) => boolean): num
  * largeur (sans dépasser `FRAME_SHARE_HEIGHT` de la partie libre en hauteur), et la hauteur de
  * cible qui le centre verticalement dans la partie libre. Voiture ou moto, même règle.
  */
-export function fitVehicle({ width, height, size, turn, azimuth, band, zoneWidth }: VehicleFrameInput): VehicleFit {
+export function fitVehicle({ width, height, size, turn, azimuth, polar, band, zoneWidth }: VehicleFrameInput): VehicleFit {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
   const zone = Math.min(w, Math.max(1, zoneWidth ?? w));
@@ -244,7 +246,7 @@ export function fitVehicle({ width, height, size, turn, azimuth, band, zoneWidth
   let distance = 6;
   const frameAt = (d: number, y: number): ScreenFrame => {
     const target: Vec3 = [0, y, 0];
-    return projectBox(size, turn, { eye: orbitPosition(target, d, azimuth), target, fov, width: w, height: h });
+    return projectBox(size, turn, { eye: orbitPosition(target, d, azimuth, polar), target, fov, width: w, height: h });
   };
   // Deux passes suffisent : la hauteur de cible change à peine la largeur à l'écran.
   for (let pass = 0; pass < 3; pass += 1) {
@@ -272,6 +274,41 @@ export function fitVehicle({ width, height, size, turn, azimuth, band, zoneWidth
     target: [0, targetY, 0],
     azimuth,
   };
+}
+
+/** Repère de l'orbite : azimut, élévation (depuis la verticale) et distance d'une caméra autour de sa cible. */
+export interface OrbitAngles {
+  azimuth: number;
+  polar: number;
+  distance: number;
+}
+
+/** Lit l'orbite d'une caméra posée en `position` autour de `target` (l'inverse de `orbitPosition`). */
+export function orbitAngles(position: Vec3, target: Vec3): OrbitAngles {
+  const ox = position[0] - target[0];
+  const oy = position[1] - target[1];
+  const oz = position[2] - target[2];
+  const distance = Math.hypot(ox, oy, oz) || 1e-6;
+  return { azimuth: Math.atan2(ox, oz), polar: Math.acos(Math.min(1, Math.max(-1, oy / distance))), distance };
+}
+
+/**
+ * Tourner le téléphone : la vue choisie au doigt suit le cadrage de la nouvelle orientation.
+ * L'azimut et l'élévation ne changent pas ; la distance garde sa part du cadrage, c'est-à-dire le
+ * rapport entre la distance où le doigt l'a mise et celle qui cadre le véhicule sous ce même
+ * angle (80 % de la zone libre) : un véhicule qui remplissait la moitié de la zone la remplit
+ * encore à moitié, entier, après la rotation. La distance rendue n'est pas rognée : les contrôles
+ * d'orbite la bornent à la plage de zoom du nouveau cadrage, la mémoire garde la valeur brute (un
+ * passage par un cadrage extrême ne doit pas coûter le zoom au retour).
+ * `prev` et `next` : les entrées du cadrage avant et après (même véhicule, même côté).
+ */
+export function carryOrbit(prev: VehicleFrameInput, next: VehicleFrameInput, position: Vec3, target: Vec3): { position: [number, number, number]; target: [number, number, number] } {
+  const now = orbitAngles(position, target);
+  const home = fitVehicle(next);
+  const before = fitVehicle({ ...prev, azimuth: now.azimuth, polar: now.polar }).distance;
+  const after = fitVehicle({ ...next, azimuth: now.azimuth, polar: now.polar }).distance;
+  const distance = (now.distance * after) / before;
+  return { position: orbitPosition(home.target, distance, now.azimuth, now.polar), target: home.target };
 }
 
 /** Zone libre d'un écran en paysage : entre les boutons ronds (à gauche) et le menu en colonne (à droite). */
