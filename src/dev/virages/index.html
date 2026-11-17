@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aperçu des virages</title>
+    <style>
+      html,
+      body,
+      #racine {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #05060a;
+        color: #e9e7e2;
+        font: 13px/1.35 system-ui, sans-serif;
+      }
+      #racine {
+        position: relative;
+      }
+      canvas {
+        display: block;
+      }
+      #info {
+        position: fixed;
+        left: 8px;
+        top: 8px;
+        padding: 4px 8px;
+        background: rgb(0 0 0 / 55%);
+        border-radius: 6px;
+        white-space: pre;
+        font-size: 11px;
+        pointer-events: none;
+      }
+      #minicarte-hote {
+        position: fixed;
+        left: 12px;
+        top: 12px;
+        pointer-events: none;
+      }
+      body[data-propre] #info {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="racine"></div>
+    <div id="info"></div>
+    <div id="minicarte-hote"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

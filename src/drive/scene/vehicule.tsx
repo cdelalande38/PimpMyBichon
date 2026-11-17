@@ -21,9 +21,9 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  PointLight,
   Quaternion,
   Raycaster,
+  SpotLight,
   Vector3,
   type BufferGeometry,
   type Material,
@@ -86,7 +86,7 @@ export interface DriveRig {
   /** Feux arrière (matières clonées, à nous) : intensité au repos, et au freinage. */
   tails: MeshStandardMaterial[];
   tailBase: number;
-  tailLight: PointLight | null;
+  tailLight: SpotLight | null;
   /** Milieu des phares dans le repère du véhicule, direction du faisceau, demi-écart des deux phares (0 : un seul). */
   readonly headLocal: Vector3;
   readonly headDirLocal: Vector3;
@@ -95,6 +95,17 @@ export interface DriveRig {
   /** Éblouissement des phares vus de face. */
   glareGain: { value: number };
 }
+
+/**
+ * Lumière des feux arrière : un projecteur posé `back` m derrière la caisse, à la hauteur des feux
+ * (`height` m au plus, `heightShare` de la hauteur du véhicule), tourné vers la route `aim` m plus
+ * loin ; cône de `angle` rad (demi-angle) et bord adouci (`penumbra`). Intensités en candelas au
+ * repos, au freinage et au plus fort du NOS. Il fait la lueur rouge sur la chaussée comme la
+ * lumière ponctuelle d'avant (même place, mêmes candelas), mais la caisse est tout entière derrière
+ * lui, hors du cône : elle n'en reçoit plus rien. La lumière ponctuelle l'éclairait de face à 0,35 m
+ * (caisse claire « brûlée » de dos, rose : 63 % de pixels saturés pour une Cox blanche en poursuite).
+ */
+export const TAIL_LIGHT = { back: 0.35, height: 0.7, heightShare: 0.4, aim: 1.5, angle: Math.PI / 3, penumbra: 0.5, candela: { rest: 5, brake: 18, nos: 40 } } as const;
 
 export function createRig(): DriveRig {
   const group = new Group();
@@ -258,7 +269,7 @@ export interface DriveModel {
   /** Fourche, guidon et poignées d'une moto, tournés avec sa roue avant (vide pour une voiture). */
   steering: SteeringPart[];
   tails: MeshStandardMaterial[];
-  tailLight: PointLight;
+  tailLight: SpotLight;
   measure: { halfLength: number; halfWidth: number; height: number };
   /** Milieu des phares, dans le repère du véhicule, et demi-écart des deux phares (0 pour une moto). */
   head: Vector3;
@@ -375,10 +386,11 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
       g.add(glare);
       return glare;
     });
-    // Lueur rouge des feux arrière sur la chaussée (plus forte au freinage).
-    const tail = new PointLight('#ff1a08', 5, 15, 2);
-    tail.position.set(-halfLength - 0.35, Math.min(0.7, height * 0.4), 0);
-    g.add(tail);
+    // Lueur rouge des feux arrière sur la chaussée (plus forte au freinage), la caisse hors du cône (TAIL_LIGHT).
+    const tail = new SpotLight('#ff1a08', TAIL_LIGHT.candela.rest, 15, TAIL_LIGHT.angle, TAIL_LIGHT.penumbra, 2);
+    tail.position.set(-halfLength - TAIL_LIGHT.back, Math.min(TAIL_LIGHT.height, height * TAIL_LIGHT.heightShare), 0);
+    tail.target.position.set(-halfLength - TAIL_LIGHT.aim, 0, 0);
+    g.add(tail, tail.target);
     return { group: g, beamMeshes, glares, tail, y, x, spread };
   }, [halfLength, halfWidth, height, isBike, rig.beamGain, rig.glareGain]);
   useEffect(

@@ -41,6 +41,7 @@ import { useEngineSoundPrefs } from '../../state/engineSound.ts';
 import { RadioButton } from '../radio/RadioButton.tsx';
 import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
+import { MiniCarte } from './MiniCarte.tsx';
 import { ArriveePanneau, ChronoSortie, FeuxDepart } from './Depart.tsx';
 import { DriveIcon } from './icones.tsx';
 import { Mixage } from './Mixage.tsx';
@@ -101,6 +102,7 @@ function DriveTop() {
       <CompteTours />
       <FeuxDepart />
       <ChronoSortie />
+      <MiniCarte />
       <div className="drive-top-droite">
         <RadioButton enSortie />
         <button type="button" className="drive-round" aria-label={paused ? 'Reprendre' : 'Pause'} aria-pressed={paused} {...pause}>

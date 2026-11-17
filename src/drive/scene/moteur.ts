@@ -45,23 +45,25 @@ import { localWeather, nearestSpan, shelteredAt, type WeatherAmounts } from './a
 import { createFarLights, createProbeBand, createRain, createSky, createTownGlow, SKY } from './ciel.ts';
 import { driveDebug, type DriveMeasure } from './debug.ts';
 import { Decor, DecorKit, LAMP_HEAD } from './decor.ts';
+import { Chevrons } from './chevrons.ts';
 import { LignesDepart } from './lignes.ts';
 import { createSignAtlas, createSignMaterial } from './enseignes.ts';
 import type { Relief } from './relief.ts';
 import { createNightUniforms, createRoleMaterials, LAMP_FADE, MAX_LAMPS, MAX_NEONS, MIST, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
 import { DRIVE_PROFILES, due, fogDensity, lampWeights, nearestLamps, stepOf, type DriveProfile } from './profil.ts';
 import { MovingProbe } from './sonde.ts';
+import { cleanProbePass } from '../../render/probePass.ts';
 import { wheelSteer } from './roues.ts';
-import { createRig, rollWheels, type DriveModel, type DriveRig } from './vehicule.tsx';
+import { createRig, rollWheels, TAIL_LIGHT, type DriveModel, type DriveRig } from './vehicule.tsx';
 
 /** Intensité des vraies lumières des lampadaires, en candelas : même éclairement que la flaque calculée (PMB_LAMP_DIFFUSE de la chaussée × 64 × π). */
 const LAMP_CANDELA = 380;
 
-/** Feux arrière : intensité au repos et au freinage, en candelas (lueur rouge sur la chaussée). */
-const TAIL_CANDELA = { rest: 5, brake: 18 } as const;
+/** Feux arrière : intensité au repos et au freinage, en candelas (lueur rouge sur la chaussée ; src/drive/scene/vehicule.tsx). */
+const TAIL_CANDELA = TAIL_LIGHT.candela;
 
 /** NOS : lueur bleue à l'échappement (le feu arrière vire au bleu), en candelas au plus fort. */
-const NOS_GLOW = { candela: 40, color: new Color('#3b7bff') } as const;
+const NOS_GLOW = { candela: TAIL_LIGHT.candela.nos, color: new Color('#3b7bff') } as const;
 
 /**
  * Météo du ciel, par temps : part mouillée de la chaussée, pluie, neige (la neige laisse la chaussée
@@ -169,6 +171,8 @@ export class DriveEngine {
   /** Départ arrêté, chrono, tours et arrivée (src/drive/depart.ts) ; lignes en damier sur la chaussée. */
   readonly depart = createDepart();
   private readonly lignes: LignesDepart;
+  /** Balises à chevrons des virages (src/drive/scene/chevrons.ts) ; publie les virages pour la mini-carte. */
+  private readonly chevrons: Chevrons;
   private startId = '';
   private readonly vehicleId: string;
   private readonly halfLengthHint: number;
@@ -207,6 +211,12 @@ export class DriveEngine {
   private readonly frameOf: VehicleFrame;
   private readonly shot: CameraShot = { position: [0, 2, -6], target: [0, 0.5, 0], fov: 55, roll: 0 };
   private readonly probeAt = new Vector3();
+  /** Pas de la sonde (une face, ou toutes à l'amorçage), réglé à chaque image ; fonction créée une fois. */
+  private readonly probeJob = { gl: null as WebGLRenderer | null, scene: null as Scene | null, every: 1, all: false };
+  private readonly probeStep = (): void => {
+    const job = this.probeJob;
+    if (job.gl && job.scene) this.probe.step(job.gl, job.scene, this.probeAt, this.hidden, job.every, job.all);
+  };
   private readonly hidden: Object3D[];
   private readonly order = new Int32Array(MAX_LAMPS + 1);
   private readonly dist = new Float32Array(MAX_LAMPS + 1);
@@ -264,6 +274,7 @@ export class DriveEngine {
     this.vehicleId = vehicle.id;
     this.halfLengthHint = vehicle.halfLengthHint;
     this.lignes = new LignesDepart(this.uniforms);
+    this.chevrons = new Chevrons(this.uniforms, this.rail);
     liveDepart.current = this.depart;
     // Lumières lointaines : les lampadaires de toute la carte, la lueur des villages.
     this.farLights = createFarLights(routeLampHeads(route), this.uniforms.pmbLampColor.value);
@@ -278,7 +289,7 @@ export class DriveEngine {
   attach(scene: Scene, camera: PerspectiveCamera): void {
     this.attached = { scene, fog: scene.fog, environment: scene.environment };
     this.band.layers.set(PROBE_ONLY_LAYER);
-    scene.add(this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, ...this.lampLights);
+    scene.add(this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, this.chevrons.group, ...this.lampLights);
     if (this.townGlow) scene.add(this.townGlow);
     scene.fog = new FogExp2(new Color(SKY.fog), fogDensity(this.profile.fogFar));
     scene.environment = this.probe.target.texture;
@@ -292,7 +303,7 @@ export class DriveEngine {
   detach(): void {
     const a = this.attached;
     if (!a) return;
-    a.scene.remove(this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, ...this.lampLights);
+    a.scene.remove(this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, this.chevrons.group, ...this.lampLights);
     if (this.townGlow) a.scene.remove(this.townGlow);
     a.scene.fog = a.fog;
     a.scene.environment = a.environment;
@@ -434,6 +445,7 @@ export class DriveEngine {
     const now = performance.now();
     decor.update(motion.s, now, camera.position.x, camera.position.z);
     this.lignes.update(decor.relief, motion.s);
+    this.chevrons.update(decor.relief, motion.s, decor.root, decor.status.loaded);
     // Plan proche : la profondeur garde sa précision au loin (marquage, fenêtres, relief).
     const near = cameraId === 'embarquee' ? NEAR.cockpit : NEAR.default;
     if (camera.near !== near) {
@@ -549,7 +561,15 @@ export class DriveEngine {
     this.probeAt.set(px, py + 1.1, pz);
     this.band.position.set(px, py, pz);
     const primeNow = !this.primed && decor.status.complete;
-    if (!off?.sonde || primeNow) this.probe.step(gl, scene, this.probeAt, this.hidden, this.degraded ? profile.probeEvery * 4 : profile.probeEvery, primeNow);
+    // Faces effacées, décor sans environnement : sans quoi la sonde s'éclaircissait sans fin (src/render/probePass.ts).
+    if (!off?.sonde || primeNow) {
+      const job = this.probeJob;
+      job.gl = gl;
+      job.scene = scene;
+      job.every = this.degraded ? profile.probeEvery * 4 : profile.probeEvery;
+      job.all = primeNow;
+      cleanProbePass(gl, scene, this.probeStep);
+    }
     if (primeNow) this.primed = true;
     // Reflet planaire : sous la pluie seulement (au sec, l'enrobé ne renvoie presque rien ; sous la
     // neige, les reflets très doux des lampes suffisent), une image sur deux, et coupé en fondu par la
@@ -712,6 +732,7 @@ export class DriveEngine {
     feuxSon.vert = false;
     this.detach();
     this.lignes.dispose();
+    this.chevrons.dispose();
     this.decor.dispose();
     this.kit.dispose();
     for (const m of this.roles.values()) m.dispose();
