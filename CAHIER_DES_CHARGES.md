@@ -277,6 +277,8 @@ Le moment de récompense : on sort le véhicule et on le regarde rouler.
 - **Sources** : uniquement des données géographiques ouvertes, dont la source et la licence sont notées dans `CREDITS.md` et rappelées dans l'app : les bases de l'IGN (routes, bâtiments, hydrographie, relief) pour la France, enrichies par OpenStreetMap (lampadaires, végétation, feux, passages piétons, glissières et murs, vitesses limites, nature des commerces du bord de la route, jamais leur nom) ; OpenStreetMap seul ailleurs, avec le relief du service d'altimétrie de l'IGN là où il en a un, sinon un relief plat déclaré. Ni fond de carte dessiné, ni donnée d'un service de cartographie commercial.
 - **Ordre** : 1. les lacs du plateau matheysin et La Mure ; 2. Monaco, en ville et sur le tour du circuit urbain. Ensuite, au fil de l'eau : Grenoble, Paris, Nice, Marseille, des capitales et des villes de bord de mer. Les cartes sont publiques, dans ce dépôt.
 - **Deux lots** : le lot 1 livre la sortie **sur rail** décrite ci-dessus, sur la première carte ; le lot 2 ajoute la **conduite libre** : direction au pouce sur route fermée, bords de route qui retiennent le véhicule, sans dégâts ni circulation.
+- **Départ et chrono** (demandés le 16 novembre 2026, en conduite libre) : chaque sortie part arrêtée, aux feux (rouge, rouge, vert), en pilote automatique comme à la main ; une ligne en damier marque le départ choisi et le bout du parcours ; le chrono part au vert et s'arrête sur la ligne d'arrivée, ou compte les tours sur un parcours en boucle ; le meilleur temps est gardé par parcours, départ et véhicule. Ni classement, ni récompense, ni adversaire à ce stade.
+- **Modes de jeu, plus tard** (vision du commanditaire, 16 novembre 2026 ; jalon 13, à n'ouvrir que lorsqu'il jugera la conduite libre assez évoluée) : la **course contre la montre** ; le **duel** contre un véhicule piloté par l'app ; les **univers** (les cartes) qui se débloquent peu à peu au lieu d'être tous offerts d'emblée ; des **dollars** gagnés en course, qui débloquent les améliorations de performances et les types de customisation. Le départ aux feux et le chrono en sont la première brique.
 - Aucun film, aucune émission, aucune compétition n'est cité ni reproduit (§ 17) : les lieux réels, oui.
 
 ### 5.6 Projets à brief et garage libre
@@ -714,6 +716,7 @@ Précautions Blender MCP : l'outil exécute du Python arbitraire dans Blender, d
 | 10 | Projets et partage | 20 briefs, carnet, livraison, liens de build et de défi, photo haute qualité partagée depuis Android |
 | 11 | Finition | pièces P2, bivouac, télé du garage (§ 5.12), accessibilité, tests sur appareil, clip vidéo, APK si demandé |
 | 12 | Vague 2 | berline 90, pick-up, 4x4, coupé, déposés sans modification du code |
+| 13 | Modes de jeu (§ 5.5) | contre la montre avec classement de ses propres temps ; duel contre un véhicule piloté par l'app ; cartes débloquées par la progression ; dollars gagnés en course qui débloquent améliorations de performances et types de customisation ; la question « tout reste libre dans l'atelier, ou une carrière verrouille de l'existant » tranchée par le commanditaire (§ 18) avant tout développement |
 
 Le jalon 1 passe avant tout le reste : si le rendu n'atteint pas le niveau attendu sur un seul véhicule, ajouter des véhicules et des options n'y changera rien. Les jalons 2, 3 et 4 ne dépendent d'aucun asset externe ; le jalon 8 ne dépend que de données géographiques ouvertes, téléchargées sur le poste (§ 5.5). Les jalons 5, 6, 7, 9 et 12 attendent les fournitures du § 10.3 ; leur code se développe avant, contre des substituts déclarés.
 
@@ -784,6 +787,7 @@ Encore ouvertes, et **bloquantes pour les jalons 5, 6, 7 et 9** :
 3. Musique du dossier de lecture : quelle source, avec quelle licence ?
 4. ~~Une photo de l'intérieur du van, à plafond LED~~ : reçue (une courte vidéo de nuit, classée à tort comme attendue jusqu'au 15 novembre 2026 ; les photos de l'extérieur sont arrivées le même jour). Elle montre un ciel de toit étoilé rouge avec un médaillon central, à refaire avec un motif à nous.
 5. Quels amis écrivent les premiers briefs ?
+6. Modes de jeu (jalon 13) : aujourd'hui tout est libre dans l'atelier ; une progression suppose de verrouiller de l'existant. Un mode libre (tout ouvert, comme maintenant) à côté d'un mode carrière (on gagne et on débloque), ou une progression pour tout le monde ? Ouverte, **bloquante pour le jalon 13 seulement**.
 
 ## 19. Consignes pour Claude Code (reprises dans `CLAUDE.md`)
 
