@@ -93,6 +93,12 @@ export const CHASE = {
   lookBend: 1,
   /** Embarquée d'une moto : œil relevé au-dessus du casque du motard (m). */
   bikeEyeLift: 0.4,
+  /**
+   * Embarquée à la place du conducteur : écart au plus, en radians (≈ 10°), entre le regard et l'axe du
+   * véhicule. Au-delà, les instruments de la planche (vague R, « cadrans ») sortent du cadre en portrait
+   * (champ horizontal d'environ ±19° pour un champ vertical de 74°) : la vitesse ne se lirait plus en virage.
+   */
+  cockpitYawMax: 0.17,
 } as const;
 
 /**
@@ -136,6 +142,12 @@ export function followChase(frame: VehicleFrame, motion: DriveMotion, rail: Rail
 /** Cap du véhicule relatif à la route (rad), borné comme le pilote le borne. */
 const relativeYaw = (motion: DriveMotion) => {
   const yaw = motion.yaw ?? 0;
+  return Number.isFinite(yaw) ? Math.max(-0.6, Math.min(0.6, yaw)) : 0;
+};
+
+/** Cap de la marche relatif à la route (rad) : celui de la caisse moins sa dérive (survirage), borné. */
+const marchYaw = (motion: DriveMotion) => {
+  const yaw = (motion.yaw ?? 0) - (motion.drift ?? 0);
   return Number.isFinite(yaw) ? Math.max(-0.6, Math.min(0.6, yaw)) : 0;
 };
 
@@ -273,7 +285,8 @@ export function cameraShot(
       extendedPose(rail, motion.s - back, scratch);
       // En retard sur la place, puis sur le cap : le point tourne autour du véhicule de l'écart de cap.
       lateralPoint(scratch, motion.offset + chase.slide, frame.height + 1.1 - lower + shakeY, out.position);
-      turnAround(out.position, px, pz, relativeYaw(motion) + chase.lag);
+      // Derrière la marche, pas derrière la caisse : en survirage, on voit la caisse se mettre en travers.
+      turnAround(out.position, px, pz, marchYaw(motion) + chase.lag);
       out.position[0] += lx * shakeX;
       out.position[2] += lz * shakeX;
       set(out.target, px + fx * frame.halfLength * 0.6, py + frame.height * 0.75, pz + fz * frame.halfLength * 0.6);
@@ -341,6 +354,21 @@ export function cameraShot(
       set(out.target, point[0], point[1], point[2]);
       // Là où pointe le véhicule : le point visé tourne autour de lui de son cap relatif.
       turnAround(out.target, px, pz, relativeYaw(motion));
+      // À la place du conducteur, le regard ne s'écarte pas de l'axe du véhicule de plus de CHASE.cockpitYawMax :
+      // la planche, donc la vitesse, reste dans l'image en virage.
+      if (eye) {
+        const vx = out.target[0] - out.position[0];
+        const vz = out.target[2] - out.position[2];
+        const ahead = vx * fx + vz * fz;
+        const side = vx * lx + vz * lz;
+        const angle = Math.atan2(side, ahead);
+        if (Math.abs(angle) > R.cockpitYawMax) {
+          const clamped = Math.sign(angle) * R.cockpitYawMax;
+          const reach = Math.hypot(vx, vz);
+          out.target[0] = out.position[0] + (Math.cos(clamped) * fx + Math.sin(clamped) * lx) * reach;
+          out.target[2] = out.position[2] + (Math.cos(clamped) * fz + Math.sin(clamped) * lz) * reach;
+        }
+      }
       // Dans l'habitacle, un champ plus ouvert : le volant, la planche et la route.
       out.position[1] += shakeY * 0.5;
       out.fov = (eye ? 74 : 66) + extraFov * 0.6;

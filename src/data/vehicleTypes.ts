@@ -109,6 +109,11 @@ export interface PerformanceSpec {
   grip: number;
   /** Boîte nommée de src/data/boites.ts (BOITES_NOMMEES) ; absente : celle de la famille de sons. */
   gearbox?: string;
+  /**
+   * Roues motrices (src/data/adherence.ts) : « propulsion », « traction » ou « integrale » ; absente :
+   * une traction pour une voiture, l'arrière pour une moto. Fait le survirage et le patinage, à la main.
+   */
+  transmission?: 'propulsion' | 'traction' | 'integrale';
 }
 
 /** Point en mètres, dans le repère du véhicule (avant vers +X, haut vers +Y, droite vers +Z). */

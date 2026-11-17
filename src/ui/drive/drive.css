@@ -113,6 +113,23 @@
   pointer-events: none;
 }
 
+/* Le pouce du manche reste posé longtemps : ni menu contextuel, ni sélection, ni loupe d'appui long ne
+   doivent le lui prendre (le pointercancel qui en résulterait lâcherait le manche). Le NOS et les boutons de
+   la manette en paysage, touchés par un second doigt, ne laissent eux non plus aucun geste au navigateur. */
+.drive-mid,
+.drive-mid *,
+.drive-nos,
+.drive-pave-btn {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drive-nos,
+.drive-pave-btn {
+  touch-action: none;
+}
+
 /* Plusieurs doigts à la fois : aucun geste du navigateur (zoom à deux doigts, défilement) ne vient
    reprendre un doigt posé sur l'écran de conduite. */
 .drive-top,
@@ -325,6 +342,23 @@
   gap: 0.5rem;
 }
 
+/* Boutons du haut (l'aide « ?», la radio, les réglages, la pause) : 48 px au doigt quoi qu'il arrive, à
+   toute taille de texte et sans qu'aucun rétrécissement ni arrondi puisse les écraser (un « ? » mesuré
+   une fois à 47,5 px de large en paysage, non reproduit depuis : ces plancher et ce refus de rétrécir
+   rendent la mesure indépendante de la mise en page de la rangée ; src/ui/tuto/tuto.css pose le même
+   plancher au « ? » en dehors de la sortie). */
+.drive-round,
+.drive-top .quick-btn,
+body:has(.drive-top) .tuto-aide {
+  flex: none;
+  min-width: 48px;
+  min-height: 48px;
+}
+
+.drive-top .radio-quick {
+  flex: none;
+}
+
 /* Radio en sortie : le bouton rond du garage ; le mini-lecteur se déploie sous le haut de l'écran,
    sur toute la largeur, sans quitter la route. */
 .drive-top .radio-quick {
@@ -459,6 +493,27 @@
   text-transform: uppercase;
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+/* Fondu au noir du retour au départ, en aperçu (FonduNoir) : 0,4 s pour sortir, 0,4 s pour revenir. */
+.drive-fondu {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 400ms ease-in-out;
+}
+
+.drive-fondu[data-noir] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drive-fondu {
+    transition: none;
+  }
 }
 
 .drive-veil {

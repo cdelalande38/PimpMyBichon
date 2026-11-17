@@ -1,5 +1,6 @@
 // Règles des bruitages de route (fonctions pures, testées par tests/unit/sons-bruitages.test.ts) :
-// niveau, hauteur et filtre de chaque boucle selon la vitesse, la météo locale et la voûte ; départ
+// niveau, hauteur et filtre de chaque boucle selon la vitesse, la météo locale et la voûte (ou la glisse
+// des pneus, ou le patinage des roues motrices : `glisseBrute`) ; départ
 // des bruitages ponctuels sur un front (freinage fort, passage de rapport, lever de pied à haut
 // régime). Les données sont dans src/data/bruitages.ts ; le lecteur dans ./route.ts. Aucune
 // allocation : tout s'écrit dans des objets donnés par l'appelant.
@@ -24,6 +25,11 @@ export interface EtatRoute {
    * du pilote, ou `glisseMesuree` à défaut. Absente : 0. Le lecteur la fait passer par `suivreGlisse`.
    */
   glisse?: number;
+  /**
+   * Patinage des roues motrices, de 0 à 1 : `DriveMotion.spin` du pilote. Absent : 0. Pilote les boucles
+   * de glisse dont la source est « patinage » (`burnout`).
+   */
+  patinage?: number;
 }
 
 /** Un instant du moteur et du véhicule, pour les déclencheurs (deux instants : avant, maintenant). */
@@ -64,11 +70,16 @@ function mouilleRoulement(e: EtatRoute): number {
   return unite(e.mouille) * (1 - unite(e.neige));
 }
 
+/** Grandeur brute qui pilote une boucle de glisse : la glisse des pneus, ou le patinage (`Glisse.source`). */
+export function glisseBrute(b: BoucleRoute, e: EtatRoute): number {
+  return (b.glisse?.source === 'patinage' ? e.patinage : e.glisse) ?? 0;
+}
+
 /**
  * Niveau visé d'une boucle, de 0 à 1 (avant le curseur « Route »). `glisse` : la glisse déjà suivie
- * (hystérésis et rampes de `suivreGlisse`) pour une boucle de glisse ; par défaut, la glisse brute.
+ * (hystérésis et rampes de `suivreGlisse`) pour une boucle de glisse ; par défaut, la grandeur brute.
  */
-export function niveauBoucle(b: BoucleRoute, e: EtatRoute, glisse: number = e.glisse ?? 0): number {
+export function niveauBoucle(b: BoucleRoute, e: EtatRoute, glisse: number = glisseBrute(b, e)): number {
   let n = b.niveau;
   if (b.glisse) n *= unite(glisse);
   if (b.vitesse) n *= partVitesse(b, e.vitesseKmh) ** b.vitesse.puissance;
@@ -84,7 +95,7 @@ export function niveauBoucle(b: BoucleRoute, e: EtatRoute, glisse: number = e.gl
 }
 
 /** Hauteur (vitesse de lecture) d'une boucle : elle monte avec la vitesse (ou, si elle glisse, avec la glisse). */
-export function hauteurBoucle(b: BoucleRoute, e: EtatRoute, glisse: number = e.glisse ?? 0): number {
+export function hauteurBoucle(b: BoucleRoute, e: EtatRoute, glisse: number = glisseBrute(b, e)): number {
   if (b.glisse) {
     const [bas, haut] = b.glisse.hauteur;
     return bas + (haut - bas) * unite(glisse);

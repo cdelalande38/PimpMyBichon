@@ -25,6 +25,8 @@ export interface Wheel {
   radius: number;
   /** Roue avant : axe de braquage dans le repère du parent du nœud ; absent pour une roue qui ne braque pas. */
   steer?: Vector3;
+  /** Roue motrice (`rouesMotrices`) : quand les roues patinent, elle tourne plus vite que la route. */
+  driven?: boolean;
 }
 
 const SIDE = new Vector3(0, 0, 1);
@@ -125,6 +127,34 @@ export function wheelSteer(steer: number, speed: number, kind: 'car' | 'bike'): 
   const t = Math.min(1, Math.max(0, ((Number.isFinite(speed) ? speed : 0) - W.slow) / (W.fast - W.slow)));
   const max = k.low + (k.high - k.low) * t;
   return Math.max(-max, Math.min(max, steer * k.gain));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Patinage (demande du 17 novembre 2026) : départ plein gaz, les roues motrices tournent plus vite que
+// la route (`DriveMotion.spin`, src/drive/pilote.ts).
+
+/**
+ * Roues motrices selon la transmission (src/data/adherence.ts) : celles de l'arrière pour une
+ * propulsion (et une moto), celles de l'avant (les roues qui braquent) pour une traction, toutes pour
+ * une intégrale. Marque chaque roue (`driven`), sans allocation.
+ */
+export function rouesMotrices(wheels: readonly Wheel[], transmission: 'propulsion' | 'traction' | 'integrale' | undefined): void {
+  for (const wheel of wheels) {
+    const front = wheel.steer !== undefined;
+    wheel.driven = transmission === 'integrale' || (transmission === 'traction' ? front : !front);
+  }
+}
+
+/**
+ * Vitesse de plus de la bande de roulement des roues motrices (m/s) pour un patinage de 0 à 1 : à
+ * patinage plein, elles tournent comme à `PATINAGE.vitesse` m/s de plus que la route (lisible à l'œil,
+ * même au départ arrêté).
+ */
+export const PATINAGE = { vitesse: 14 } as const;
+
+export function roueEnPlus(spin: number): number {
+  if (!Number.isFinite(spin)) return 0;
+  return Math.min(1, Math.max(0, spin)) * PATINAGE.vitesse;
 }
 
 /** Pièces de direction d'une moto, tournées avec la roue avant (noms des pièces des modèles, jamais d'un véhicule). */

@@ -85,3 +85,26 @@ export async function quitterManette(force = false): Promise<void> {
   }
   prevenir();
 }
+
+/** Première manette physique branchée (API Gamepad), ou `null`. Chrome n'en montre une qu'après un appui sur un de ses boutons. */
+export function premiereManette(): Gamepad | null {
+  if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return null;
+  for (const pad of navigator.getGamepads()) if (pad?.connected) return pad;
+  return null;
+}
+
+/** Une manette physique est-elle branchée ? Suit les événements de connexion de l'API Gamepad. */
+export function useManetteBranchee(): boolean {
+  return useSyncExternalStore(
+    (fn) => {
+      window.addEventListener('gamepadconnected', fn);
+      window.addEventListener('gamepaddisconnected', fn);
+      return () => {
+        window.removeEventListener('gamepadconnected', fn);
+        window.removeEventListener('gamepaddisconnected', fn);
+      };
+    },
+    () => premiereManette() !== null,
+    () => false,
+  );
+}

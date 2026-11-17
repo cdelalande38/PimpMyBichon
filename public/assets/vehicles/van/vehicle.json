@@ -47,7 +47,7 @@
     "power": 102,
     "sound": "diesel-turbo"
   },
-  "performance": { "mass": 1800, "topKmh": 170, "grip": 5 },
+  "performance": { "mass": 1800, "topKmh": 170, "grip": 5, "transmission": "traction" },
   "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -14 }, "fov": 95, "volets": ["volant", "pommeau"] },
   "interiorViews": [
     { "place": "passager", "label": "Passager", "seat": { "anchors": ["siege_avant_droit"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": -14, "pitch": -12 }, "fov": 95 },
@@ -70,8 +70,8 @@
     },
     "light": { "position": [0.1, 1.0, 0], "intensity": 1.6, "distance": 3 },
     "panels": [
-      { "shape": "disque", "center": [1.317, 1.1904, -0.538], "normal": [-0.94, 0.34, 0], "size": [0.1, 0.1], "color": "#f4f1ea", "intensity": 0.9, "instrument": { "mesure": "vitesse", "max": 160 } },
-      { "shape": "disque", "center": [1.317, 1.1904, -0.402], "normal": [-0.94, 0.34, 0], "size": [0.1, 0.1], "color": "#f4f1ea", "intensity": 0.9, "instrument": { "mesure": "regime" } },
+      { "shape": "disque", "center": [1.342, 1.2604, -0.538], "normal": [-0.94, 0.34, 0], "size": [0.09, 0.09], "color": "#f4f1ea", "intensity": 0.9, "instrument": { "mesure": "vitesse", "max": 160 } },
+      { "shape": "disque", "center": [1.342, 1.2604, -0.402], "normal": [-0.94, 0.34, 0], "size": [0.09, 0.09], "color": "#f4f1ea", "intensity": 0.9, "instrument": { "mesure": "regime" } },
       { "shape": "rectangle", "center": [1.253, 1.2107, 0], "normal": [-0.94, 0.34, 0], "size": [0.22, 0.13], "color": "#2f7bff", "intensity": 0.85, "instrument": { "mesure": "vitesse", "affichage": "chiffres", "barre": "regime" } }
     ]
   },

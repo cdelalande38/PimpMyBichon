@@ -70,6 +70,20 @@ export function lireManettePhysique(pad: ManettePhysique, out: LectureManche & {
   return out;
 }
 
+/**
+ * Boutons de face (0 à 3) et Start (9) d'une manette physique, disposition standard : n'importe lequel
+ * lance la course depuis l'aperçu, ou rend le volant sous le pilote automatique.
+ */
+export const BOUTONS_LANCEMENT: readonly number[] = [0, 1, 2, 3, 9];
+
+/** Un bouton de face ou Start est-il pressé ? */
+export function boutonDeLancement(pad: ManettePhysique): boolean {
+  for (let i = 0; i < BOUTONS_LANCEMENT.length; i += 1) {
+    if (pad.buttons[BOUTONS_LANCEMENT[i] as number]?.pressed) return true;
+  }
+  return false;
+}
+
 function gachette(pad: ManettePhysique, index: number): number {
   const b = pad.buttons[index];
   const v = b ? (Number.isFinite(b.value) ? b.value : b.pressed ? 1 : 0) : 0;

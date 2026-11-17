@@ -17,7 +17,8 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react';
 import { useDrive } from '../../state/drive.ts';
 import { useBoucleImage } from './CompteTours.tsx';
-import { boutonManche, lireManche, lireManettePhysique, MANCHE, type LectureManche } from './manche.ts';
+import { boutonDeLancement, boutonManche, lireManche, lireManettePhysique, MANCHE, type LectureManche } from './manche.ts';
+import { premiereManette } from './manette.ts';
 
 /** Ce que tiennent les doigts, à la main. */
 export const MANUEL: { stick: LectureManche; pad: LectureManche & { nos: boolean }; gaz: boolean; frein: boolean } = {
@@ -74,14 +75,13 @@ export function useManettePhysique(main: boolean, manche: boolean): void {
   }, []);
   useBoucleImage(() => {
     const e = etat.current;
-    if (!main || !e.branchee) return;
-    let pad: Gamepad | null = null;
-    for (const item of navigator.getGamepads()) {
-      if (item?.connected) {
-        pad = item;
-        break;
-      }
+    if (!e.branchee) return;
+    if (!main) {
+      // Pas à la main : le bouton qui rend le volant (ou lance la course) ne tire pas le NOS en passant.
+      e.nos = premiereManette()?.buttons[0]?.pressed ?? false;
+      return;
     }
+    const pad = premiereManette();
     if (!pad) return;
     const lu = lireManettePhysique(pad, MANUEL.pad);
     const vide = lu.throttle === 0 && lu.brake === 0 && lu.steer === 0;
@@ -90,6 +90,54 @@ export function useManettePhysique(main: boolean, manche: boolean): void {
     e.vide = vide;
     if (lu.nos && !e.nos) useDrive.getState().fireNos();
     e.nos = lu.nos;
+  });
+}
+
+/**
+ * Manette physique, hors conduite : un bouton de face ou Start (front montant, lu à chaque image tant
+ * qu'une manette est branchée) appelle `quandBouton` pendant que `actif` est vrai : lancer la course depuis
+ * l'aperçu, rendre le volant sous le pilote automatique. Un bouton déjà tenu ne compte pas.
+ */
+export function useBoutonManette(actif: boolean, quandBouton: () => void): void {
+  const etat = useRef({ branchee: false, tenu: false, reprise: true });
+  const rappel = useRef(quandBouton);
+  useEffect(() => {
+    rappel.current = quandBouton;
+  });
+  useEffect(() => {
+    const suivre = () => {
+      const branchee = premiereManette() !== null;
+      // Chrome ne montre une manette qu'après un appui sur l'un de ses boutons : cet appui-là ne lance rien.
+      if (branchee && !etat.current.branchee) etat.current.reprise = true;
+      etat.current.branchee = branchee;
+    };
+    // La boucle s'arrête en pause et page cachée : à la reprise, un bouton déjà tenu ne compte pas.
+    const arreter = () => {
+      etat.current.reprise = true;
+    };
+    suivre();
+    window.addEventListener('gamepadconnected', suivre);
+    window.addEventListener('gamepaddisconnected', suivre);
+    document.addEventListener('visibilitychange', arreter);
+    const off = useDrive.subscribe((state, previous) => {
+      if (state.paused !== previous.paused) arreter();
+    });
+    return () => {
+      window.removeEventListener('gamepadconnected', suivre);
+      window.removeEventListener('gamepaddisconnected', suivre);
+      document.removeEventListener('visibilitychange', arreter);
+      off();
+    };
+  }, []);
+  useBoucleImage(() => {
+    const e = etat.current;
+    if (!e.branchee) return;
+    const pad = premiereManette();
+    const presse = pad !== null && boutonDeLancement(pad);
+    const front = presse && !e.tenu && !e.reprise;
+    e.reprise = false;
+    e.tenu = presse;
+    if (front && actif && !document.querySelector('dialog[open]')) rappel.current();
   });
 }
 
@@ -137,7 +185,7 @@ export function leverManche(el: HTMLElement | null): void {
 /** Le dessin du manche : anneau, bouton, repères. */
 export function MancheDessin({ el }: { el: RefObject<HTMLDivElement | null> }) {
   return (
-    <div ref={el} className="drive-manche" aria-hidden="true" data-actif="false" data-gaz="0.00" data-frein="0.00" data-placement="0.00" style={{ ['--rayon' as string]: `${MANCHE.rayon}px` }}>
+    <div ref={el} className="drive-manche" aria-hidden="true" data-actif="false" data-gaz="0.00" data-frein="0.00" data-placement="0.00" data-coupures="0" data-reprises="0" style={{ ['--rayon' as string]: `${MANCHE.rayon}px` }}>
       <span className="drive-manche-repere" data-repere="gaz">
         Gaz
       </span>

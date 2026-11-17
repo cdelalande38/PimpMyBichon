@@ -75,6 +75,28 @@ export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ weather
 /** Caméra mise en passant « À la main ». */
 export const CAMERA_A_LA_MAIN: CameraId = 'poursuite';
 
+/** Durée du fondu au noir de fin d'aperçu, dans un sens, en ms (la même que la transition de .drive-fondu, src/ui/drive/drive.css). */
+export const FONDU_MS = 400;
+/** Secours, en ms : si l'écran ne confirme pas le noir (rendu figé), la scène reprend quand même après ce délai. */
+export const FONDU_SECOURS_MS = 1500;
+
+/** Fondu de fin d'aperçu : `non` ; `sortie` (l'écran noircit) ; `noir` (l'écran l'est, confirmé par la fin de la transition). */
+export type FonduEtat = 'non' | 'sortie' | 'noir';
+export type EtapeFondu = 'lever' | 'attendre' | 'reprendre';
+
+/**
+ * Fin d'un parcours ouvert en aperçu : que fait la scène à cette image ? `depuis` : instant où le fondu a
+ * été levé (ms), -1 s'il ne l'est pas encore ; `noir` : l'écran a confirmé qu'il est noir. Sans mouvement
+ * (`reduit`), la coupe est franche : on reprend tout de suite. Sinon : lever le fondu, attendre que l'écran
+ * ait fini de noircir (même quand les images tombent à une par seconde : c'est lui qui le dit, pas
+ * l'horloge), puis reprendre du départ ; l'horloge ne sert que de secours.
+ */
+export function etapeFondu(depuis: number, maintenant: number, reduit: boolean, noir: boolean): EtapeFondu {
+  if (reduit) return 'reprendre';
+  if (depuis < 0) return 'lever';
+  return noir || maintenant - depuis >= FONDU_SECOURS_MS ? 'reprendre' : 'attendre';
+}
+
 export const AUTO_INPUT: Readonly<DriveInput> = Object.freeze({ auto: true, throttle: 0, brake: 0, lane: 0 });
 
 /**
@@ -152,6 +174,12 @@ export interface DriveState extends DriveStore {
   retry: () => void;
   /** Aperçu du début de sortie : pilote automatique, réalisateur, rien à l'écran, jusqu'au premier appui. */
   apercu: boolean;
+  /**
+   * Fondu au noir de l'aperçu au bout d'un parcours ouvert : levé par la scène en fin de route, confirmé
+   * noir par l'écran, baissé quand le véhicule est revenu au départ (src/drive/scene/moteur.ts) ; jamais sauvegardé.
+   */
+  fondu: FonduEtat;
+  setFondu: (fondu: FonduEtat) => void;
   /** Départs à la main demandés (« commencer », « Repartir ») : la scène remet le véhicule sur la ligne et relance les feux. */
   course: number;
   /**
@@ -231,19 +259,20 @@ export const useDrive = create<DriveState>()(
       attempt: 0,
       apercu: true,
       course: 0,
+      fondu: 'non',
       choice: { map: null, start: null },
       retry: () =>
         set((state) =>
           state.map === null
             ? state
-            : { attempt: state.attempt + 1, apercu: true, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            : { attempt: state.attempt + 1, apercu: true, fondu: 'non', input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
         ),
       commencer: () =>
         set((state) => {
           if (state.map === null) return state;
           const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
           const input: DriveInput = { auto: false, throttle: 0, brake: 0, lane: 0, ...(state.direction === 'assistee' ? { assist: true } : {}), ...nos };
-          return { apercu: false, course: state.course + 1, input, camera: CAMERA_A_LA_MAIN, director: false, slow: false, paused: false };
+          return { apercu: false, fondu: 'non', course: state.course + 1, input, camera: CAMERA_A_LA_MAIN, director: false, slow: false, paused: false };
         }),
       laisserConduire: () =>
         set((state) => {
@@ -251,6 +280,7 @@ export const useDrive = create<DriveState>()(
           const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
           return { input: { ...AUTO_INPUT, ...nos }, director: true, paused: false };
         }),
+      setFondu: (fondu) => set((state) => (state.fondu === fondu ? state : { fondu })),
       fail: () => set((state) => ({ telemetry: { ...state.telemetry, ready: false, failed: true } })),
       setTelemetry: (telemetry) => set((state) => (sameTelemetry(state.telemetry, telemetry) ? state : { telemetry: { ...telemetry } })),
       chooseMap: (map) => set((state) => (mapById(map) ? { choice: { map, start: state.choice.map === map ? state.choice.start : null } } : state)),
@@ -265,6 +295,7 @@ export const useDrive = create<DriveState>()(
           map: target.id,
           start: wanted,
           apercu: true,
+          fondu: 'non',
           director: true,
           input: { ...AUTO_INPUT },
           orbit: { ...DEFAULT_ORBIT },
@@ -277,7 +308,7 @@ export const useDrive = create<DriveState>()(
         set((state) =>
           state.map === null
             ? state
-            : { map: null, start: null, apercu: true, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            : { map: null, start: null, apercu: true, fondu: 'non', input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
         ),
       setCamera: (camera) => set({ camera, director: false }),
       nextCamera: () => set((state) => ({ camera: nextCameraOf(state.camera), director: false })),

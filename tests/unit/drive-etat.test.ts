@@ -6,7 +6,8 @@ import { createStore, get, set } from 'idb-keyval';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CAMERA_IDS } from '../../src/drive/contrat.ts';
 import { MAPS } from '../../src/data/maps.ts';
-import { AUTO_INPUT, DEFAULT_DRIVE_PREFS, DRIVE_KEY, IDLE_TELEMETRY, nextCameraOf, sanitizeDrivePrefs } from '../../src/state/drive.ts';
+import { BOUTONS_LANCEMENT, boutonDeLancement } from '../../src/ui/drive/manche.ts';
+import { AUTO_INPUT, DEFAULT_DRIVE_PREFS, etapeFondu, FONDU_MS, FONDU_SECOURS_MS, DRIVE_KEY, IDLE_TELEMETRY, nextCameraOf, sanitizeDrivePrefs } from '../../src/state/drive.ts';
 
 type DriveModule = typeof import('../../src/state/drive.ts');
 
@@ -149,6 +150,45 @@ describe('une sortie', () => {
     expect(drive.getState()).toMatchObject({ apercu: true, input: AUTO_INPUT });
   });
 
+  it('fondu de fin d’aperçu : levé, confirmé noir, baissé par la scène ; remis à zéro par chaque départ', async () => {
+    const drive = await launch();
+    drive.getState().enter();
+    expect(drive.getState().fondu).toBe('non');
+    drive.getState().setFondu('sortie');
+    drive.getState().setFondu('noir');
+    expect(drive.getState().fondu).toBe('noir');
+    // Un appui sur la route pendant le fondu : la course part, l'écran n'est pas laissé noir.
+    drive.getState().commencer();
+    expect(drive.getState().fondu).toBe('non');
+    drive.getState().setFondu('sortie');
+    drive.getState().retry();
+    expect(drive.getState().fondu).toBe('non');
+    drive.getState().setFondu('noir');
+    drive.getState().leave();
+    expect(drive.getState().fondu).toBe('non');
+    drive.getState().enter();
+    drive.getState().setFondu('sortie');
+    const same = drive.getState();
+    drive.getState().setFondu('sortie');
+    expect(drive.getState()).toBe(same);
+  });
+
+  it('fin de route en aperçu : lever le fondu, attendre que l’écran confirme le noir, reprendre ; coupe franche sans mouvement', () => {
+    const t0 = 5_000;
+    expect(etapeFondu(-1, t0, false, false)).toBe('lever');
+    // Tant que l'écran n'a pas dit « noir », on attend, quelle que soit la lenteur des images.
+    expect(etapeFondu(t0, t0 + 1, false, false)).toBe('attendre');
+    expect(etapeFondu(t0, t0 + FONDU_MS * 2, false, false)).toBe('attendre');
+    expect(etapeFondu(t0, t0 + 1, false, true)).toBe('reprendre');
+    // Rendu figé : l'horloge sert de secours.
+    expect(etapeFondu(t0, t0 + FONDU_SECOURS_MS - 1, false, false)).toBe('attendre');
+    expect(etapeFondu(t0, t0 + FONDU_SECOURS_MS, false, false)).toBe('reprendre');
+    // Mouvement réduit : jamais de fondu, la scène reprend aussitôt.
+    expect(etapeFondu(-1, t0, true, false)).toBe('reprendre');
+    expect(etapeFondu(t0, t0 + 1, true, false)).toBe('reprendre');
+    expect(FONDU_MS).toBe(400);
+  });
+
   it('caméra choisie à la main : le réalisateur s’arrête', async () => {
     const drive = await launch();
     drive.getState().enter();
@@ -255,5 +295,20 @@ describe('une sortie', () => {
     drive.getState().retry();
     expect(drive.getState().attempt).toBe(attempt + 1);
     expect(drive.getState().telemetry).toEqual(IDLE_TELEMETRY);
+  });
+});
+
+describe('manette physique : le bouton qui lance la course', () => {
+  const pad = (...presses: number[]) => ({
+    axes: [0, 0],
+    buttons: Array.from({ length: 17 }, (_, i) => ({ value: presses.includes(i) ? 1 : 0, pressed: presses.includes(i) })),
+  });
+
+  it('un bouton de face ou Start compte, ni les gâchettes ni la croix', () => {
+    expect(BOUTONS_LANCEMENT).toEqual([0, 1, 2, 3, 9]);
+    for (const index of BOUTONS_LANCEMENT) expect(boutonDeLancement(pad(index))).toBe(true);
+    for (const index of [4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16]) expect(boutonDeLancement(pad(index))).toBe(false);
+    expect(boutonDeLancement(pad())).toBe(false);
+    expect(boutonDeLancement({ axes: [], buttons: [] })).toBe(false);
   });
 });

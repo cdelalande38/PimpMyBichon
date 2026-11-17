@@ -8,7 +8,7 @@
 // faudrait rouler plus d'un kilomètre, des minutes en rendu logiciel ; son cœur est prouvé par
 // tests/unit/drive-depart.test.ts.
 // Délais larges : en rendu logiciel la scène avance d'un dixième de seconde par image.
-// Captures : captures/vague-q-attente/.
+// Captures : captures/vague-q-attente/ (vague Q), captures/vague-r-course/ (vague R : boutons du haut en paysage, texte très grand).
 
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -19,8 +19,8 @@ import { attendreApercu, commencerCourse, DELAI_ROUTE, fermerReglages, ouvrirReg
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const attr = async (page: Page, name: string) => Number(await stage(page).getAttribute(name));
 
-async function shot(page: Page, name: string): Promise<void> {
-  const path = resolve('captures', 'vague-q-attente', `${name}.png`);
+async function shot(page: Page, name: string, dossier = 'vague-q-attente'): Promise<void> {
+  const path = resolve('captures', dossier, `${name}.png`);
   mkdirSync(dirname(path), { recursive: true });
   await page.screenshot({ path });
 }
@@ -50,6 +50,33 @@ async function sansRecouvrement(page: Page, selectors: string[], commandes: stri
       if (a === b) continue;
       const overlap = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > 1 && Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > 1;
       expect(overlap, `${a.sel} / ${b.sel}`).toBe(false);
+    }
+  }
+}
+
+const BOUTONS_HAUT = '.tuto-aide, .drive-top .quick-btn, .drive-reglages-btn, .drive-pause';
+
+/**
+ * Chaque bouton du haut de l'écran (« ? », radio, réglages, pause) offre 48 px au doigt, en largeur comme
+ * en hauteur, aux trois tailles de texte : plusieurs mesures étalées sur une demi-seconde (l'échec rare
+ * du premier passage, 47,5 px, venait d'une mesure prise pendant que la mise en page bougeait).
+ */
+async function boutonsDuHaut48(page: Page, attendus: number, contexte: string): Promise<void> {
+  for (const texte of ['normal', 'grand', 'tres-grand']) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.text = value;
+    }, texte);
+    for (let essai = 0; essai < 5; essai += 1) {
+      await page.waitForTimeout(100);
+      const boites = await page.evaluate((sel) => [...document.querySelectorAll(sel)].map((el) => {
+        const r = el.getBoundingClientRect();
+        return { nom: el.getAttribute('aria-label') ?? el.className, w: r.width, h: r.height };
+      }), BOUTONS_HAUT);
+      expect(boites.length, `${contexte}, texte ${texte}`).toBe(attendus);
+      for (const b of boites) {
+        expect(b.w, `${contexte}, texte ${texte} : ${b.nom} largeur`).toBeGreaterThanOrEqual(48);
+        expect(b.h, `${contexte}, texte ${texte} : ${b.nom} hauteur`).toBeGreaterThanOrEqual(48);
+      }
     }
   }
 }
@@ -234,6 +261,26 @@ test.describe('sortie de nuit : l’aperçu, puis la course', () => {
     await shot(page, '08-course-paysage');
     await rentrerAuGarage(page);
     await expect(stage(page)).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+
+  test('paysage, texte très grand : chaque bouton du haut offre 48 px', async ({ page }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto('./#/sortie');
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
+    await attendreApercu(page);
+    // Aperçu : l'aide, la radio, les réglages ; course : la pause en plus.
+    await boutonsDuHaut48(page, 3, 'aperçu paysage');
+    await commencerCourse(page);
+    await boutonsDuHaut48(page, 4, 'course paysage');
+    await page.evaluate(() => {
+      document.documentElement.dataset.text = 'tres-grand';
+    });
+    await page.waitForTimeout(500);
+    await shot(page, '03-haut-paysage-texte-tres-grand', 'vague-r-course');
+    await rentrerAuGarage(page);
     expect(errors).toEqual([]);
   });
 });

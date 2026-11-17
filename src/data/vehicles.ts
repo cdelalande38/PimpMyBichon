@@ -4,6 +4,7 @@
 // Les manifestes sont validés ici (erreur claire, chemin du fichier compris) et triés par `order` :
 // le premier est le véhicule de départ. Aucun identifiant de véhicule n'est écrit dans le code.
 
+import { TRANSMISSIONS } from './adherence.ts';
 import { BOITES_NOMMEES } from './boites.ts';
 import { FINISHES } from './finishes.ts';
 import { INTERIOR_CATALOGUE } from './habitacle.ts';
@@ -101,6 +102,9 @@ function checkPerformance(raw: unknown, problems: string[]): void {
   if (!within(raw.grip, 2, 15)) problems.push('performance.grip doit être une accélération latérale en m/s², de 2 à 15');
   if (raw.gearbox !== undefined && (typeof raw.gearbox !== 'string' || !(raw.gearbox in BOITES_NOMMEES))) {
     problems.push(`performance.gearbox doit valoir ${Object.keys(BOITES_NOMMEES).join(' ou ')}`);
+  }
+  if (raw.transmission !== undefined && !(TRANSMISSIONS as readonly unknown[]).includes(raw.transmission)) {
+    problems.push(`performance.transmission doit valoir ${TRANSMISSIONS.join(' ou ')}`);
   }
 }
 

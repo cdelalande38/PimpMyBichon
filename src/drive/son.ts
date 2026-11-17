@@ -185,6 +185,8 @@ export function brancherSonSortie(): () => void {
       // `slip` : glisse publiée par le pilote (facultative) ; à défaut, estimée d'après le braquage et l'adhérence.
       const pneus = motion as { slip?: number };
       etatRoute.glisse = glisseMesuree({ slip: pneus.slip, vitesse: motion.speed, braquage: motion.steer, grip, genre });
+      // Patinage des roues motrices (boucle `burnout`).
+      etatRoute.patinage = motion.spin ?? 0;
       instant.vitesseKmh = etatRoute.vitesseKmh;
       instant.accel = motion.accel;
       instant.shifting = train?.shifting === true;

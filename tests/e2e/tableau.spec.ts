@@ -9,6 +9,14 @@ import { choisirCamera, openApp, openEntry, pickMap, waitForBench, waitForScene 
 // bord (`data-tableau` sur la scène) est celle du compteur de l'écran (`data-vitesse`) ; au garage, en
 // vue intérieure, les instruments restent à zéro. Captures de revue : PMB_CAPTURES (dossier), sinon
 // captures/vague-p-tableau/.
+//
+// Vague R (lot « cadrans ») : la vitesse se lit derrière le volant. Le dernier parcours prend des captures
+// de la vue conducteur (garage, puis caméra embarquée de la sortie : volant droit, en portrait et en
+// paysage, puis volant braqué dans le lacet), dans PMB_CAPTURES ou captures/vague-r-cadrans/. Les manifestes
+// des véhicules sont lus à la construction du site (pas à l'exécution) : pour comparer avec l'état d'avant, on
+// reconstruit le site avec les anciens manifestes et PMB_AVANT=1 (les captures prennent alors le suffixe « avant »).
+// PMB_RAPIDE=1 saute le volant braqué. Ces captures ne se prennent que si PMB_VUE_CONDUCTEUR=1. La mesure chiffrée est un test unitaire
+// (tests/unit/tableau-vue.test.ts).
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 
@@ -100,5 +108,71 @@ test('garage, vue intérieure : les instruments restent à zéro', async ({ page
     await expect(page.locator('.stage')).toHaveAttribute('data-vue', 'interieur', { timeout: 15_000 });
     await page.waitForTimeout(1500);
     await page.screenshot({ path: resolve(dir, `garage-${vehicle}-interieur.png`) });
+  }
+});
+
+// ---------------------------------------------------------------------------------------------
+// Vague R : captures de la vue conducteur, avant et après (390 × 844 ; 844 × 390 à la caméra embarquée).
+
+const AVANT = process.env.PMB_AVANT;
+const PHASE = AVANT ? 'avant' : 'apres';
+
+test.describe('vue conducteur : captures de revue', () => {
+  for (const vehicle of ['concept', 'cox', 'van']) {
+    test(`vue conducteur (${vehicle}, ${PHASE}) : garage, caméra embarquée droite et braquée`, async ({ page }) => {
+      test.skip(!process.env.PMB_VUE_CONDUCTEUR, 'captures de revue : PMB_VUE_CONDUCTEUR=1');
+      test.setTimeout(900_000);
+      const dir = process.env.PMB_CAPTURES ?? resolve('captures', 'vague-r-cadrans');
+      mkdirSync(dir, { recursive: true });
+      await openApp(page);
+      await waitForScene(page);
+      await waitForBench(page);
+      await choisir(page, vehicle);
+      // Garage, vue intérieure du conducteur (volant droit).
+      await openEntry(page, 'Intérieur');
+      await expect(page.locator('.stage')).toHaveAttribute('data-vue', 'interieur', { timeout: 15_000 });
+      await page.waitForTimeout(2000);
+      await page.screenshot({ path: resolve(dir, `${vehicle}-garage-${PHASE}.png`) });
+      // Sortie de nuit, départ au bas de la rampe, caméra embarquée.
+      await openEntry(page, 'Sortie de nuit');
+      await pickMap(page);
+      const depart = page.locator('footer.dock').getByRole('group', { name: 'Départ' }).getByRole('button', { name: /rampe/i });
+      await depart.tap();
+      await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
+      await embarquee(page);
+      await expect(stage(page)).toHaveAttribute('data-tableau', /^\d+$/, { timeout: 60_000 });
+      await scenePropre(page, resolve(dir, `${vehicle}-embarquee-portrait-${PHASE}.png`));
+      await page.setViewportSize({ width: 844, height: 390 });
+      await page.waitForTimeout(2500);
+      await scenePropre(page, resolve(dir, `${vehicle}-embarquee-paysage-${PHASE}.png`));
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(1500);
+      if (process.env.PMB_RAPIDE) return;
+      // Volant braqué : on roule jusqu'au lacet (vers 224 à 246 m) et on prend la scène au plus fort du braquage.
+      await page.evaluate((cls) => {
+        const el = document.querySelector<HTMLElement>(`.${cls}`);
+        (window as unknown as { __braque: number[] }).__braque = [];
+        new MutationObserver(() => (window as unknown as { __braque: number[] }).__braque.push(Number(el?.dataset.braquage))).observe(el!, { attributes: true, attributeFilter: ['data-braquage'] });
+      }, DRIVE_STAGE_CLASS);
+      let pris = false;
+      await expect
+        .poll(
+          async () => {
+            const lu = await page.evaluate((cls) => {
+              const el = document.querySelector<HTMLElement>(`.${cls}`);
+              return { s: Number(el?.dataset.s), braquage: Number(el?.dataset.braquage) };
+            }, DRIVE_STAGE_CLASS);
+            if (!pris && lu.s > 225 && lu.s < 250 && Math.abs(lu.braquage) >= 4) {
+              pris = true;
+              await scenePropre(page, resolve(dir, `${vehicle}-embarquee-braque-${PHASE}.png`));
+            }
+            return lu.s;
+          },
+          { timeout: 600_000, intervals: [400] },
+        )
+        .toBeGreaterThan(255);
+      expect(pris, 'le lacet a été pris en capture').toBe(true);
+    });
   }
 });

@@ -54,11 +54,12 @@ import {
   MancheDessin,
   poserManche,
   useAppui,
+  useBoutonManette,
   useManettePhysique,
   type MancheTenu,
 } from './Manche.tsx';
 import { axeManche } from './manche.ts';
-import { entrerManette, quitterManette, useManette } from './manette.ts';
+import { entrerManette, quitterManette, useManette, useManetteBranchee } from './manette.ts';
 import { ReglagesPanneau, useReglages } from './Reglages.tsx';
 import './drive.css';
 
@@ -224,14 +225,69 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
     timer.current = null;
   };
 
-  const releaseStick = (event: ReactPointerEvent<HTMLDivElement>): boolean => {
+  // Diagnostic lisible sur téléphone (data-coupures, data-reprises sur l'élément du manche) : coupures
+  // subies (pointercancel du navigateur : geste système, défilement pris par la page) et captures du
+  // pointeur reprises (perdues sans que le doigt se lève).
+  const compteurs = useRef({ coupures: 0, reprises: 0 });
+  const noter = (cle: 'coupures' | 'reprises') => {
+    compteurs.current[cle] += 1;
+    if (mancheEl.current) mancheEl.current.dataset[cle] = String(compteurs.current[cle]);
+  };
+  useEffect(() => {
+    const el = mancheEl.current;
+    if (!el) return;
+    el.dataset.coupures = String(compteurs.current.coupures);
+    el.dataset.reprises = String(compteurs.current.reprises);
+  }, [manche, finished]);
+
+  // Le manche ne lâche que sur la fin du doigt (levé), ou sur le pointercancel du navigateur, compté.
+  // Une capture perdue sans l'un ni l'autre est reprise : le doigt continue de mener le manche.
+  const releaseStick = (event: { pointerId: number; type: string }): boolean => {
     if (stick.current?.id !== event.pointerId) return false;
+    if (event.type === 'lostpointercapture') {
+      try {
+        zone.current?.setPointerCapture(event.pointerId);
+        noter('reprises');
+        return true;
+      } catch {
+        // Le doigt est déjà levé : on lâche.
+      }
+    }
     stick.current = null;
+    if (event.type === 'pointercancel') noter('coupures');
     leverManche(mancheEl.current);
     appliquerManuel(true);
     setTenu(false);
     return true;
   };
+
+  /** Le doigt du manche a bougé (par la zone, ou par la fenêtre si la capture est perdue). */
+  const suivreManche = (event: { pointerId: number; clientX: number; clientY: number }): boolean => {
+    const held = stick.current;
+    if (!held || held.id !== event.pointerId) return false;
+    bougerManche(mancheEl.current, event.clientX - held.x, event.clientY - held.y);
+    appliquerManuel(true);
+    return true;
+  };
+
+  // Filet : si le navigateur ne livre plus les événements du doigt à la zone (capture perdue, doigt passé
+  // sur un bouton), la fenêtre les reçoit encore. Les gestionnaires sont idempotents.
+  const dernier = useRef({ suivre: suivreManche, lacher: releaseStick });
+  useEffect(() => {
+    dernier.current = { suivre: suivreManche, lacher: releaseStick };
+  });
+  useEffect(() => {
+    const bouger = (event: PointerEvent) => void dernier.current.suivre(event);
+    const finir = (event: PointerEvent) => void dernier.current.lacher(event);
+    window.addEventListener('pointermove', bouger);
+    window.addEventListener('pointerup', finir);
+    window.addEventListener('pointercancel', finir);
+    return () => {
+      window.removeEventListener('pointermove', bouger);
+      window.removeEventListener('pointerup', finir);
+      window.removeEventListener('pointercancel', finir);
+    };
+  }, []);
 
   const release = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (releaseStick(event)) return;
@@ -284,8 +340,12 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
         if (!box) return;
         const drive = useDrive.getState();
         if (!drive.input.auto && manche) {
-          // Un seul pouce tient le manche ; un autre doigt dans la zone ne le lui vole pas.
-          if (stick.current !== null) return;
+          // Un seul pouce tient le manche ; un autre doigt dans la zone ne le lui vole pas. Un nouveau premier
+          // doigt (le navigateur n'en voit plus d'autre posé) prend la place d'un doigt perdu en route.
+          if (stick.current !== null) {
+            if (!event.isPrimary) return;
+            leverManche(mancheEl.current);
+          }
           zone.current?.setPointerCapture?.(event.pointerId);
           stick.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
           poserManche(mancheEl.current, event.clientX - box.left, event.clientY - box.top);
@@ -308,12 +368,7 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
         }, LONG_PRESS_MS);
       }}
       onPointerMove={(event) => {
-        const held = stick.current;
-        if (held && held.id === event.pointerId) {
-          bougerManche(mancheEl.current, event.clientX - held.x, event.clientY - held.y);
-          appliquerManuel(true);
-          return;
-        }
+        if (suivreManche(event)) return;
         const touch = touches.current.get(event.pointerId);
         if (!touch) return;
         const drive = useDrive.getState();
@@ -350,6 +405,7 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
       onPointerUp={release}
       onPointerCancel={release}
       onLostPointerCapture={release}
+      onContextMenu={(event) => event.preventDefault()}
     >
       {slow && (
         <p className="drive-badge" role="status">
@@ -464,6 +520,7 @@ function DriveBas({ apercu, paysage }: { apercu: boolean; paysage: boolean }) {
   const phase = useDrive((state) => state.telemetry.depart);
   const paused = useDrive((state) => state.paused);
   const manette = useManette();
+  const padBranche = useManetteBranchee();
   const [refus, setRefus] = useState(false);
   if (!ready || failed) return null;
   if (finished && phase !== 'arrive' && !apercu) {
@@ -506,8 +563,8 @@ function DriveBas({ apercu, paysage }: { apercu: boolean; paysage: boolean }) {
         </p>
       )}
       {auto && !paused && !finished && (
-        <p className="drive-invite" role="status">
-          {apercu ? 'Touche l’écran pour commencer' : 'Touche l’écran pour reprendre la main'}
+        <p className="drive-invite" role="status" data-manette={padBranche || undefined}>
+          {padBranche ? (apercu ? 'Touche l’écran ou un bouton de la manette pour commencer' : 'Touche l’écran ou un bouton de la manette pour reprendre la main') : apercu ? 'Touche l’écran pour commencer' : 'Touche l’écran pour reprendre la main'}
         </p>
       )}
     </div>
@@ -644,12 +701,42 @@ function DriveVeil() {
   );
 }
 
+/**
+ * Fondu au noir de l'aperçu au bout d'un parcours ouvert : la scène (src/drive/scene/moteur.ts) lève
+ * `fondu` en fin de route, attend que l'écran dise qu'il est noir pour remettre le véhicule au départ, puis le
+ * baisse. Sous l'interface (nom de la carte, réglages), jamais sur un appui. Sans mouvement, la scène ne
+ * le lève pas : coupe franche.
+ */
+function FonduNoir() {
+  const fondu = useDrive((state) => state.fondu);
+  return (
+    <div
+      className="drive-fondu"
+      data-noir={fondu !== 'non' || undefined}
+      aria-hidden="true"
+      // La scène attend cette confirmation : le noir est atteint pour de bon, même quand les images sont rares.
+      onTransitionEnd={(event) => {
+        if (event.propertyName === 'opacity' && useDrive.getState().fondu === 'sortie') useDrive.getState().setFondu('noir');
+      }}
+    />
+  );
+}
+
 export function DriveScreen() {
   const attempt = useDrive((state) => state.attempt);
   const mapId = useDrive((state) => state.map);
   const apercu = useDrive((state) => state.apercu);
   const paysage = useMediaQuery(PAYSAGE);
   const reglages = useReglages();
+  const auto = useDrive((state) => state.input.auto);
+  const prete = useDrive((state) => state.telemetry.ready && !state.telemetry.failed && !state.telemetry.finished);
+  // Une manette physique fait comme l'appui sur la route : un bouton de face ou Start lance la course
+  // depuis l'aperçu, ou rend le volant sous le pilote automatique.
+  useBoutonManette(auto && prete && !reglages.ouvert, () => {
+    const drive = useDrive.getState();
+    if (drive.apercu) drive.commencer();
+    else drive.setAuto(false);
+  });
   // Le son du moteur suit la sortie tant que l'écran est là ; il se coupe au retour au garage.
   useEffect(() => brancherSonSortie(), []);
   // En rentrant au garage, le mode manette s'arrête : verrou levé, plein écran quitté.
@@ -682,6 +769,7 @@ export function DriveScreen() {
   return (
     <>
       <DriveTop apercu={apercu} reglages={reglages.ouvert} ouvrirReglages={reglages.ouvrir} />
+      <FonduNoir />
       <DriveGestures paysage={paysage} />
       <DriveBas apercu={apercu} paysage={paysage} />
       <DriveVeil />

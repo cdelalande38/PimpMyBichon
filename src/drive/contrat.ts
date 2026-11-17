@@ -11,6 +11,7 @@
 // Repère : celui de la carte (src/data/mapTypes.ts) : le mètre, X vers l'est, Y vers le haut, Z vers
 // le sud. Un véhicule a l'avant vers +X dans son propre repère (src/data/vehicleTypes.ts).
 
+import type { Transmission } from '../data/adherence.ts';
 import type { BoiteSpec } from '../data/boites.ts';
 import type { MapId, MapRoute, RailGround } from '../data/mapTypes.ts';
 import type { PhaseDepart } from './depart.ts';
@@ -122,14 +123,30 @@ export interface DriveMotion {
    * Cap du véhicule relatif à la route, en radians, positif vers la gauche (rotation autour de Y, comme
    * `RailPose.heading`) ; la scène et les caméras l'ajoutent au cap de la route. Pilote automatique :
    * celui que donne un changement de place, atan(vitesse latérale / vitesse), de quelques degrés au plus,
-   * nul à l'arrêt. À la main : le vrai cap relatif, borné à ±0,6 rad (≈ 34°).
+   * nul à l'arrêt. À la main : le cap de la caisse, celui de la marche (borné à ±0,6 rad, ≈ 34°) plus
+   * la dérive (`drift`) ; il peut dépasser ±0,6 rad en survirage, jusqu'au tête-à-queue.
    */
   yaw?: number;
+  /**
+   * Dérive de la caisse, en radians, positive nez à gauche de la marche : angle entre la caisse et la
+   * direction où va le véhicule, quand l'arrière décroche (survirage, à la main seulement ; src/data/
+   * adherence.ts). Déjà comprise dans `yaw` : la scène n'a rien à ajouter. Une caméra qui suit la
+   * marche plutôt que la caisse la retranche. Toujours 0 en pilote automatique.
+   */
+  drift?: number;
+  /**
+   * Patinage des roues motrices, de 0 (elles tiennent) à 1 (elles patinent franchement), adouci : la
+   * poussée du moteur dépasse la motricité (départ plein gaz, surtout sous la pluie ou sur la neige).
+   * Les roues motrices tournent alors plus vite que la route (src/drive/scene/roues.ts) ; boucle de
+   * son `burnout`. Toujours 0 en pilote automatique.
+   */
+  spin?: number;
   /**
    * Glissement des pneus, de 0 (ils tiennent) à 1 (ils glissent franchement), adouci (≈ 0,08 s) : à la
    * main, quand la courbure demandée dépasse l'adhérence (sous-virage) ou quand le véhicule frotte le
    * bord (d'autant plus qu'il y arrive de face et vite). Toujours 0 en pilote automatique. Pour le
-   * crissement des pneus (src/audio/sfx/) ; la conduite ne joue aucun son.
+   * crissement des pneus (src/audio/sfx/) ; la conduite ne joue aucun son. Monte aussi quand l'arrière
+   * glisse (dérive) ou que les roues patinent.
    */
   slip?: number;
 }
@@ -164,6 +181,8 @@ export interface Pilot {
   readonly motion: DriveMotion;
   /** Moteur et boîte (pilote de src/drive/pilote.ts) ; absent d'un pilote qui n'en tient pas. */
   readonly train?: DriveTrain;
+  /** Roues motrices du véhicule (src/data/adherence.ts) : la scène fait tourner celles-là plus vite quand elles patinent. */
+  readonly transmission?: Transmission;
   /** Demi-largeur et demi-longueur hors tout du véhicule posé, en mètres (marge au bord de la chaussée). */
   setSize?(halfWidth: number, halfLength: number): void;
   /** Repart d'une abscisse, à l'arrêt. */
@@ -174,6 +193,11 @@ export interface Pilot {
    * qui ne sait pas tenir.
    */
   setHold?(held: boolean): void;
+  /**
+   * Météo de la sortie (src/data/adherence.ts) : à la main, elle abaisse l'adhérence, la motricité et le
+   * freinage ; le pilote automatique règle sa vitesse dessus. Absent d'un pilote qui l'ignore.
+   */
+  setWeather?(weather: Weather): void;
   /** Avance de `dt` secondes (borné par l'appelant à 0,1 s). */
   step(dt: number, input: DriveInput, kind: 'car' | 'bike'): DriveMotion;
 }
@@ -198,6 +222,8 @@ export interface DrivePerformance {
   halfLength: number;
   /** Puissance ajoutée par le NOS, en part de la puissance (un kit nitro monté la grossit). */
   nosBoost?: number;
+  /** Roues motrices (`performance.transmission` du manifeste ; absente : src/data/adherence.ts, TRANSMISSION_PAR_DEFAUT). */
+  transmission?: Transmission;
 }
 
 export type CreatePilot = (rail: Rail, performance?: DrivePerformance) => Pilot;

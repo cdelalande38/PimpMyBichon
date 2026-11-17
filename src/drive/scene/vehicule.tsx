@@ -82,6 +82,8 @@ export interface DriveRig {
   steering: SteeringPart[];
   /** Angle de roulement cumulé, en radians par mètre de rayon (distance parcourue). */
   distance: number;
+  /** Distance de plus des roues motrices qui patinent (m, src/drive/scene/roues.ts, `roueEnPlus`). */
+  spun: number;
   measure: { halfLength: number; halfWidth: number; height: number } | null;
   /** Feux arrière (matières clonées, à nous) : intensité au repos, et au freinage. */
   tails: MeshStandardMaterial[];
@@ -120,6 +122,7 @@ export function createRig(): DriveRig {
     wheels: [],
     steering: [],
     distance: 0,
+    spun: 0,
     measure: null,
     tails: [],
     tailBase: 10,
@@ -137,15 +140,18 @@ const axisWork = new Quaternion();
 const steerWork = new Quaternion();
 
 /**
- * Fait tourner les roues de la distance parcourue et braque les roues avant de `steer` radians
+ * Fait tourner les roues de la distance parcourue (les roues motrices, de `spun` mètres de plus quand
+ * elles patinent) et braque les roues avant de `steer` radians
  * (positif à gauche, déjà amplifié pour l'image : `wheelSteer`), fourche d'une moto comprise
  * (aucune allocation).
  */
-export function rollWheels(rig: DriveRig, meters: number, steer = 0): void {
+export function rollWheels(rig: DriveRig, meters: number, steer = 0, spun = 0): void {
   rig.distance += meters;
+  rig.spun += spun;
   for (let i = 0; i < rig.wheels.length; i += 1) {
     const w = rig.wheels[i] as Wheel;
-    axisWork.setFromAxisAngle(w.axis, -rig.distance / w.radius);
+    // Une roue motrice qui patine a fait plus de chemin que la route (`spun`).
+    axisWork.setFromAxisAngle(w.axis, -(rig.distance + (w.driven ? rig.spun : 0)) / w.radius);
     if (w.steer) {
       steerWork.setFromAxisAngle(w.steer, steer);
       w.node.quaternion.multiplyQuaternions(steerWork, axisWork).multiply(w.base);

@@ -172,6 +172,44 @@ function dessinerAiguille(ctx: Ctx, size: number, color: Color, instrument: Pane
   ctx.fill();
 }
 
+/** Mise en page d'un afficheur de chiffres sur sa toile (pixels de la toile) : partagée par le dessin et par la mesure de lisibilité. */
+export interface PageChiffres {
+  /** Bords gauche et droit de la zone utile, hauteur de la zone des chiffres. */
+  xl: number;
+  xr: number;
+  zone: number;
+  /** Les trois chiffres : hauteur, largeur, écart, épaisseur d'un segment, hauteur d'un segment vertical. */
+  dh: number;
+  dw: number;
+  gap: number;
+  t: number;
+  hv: number;
+  /** Coin haut gauche du bloc des trois chiffres. */
+  x0: number;
+  y0: number;
+  /** Écran très large (écran de planche). */
+  wide: boolean;
+}
+
+export function pageChiffres(w: number, h: number, barre: boolean, haut: number): PageChiffres {
+  const wide = w / h > 2.5;
+  // Très large (écran de planche) : chiffres à droite (le volant masque souvent la gauche d'un écran bas),
+  // barre de régime en haut à gauche ; sinon la barre passe sous les chiffres.
+  const margin = haut > 0 ? 0.15 : 0.05;
+  const xl = margin * w;
+  const xr = (1 - margin) * w;
+  const zone = barre && !wide ? h * 0.78 : h; // hauteur de la zone des chiffres
+  const dh = zone * (wide ? 0.6 : 0.62);
+  const dw = dh * 0.56;
+  const gap = dw * 0.3;
+  const t = Math.max(2, dh * 0.13);
+  const hv = (dh - 3 * t) / 2; // hauteur d'un segment vertical
+  const block = 3 * dw + 2 * gap;
+  const x0 = xr - block;
+  const y0 = zone * (wide ? 0.3 : 0.14);
+  return { xl, xr, zone, dh, dw, gap, t, hv, x0, y0, wide };
+}
+
 function dessinerChiffres(ctx: Ctx, w: number, h: number, color: Color, kmh: number, barre: boolean, rpm: number, max: number, rouge: number, haut: number): void {
   ctx.clearRect(0, 0, w, h);
   ctx.save();
@@ -190,21 +228,7 @@ function dessinerChiffres(ctx: Ctx, w: number, h: number, color: Color, kmh: num
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = rgba(color, 0.08);
   ctx.fillRect(0, 0, w, h);
-  const wide = w / h > 2.5;
-  // Très large (écran de planche) : chiffres à droite (le volant masque souvent la gauche d'un écran bas),
-  // barre de régime en haut à gauche ; sinon la barre passe sous les chiffres.
-  const margin = haut > 0 ? 0.15 : 0.05;
-  const xl = margin * w;
-  const xr = (1 - margin) * w;
-  const zone = barre && !wide ? h * 0.78 : h; // hauteur de la zone des chiffres
-  const dh = zone * (wide ? 0.6 : 0.62);
-  const dw = dh * 0.56;
-  const gap = dw * 0.3;
-  const t = Math.max(2, dh * 0.13);
-  const hv = (dh - 3 * t) / 2; // hauteur d'un segment vertical
-  const block = 3 * dw + 2 * gap;
-  const x0 = xr - block;
-  const y0 = zone * (wide ? 0.3 : 0.14);
+  const { xl, xr, zone, dh, dw, gap, t, hv, x0, y0, wide } = pageChiffres(w, h, barre, haut);
   const value = Math.min(999, Math.max(0, Math.round(kmh)));
   const digits = [Math.floor(value / 100), Math.floor(value / 10) % 10, value % 10];
   for (let i = 0; i < 3; i += 1) {
@@ -246,6 +270,36 @@ function dessinerChiffres(ctx: Ctx, w: number, h: number, color: Color, kmh: num
   ctx.restore();
 }
 
+/** Dimensions de la toile d'un panneau, en pixels : 1 400 pixels par mètre, de 128 à 512 sur la plus grande dimension. */
+export function dimensionsToile(panel: CabinPanel): { largeur: number; hauteur: number } {
+  const [w, h] = panel.size;
+  const scale = Math.min(512, Math.max(128, PIXELS_PAR_METRE * Math.max(w, h))) / Math.max(w, h);
+  return { largeur: Math.max(32, Math.round(w * scale)), hauteur: Math.max(32, Math.round((panel.shape === 'disque' ? w : h) * scale)) };
+}
+
+/**
+ * Zone utile d'un instrument de vitesse, en coordonnées de la toile ramenées à 0..1 (u vers la droite,
+ * v vers le bas) : celle qu'il faut voir en entier. Un cadran : le disque des graduations ; un afficheur :
+ * le bloc des trois chiffres. Sert à la mesure de ce que le volant en masque (tests/unit/tableau-vue.test.ts).
+ */
+export interface ZoneUtile {
+  u0: number;
+  u1: number;
+  v0: number;
+  v1: number;
+  contient(u: number, v: number): boolean;
+}
+
+export function zoneUtile(panel: CabinPanel): ZoneUtile {
+  if (affichageDe(panel) === 'aiguille') {
+    return { u0: 0.05, u1: 0.95, v0: 0.05, v1: 0.95, contient: (u, v) => Math.hypot(u - 0.5, v - 0.5) <= 0.45 };
+  }
+  const { largeur, hauteur } = dimensionsToile(panel);
+  const haut = panel.haut !== undefined && panel.shape === 'rectangle' ? panel.haut / panel.size[0] : 0;
+  const p = pageChiffres(largeur, hauteur, panel.instrument?.barre === 'regime', haut);
+  return { u0: p.x0 / largeur, u1: p.xr / largeur, v0: p.y0 / hauteur, v1: (p.y0 + p.dh) / hauteur, contient: () => true };
+}
+
 /**
  * Un instrument vivant : sa toile, sa texture et sa cadence. Dessiné à zéro à la création (garage :
  * rien n'est ensuite redessiné) ; `update(pilot, now)` le fait suivre le pilote de la sortie et
@@ -273,13 +327,11 @@ export class LiveInstrument {
     this.kind = affichageDe(panel);
     this.usesRpm = panel.instrument.mesure === 'regime' || panel.instrument.barre === 'regime';
     this.color = new Color(panel.color);
-    const [w, h] = panel.size;
-    // Résolution : 1 400 pixels par mètre, de 128 à 512 pixels sur la plus grande dimension.
-    const scale = Math.min(512, Math.max(128, PIXELS_PAR_METRE * Math.max(w, h))) / Math.max(w, h);
-    this.haut = panel.haut !== undefined && panel.shape === 'rectangle' ? panel.haut / w : 0;
+    this.haut = panel.haut !== undefined && panel.shape === 'rectangle' ? panel.haut / panel.size[0] : 0;
     this.canvas = document.createElement('canvas');
-    this.canvas.width = Math.max(32, Math.round(w * scale));
-    this.canvas.height = Math.max(32, Math.round((panel.shape === 'disque' ? w : h) * scale));
+    const { largeur, hauteur } = dimensionsToile(panel);
+    this.canvas.width = largeur;
+    this.canvas.height = hauteur;
     const ctx = this.canvas.getContext('2d');
     if (!ctx) throw new Error('canvas 2D indisponible');
     this.ctx = ctx;

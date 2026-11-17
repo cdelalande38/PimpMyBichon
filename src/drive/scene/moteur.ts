@@ -34,7 +34,7 @@ import { ATMOSPHERE_LAYER, CAMERA_LAYERS, PROBE_ONLY_LAYER } from '../../render/
 import { PlanarReflection } from '../../render/planarReflection.ts';
 import type { QualityLevel } from '../../render/quality.ts';
 import { useBuilds } from '../../state/builds.ts';
-import { liveDepart, livePilot, useDrive } from '../../state/drive.ts';
+import { etapeFondu, liveDepart, livePilot, useDrive } from '../../state/drive.ts';
 import { cameraShot, guardShot } from '../cameras.ts';
 import type { CameraId, CameraShot, Director, DriveTelemetry, Pilot, Rail, RailPose, VehicleFrame } from '../contrat.ts';
 import { armerDepart, cleTemps, createDepart, lancerDepart, pasDepart, tenuSurLaLigne } from '../depart.ts';
@@ -53,7 +53,7 @@ import { createNightUniforms, createRoleMaterials, LAMP_FADE, MAX_LAMPS, MAX_NEO
 import { DRIVE_PROFILES, due, fogDensity, lampWeights, nearestLamps, stepOf, type DriveProfile } from './profil.ts';
 import { MovingProbe } from './sonde.ts';
 import { cleanProbePass } from '../../render/probePass.ts';
-import { wheelSteer } from './roues.ts';
+import { roueEnPlus, rouesMotrices, wheelSteer } from './roues.ts';
 import { createRig, rollWheels, TAIL_LIGHT, type DriveModel, type DriveRig } from './vehicule.tsx';
 
 /** Intensité des vraies lumières des lampadaires, en candelas : même éclairement que la flaque calculée (PMB_LAMP_DIFFUSE de la chaussée × 64 × π). */
@@ -325,11 +325,31 @@ export class DriveEngine {
     useDrive.getState().effacerArrivee();
   }
 
+  /** Début du fondu au noir de fin d'aperçu (performance.now, ms), -1 hors fondu. */
+  private fonduDepuis = -1;
+
+  /**
+   * Aperçu au bout d'un parcours ouvert : fondu au noir (0,4 s, levé dans le store, dessiné par l'écran, qui confirme le noir), puis le
+   * véhicule repart du départ pendant que l'écran revient (0,4 s). Coupe franche sans mouvement.
+   */
+  private reprendreApercu(drive: ReturnType<typeof useDrive.getState>): void {
+    const etape = etapeFondu(this.fonduDepuis, performance.now(), this.reducedMotion, drive.fondu === 'noir');
+    if (etape === 'lever') {
+      this.fonduDepuis = performance.now();
+      drive.setFondu('sortie');
+    } else if (etape === 'reprendre') {
+      this.fonduDepuis = -1;
+      this.start(this.startId);
+      drive.setFondu('non');
+    }
+  }
+
   /** Repart un peu avant `s` et roule jusqu'à elle (le pilote y arrive lancé ; départ lancé, sans les feux). */
   seek(s: number): void {
     lancerDepart(this.depart, Math.max(0, s - 90), this.rail.loop);
     this.pilot.setHold?.(false);
     this.pilot.reset(Math.max(0, s - 90));
+    this.pilot.setWeather?.(useDrive.getState().weather);
     const input = useDrive.getState().input;
     for (let i = 0; i < 400 && this.pilot.motion.s < s; i += 1) this.pilot.step(0.1, input, this.kind);
   }
@@ -341,6 +361,8 @@ export class DriveEngine {
     rig.wheels = model?.wheels ?? [];
     rig.steering = model?.steering ?? [];
     rig.distance = 0;
+    rig.spun = 0;
+    rouesMotrices(rig.wheels, this.pilot.transmission);
     rig.measure = model?.measure ?? null;
     rig.tails = model?.tails ?? [];
     rig.tailBase = model?.tails[0]?.emissiveIntensity ?? 10;
@@ -372,10 +394,16 @@ export class DriveEngine {
     if (drive.course !== this.course) {
       this.course = drive.course;
       this.start(this.startId);
-    } else if (drive.apercu && this.pilot.motion.finished) this.start(this.startId);
+    } else if (drive.apercu && this.pilot.motion.finished) this.reprendreApercu(drive);
+    else if (this.fonduDepuis >= 0) {
+      this.fonduDepuis = -1;
+      drive.setFondu('non');
+    }
     // Départ arrêté : tenu sur la ligne tant que les feux ne sont pas au vert.
     const depart = this.depart;
     this.pilot.setHold?.(tenuSurLaLigne(depart));
+    // Adhérence de la météo choisie (src/data/adherence.ts).
+    this.pilot.setWeather?.(drive.weather);
     const motion = this.pilot.step(dt, drive.input, this.kind);
     const arrived = depart.phase === 'arrive';
     pasDepart(depart, dt, this.vehicleReady && !this.vehicleFailed && decor.status.loaded > 0 && this.frames > 2, motion.s, this.rail, motion.finished);
@@ -403,7 +431,8 @@ export class DriveEngine {
     rig.body.rotation.set(motion.roll, 0, motion.dive);
     // Roues avant braquées du braquage du pilote, amplifié pour l'image (roues.ts).
     const steer = wheelSteer(motion.steer ?? 0, motion.speed, this.kind);
-    rollWheels(rig, motion.speed * dt, steer);
+    // Les roues motrices qui patinent tournent plus vite que la route (roues.ts).
+    rollWheels(rig, motion.speed * dt, steer, roueEnPlus(motion.spin ?? 0) * dt);
     const brake = motion.braking ? 3.2 : 1;
     for (let i = 0; i < rig.tails.length; i += 1) (rig.tails[i] as { emissiveIntensity: number }).emissiveIntensity = rig.tailBase * brake;
     if (rig.tailLight) {

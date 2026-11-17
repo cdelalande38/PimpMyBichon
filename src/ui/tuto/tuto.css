@@ -195,6 +195,9 @@
   z-index: 2;
   display: inline-grid;
   place-items: center;
+  flex: none;
+  min-width: 48px;
+  min-height: 48px;
   width: max(48px, 3rem);
   height: max(48px, 3rem);
   padding: 0;

@@ -14,7 +14,7 @@ import { BOUCLES_ROUTE, FAMILLE_ROUTE, FONDU_BOUCLES, PONCTUELS_ROUTE, type Bouc
 import { engineFileUrl, parseEngineManifest } from '../engine/manifeste.ts';
 import { parseSfxManifest, sfxFileUrl, type SfxBoucle, type SfxManifest, type SfxPonctuel } from './manifeste.ts';
 import { feuxSon } from './feux.ts';
-import { copierInstant, coupureBoucle, hauteurBoucle, niveauBoucle, ponctuelPart, suiviGlisseRepos, suivreGlisse, type EtatRoute, type InstantRoute, type SuiviGlisse } from './regles.ts';
+import { copierInstant, coupureBoucle, glisseBrute, hauteurBoucle, niveauBoucle, ponctuelPart, suiviGlisseRepos, suivreGlisse, type EtatRoute, type InstantRoute, type SuiviGlisse } from './regles.ts';
 
 /** Un son décodé, avec son gain de lecture (dB). */
 interface Prise {
@@ -302,7 +302,7 @@ export class LecteurBruitages {
       }
     }
     for (const voix of this.voix) {
-      const glisse = voix.suivi && voix.boucle.glisse ? suivreGlisse(voix.suivi, etat.glisse ?? 0, etat.vitesseKmh, dt, voix.boucle.glisse) : 0;
+      const glisse = voix.suivi && voix.boucle.glisse ? suivreGlisse(voix.suivi, glisseBrute(voix.boucle, etat), etat.vitesseKmh, dt, voix.boucle.glisse) : 0;
       const cible = niveauBoucle(voix.boucle, etat, glisse) * voix.base;
       // Trois constantes de temps font la rampe : FONDU_BOUCLES à l'aller comme au retour.
       voix.gain.gain.setTargetAtTime(cible, now, FONDU_BOUCLES / 3);

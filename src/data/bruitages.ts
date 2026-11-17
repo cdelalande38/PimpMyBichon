@@ -42,6 +42,11 @@ export interface BoucleRoute {
  * Le niveau monte de 0 (à `seuil - hysteresis`) à 1 (glisse pleine) ; la hauteur suit la glisse.
  */
 export interface Glisse {
+  /**
+   * Ce qui la pilote : la glisse des pneus en courbe (`DriveMotion.slip`, par défaut) ou le patinage
+   * des roues motrices (`DriveMotion.spin` : départ plein gaz, roues qui tournent plus vite que la route).
+   */
+  source?: 'glisse' | 'patinage';
   seuil: number;
   hysteresis: number;
   /** Rien en dessous de cette vitesse (km/h) : le véhicule qui frotte à l'arrêt ne crisse pas. */
@@ -115,6 +120,16 @@ export const BOUCLES_ROUTE: readonly BoucleRoute[] = Object.freeze([
     glisse: { seuil: 0.3, hysteresis: 0.12, vitesseMin: 20, attaque: 0.15, relache: 0.5, hauteur: [0.85, 1.2] },
     mouille: { coupure: 2200, niveau: 0.7 },
     neige: { coupure: 1200, niveau: 0.1 },
+  },
+  // Patinage (départ plein gaz, surtout sous la pluie et sur la neige) : les roues motrices tournent
+  // plus vite que la route. Dès l'arrêt, sans dépendance au tunnel ; plus sourd sur le mouillé, étouffé
+  // sur la neige (on y patine le plus, on l'entend le moins). Emplacement vide : muet.
+  {
+    emplacement: 'burnout',
+    niveau: 0.75,
+    glisse: { source: 'patinage', seuil: 0.2, hysteresis: 0.08, vitesseMin: 0, attaque: 0.08, relache: 0.35, hauteur: [0.9, 1.15] },
+    mouille: { coupure: 2600, niveau: 0.75 },
+    neige: { coupure: 1500, niveau: 0.35 },
   },
 ] satisfies BoucleRoute[]);
 
