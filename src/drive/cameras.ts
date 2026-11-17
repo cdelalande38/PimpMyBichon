@@ -257,6 +257,12 @@ export function cameraShot(
   const shakeX = shake * 0.5 * Math.sin(time * 23.7);
   followChase(frame, motion, rail, time);
   out.roll = 0;
+  // Pour la garde au sol (guardShot) : ce plan, et l'emprise du véhicule à ignorer sur la ligne de visée.
+  guard.id = id;
+  guard.time = time;
+  guard.x = px;
+  guard.z = pz;
+  guard.reach = frame.halfLength + CAMERA_GUARD.body;
 
   switch (id) {
     case 'poursuite': {
@@ -393,7 +399,48 @@ export const CAMERA_GUARD = {
   steps: 12,
   /** Distance minimale au point visé quand la caméra se rapproche. */
   minDistance: 1.5,
+  /**
+   * Ligne de visée : points ignorés à moins de la demi-longueur du véhicule plus `body` m de son centre.
+   * Sous la caisse, la sonde (le point le plus haut de chaque case de 2 m) prend la bordure, le mur ou
+   * le talus voisin pour la chaussée ; et un obstacle si près du point visé demandait un relevé
+   * multiplié par 1/k (k petit) : la caméra sautait de plusieurs mètres d'une image à l'autre.
+   */
+  body: 2,
+  /**
+   * Mémoire de la correction (relevé, rapprochement) d'une image à l'autre : temps de montée et de
+   * descente (s, exponentielle du temps écoulé, donc indépendante de la cadence). Au-delà de `gap` s
+   * entre deux plans, à un changement de caméra ou à une coupe (caméra déplacée de plus de `cut` m),
+   * la correction est prise telle quelle. Ce qui garde la caméra hors du sol et des obstacles monte
+   * tout de suite ; seul le relevé de la ligne de visée monte en `rise` s (le véhicule peut rester
+   * caché une image ou deux derrière une bosse, jamais la caméra sous le sol).
+   */
+  rise: 0.08,
+  fall: 0.45,
+  gap: 0.1,
+  cut: 10,
 } as const;
+
+/**
+ * Mémoire de la garde (une seule scène à la fois, comme `chase`) : le plan du moment, posé par
+ * `cameraShot` (caméra, temps, centre du véhicule et rayon ignoré sur la ligne de visée), et la
+ * correction appliquée au dernier plan gardé (relevé en m, part du rapprochement vers le point visé).
+ * Une garde appelée sans `cameraShot` avant elle (NaN) est instantanée et n'ignore rien.
+ */
+export const guard = {
+  id: '' as CameraId | '',
+  time: Number.NaN,
+  x: Number.NaN,
+  z: Number.NaN,
+  reach: 0,
+  lastId: '' as CameraId | '',
+  lastTime: Number.NaN,
+  lastX: Number.NaN,
+  lastY: Number.NaN,
+  lastZ: Number.NaN,
+  floor: 0,
+  lift: 0,
+  approach: 0,
+};
 
 /** Relevé nécessaire au point (x, y, z) pour passer `margin` au-dessus du sol (et des toits si `built`). */
 function blockedAt(sampler: GroundSampler, x: number, y: number, z: number, margin: number, built: boolean): number {
@@ -409,46 +456,79 @@ function blockedAt(sampler: GroundSampler, x: number, y: number, z: number, marg
 /**
  * Garde au sol d'un plan : aucune caméra sous le terrain, dans un bâtiment ni derrière un talus qui
  * cache le véhicule. Dans l'ordre : la caméra se relève au-dessus du sol au point où elle est ; si
- * le sol ou un toit coupe la ligne de visée, elle se relève (de `CAMERA_GUARD.lift` au plus) ; si
- * cela ne suffit pas, elle avance vers le point visé jusqu'au dernier point libre (recul limité), puis
- * se relève de nouveau au-dessus du sol. Une sonde muette (NaN partout) laisse le plan tel quel.
- * Fonction pure, sans allocation : modifie `shot` et le rend.
+ * le sol ou un toit coupe la ligne de visée (hors de l'emprise du véhicule, `CAMERA_GUARD.body`), elle
+ * se relève (de `CAMERA_GUARD.lift` au plus) ; si cela ne suffit pas, elle avance vers le point visé
+ * jusqu'au dernier point libre (recul limité) ; enfin elle se relève de nouveau au-dessus du sol (et du
+ * toit si elle a avancé). Relevé et rapprochement de la ligne de visée passent d'une image à l'autre
+ * par la mémoire `guard` (montée en `rise` s, descente en `fall` s) : un obstacle que les points
+ * sondés attrapent une image sur deux ne fait plus sauter la caméra (lot « tremblote », 17 novembre
+ * 2026 : jusqu'à 180 pixels d'écart d'une image à l'autre en ville). Une sonde muette (NaN partout)
+ * laisse le plan tel quel. Sans allocation : modifie `shot` et le rend.
  */
 export function guardShot(shot: CameraShot, sampler: GroundSampler): CameraShot {
   const p = shot.position;
   const t = shot.target;
   const G = CAMERA_GUARD;
-  // 1. Au-dessus du sol au point de la caméra (une caméra dans un bâtiment est traitée en 2 et 3).
+  const M = guard;
+  // Mémoire : même caméra, images rapprochées, pas de coupe (position brute à moins de `cut` m).
+  const dt = M.time - M.lastTime;
+  const moved = (p[0] - M.lastX) ** 2 + (p[1] - M.lastY) ** 2 + (p[2] - M.lastZ) ** 2;
+  // Mémoire et emprise ignorée pour les caméras qui suivent le véhicule du dehors (poursuite, rasante,
+  // avant). Embarquée, travelling et orbite : la garde d'avant, instantanée et complète (l'œil de
+  // l'embarquée peut encore sortir de l'habitacle : TODO_ASSETS.md, paragraphe « tremblote »).
+  const attached = M.id === 'poursuite' || M.id === 'rasante' || M.id === 'avant';
+  const memory = attached && M.id === M.lastId && dt >= 0 && dt <= G.gap && moved <= G.cut * G.cut;
+  M.lastId = M.id;
+  M.lastTime = M.time;
+  M.lastX = p[0];
+  M.lastY = p[1];
+  M.lastZ = p[2];
+  const fall = memory && dt > 0 ? Math.exp(-dt / G.fall) : memory ? 1 : 0;
+  // 1. Au-dessus du sol au point de la caméra (une caméra dans un bâtiment est traitée en 2 et 3) :
+  // relevée tout de suite, redescendue en douceur (une bordure prise une case sur deux ne la fait pas sauter).
   let need = blockedAt(sampler, p[0], p[1], p[2], G.clearance, false);
-  if (need > 0) p[1] += need;
-  // 2. Ligne de visée : relevé nécessaire pour passer chaque point sondé.
+  M.floor = Math.max(need > 0 ? need : 0, M.floor * fall);
+  p[1] += M.floor;
+  // 2. Ligne de visée : relevé nécessaire pour passer chaque point sondé hors de l'emprise du véhicule.
+  const reach2 = attached && M.x === M.x && M.z === M.z ? M.reach * M.reach : -1;
   let lift = 0;
   let first = 0;
   for (let i = G.steps; i >= 1; i -= 1) {
     const k = i / G.steps;
-    const y = t[1] + (p[1] - t[1]) * k;
-    const n = blockedAt(sampler, t[0] + (p[0] - t[0]) * k, y, t[2] + (p[2] - t[2]) * k, G.sight, true);
+    const x = t[0] + (p[0] - t[0]) * k;
+    const z = t[2] + (p[2] - t[2]) * k;
+    if ((x - M.x) ** 2 + (z - M.z) ** 2 < reach2) continue;
+    const n = blockedAt(sampler, x, t[1] + (p[1] - t[1]) * k, z, G.sight, true);
     if (n > 0) {
       lift = Math.max(lift, n / k);
       first = i;
     }
   }
-  if (lift <= 0) return shot;
-  if (lift <= G.lift) {
-    p[1] += lift;
-    return shot;
+  // 3. Trop haut : la caméra se rapproche du point visé, juste avant le premier obstacle (sans relevé).
+  let wantLift = lift;
+  let wantApproach = 0;
+  if (lift > G.lift) {
+    const length = Math.hypot(p[0] - t[0], p[1] - t[1], p[2] - t[2]);
+    wantApproach = 1 - Math.max((first - 1) / G.steps, Math.min(1, G.minDistance / Math.max(1e-6, length)));
+    wantLift = 0;
   }
-  // 3. Trop haut : la caméra se rapproche du point visé, juste avant le premier obstacle.
-  const dx = p[0] - t[0];
-  const dy = p[1] - t[1];
-  const dz = p[2] - t[2];
-  const length = Math.hypot(dx, dy, dz);
-  const keep = Math.max((first - 1) / G.steps, Math.min(1, G.minDistance / Math.max(1e-6, length)));
-  p[0] = t[0] + dx * keep;
-  p[1] = t[1] + dy * keep;
-  p[2] = t[2] + dz * keep;
-  // Encore dans un bâtiment (toit débordant sur la chaussée dans les données) : au-dessus du toit.
-  need = blockedAt(sampler, p[0], p[1], p[2], G.clearance, true);
+  // Relevé : monté en `rise` s, redescendu en `fall` s. Rapprochement : tout de suite (jamais dans
+  // l'obstacle), puis rendu en `fall` s le long d'une ligne de visée redevenue libre.
+  if (memory) {
+    if (dt > 0) M.lift += (wantLift - M.lift) * (1 - Math.exp(-dt / (wantLift > M.lift ? G.rise : G.fall)));
+    M.approach = Math.max(wantApproach, M.approach * fall);
+  } else {
+    M.lift = wantLift;
+    M.approach = wantApproach;
+  }
+  if (M.lift < 1e-4 && M.approach < 1e-4) return shot;
+  p[1] += M.lift;
+  const keep = 1 - M.approach;
+  p[0] = t[0] + (p[0] - t[0]) * keep;
+  p[1] = t[1] + (p[1] - t[1]) * keep;
+  p[2] = t[2] + (p[2] - t[2]) * keep;
+  // Toujours au-dessus du sol ; et du toit après un rapprochement (toit débordant sur la chaussée dans les données).
+  need = blockedAt(sampler, p[0], p[1], p[2], G.clearance, wantApproach > 0);
   if (need > 0) p[1] += need;
   return shot;
 }
