@@ -2,14 +2,13 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, waitForBench, waitForScene, rentrerAuGarage } from './helpers.ts';
+import { choisirCamera, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, rentrerAuGarage, waitForBench, waitForScene } from './helpers.ts';
 
 // Sortie de nuit : la caméra « embarquée » se pose à la place du conducteur du manifeste (œil posé
 // sur son siège, comme au garage), pas au-dessus du toit. Séquence de captures de revue :
 // PMB_CAPTURES (dossier), sinon captures/places/.
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
-const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
 
 test('sortie de nuit : la caméra embarquée est à la place du conducteur de la Cox', async ({ page }) => {
   test.setTimeout(480_000);
@@ -26,15 +25,13 @@ test('sortie de nuit : la caméra embarquée est à la place du conducteur de la
   await pickMap(page);
   await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
-  // Une caméra à la fois : on attend que la scène ait posé la suivante avant de rappuyer.
-  for (let i = 0; i < 6; i += 1) {
-    const camera = (await stage(page).getAttribute('data-camera')) ?? '';
-    if (camera === 'embarquee') break;
-    await bar(page).getByRole('button', { name: 'Caméra suivante' }).tap();
-    await expect(stage(page)).not.toHaveAttribute('data-camera', camera);
-  }
+  // La caméra embarquée, choisie dans les réglages (l'aperçu roule derrière).
+  await choisirCamera(page, 'Embarquée');
   await expect(stage(page)).toHaveAttribute('data-camera', 'embarquee');
-  await expect(bar(page).getByRole('button', { name: 'Caméra suivante' })).toContainText('Embarqu');
+  const panneau = await ouvrirReglages(page);
+  await expect(panneau.getByRole('group', { name: 'Caméra' }).getByRole('button', { name: 'Embarquée', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panneau.getByRole('button', { name: 'Réalisateur' })).toHaveAttribute('aria-pressed', 'false');
+  await fermerReglages(page);
   await expect.poll(async () => Number(await stage(page).getAttribute('data-vitesse')), { timeout: 90_000 }).toBeGreaterThan(10);
   for (let i = 1; i <= 3; i += 1) {
     await page.waitForTimeout(2500);

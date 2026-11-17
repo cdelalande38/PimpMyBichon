@@ -1,4 +1,5 @@
-// Départ arrêté de la sortie de nuit (src/drive/depart.ts) : feux rouge, rouge, vert ; le véhicule
+// Départ arrêté de la sortie de nuit (src/drive/depart.ts) : l'aperçu roule sans feux ; un appui sur
+// la route ramène le véhicule sur la ligne : feux rouge, rouge, vert ; le véhicule
 // tenu sur la ligne pendant les feux, même accélérateur tenu à la main ; au vert il part et le chrono
 // monte ; en pause le chrono se fige. L'arrivée et les tours se prouvent par les tests unitaires du
 // cœur (tests/unit/drive-depart.test.ts) : le parcours ne roule pas des kilomètres en rendu logiciel.
@@ -8,9 +9,9 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
+import { attendreApercu, commencerCourse } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
-const mode = (page: Page) => page.getByRole('switch', { name: 'Conduite à la main' });
 const attr = async (page: Page, name: string) => Number(await stage(page).getAttribute(name));
 
 test.describe('départ arrêté', () => {
@@ -22,15 +23,20 @@ test.describe('départ arrêté', () => {
     await page.goto('./#/sortie');
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(page.locator('.drive-chargement')).toHaveCount(0, { timeout: 30_000 });
-    // Les feux : trois lampes sous le compte-tours.
-    await expect(stage(page)).toHaveAttribute('data-depart', 'feux', { timeout: 60_000 });
+    // L'aperçu : parti sans feux, le véhicule roule déjà ; ni feux ni chrono à l'écran.
+    await attendreApercu(page);
+    await expect(stage(page)).toHaveAttribute('data-depart', 'parti');
+    await expect.poll(() => attr(page, 'data-s'), { timeout: 150_000 }).toBeGreaterThan(5);
     const feux = page.locator('.drive-feux');
+    await expect(feux).toHaveCount(0);
+    await expect(page.locator('.drive-chrono')).toHaveCount(0);
+    // Un appui sur la route : retour sur la ligne, les feux, trois lampes sous le compte-tours.
+    await commencerCourse(page);
+    await expect(stage(page)).toHaveAttribute('data-depart', 'feux', { timeout: 60_000 });
     await expect(feux.locator('i')).toHaveCount(3);
     const s0 = await attr(page, 'data-s');
 
     // À la main, le manche poussé vers le haut et tenu : les gaz.
-    await mode(page).tap();
-    await expect(mode(page)).toHaveAttribute('aria-checked', 'true');
     const box = await page.locator('.drive-mid').boundingBox();
     if (!box) throw new Error('zone des gestes introuvable');
     const cdp = await page.context().newCDPSession(page);

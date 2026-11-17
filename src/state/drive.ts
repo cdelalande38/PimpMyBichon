@@ -6,6 +6,11 @@
 // Passer « À la main » met la caméra de poursuite et coupe le réalisateur (demande du 16 novembre
 // 2026) ; ensuite rien ne les change tout seul : seuls les boutons de caméra et de réalisateur le font.
 // Le choix fait dans le menu (carte, départ) dure la séance : « Sortir » part de là.
+// Déroulé (demande du 17 novembre 2026) : la sortie s'ouvre sur l'aperçu (`apercu` : la vitrine en
+// pilote automatique, réalisateur, départ lancé sans feux) ; « commencer » (un appui sur la route)
+// remet le véhicule sur la ligne du départ choisi, feux, à la main ; « Repartir » fait de même.
+// « Pilote automatique » des réglages (`laisserConduire`) rend le volant au pilote sans rien perdre
+// du parcours (position, chrono) ; un appui sur la route le reprend.
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -143,8 +148,19 @@ export interface DriveState extends DriveStore {
   direction: DriveDirection;
   /** Essai de la sortie en cours : « Réessayer » et « Repartir » remontent la scène (clé de montage). */
   attempt: number;
-  /** Remonte la scène sur la même carte et le même départ : après une erreur, ou au bout de la route. */
+  /** Remonte la scène sur la même carte et le même départ, en aperçu : après une erreur. */
   retry: () => void;
+  /** Aperçu du début de sortie : pilote automatique, réalisateur, rien à l'écran, jusqu'au premier appui. */
+  apercu: boolean;
+  /** Départs à la main demandés (« commencer », « Repartir ») : la scène remet le véhicule sur la ligne et relance les feux. */
+  course: number;
+  /**
+   * Lance la course (depuis l'aperçu) ou la relance (« Repartir ») : véhicule sur la ligne du départ
+   * choisi, feux, conduite à la main, caméra de poursuite, réalisateur coupé, pause levée.
+   */
+  commencer: () => void;
+  /** « Pilote automatique » : le pilote reprend où l'on est (parcours et chrono gardés), le réalisateur revient. */
+  laisserConduire: () => void;
   /** La scène est tombée (erreur de rendu) : la sortie affiche son message d'erreur. */
   fail: () => void;
   /** Choix du menu, avant de sortir : carte (`null` : la première du catalogue) et départ. */
@@ -213,13 +229,28 @@ export const useDrive = create<DriveState>()(
       telemetry: { ...IDLE_TELEMETRY },
       hydrated: false,
       attempt: 0,
+      apercu: true,
+      course: 0,
       choice: { map: null, start: null },
       retry: () =>
         set((state) =>
           state.map === null
             ? state
-            : { attempt: state.attempt + 1, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            : { attempt: state.attempt + 1, apercu: true, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
         ),
+      commencer: () =>
+        set((state) => {
+          if (state.map === null) return state;
+          const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
+          const input: DriveInput = { auto: false, throttle: 0, brake: 0, lane: 0, ...(state.direction === 'assistee' ? { assist: true } : {}), ...nos };
+          return { apercu: false, course: state.course + 1, input, camera: CAMERA_A_LA_MAIN, director: false, slow: false, paused: false };
+        }),
+      laisserConduire: () =>
+        set((state) => {
+          if (state.map === null) return state;
+          const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
+          return { input: { ...AUTO_INPUT, ...nos }, director: true, paused: false };
+        }),
       fail: () => set((state) => ({ telemetry: { ...state.telemetry, ready: false, failed: true } })),
       setTelemetry: (telemetry) => set((state) => (sameTelemetry(state.telemetry, telemetry) ? state : { telemetry: { ...telemetry } })),
       chooseMap: (map) => set((state) => (mapById(map) ? { choice: { map, start: state.choice.map === map ? state.choice.start : null } } : state)),
@@ -233,6 +264,7 @@ export const useDrive = create<DriveState>()(
         set({
           map: target.id,
           start: wanted,
+          apercu: true,
           director: true,
           input: { ...AUTO_INPUT },
           orbit: { ...DEFAULT_ORBIT },
@@ -245,7 +277,7 @@ export const useDrive = create<DriveState>()(
         set((state) =>
           state.map === null
             ? state
-            : { map: null, start: null, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            : { map: null, start: null, apercu: true, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
         ),
       setCamera: (camera) => set({ camera, director: false }),
       nextCamera: () => set((state) => ({ camera: nextCameraOf(state.camera), director: false })),

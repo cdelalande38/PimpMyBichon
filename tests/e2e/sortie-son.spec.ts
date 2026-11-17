@@ -2,19 +2,22 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, reloadSaved, rentrerAuGarage } from './helpers.ts';
+import { commencerCourse, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, reglagesSortie, reloadSaved, rentrerAuGarage } from './helpers.ts';
 
 // Son du moteur en sortie de nuit (§ 5.5, § 9) : au départ le moteur démarre et tourne, le régime
 // publié monte avec la vitesse et passe des rapports, le bouton « Moteur » coupe et remet (choix
 // gardé d'une sortie à l'autre), la pause et le retour au garage coupent ; ouverte sans geste, la
-// sortie reste muette jusqu'au premier appui. L'état se lit dans data-moteur, data-regime et
-// data-rapport du bouton (src/ui/drive/DriveScreen.tsx) ; on vérifie l'état du lecteur et les
-// requêtes, pas le son entendu. Le mélange (panneau « Son », src/ui/drive/Mixage.tsx) se lit dans
-// data-radio, data-moteur-niveau, data-route, data-bruitage et data-bruitages du bloc `.mixage`.
+// sortie reste muette jusqu'au premier appui. Le bouton « Son du moteur » et les curseurs du son sont
+// dans les réglages de la sortie (src/ui/drive/Reglages.tsx) ; l'état se lit dans data-moteur,
+// data-regime, data-rapport et data-niveau du témoin caché `.drive-son-etat` (src/ui/drive/Mixage.tsx),
+// le mélange dans ses data-radio, data-moteur-niveau, data-route, data-bruitage et data-bruitages ; on
+// vérifie l'état du lecteur et les requêtes, pas le son entendu.
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
-const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
-const engine = (page: Page) => bar(page).getByRole('button', { name: /^Son du moteur/ });
+/** Témoin caché du son de la sortie (src/ui/drive/Mixage.tsx, SonEtat) : état du moteur et mélange. */
+const engine = (page: Page) => page.locator('.drive-son-etat');
+/** « Son du moteur », dans les réglages de la sortie. */
+const engineButton = (page: Page) => reglagesSortie(page).getByRole('button', { name: /^Son du moteur/ });
 const numberAttr = async (page: Page, name: string) => Number(await engine(page).getAttribute(name));
 
 /** Met un véhicule à l'écran par la sauvegarde des builds (idb-keyval), sans passer par le catalogue. */
@@ -85,16 +88,18 @@ test.describe('son du moteur en sortie', () => {
     expect(sounds).toEqual([]);
 
     await goOut(page);
-    // Le bouton est dans la barre du bas, au pouce, et assez grand pour le doigt.
-    const button = engine(page);
+    // Le bouton est dans les réglages (l'aperçu roule derrière), assez grand pour le doigt.
+    const button = engineButton(page);
+    const temoin = engine(page);
+    await ouvrirReglages(page);
     await expect(button).toHaveAttribute('aria-pressed', 'true');
+    await button.scrollIntoViewIfNeeded();
     const box = await button.boundingBox();
     expect(box && Math.min(box.width, box.height)).toBeGreaterThanOrEqual(48);
-    expect(box && box.y).toBeGreaterThan(844 / 2);
-
+    await fermerReglages(page);
     // Départ : le démarreur, puis le moteur tourne ; les sons de la famille du véhicule sont demandés.
-    await expect(button).toHaveAttribute('data-moteur', /demarre|tourne/, { timeout: 30_000 });
-    await expect(button).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
+    await expect(temoin).toHaveAttribute('data-moteur', /demarre|tourne/, { timeout: 30_000 });
+    await expect(temoin).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
     expect(sounds.some((path) => path.startsWith('quatre-en-ligne-moto/'))).toBe(true);
     expect(sounds.every((path) => path.startsWith('quatre-en-ligne-moto/'))).toBe(true);
 
@@ -121,40 +126,45 @@ test.describe('son du moteur en sortie', () => {
     if (slow.length > 0) expect(Math.min(...slow.map((sample) => sample.regime))).toBeLessThan(Math.max(...fast.map((sample) => sample.regime)));
     await shot(page, 'sortie-moteur-tourne');
 
-    // Le bouton coupe, puis remet (sans démarreur : le véhicule roule déjà).
+    // Le bouton coupe, puis remet (sans démarreur : le véhicule roule déjà). Dans l'aperçu, les
+    // réglages ouverts n'arrêtent pas la route.
+    await ouvrirReglages(page);
     await button.tap();
-    await expect(button).toHaveAttribute('data-moteur', 'muet');
+    await expect(temoin).toHaveAttribute('data-moteur', 'muet');
     await expect(button).toHaveAttribute('aria-pressed', 'false');
-    await expect(button).toHaveAttribute('data-regime', '0');
+    await expect(temoin).toHaveAttribute('data-regime', '0');
     await shot(page, 'sortie-moteur-coupe');
     await button.tap();
     await expect(button).toHaveAttribute('aria-pressed', 'true');
-    await expect(button).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
-
-    // Pause : coupé ; reprise : il tourne de nouveau.
-    const top = page.locator('.drive-top');
-    await top.getByRole('button', { name: 'Pause' }).tap();
-    await expect(button).toHaveAttribute('data-moteur', 'coupe');
-    await top.getByRole('button', { name: 'Reprendre' }).tap();
-    await expect(button).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
-
-    // Ralenti d'image maintenu : le moteur tourne toujours (le volume baisse, pas la hauteur).
-    const ralenti = bar(page).getByRole('button', { name: 'Ralenti' });
-    const slowBox = await ralenti.boundingBox();
-    if (!slowBox) throw new Error('bouton Ralenti introuvable');
-    await page.mouse.move(slowBox.x + slowBox.width / 2, slowBox.y + slowBox.height / 2);
+    await expect(temoin).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
+    // Ralenti d'image : le moteur tourne toujours (le volume baisse, pas la hauteur).
+    const ralenti = reglagesSortie(page).getByRole('button', { name: 'Ralenti' });
     const plein = await numberAttr(page, 'data-niveau');
     expect(plein).toBeGreaterThan(0);
-    await page.mouse.down();
+    await ralenti.tap();
     await expect(ralenti).toHaveAttribute('aria-pressed', 'true');
-    await expect(button).toHaveAttribute('data-moteur', 'tourne');
+    await expect(temoin).toHaveAttribute('data-moteur', 'tourne');
     await expect.poll(() => numberAttr(page, 'data-niveau')).toBeLessThan(plein);
-    await page.mouse.up();
+    await ralenti.tap();
+    await expect(ralenti).toHaveAttribute('aria-pressed', 'false');
     await expect.poll(() => numberAttr(page, 'data-niveau')).toBe(plein);
-
+    await fermerReglages(page);
+    // La course : pause, coupé ; reprise, il tourne de nouveau.
+    await commencerCourse(page);
+    const top = page.locator('.drive-top');
+    await top.getByRole('button', { name: 'Pause' }).tap();
+    await expect(temoin).toHaveAttribute('data-moteur', 'coupe');
+    await top.getByRole('button', { name: 'Reprendre' }).tap();
+    await expect(temoin).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
+    // Les réglages ouverts en course la mettent en pause : coupé, puis il repart à la fermeture.
+    await ouvrirReglages(page);
+    await expect(temoin).toHaveAttribute('data-moteur', 'coupe');
+    await fermerReglages(page);
+    await expect(temoin).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
     // Coupé à la main, puis retour au garage : le moteur est coupé au garage.
+    await ouvrirReglages(page);
     await button.tap();
-    await expect(button).toHaveAttribute('data-moteur', 'muet');
+    await expect(temoin).toHaveAttribute('data-moteur', 'muet');
     await rentrerAuGarage(page);
     await expect(stage(page)).toHaveCount(0);
     await openEntry(page, 'Préparation');
@@ -163,8 +173,9 @@ test.describe('son du moteur en sortie', () => {
     // Le choix est gardé d'une sortie à l'autre : on repart moteur coupé, on le remet.
     await goOut(page);
     await expect(engine(page)).toHaveAttribute('data-moteur', 'muet');
-    await expect(engine(page)).toHaveAttribute('aria-pressed', 'false');
-    await engine(page).tap();
+    await ouvrirReglages(page);
+    await expect(engineButton(page)).toHaveAttribute('aria-pressed', 'false');
+    await engineButton(page).tap();
     await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
     await rentrerAuGarage(page);
     await expect(stage(page)).toHaveCount(0);
@@ -188,6 +199,8 @@ test.describe('son du moteur en sortie', () => {
 
     // Premier appui sur la route : le moteur démarre.
     await page.locator('.drive-mid').tap({ position: { x: 100, y: 120 } });
+    // Ce premier appui lance aussi la course, à la main.
+    await expect(page.locator('.drive-mid')).toHaveAttribute('data-conduite', 'main');
     await expect(engine(page)).toHaveAttribute('data-moteur', /demarre|tourne/, { timeout: 30_000 });
     await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
     expect(sounds.length).toBeGreaterThan(0);
@@ -229,7 +242,7 @@ test.describe('son du moteur en sortie', () => {
       await putOnScreen(page, 'sportive');
       await reloadSaved(page);
       await goOut(page);
-      const mix = page.locator('.mixage');
+      const mix = engine(page);
       const radioFacteur = async () => Number(await mix.getAttribute('data-radio'));
 
       // Le moteur tourne : la radio passe derrière (45 % de son volume), le moteur à plein.
@@ -238,25 +251,16 @@ test.describe('son du moteur en sortie', () => {
       await expect(engine(page)).toHaveAttribute('data-niveau', '1.00');
       await expect(mix).toHaveAttribute('data-route', '0.70');
 
-      // Pause : la radio reprend son volume ; reprise : elle repasse derrière.
-      const top = page.locator('.drive-top');
-      await top.getByRole('button', { name: 'Pause' }).tap();
-      await expect.poll(radioFacteur).toBe(1);
-      await top.getByRole('button', { name: 'Reprendre' }).tap();
-      await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
-      await expect.poll(radioFacteur).toBeCloseTo(0.45, 2);
-
       // Un bruitage de rapport part au passage de rapport ; l'index n'est demandé qu'une fois.
       await expect.poll(async () => Number(await mix.getAttribute('data-bruitages')), { timeout: 150_000, intervals: [250] }).toBeGreaterThan(0);
       await expect(mix).toHaveAttribute('data-bruitage', 'rapport');
       expect(sfx.filter((path) => path === 'sfx.json')).toHaveLength(1);
       expect(sfx.some((path) => path.startsWith('rapport-1.ogg'))).toBe(true);
 
-      // Le panneau « Son » : trois curseurs au doigt, aux valeurs d'origine.
-      const bouton = mix.getByRole('button', { name: 'Réglages du son', exact: true });
-      await bouton.tap();
-      await expect(bouton).toHaveAttribute('aria-expanded', 'true');
-      const panneau = page.getByRole('region', { name: 'Son de la sortie' });
+      // Les réglages, rubrique « Son » : trois curseurs au doigt, aux valeurs d'origine (dans l'aperçu,
+      // la route continue derrière).
+      await ouvrirReglages(page);
+      const panneau = reglagesSortie(page).getByRole('group', { name: 'Son de la sortie' });
       await expect(panneau).toBeVisible();
       const curseur = (nom: string) => panneau.getByRole('slider', { name: nom, exact: true });
       await expect(curseur('Radio')).toHaveValue('45');
@@ -267,7 +271,6 @@ test.describe('son du moteur en sortie', () => {
         expect(box && box.height, nom).toBeGreaterThanOrEqual(48);
       }
       const cadre = await panneau.boundingBox();
-      expect(cadre && cadre.width).toBeLessThanOrEqual(358);
       expect(cadre && cadre.x).toBeGreaterThanOrEqual(0);
       expect(cadre && cadre.x + cadre.width).toBeLessThanOrEqual(390);
       await shot(page, 'son-origine-390', 'vague-o-sonsroute');
@@ -283,9 +286,10 @@ test.describe('son du moteur en sortie', () => {
       await shot(page, 'son-deplaces-390', 'vague-o-sonsroute');
 
       // Petit téléphone : le panneau tient dans la largeur.
-      await bouton.tap();
+      await fermerReglages(page);
       await page.setViewportSize({ width: 360, height: 780 });
-      await bouton.tap();
+      await ouvrirReglages(page);
+      await panneau.scrollIntoViewIfNeeded();
       const petit = await panneau.boundingBox();
       expect(petit && petit.x).toBeGreaterThanOrEqual(0);
       expect(petit && petit.x + petit.width).toBeLessThanOrEqual(360);
@@ -294,21 +298,30 @@ test.describe('son du moteur en sortie', () => {
       await expect(curseur('Radio')).toHaveValue('45');
       await expect.poll(radioFacteur).toBeCloseTo(0.45, 2);
       await shot(page, 'son-origine-360', 'vague-o-sonsroute');
-      await panneau.getByRole('button', { name: 'Fermer les réglages du son' }).tap();
+      await fermerReglages(page);
       await expect(panneau).toHaveCount(0);
-      // Un appui ailleurs (ici la route) le ferme aussi.
-      await bouton.tap();
+      // Un appui à côté (au-dessus du panneau) le ferme aussi, sans lancer la course.
+      await ouvrirReglages(page);
       await expect(panneau).toBeVisible();
-      await page.locator('.drive-mid').tap({ position: { x: 100, y: 40 } });
-      await expect(panneau).toHaveCount(0);
+      await page.touchscreen.tap(180, 40);
+      await expect(reglagesSortie(page)).toHaveCount(0);
+      await expect(page.locator('.drive-mid')).toHaveAttribute('data-conduite', 'auto');
+      // La course : pause, la radio reprend son volume ; reprise, elle repasse derrière.
+      await commencerCourse(page);
+      const top = page.locator('.drive-top');
+      await top.getByRole('button', { name: 'Pause' }).tap();
+      await expect.poll(radioFacteur).toBe(1);
+      await top.getByRole('button', { name: 'Reprendre' }).tap();
+      await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 30_000 });
+      await expect.poll(radioFacteur).toBeCloseTo(0.45, 2);
 
       // Au garage, la radio reprend son volume ; les réglages sont gardés d'une sortie à l'autre.
-      await bouton.tap();
+      await ouvrirReglages(page);
       await curseur('Route').fill('55');
       await rentrerAuGarage(page);
       await expect(stage(page)).toHaveCount(0);
       await goOut(page);
-      await page.locator('.mixage').getByRole('button', { name: 'Réglages du son', exact: true }).tap();
+      await ouvrirReglages(page);
       await expect(curseur('Route')).toHaveValue('55');
 
       expect(errors).toEqual([]);
@@ -342,14 +355,14 @@ test.describe('son du moteur en sortie', () => {
       await putOnScreen(page, 'sportive');
       await reloadSaved(page);
       await goOut(page);
-      const mix = page.locator('.mixage');
+      const mix = engine(page);
       const nos = page.getByRole('button', { name: 'NOS' });
       const bruitages = async () => Number(await mix.getAttribute('data-bruitages'));
       await expect(engine(page)).toHaveAttribute('data-moteur', 'tourne', { timeout: 60_000 });
       await expect(mix).toHaveAttribute('data-bruitages', '0');
 
       // À la main : le NOS n'est envoyé qu'à la main. Un appui : le coup d'envoi part, une fois.
-      await page.getByRole('switch', { name: 'Conduite à la main' }).tap();
+      await commencerCourse(page);
       await expect(nos).toBeVisible();
       // Le départ est donné aux feux : un appui pendant les feux rouges ne compte pas (le véhicule est
       // tenu sur la ligne). En rendu logiciel les feux durent une demi-minute : on attend le vert.

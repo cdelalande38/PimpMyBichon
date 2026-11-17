@@ -212,13 +212,12 @@ export const TUTOS: readonly Tuto[] = [
     id: 'sortie',
     ecrans: ['sortie'],
     titre: 'Sur la route',
-    but: 'Ici, tu regardes ton véhicule rouler. Il se débrouille tout seul : pose le téléphone et profite.',
+    but: 'D’abord l’aperçu : ton véhicule roule tout seul, les plans changent. Regarde, puis prends le volant quand tu veux.',
     etapes: [
-      { texte: '« Pilote auto » ou « À la main » : le bouton du bas dit qui conduit. Touche-le pour prendre le volant.', cible: '.drive-mode' },
-      { texte: 'À la main, c’est toi qui tiens la direction. Pose ton pouce : en haut les gaz, en bas le frein, sur les côtés tu tournes.', cible: '.drive-mid' },
-      { texte: '« NOS » envoie une poussée, l’anneau dit la réserve. La languette rappelle la barre des commandes.', cible: '.drive-pilot' },
-      { texte: 'Sous le compte-tours, les feux : rouge, rouge, vert, et le chrono part. Cadran : vert ça tire, orange ça passe la vitesse, rouge zone rouge.', cible: '.drive-dial' },
-      { texte: 'Barre du bas : caméras, météo, « Pédales », « Rentrer au garage », et « Direction : assistée » si tu veux que l’aide suive la route.', cible: '.drive-acts' },
+      { texte: 'Touche la route pour commencer : retour sur la ligne, feux rouge, rouge, vert, et c’est toi qui conduis.', cible: '.drive-invite' },
+      { texte: 'Pose ton pouce n’importe où : en haut les gaz, en bas le frein, sur les côtés tu tournes. Téléphone couché, la manette.', cible: '.drive-mid' },
+      { texte: 'Au vert, le chrono part. Cadran : vert ça tire, orange passe la vitesse, rouge zone rouge. « NOS » envoie une poussée.' },
+      { texte: 'La petite icône du coin range tout : caméras, météo, son, pédales, pilote automatique, « Repartir », « Rentrer au garage ».', cible: '.drive-reglages-btn' },
     ],
   },
 ];

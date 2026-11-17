@@ -1,31 +1,30 @@
-// Écran de la sortie de nuit (§ 5.5), posé sur la scène de la route (src/drive/DriveCanvas.tsx) :
-// - en haut : le nom de la carte en entier et la progression, au milieu le compte-tours (régime,
-//   rapport, vitesse ; src/ui/drive/CompteTours.tsx), à droite la radio (bouton rond et mini-lecteur,
-//   sans quitter la route) et la pause ;
-// - au milieu, la zone des gestes : à la main, le manche virtuel par défaut (src/ui/drive/Manche.tsx :
-//   le pouce se pose n'importe où, la base apparaît sous lui ; haut le gaz, bas le frein, côtés la
-//   direction (direction libre : on braque ; assistée : on se place), tous progressifs ; une amorce
-//   dit où poser le pouce tant qu'on ne roule pas), ou, au choix dans les commandes (gardé), les deux
-//   pédales : appui maintenu à droite pour accélérer, à gauche pour freiner, glissé latéral pour
-//   tourner (libre, progressif) ou se placer (assistée) ; en pilote automatique, un appui propose de
-//   reprendre la main, un appui long met le ralenti (dit à l'écran), et, sur la caméra d'orbite, un
-//   glissé tourne autour du véhicule. Chaque doigt a le sien : le manche sous un pouce, le NOS, la
-//   pause ou la languette sous un autre, sans que l'un lâche l'autre ;
-// - en bas, au pouce : le mode de conduite, toujours visible (« Pilote auto » ou « À la main », un
-//   appui pour passer de l'un à l'autre ; à la main : caméra de poursuite et réalisateur coupé), le NOS
-//   à la main ; puis la barre des commandes (caméra, réalisateur, ralenti, météo, commande, direction
-//   libre ou assistée, moteur, manette, « Rentrer au garage »). À la main, la
-//   barre s'abaisse pour laisser la place au pilotage : il en reste une languette qui la rappelle ;
-//   elle remonte d'elle-même en pilote automatique, en pause et au bout de la route ;
+// Écran de la sortie de nuit (§ 5.5), posé sur la scène de la route (src/drive/DriveCanvas.tsx).
+// Déroulé (demande du 17 novembre 2026) :
+// - l'aperçu : une fois la carte chargée, la route en pilote automatique avec le réalisateur, comme une
+//   vitrine. À l'écran, presque rien : le nom de la carte, la radio, la petite icône des réglages dans
+//   le coin, et en bas, en léger, « Touche l'écran pour commencer » ;
+// - un appui sur la route lance la course : le véhicule revient sur la ligne du départ choisi, les
+//   feux (rouge, rouge, vert), la conduite à la main, la caméra de poursuite ; pendant les feux, en
+//   portrait, une offre discrète « Mode manette » (plein écran et paysage), effacée au vert ;
+// - la course : en haut le nom de la carte et la progression, le compte-tours (régime, rapport, vitesse ;
+//   src/ui/drive/CompteTours.tsx), les feux puis le chrono, à droite les réglages, la radio et la
+//   pause ; sous le nom de la carte, un carré de 130 px réservé à la mini-carte ; au milieu, la zone
+//   des gestes : le manche virtuel par défaut (src/ui/drive/Manche.tsx : le pouce se pose n'importe
+//   où, la base apparaît sous lui ; haut le gaz, bas le frein, côtés la direction (libre : on braque ;
+//   assistée : on se place), tous progressifs ; une amorce dit où poser le pouce tant qu'on ne roule
+//   pas), ou les deux pédales (au choix dans les réglages, gardé) ; le NOS en bas à droite. Chaque
+//   doigt a le sien : le manche sous un pouce, le NOS ou la pause sous un autre ;
 // - en paysage (téléphone couché, ou « Manette (paysage) » : plein écran et orientation verrouillée,
 //   src/ui/drive/manette.ts), la manette : le manche sous le pouce gauche, GAZ, FREIN et NOS sous le
-//   pouce droit, le compte-tours en haut au milieu, le bandeau réduit, la barre en languette.
+//   pouce droit, le compte-tours en haut au milieu, le bandeau réduit ;
+// - les réglages (src/ui/drive/Reglages.tsx) rangent tout le reste : caméra, réalisateur, ralenti,
+//   météo, commande, direction, manette, son, pilote automatique, « Repartir », « Rentrer au garage ».
+//   « Pilote automatique » rend le volant au pilote sans rien perdre du parcours (position, chrono) ;
+//   l'écran redevient épuré, et un appui sur la route reprend la main. Dans l'aperçu et sous le pilote,
+//   un appui long met le ralenti, et, sur la caméra d'orbite, un glissé tourne autour du véhicule.
 // Tant que la route n'est pas prête, un écran de chargement plein et opaque (même air que celui du
 // lancement de l'app) nomme la carte et coche ses étapes, « Rentrer au garage » compris ; il s'efface
 // en fondu à la première image de la route. L'erreur garde son message et « Réessayer ».
-// La sortie se regarde sans toucher l'écran : pilote automatique et réalisateur sont mis d'office au
-// premier lancement ; en passant à la main, la poursuite et plus de réalisateur, jusqu'à ce que tu
-// les changes toi-même.
 // Le son du moteur est branché sur la sortie tant que l'écran est monté (src/drive/son.ts).
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
@@ -34,17 +33,16 @@ import { useMediaQuery } from '../../app/useMediaQuery.ts';
 import { creditLine, mapById } from '../../data/maps.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { DRIVE_STAGE_CLASS } from '../../drive/contrat.ts';
-import { basculerMoteur, brancherSonSortie, useSonSortie, type EtatSonSortie } from '../../drive/son.ts';
+import { brancherSonSortie } from '../../drive/son.ts';
 import { useBuilds } from '../../state/builds.ts';
-import { CAMERA_LABELS, COMMANDES, DIRECTIONS, useDrive, WEATHERS } from '../../state/drive.ts';
-import { useEngineSoundPrefs } from '../../state/engineSound.ts';
+import { useDrive } from '../../state/drive.ts';
 import { RadioButton } from '../radio/RadioButton.tsx';
 import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
 import { MiniCarte } from './MiniCarte.tsx';
 import { ArriveePanneau, ChronoSortie, FeuxDepart } from './Depart.tsx';
 import { DriveIcon } from './icones.tsx';
-import { Mixage } from './Mixage.tsx';
+import { SonEtat } from './Mixage.tsx';
 import {
   Amorce,
   appliquerManuel,
@@ -60,7 +58,8 @@ import {
   type MancheTenu,
 } from './Manche.tsx';
 import { axeManche } from './manche.ts';
-import { entrerManette, manettePossible, quitterManette, useManette } from './manette.ts';
+import { entrerManette, quitterManette, useManette } from './manette.ts';
+import { ReglagesPanneau, useReglages } from './Reglages.tsx';
 import './drive.css';
 
 /** Écran plus large que haut, à hauteur de téléphone couché : la disposition manette (drive.css). */
@@ -75,14 +74,12 @@ const PEDAL_STEER_DEAD = 0.1;
 /** Orbite au doigt : radians par pixel. */
 const ORBIT_YAW_PER_PX = 0.009;
 const ORBIT_PITCH_PER_PX = 0.006;
-/** « Reprendre la main ? » reste affiché ce temps-là, en millisecondes. */
-const OFFER_MS = 3500;
 /** Pédales dessinées : estompées après ce temps à rouler (s, au-dessus de `HINT_MOVING_KMH`), revenues sous `HINT_STOP_KMH`. */
 const HINT_FADE_S = 4;
 const HINT_MOVING_KMH = 10;
 const HINT_STOP_KMH = 3;
 
-function DriveTop() {
+function DriveTop({ apercu, reglages, ouvrirReglages }: { apercu: boolean; reglages: boolean; ouvrirReglages: () => void }) {
   const mapId = useDrive((state) => state.map);
   const progressValue = useDrive((state) => state.telemetry.progress);
   const paused = useDrive((state) => state.paused);
@@ -90,25 +87,38 @@ function DriveTop() {
   const map = mapById(mapId);
   const progress = Math.round(Math.min(1, Math.max(0, progressValue)) * 100);
   const pause = useAppui(() => setPaused(!useDrive.getState().paused));
+  const ouvrir = useAppui(ouvrirReglages);
 
   return (
-    <header className="drive-top">
+    <header className="drive-top" data-apercu={apercu || undefined}>
       <div className="drive-where">
         <span className="drive-map">{map?.name ?? 'Sortie de nuit'}</span>
-        <span className="drive-progress" role="progressbar" aria-label="Progression" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
-          <i style={{ width: `${progress}%` }} />
-        </span>
+        {!apercu && (
+          <span className="drive-progress" role="progressbar" aria-label="Progression" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+            <i style={{ width: `${progress}%` }} />
+          </span>
+        )}
       </div>
-      <CompteTours />
-      <FeuxDepart />
-      <ChronoSortie />
-      <MiniCarte />
+      {!apercu && <CompteTours />}
+      {!apercu && <FeuxDepart />}
+      {!apercu && <ChronoSortie />}
       <div className="drive-top-droite">
-        <RadioButton enSortie />
-        <button type="button" className="drive-round" aria-label={paused ? 'Reprendre' : 'Pause'} aria-pressed={paused} {...pause}>
-          <DriveIcon name={paused ? 'lecture' : 'pause'} />
+        <button type="button" className="drive-round drive-reglages-btn" aria-label="Réglages de la sortie" aria-haspopup="dialog" aria-expanded={reglages} {...ouvrir}>
+          <DriveIcon name="reglages" />
         </button>
+        <RadioButton enSortie />
+        {!apercu && (
+          <button type="button" className="drive-round drive-pause" aria-label={paused ? 'Reprendre' : 'Pause'} aria-pressed={paused} {...pause}>
+            <DriveIcon name={paused ? 'lecture' : 'pause'} />
+          </button>
+        )}
       </div>
+      {/* Place de la mini-carte (130 px), en course seulement : la monter ici, dans ce carré. */}
+      {!apercu && (
+        <div className="drive-minicarte-place" data-place="minicarte">
+          <MiniCarte />
+        </div>
+      )}
     </header>
   );
 }
@@ -167,7 +177,6 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
   const touches = useRef(new Map<number, Touch>());
   const timer = useRef<number | null>(null);
   const slowByPress = useRef(false);
-  const [offer, setOffer] = useState(false);
   const faded = usePedalsFaded(auto);
   // Le manche : en portrait s'il est choisi (par défaut), toujours en paysage (manette).
   const manche = !auto && (paysage || commande === 'manche');
@@ -239,8 +248,11 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
     if (!drive.input.auto) {
       if (!manche) pedals();
     }
-    // Pilote automatique : un appui bref (ni glissé, ni appui long) propose de reprendre la main.
-    else if (short && !touch.moved && event.type === 'pointerup') setOffer(true);
+    // Aperçu : un appui bref (ni glissé, ni appui long) lance la course ; sous le pilote, il reprend la main.
+    else if (short && !touch.moved && event.type === 'pointerup' && !drive.telemetry.finished) {
+      if (drive.apercu) drive.commencer();
+      else drive.setAuto(false);
+    }
   };
 
   // Le doigt reste posé quand on change de mode, ou l'écran se démonte : on lâche tout.
@@ -260,12 +272,6 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
       slowByPress.current = false;
     };
   }, [auto, manche, steers]);
-
-  useEffect(() => {
-    if (!offer) return;
-    const t = window.setTimeout(() => setOffer(false), OFFER_MS);
-    return () => window.clearTimeout(t);
-  }, [offer]);
 
   return (
     <div
@@ -298,7 +304,6 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
         timer.current = window.setTimeout(() => {
           timer.current = null;
           slowByPress.current = true;
-          setOffer(false);
           useDrive.getState().setSlow(true);
         }, LONG_PRESS_MS);
       }}
@@ -351,22 +356,6 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
           Ralenti
         </p>
       )}
-      {auto && offer && !finished && (
-        <div className="drive-offer" role="status" onPointerDown={(event) => event.stopPropagation()}>
-          <span>Reprendre la main ?</span>
-          <button
-            type="button"
-            className="btn drive-offer-btn"
-            onClick={() => {
-              setOffer(false);
-              useDrive.getState().setAuto(false);
-            }}
-          >
-            <DriveIcon name="main" />
-            Prendre le volant
-          </button>
-        </div>
-      )}
       {manche && !finished && !tenu && !faded && <Amorce libre={libre} />}
       {manche && !finished && <MancheDessin el={mancheEl} />}
       {!auto && !manche && !finished && (
@@ -385,6 +374,11 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
         </div>
       )}
       {paysage && !auto && !finished && <PaveManette />}
+      {!paysage && !auto && !finished && (
+        <div className="drive-nos-coin" onPointerDown={(event) => event.stopPropagation()}>
+          <NosButton />
+        </div>
+      )}
     </div>
   );
 }
@@ -408,69 +402,6 @@ function PaveManette() {
         Gaz
       </BoutonTenu>
     </div>
-  );
-}
-
-const MOTEUR_LIBELLES: Record<EtatSonSortie, string> = {
-  'sans-son': 'Sans son',
-  muet: 'Coupé',
-  attente: 'Moteur',
-  coupe: 'Moteur',
-  demarre: 'Moteur',
-  tourne: 'Moteur',
-};
-
-/**
- * Coupe et remet le son du moteur ; le choix est gardé d'une sortie à l'autre. Pour les parcours :
- * data-moteur (sans-son, muet, attente d'un geste, coupe, demarre, tourne), data-regime (tr/min du
- * moteur réel), data-rapport et data-niveau (volume d'ensemble du moteur).
- */
-function EngineToggle() {
-  const { etat, regime, rapport, niveau } = useSonSortie();
-  const enSortie = useEngineSoundPrefs((state) => state.enSortie);
-  const sansSon = etat === 'sans-son';
-  return (
-    <button
-      type="button"
-      className="drive-act drive-engine"
-      aria-label={sansSon ? 'Son du moteur : pas encore de son pour ce moteur' : 'Son du moteur'}
-      aria-pressed={sansSon ? undefined : enSortie}
-      disabled={sansSon}
-      data-moteur={etat}
-      data-regime={regime}
-      data-rapport={rapport}
-      data-niveau={niveau.toFixed(2)}
-      onClick={basculerMoteur}
-    >
-      <DriveIcon name={enSortie && !sansSon ? 'moteur' : 'moteurCoupe'} />
-      <span>{MOTEUR_LIBELLES[etat]}</span>
-    </button>
-  );
-}
-
-/** Mode de conduite, toujours visible : un interrupteur « Conduite à la main ». */
-function ModeToggle() {
-  const auto = useDrive((state) => state.input.auto);
-  const basculer = useAppui(() => {
-    const drive = useDrive.getState();
-    drive.setAuto(!drive.input.auto);
-  });
-  return (
-    <button
-      type="button"
-      role="switch"
-      className="drive-mode"
-      aria-checked={!auto}
-      aria-label="Conduite à la main"
-      data-conduite={auto ? 'auto' : 'main'}
-      {...basculer}
-    >
-      <DriveIcon name={auto ? 'auto' : 'main'} />
-      <span className="drive-mode-texte">
-        <b>{auto ? 'Pilote auto' : 'À la main'}</b>
-        <small>{auto ? 'touche pour conduire' : 'touche pour le pilote'}</small>
-      </span>
-    </button>
   );
 }
 
@@ -520,155 +451,66 @@ function NosButton() {
   );
 }
 
-/** Entrée « Manette (paysage) » : proposée là où le navigateur sait verrouiller l'orientation. */
-function ManetteToggle() {
-  const active = useManette();
+/**
+ * Le bas de l'écran, en léger : « Touche l'écran pour commencer » dans l'aperçu, « pour reprendre la
+ * main » sous le pilote automatique ; pendant les feux, en portrait, l'offre « Mode manette » ; au bout
+ * d'une route sans arrivée, « Repartir ».
+ */
+function DriveBas({ apercu, paysage }: { apercu: boolean; paysage: boolean }) {
+  const auto = useDrive((state) => state.input.auto);
+  const ready = useDrive((state) => state.telemetry.ready);
+  const failed = useDrive((state) => state.telemetry.failed);
+  const finished = useDrive((state) => state.telemetry.finished);
+  const phase = useDrive((state) => state.telemetry.depart);
+  const paused = useDrive((state) => state.paused);
+  const manette = useManette();
   const [refus, setRefus] = useState(false);
-  if (!manettePossible()) return null;
+  if (!ready || failed) return null;
+  if (finished && phase !== 'arrive' && !apercu) {
+    return (
+      <div className="drive-bas">
+        <div className="drive-end">
+          <p role="status">Bout de la route. On repart, ou on rentre ?</p>
+          <button type="button" className="btn" onClick={() => useDrive.getState().commencer()}>
+            Repartir
+          </button>
+        </div>
+      </div>
+    );
+  }
+  // Proposée à tout téléphone en portrait : là où le navigateur ne sait pas tourner l'écran, l'appui
+  // dit de le coucher (la manette suit l'orientation).
+  const offreManette = !apercu && !auto && !paysage && !manette && (phase === 'attente' || phase === 'feux');
   return (
-    <>
-      <button
-        type="button"
-        className="drive-act drive-manette"
-        aria-label="Manette (paysage)"
-        aria-pressed={active}
-        onClick={() => {
-          setRefus(false);
-          if (active) void quitterManette();
-          else void entrerManette().then((ok) => setRefus(!ok));
-        }}
-      >
-        <DriveIcon name="manette" />
-        <span>Manette</span>
-      </button>
-      {refus && (
+    <div className="drive-bas">
+      {offreManette && (
+        <button
+          type="button"
+          className="drive-offre-manette"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={() => {
+            setRefus(false);
+            void entrerManette().then((ok) => setRefus(!ok));
+          }}
+        >
+          <DriveIcon name="manette" />
+          <span>
+            <b>Mode manette</b>
+            <small>plein écran, téléphone couché</small>
+          </span>
+        </button>
+      )}
+      {refus && !paysage && (
         <p className="drive-refus" role="status">
           Ton téléphone ne veut pas tourner l’écran : couche-le, la manette suit.
         </p>
       )}
-    </>
-  );
-}
-
-function DriveBar({ paysage }: { paysage: boolean }) {
-  const camera = useDrive((state) => state.camera);
-  const commande = useDrive((state) => state.commande);
-  const direction = useDrive((state) => state.direction);
-  const director = useDrive((state) => state.director);
-  const auto = useDrive((state) => state.input.auto);
-  const slow = useDrive((state) => state.slow);
-  const weather = useDrive((state) => state.weather);
-  const paused = useDrive((state) => state.paused);
-  const finished = useDrive((state) => state.telemetry.finished);
-  // L'arrivée a son panneau (src/ui/drive/Depart.tsx) : pas de second « Repartir » dans la barre.
-  const arrive = useDrive((state) => state.telemetry.depart === 'arrive');
-  // Barre rappelée à la main : vaut pour ce passage à la main (elle s'abaisse de nouveau au suivant).
-  const [raisedFor, setRaisedFor] = useState<{ auto: boolean; up: boolean }>({ auto, up: false });
-  const raised = raisedFor.auto === auto && raisedFor.up;
-  const drive = useDrive.getState;
-  // Un appui passe au temps suivant : sec, pluie, neige, puis sec.
-  const nextWeather = WEATHERS[(WEATHERS.findIndex((item) => item.id === weather) + 1) % WEATHERS.length]?.id ?? 'sec';
-  const weatherLabel = WEATHERS.find((item) => item.id === weather)?.label ?? weather;
-
-  // À la main, la barre s'abaisse d'elle-même ; elle remonte en pilote automatique.
-  const folded = !auto && !raised && !paused && !finished;
-
-  const holdSlow = (on: boolean) => () => drive().setSlow(on);
-  const tab = useAppui(() => setRaisedFor({ auto, up: folded }));
-  const nextCamera = useAppui(() => drive().nextCamera());
-  const nextCommande = COMMANDES[(COMMANDES.findIndex((item) => item.id === commande) + 1) % COMMANDES.length]?.id ?? 'manche';
-  const commandeLabel = COMMANDES.find((item) => item.id === commande)?.label ?? commande;
-  const nextDirection = DIRECTIONS[(DIRECTIONS.findIndex((item) => item.id === direction) + 1) % DIRECTIONS.length]?.id ?? 'libre';
-  const directionLabel = DIRECTIONS.find((item) => item.id === direction)?.label ?? direction;
-
-  return (
-    <footer className="drive-bar" aria-label="Commandes de la sortie" data-replie={folded}>
-      {finished && !arrive && (
-        <div className="drive-end">
-          <p role="status">Bout de la route. On repart, ou on rentre ?</p>
-          <button type="button" className="btn" onClick={() => drive().retry()}>
-            Repartir
-          </button>
-        </div>
+      {auto && !paused && !finished && (
+        <p className="drive-invite" role="status">
+          {apercu ? 'Touche l’écran pour commencer' : 'Touche l’écran pour reprendre la main'}
+        </p>
       )}
-      <div className="drive-pilot">
-        <ModeToggle />
-        {!auto && !finished && (
-          <button
-            type="button"
-            className="drive-tab"
-            aria-expanded={!folded}
-            aria-controls="drive-commandes"
-            aria-label={folded ? 'Afficher les commandes' : 'Replier les commandes'}
-            {...tab}
-          >
-            <DriveIcon name={folded ? 'monter' : 'descendre'} />
-            <span>{folded ? 'Commandes' : 'Replier'}</span>
-          </button>
-        )}
-        {!auto && !finished && !paysage && <NosButton />}
-      </div>
-      <div className="drive-panel" id="drive-commandes" inert={folded} aria-hidden={folded || undefined}>
-        <div className="drive-panel-in">
-          <nav className="drive-acts" aria-label="Sortie">
-            <button type="button" className="drive-act" aria-label="Caméra suivante" {...nextCamera}>
-              <DriveIcon name="camera" />
-              <span>{director ? 'Caméra' : CAMERA_LABELS[camera]}</span>
-            </button>
-            <button type="button" className="drive-act" aria-label="Réalisateur" aria-pressed={director} onClick={() => drive().setDirector(!director)}>
-              <DriveIcon name="realisateur" />
-              <span>Réalisateur</span>
-            </button>
-            <button
-              type="button"
-              className="drive-act"
-              aria-label="Ralenti"
-              aria-pressed={slow}
-              onPointerDown={holdSlow(true)}
-              onPointerUp={holdSlow(false)}
-              onPointerCancel={holdSlow(false)}
-              onPointerLeave={holdSlow(false)}
-              onContextMenu={(event) => event.preventDefault()}
-              onKeyDown={(event) => (event.key === ' ' || event.key === 'Enter') && drive().setSlow(!slow)}
-            >
-              <DriveIcon name="ralenti" />
-              <span>Ralenti</span>
-            </button>
-            <button type="button" className="drive-act" aria-label={`Météo : ${weatherLabel}`} data-meteo={weather} onClick={() => drive().setWeather(nextWeather)}>
-              <DriveIcon name={weather} />
-              <span>{weatherLabel}</span>
-            </button>
-            {/* La commande à la main, en portrait : le manche ou les pédales (en paysage, toujours la manette). */}
-            {!paysage && (
-              <button type="button" className="drive-act" aria-label={`Commande : ${commandeLabel}`} data-commande={commande} onClick={() => drive().setCommande(nextCommande)}>
-                <DriveIcon name={commande === 'manche' ? 'manche' : 'pedales'} />
-                <span>{commandeLabel}</span>
-              </button>
-            )}
-            {/* Direction à la main : libre (on braque) ou assistée (l'aide suit la route). Aucune ne freine à ta place. */}
-            <button
-              type="button"
-              className="drive-act"
-              aria-label={`Direction : ${directionLabel}`}
-              data-direction={direction}
-              onClick={() => drive().setDirection(nextDirection)}
-            >
-              <DriveIcon name={direction === 'libre' ? 'directionLibre' : 'directionAssistee'} />
-              <span>{directionLabel}</span>
-            </button>
-          </nav>
-          <div className="drive-foot">
-            <EngineToggle />
-            <Mixage />
-            <ManetteToggle />
-            <button type="button" className="btn drive-home" onClick={closeSheet}>
-              <DriveIcon name="garage" />
-              Rentrer au garage
-            </button>
-          </div>
-        </div>
-      </div>
-    </footer>
+    </div>
   );
 }
 
@@ -773,7 +615,7 @@ function DriveLoading() {
   );
 }
 
-/** Erreur : par-dessus la scène, sans masquer « Rentrer au garage ». */
+/** Erreur : par-dessus la scène, avec « Réessayer » et « Rentrer au garage ». */
 function DriveVeil() {
   const mapId = useDrive((state) => state.map);
   const failed = useDrive((state) => state.telemetry.failed);
@@ -794,6 +636,10 @@ function DriveVeil() {
           Réessayer
         </button>
       )}
+      <button type="button" className="btn drive-home" onClick={closeSheet}>
+        <DriveIcon name="garage" />
+        Rentrer au garage
+      </button>
     </div>
   );
 }
@@ -801,7 +647,9 @@ function DriveVeil() {
 export function DriveScreen() {
   const attempt = useDrive((state) => state.attempt);
   const mapId = useDrive((state) => state.map);
+  const apercu = useDrive((state) => state.apercu);
   const paysage = useMediaQuery(PAYSAGE);
+  const reglages = useReglages();
   // Le son du moteur suit la sortie tant que l'écran est là ; il se coupe au retour au garage.
   useEffect(() => brancherSonSortie(), []);
   // En rentrant au garage, le mode manette s'arrête : verrou levé, plein écran quitté.
@@ -833,11 +681,13 @@ export function DriveScreen() {
 
   return (
     <>
-      <DriveTop />
+      <DriveTop apercu={apercu} reglages={reglages.ouvert} ouvrirReglages={reglages.ouvrir} />
       <DriveGestures paysage={paysage} />
+      <DriveBas apercu={apercu} paysage={paysage} />
       <DriveVeil />
-      <DriveBar paysage={paysage} />
+      <SonEtat />
       <ArriveePanneau />
+      {reglages.ouvert && <ReglagesPanneau paysage={paysage} fermer={reglages.fermer} />}
       <DriveLoading key={`${mapId ?? ''}-${attempt}`} />
     </>
   );

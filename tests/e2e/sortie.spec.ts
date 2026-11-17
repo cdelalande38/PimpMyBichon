@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { capture, openApp, openEntry, waitForScene, rentrerAuGarage } from './helpers.ts';
+import { attendreApercu, capture, choisirCamera, commencerCourse, fermerReglages, openApp, openEntry, ouvrirReglages, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 // Sortie de nuit, lot 1 (§ 5.5) : on entre par le menu (Garage · Sortie de nuit), on roule, on change
 // de caméra, on passe à la main, on rentre au garage. Le parcours ne lit que les attributs que la
@@ -9,7 +9,6 @@ import { capture, openApp, openEntry, waitForScene, rentrerAuGarage } from './he
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const numberAttr = async (page: Page, name: string) => Number(await stage(page).getAttribute(name));
-const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
 
 test.describe('sortie de nuit', () => {
   // Rendu logiciel sur une machine partagée (CI) : la scène tourne à quelques images par seconde et
@@ -54,32 +53,39 @@ test.describe('sortie de nuit', () => {
     const s0 = await numberAttr(page, 'data-s');
     await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 90_000 }).toBeGreaterThan(10);
     await expect.poll(() => numberAttr(page, 'data-s'), { timeout: 120_000 }).toBeGreaterThan(s0 + 20);
-    await expect(page.locator('.drive-speed b')).not.toHaveText('0');
+    await attendreApercu(page);
     await capture(page, 'sortie-route');
 
     // Caméra suivante : le réalisateur s'arrête, la caméra choisie est celle qu'on voit.
-    await expect(bar(page).getByRole('button', { name: 'Réalisateur' })).toHaveAttribute('aria-pressed', 'true');
-    await bar(page).getByRole('button', { name: 'Caméra suivante' }).tap();
-    await expect(bar(page).getByRole('button', { name: 'Réalisateur' })).toHaveAttribute('aria-pressed', 'false');
+    let panneau = await ouvrirReglages(page);
+    await expect(panneau.getByRole('button', { name: 'Réalisateur' })).toHaveAttribute('aria-pressed', 'true');
+    await fermerReglages(page);
+    await choisirCamera(page, 'Rasante');
+    panneau = await ouvrirReglages(page);
+    await expect(panneau.getByRole('button', { name: 'Réalisateur' })).toHaveAttribute('aria-pressed', 'false');
+    await fermerReglages(page);
     const camera = await stage(page).getAttribute('data-camera');
-    await bar(page).getByRole('button', { name: 'Caméra suivante' }).tap();
+    await choisirCamera(page, 'Avant');
     await expect(stage(page)).not.toHaveAttribute('data-camera', camera ?? '');
 
-    // À la main, au manche (le pouce posé n'importe où) : tiré vers le bas, on freine ; poussé vers le
-    // haut, on repart.
-    // Le mode se lit en permanence ; à la main, la barre des commandes s'abaisse.
-    const mode = page.getByRole('switch', { name: 'Conduite à la main' });
-    await expect(mode).toHaveAttribute('aria-checked', 'false');
-    await mode.tap();
-    await expect(mode).toHaveAttribute('aria-checked', 'true');
-    await expect(mode).toContainText('À la main');
-    await expect(bar(page)).toHaveAttribute('data-replie', 'true');
+    // Un appui sur la route : la course, depuis la ligne, à la main, poursuite.
+    await commencerCourse(page, { parti: true });
+    await expect(stage(page)).toHaveAttribute('data-camera', 'poursuite');
+    await expect(page.locator('.drive-speed b')).toBeVisible();
     const zone = page.locator('.drive-mid');
     const box = await zone.boundingBox();
     if (!box) throw new Error('zone des gestes introuvable');
-    const before = await numberAttr(page, 'data-vitesse');
     const cx = box.x + box.width * 0.5;
     const cy = box.y + box.height * 0.5;
+    // Manche vers le haut : les gaz ; on lance le véhicule.
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx, cy - 70, { steps: 4 });
+    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 120_000 }).toBeGreaterThan(25);
+    await expect(page.locator('.drive-speed b')).not.toHaveText('0');
+    await page.mouse.up();
+    // Manche vers le bas : le frein, à fond.
+    const before = await numberAttr(page, 'data-vitesse');
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.mouse.move(cx, cy + 70, { steps: 4 });
@@ -96,7 +102,6 @@ test.describe('sortie de nuit', () => {
 
     // Rentrer au garage en deux gestes à la main (la languette rappelle la barre) : l'atelier revient
     // tel qu'on l'avait laissé.
-    await bar(page).getByRole('button', { name: 'Afficher les commandes' }).tap();
     await rentrerAuGarage(page);
     await expect(page).not.toHaveURL(/#\/sortie/);
     await expect(stage(page)).toHaveCount(0);
@@ -126,16 +131,26 @@ test.describe('sortie de nuit', () => {
     release();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(veil).toHaveCount(0);
-    const controls = page.locator('.app button:visible');
-    const count = await controls.count();
-    expect(count).toBeGreaterThan(5);
-    for (let i = 0; i < count; i += 1) {
-      const control = controls.nth(i);
-      const label = ((await control.getAttribute('aria-label')) ?? (await control.innerText())).trim();
-      const size = await control.boundingBox();
-      expect(size?.height ?? 0, label).toBeGreaterThanOrEqual(48);
-      expect(size?.width ?? 0, label).toBeGreaterThanOrEqual(48);
-    }
+    await attendreApercu(page);
+    // L'aperçu, puis les réglages ouverts : chaque bouton visible offre 48 px au doigt.
+    const tailles = async () => {
+      const controls = page.locator('.app button:visible');
+      const count = await controls.count();
+      for (let i = 0; i < count; i += 1) {
+        const control = controls.nth(i);
+        const label = ((await control.getAttribute('aria-label')) ?? (await control.innerText())).trim();
+        const size = await control.boundingBox();
+        expect(size?.height ?? 0, label).toBeGreaterThanOrEqual(48);
+        expect(size?.width ?? 0, label).toBeGreaterThanOrEqual(48);
+      }
+      return count;
+    };
+    expect(await tailles()).toBeGreaterThanOrEqual(2);
+    await ouvrirReglages(page);
+    expect(await tailles()).toBeGreaterThan(15);
+    await fermerReglages(page);
+    await commencerCourse(page);
+    expect(await tailles()).toBeGreaterThanOrEqual(4);
   });
 
   test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les trois météos', async ({ page }) => {
@@ -152,9 +167,13 @@ test.describe('sortie de nuit', () => {
     // Les deux autres météos, par le bouton qui passe de l'une à l'autre (celle du joueur est
     // enregistrée : pluie par défaut).
     const seen = new Set([await stage(page).getAttribute('data-meteo')]);
-    for (let k = 0; k < 2; k += 1) {
+    // Les réglages ouverts dans l'aperçu : la route continue derrière, chaque météo s'y compile.
+    const panneau = await ouvrirReglages(page);
+    for (const nom of ['Sec', 'Pluie', 'Neige']) {
       const before = (await stage(page).getAttribute('data-meteo')) ?? '';
-      await bar(page).getByRole('button', { name: /^Météo/ }).tap();
+      const bouton = panneau.getByRole('group', { name: 'Météo' }).getByRole('button', { name: nom, exact: true });
+      if ((await bouton.getAttribute('aria-pressed')) === 'true') continue;
+      await bouton.tap();
       await expect(stage(page)).not.toHaveAttribute('data-meteo', before);
       seen.add(await stage(page).getAttribute('data-meteo'));
       await page.waitForTimeout(2_000);
@@ -169,10 +188,13 @@ test.describe('sortie de nuit', () => {
     await expect(stage(page)).toHaveAttribute('data-sortie', 'erreur', { timeout: 30_000 });
     await expect(page.getByRole('alert')).toContainText('La route ne veut pas s’ouvrir');
     await expect(page.getByRole('button', { name: 'Réessayer' })).toBeVisible();
+    await expect(page.locator('.drive-veil[data-etat="erreur"]').getByRole('button', { name: 'Rentrer au garage' })).toBeVisible();
     await capture(page, 'sortie-erreur');
     await page.unroute('**/assets/maps/*/route.json');
     await page.getByRole('button', { name: 'Réessayer' }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
+    // « Réessayer » rouvre sur l'aperçu.
+    await attendreApercu(page);
     await rentrerAuGarage(page);
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
   });

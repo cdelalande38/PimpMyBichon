@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, waitForScene } from './helpers.ts';
+import { commencerCourse, openApp, openEntry, ouvrirReglages, pickMap, reglagesSortie, waitForScene } from './helpers.ts';
 
 // « Retour » en sortie de nuit : le geste retour du téléphone, le retour du navigateur et le bouton
 // « Rentrer au garage » demandent d'abord « Rentrer au garage ? » tant que la route roule ; la sortie se
@@ -22,7 +22,9 @@ async function shot(page: Page, name: string): Promise<void> {
 
 async function sortieEnRoute(page: Page): Promise<void> {
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
-  await expect(page.getByRole('contentinfo', { name: 'Commandes de la sortie' })).toBeVisible();
+  // L'aperçu, puis la course : la pause n'est à l'écran qu'en course.
+  await commencerCourse(page);
+  await expect(pause(page)).toBeVisible();
 }
 
 /** Le dialogue tient dans l'écran et ses boutons font 48 px au moins. */
@@ -89,9 +91,11 @@ test.describe('retour en sortie de nuit', () => {
     await expect(page).toHaveURL(/#\/sortie$/);
     await expect(pause(page)).toHaveAttribute('aria-pressed', 'false');
 
-    // Échap = rester ; le bouton « Rentrer au garage » de l'écran demande aussi.
-    await page.getByRole('button', { name: 'Rentrer au garage' }).tap();
+    // Échap = rester ; « Rentrer au garage » des réglages demande aussi (le panneau se referme).
+    const panneau = await ouvrirReglages(page);
+    await panneau.getByRole('button', { name: 'Rentrer au garage' }).tap();
     await expect(dialogue(page)).toBeVisible();
+    await expect(reglagesSortie(page)).toHaveCount(0);
     await expect(pause(page)).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape');
     await expect(dialogue(page)).toHaveCount(0);

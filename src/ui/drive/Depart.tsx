@@ -96,7 +96,8 @@ export function ChronoSortie() {
 export function ArriveePanneau() {
   const phase = useDrive((state) => state.telemetry.depart);
   const arrivee = useDrive((state) => state.arrivee);
-  const retry = useDrive((state) => state.retry);
+  // « Repartir » : de nouveau sur la ligne, les feux, à la main.
+  const commencer = useDrive((state) => state.commencer);
   if (phase !== 'arrive' || !arrivee) return null;
   const { temps, meilleur, precedent } = arrivee;
   const record = precedent > 0 && temps < precedent;
@@ -115,7 +116,7 @@ export function ArriveePanneau() {
         </p>
         <p className="drive-arrivee-meilleur">{ligne}</p>
         <div className="drive-arrivee-actes">
-          <button type="button" className="btn" onClick={retry}>
+          <button type="button" className="btn" onClick={commencer}>
             Repartir
           </button>
           <button type="button" className="btn drive-home" onClick={closeSheet}>

@@ -1,6 +1,6 @@
-// Annonce des virages (src/drive/virages.ts, src/ui/drive/MiniCarte.tsx) : en sortie lancée, la
-// mini-carte est là, dessinée, hors d'atteinte du doigt ; data-virage annonce le sens et la distance
-// du prochain virage, et change quand on l'a passé. Les balises à chevrons (scène) et le cœur se
+// Annonce des virages (src/drive/virages.ts, src/ui/drive/MiniCarte.tsx) : pas de mini-carte dans
+// l'aperçu ; en course, elle est là, dessinée, hors d'atteinte du doigt ; data-virage annonce le sens
+// et la distance du prochain virage, et change quand on l'a passé. Les balises à chevrons (scène) et le cœur se
 // prouvent par les tests unitaires (tests/unit/drive-virages.test.ts, drive-chevrons.test.ts).
 // Captures : captures/vague-q-virages/parcours-*.png.
 //
@@ -11,6 +11,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
+import { attendreApercu, commencerCourse, ouvrirReglages, reglagesSortie } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const carte = (page: Page) => page.locator('.minicarte');
@@ -31,11 +32,12 @@ test.describe('annonce des virages', () => {
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(page.locator('.drive-chargement')).toHaveCount(0, { timeout: 30_000 });
 
-    // Aux feux : la mini-carte ne s'affiche pas (rien n'est lancé).
-    await expect(carte(page)).toHaveAttribute('data-visible', 'false');
+    // Dans l'aperçu : l'écran est épuré, la mini-carte n'est pas montée.
+    await attendreApercu(page);
+    await expect(carte(page)).toHaveCount(0);
 
-    // Au vert : elle apparaît, dessinée.
-    await expect(stage(page)).toHaveAttribute('data-depart', 'parti', { timeout: 150_000 });
+    // La course commence ; au vert, la mini-carte apparaît, dessinée.
+    await commencerCourse(page, { parti: true });
     await expect(carte(page)).toHaveAttribute('data-visible', 'true', { timeout: 30_000 });
     await expect(carte(page)).toBeVisible();
     const box = await carte(page).boundingBox();
@@ -68,7 +70,11 @@ test.describe('annonce des virages', () => {
     expect(Number(await carte(page).getAttribute('data-virage-cran'))).toBeGreaterThanOrEqual(1);
     await photo(page, 'minicarte');
 
-    // Pilote automatique : la route avance, on passe le virage, le prochain est un autre.
+    // Pilote automatique des réglages (la course continue) : la route avance, on passe le virage, le
+    // prochain est un autre.
+    await (await ouvrirReglages(page)).getByRole('button', { name: 'Pilote automatique' }).tap();
+    await expect(reglagesSortie(page)).toHaveCount(0);
+    await expect(carte(page)).toHaveAttribute('data-visible', 'true');
     await expect(carte(page)).not.toHaveAttribute('data-virage-index', premier ?? '', { timeout: 300_000 });
     await expect(carte(page)).toHaveAttribute('data-virage', /^(gauche|droite):\d+$|^aucun$/);
     await photo(page, 'apres-virage');

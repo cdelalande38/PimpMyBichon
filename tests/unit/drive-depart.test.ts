@@ -81,6 +81,32 @@ describe('départ arrêté : les feux', () => {
   });
 });
 
+describe('aperçu : départ lancé', () => {
+  it('tenu tant que la route n’est pas prête, puis parti sans feux ni vert, chrono qui tourne', () => {
+    const etat = armerDepart(createDepart(), 120, false, true);
+    expect(etat.lance).toBe(true);
+    pasDepart(etat, 0.1, false, 120, OUVERT, false);
+    expect(etat.phase).toBe('attente');
+    expect(tenuSurLaLigne(etat)).toBe(true);
+    pasDepart(etat, 0.1, true, 120, OUVERT, false);
+    expect(etat).toMatchObject({ phase: 'parti', vert: false, rouges: 0 });
+    expect(tenuSurLaLigne(etat)).toBe(false);
+    expect(feuxVisibles(etat)).toBe(false);
+    pasDepart(etat, 0.5, true, 130, OUVERT, false);
+    expect(etat.chrono).toBeCloseTo(500, 6);
+    expect(etat.parcouru).toBeCloseTo(10, 6);
+  });
+
+  it('un nouveau départ arrêté efface le lancé : les feux reviennent', () => {
+    const etat = armerDepart(createDepart(), 0, false, true);
+    pasDepart(etat, 0.1, true, 0, OUVERT, false);
+    armerDepart(etat, 0, false);
+    expect(etat.lance).toBe(false);
+    pasDepart(etat, 0.1, true, 0, OUVERT, false);
+    expect(etat.phase).toBe('feux');
+  });
+});
+
 describe('arrivée et tours', () => {
   it('parcours ouvert : le chrono s’arrête à la ligne d’arrivée, à l’instant interpolé', () => {
     const etat = lancerDepart(createDepart(), 900);

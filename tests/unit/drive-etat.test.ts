@@ -119,6 +119,36 @@ describe('une sortie', () => {
     expect(drive.getState().map).toBe(first.id);
   });
 
+  it('aperçu, commencer, pilote automatique, repartir', async () => {
+    const drive = await launch();
+    drive.getState().setDirection('assistee');
+    drive.getState().enter();
+    expect(drive.getState()).toMatchObject({ apercu: true, director: true, input: AUTO_INPUT });
+    const course = drive.getState().course;
+    drive.getState().setCamera('orbite');
+    drive.getState().setPaused(true);
+    // Un appui sur la route : la course, à la main, poursuite, réalisateur coupé, pause levée.
+    drive.getState().commencer();
+    expect(drive.getState()).toMatchObject({ apercu: false, course: course + 1, camera: 'poursuite', director: false, paused: false });
+    expect(drive.getState().input).toMatchObject({ auto: false, throttle: 0, brake: 0, assist: true });
+    // « Pilote automatique » : le pilote reprend, le réalisateur revient, la course reste (pas d'aperçu, pas de nouveau départ).
+    drive.getState().fireNos();
+    drive.getState().laisserConduire();
+    expect(drive.getState()).toMatchObject({ apercu: false, course: course + 1, director: true });
+    expect(drive.getState().input).toMatchObject({ auto: true, nos: 1 });
+    // « Repartir » : un nouveau départ à la main.
+    drive.getState().commencer();
+    expect(drive.getState()).toMatchObject({ apercu: false, course: course + 2 });
+    expect(drive.getState().input.auto).toBe(false);
+    // Rentrer puis ressortir : de nouveau l'aperçu ; « Réessayer » aussi.
+    drive.getState().leave();
+    drive.getState().enter();
+    expect(drive.getState().apercu).toBe(true);
+    drive.getState().commencer();
+    drive.getState().retry();
+    expect(drive.getState()).toMatchObject({ apercu: true, input: AUTO_INPUT });
+  });
+
   it('caméra choisie à la main : le réalisateur s’arrête', async () => {
     const drive = await launch();
     drive.getState().enter();

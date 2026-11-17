@@ -24,7 +24,10 @@ export type DriveIconName =
   | 'pedales'
   | 'manette'
   | 'directionLibre'
-  | 'directionAssistee';
+  | 'directionAssistee'
+  | 'reglages'
+  | 'fermer'
+  | 'repartir';
 
 // Bloc moteur vu de côté : carter, bouchon de remplissage, échappement à droite, ventilateur à gauche.
 const BLOC = 'M6 9h2.5l1.5-2h5l1.5 2H18v8.5h-1.5L15 19H9l-1.5-1.5H6Z M10 7V4.5h4V7 M18 12h2.5v3H18 M6 12.25H3.5 M3.5 10v4.5';
@@ -135,6 +138,23 @@ const SHAPES: Record<DriveIconName, ReactNode> = {
   // Chevrons : rappeler la barre, la replier.
   monter: <path d="m6 15 6-6 6 6" />,
   descendre: <path d="m6 9 6 6 6-6" />,
+  // Réglages : trois curseurs couchés, chacun avec son bouton.
+  reglages: (
+    <>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+      <circle cx="9" cy="7" r="2" />
+      <circle cx="15.5" cy="12" r="2" />
+      <circle cx="7.5" cy="17" r="2" />
+    </>
+  ),
+  fermer: <path d="M6 6l12 12M18 6 6 18" />,
+  // Repartir : la flèche qui revient sur la ligne.
+  repartir: (
+    <>
+      <path d="M5 12a7 7 0 1 0 2.2-5.1" />
+      <path d="M5 4.5V9h4.5" />
+    </>
+  ),
   // Porte de garage : le linteau et les lames.
   garage: (
     <>

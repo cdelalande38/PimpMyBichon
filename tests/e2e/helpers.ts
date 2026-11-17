@@ -246,12 +246,88 @@ export async function reloadSaved(page: Page): Promise<void> {
 }
 
 /**
- * « Rentrer au garage » de la barre de la sortie. Tant que la route roule, il demande d'abord
- * « Rentrer au garage ? » (src/app/gardeSortie.ts) : on confirme par « Rentrer ». Route pas encore prête,
- * en erreur ou au bout : pas de question, le garage revient tout de suite.
+ * Sortie de nuit : elle s'ouvre sur l'aperçu (pilote automatique, réalisateur, presque rien à
+ * l'écran) ; un appui sur la route lance la course à la main depuis la ligne (src/ui/drive/DriveScreen.tsx) ;
+ * la petite icône du coin ouvre les réglages (src/ui/drive/Reglages.tsx).
+ */
+export const DELAI_ROUTE = 150_000;
+
+/** L'aperçu roule : la route est prête et l'invitation « Touche l'écran pour commencer » est là. */
+export async function attendreApercu(page: Page): Promise<void> {
+  await expect(page.locator('.drive-invite')).toHaveText('Touche l’écran pour commencer', { timeout: DELAI_ROUTE });
+}
+
+/**
+ * Commence la course depuis l'aperçu : un appui bref au milieu de la route. On repart de la ligne, aux
+ * feux, à la main. `parti` : attend aussi le vert (« parti ») avant de rendre la main au parcours.
+ */
+export async function commencerCourse(page: Page, { parti = false }: { parti?: boolean } = {}): Promise<void> {
+  await attendreApercu(page);
+  const zone = page.locator('.drive-mid');
+  const box = await zone.boundingBox();
+  if (!box) throw new Error('zone des gestes introuvable');
+  await zone.tap({ position: { x: box.width * 0.5, y: box.height * 0.4 } });
+  await expect(zone).toHaveAttribute('data-conduite', 'main');
+  await expect(page.locator('.drive-invite')).toHaveCount(0);
+  // La scène a repris le départ arrêté (l'aperçu, lui, était « parti » sans feux).
+  await expect(page.locator('.drive-stage')).toHaveAttribute('data-depart', /^(attente|feux)$/, { timeout: DELAI_ROUTE });
+  if (parti) await expect(page.locator('.drive-stage')).toHaveAttribute('data-depart', 'parti', { timeout: DELAI_ROUTE });
+}
+
+/** Le panneau des réglages de la sortie, ouvert ou non. */
+export function reglagesSortie(page: Page) {
+  return page.getByRole('dialog', { name: 'Réglages' });
+}
+
+/** Ouvre les réglages par la petite icône du coin ; rend le panneau. */
+export async function ouvrirReglages(page: Page) {
+  const panneau = reglagesSortie(page);
+  if (!(await panneau.isVisible())) await page.getByRole('button', { name: 'Réglages de la sortie' }).tap();
+  await expect(panneau).toBeVisible();
+  return panneau;
+}
+
+/** Ferme les réglages par leur croix. */
+export async function fermerReglages(page: Page): Promise<void> {
+  const panneau = reglagesSortie(page);
+  await panneau.getByRole('button', { name: 'Fermer les réglages' }).tap();
+  await expect(panneau).toHaveCount(0);
+}
+
+/**
+ * Dans les réglages, touche le choix `nom` du groupe `groupe` (« Caméra », « Météo », « Commande »,
+ * « Direction »), vérifie qu'il est allumé, puis referme le panneau (sauf `garder`).
+ */
+export async function reglerSortie(page: Page, groupe: string, nom: string, { garder = false }: { garder?: boolean } = {}): Promise<void> {
+  const panneau = await ouvrirReglages(page);
+  const bouton = panneau.getByRole('group', { name: groupe }).getByRole('button', { name: nom, exact: true });
+  await bouton.tap();
+  await expect(bouton).toHaveAttribute('aria-pressed', 'true');
+  if (!garder) await fermerReglages(page);
+}
+
+/** Choisit une caméra dans les réglages (le réalisateur s'arrête). */
+export async function choisirCamera(page: Page, nom: string, options: { garder?: boolean } = {}): Promise<void> {
+  await reglerSortie(page, 'Caméra', nom, options);
+}
+
+/**
+ * « Rentrer au garage » : celui de l'écran de chargement tant que la route charge, celui de
+ * l'arrivée au bout d'un parcours, sinon celui des réglages. Tant que la route roule, il demande
+ * d'abord « Rentrer au garage ? » (src/app/gardeSortie.ts) : on confirme par « Rentrer ». Route pas
+ * encore prête, en erreur ou au bout : pas de question, le garage revient tout de suite.
  */
 export async function rentrerAuGarage(page: Page): Promise<void> {
-  await page.getByRole('contentinfo', { name: 'Commandes de la sortie' }).getByRole('button', { name: 'Rentrer au garage' }).tap();
+  const chargement = page.locator('.drive-veil[data-etat="chargement"]:not([data-fini])');
+  const arrivee = page.locator('.drive-arrivee');
+  const erreur = page.locator('.drive-veil[data-etat="erreur"]');
+  if (await chargement.isVisible()) await chargement.getByRole('button', { name: 'Rentrer au garage' }).tap();
+  else if (await arrivee.isVisible()) await arrivee.getByRole('button', { name: 'Rentrer au garage' }).tap();
+  else if (await erreur.isVisible()) await erreur.getByRole('button', { name: 'Rentrer au garage' }).tap();
+  else {
+    const panneau = await ouvrirReglages(page);
+    await panneau.getByRole('button', { name: 'Rentrer au garage' }).tap();
+  }
   const question = page.getByRole('dialog', { name: 'Rentrer au garage ?' });
   const garage = page.getByRole('heading', { level: 1, name: 'PimpMyBichon' });
   await expect(question.or(garage)).toBeVisible();

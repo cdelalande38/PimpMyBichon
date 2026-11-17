@@ -14,16 +14,20 @@
 // assistée, l'ancien comportement : le manche place le véhicule, qui revient ensuite sur sa trajectoire.
 // Écart (m), cap (°) et glissement relevés sur la zone des gestes (data-ecart, data-cap, data-glisse).
 // Captures : captures/vague-o-manette/, captures/vague-p-direction/.
+// Déroulé (vague Q, demande du 17 novembre 2026) : la sortie s'ouvre sur l'aperçu (pilote automatique,
+// réalisateur, presque rien à l'écran) ; un appui sur la route lance la course à la main depuis la
+// ligne ; tout le reste (caméra, direction, commande, pilote automatique) passe par les réglages.
 
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
+import { attendreApercu, commencerCourse, fermerReglages, ouvrirReglages, reglagesSortie, reglerSortie } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
-const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
 const dial = (page: Page) => page.locator('.drive-dial');
-const mode = (page: Page) => page.getByRole('switch', { name: 'Conduite à la main' });
+/** Qui conduit : « main » ou « auto » (posé sur la zone des gestes). */
+const conduite = (page: Page) => page.locator('.drive-mid');
 const kmh = async (page: Page) => Number(await stage(page).getAttribute('data-vitesse'));
 
 async function shot(page: Page, name: string, dir = 'vague-o-manette'): Promise<void> {
@@ -34,7 +38,7 @@ async function shot(page: Page, name: string, dir = 'vague-o-manette'): Promise<
 
 const gestes = (page: Page) => page.locator('.drive-mid');
 const ecart = async (page: Page) => Number(await gestes(page).getAttribute('data-ecart'));
-const realisateur = (page: Page) => page.locator('.drive-act[aria-label="Réalisateur"]');
+const realisateur = (page: Page) => reglagesSortie(page).getByRole('button', { name: 'Réalisateur' });
 
 /**
  * Relève sur la zone des gestes, à chaque changement, le cap le plus fort à gauche et à droite (°) et
@@ -195,7 +199,7 @@ async function sortir(page: Page, errors: string[]): Promise<void> {
 test.describe('sortie de nuit, pilotage au doigt', () => {
   test.setTimeout(600_000);
 
-  test('chargement, mode lisible, manche, deux doigts, pédales au choix, compte-tours, NOS, languette, radio', async ({ page }) => {
+  test('chargement, aperçu, course à la main, manche, deux doigts, réglages, pédales au choix, compte-tours, NOS, radio, pilote', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto('./');
@@ -210,32 +214,31 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(loading).toHaveCount(0, { timeout: 10_000 });
 
-    // Pilote automatique : le mode se lit, la barre est levée ; le nom de la carte en entier, le compte-tours agrandi.
-    await expect(mode(page)).toHaveAttribute('aria-checked', 'false');
-    await expect(mode(page)).toContainText('Pilote auto');
-    await expect(bar(page)).toHaveAttribute('data-replie', 'false');
-    await expect(bar(page).getByRole('button', { name: 'Rentrer au garage' })).toBeVisible();
+    // L'aperçu : pilote automatique, presque rien à l'écran (le nom de la carte entier, la radio, les
+    // réglages, l'invitation) ; ni compte-tours, ni pause, ni commandes.
+    await attendreApercu(page);
+    await expect(conduite(page)).toHaveAttribute('data-conduite', 'auto');
+    await expect(dial(page)).toHaveCount(0);
+    await expect(page.locator('.drive-pause')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'NOS' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Réglages de la sortie' })).toBeVisible();
+    await nomEntier(page);
+    // Pilote automatique au premier lancement : le réalisateur est mis d'office.
+    await ouvrirReglages(page);
+    await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'true');
+    await fermerReglages(page);
+    // Un appui bref sur la route : la course, à la main ; la caméra passe en poursuite, le réalisateur se
+    // coupe ; l'amorce dit où poser le pouce ; le compte-tours agrandi apparaît.
+    const mid = page.locator('.drive-mid');
+    await commencerCourse(page);
+    await expect(stage(page)).toHaveAttribute('data-camera', 'poursuite');
     await expect(dial(page)).toBeVisible();
     expect((await dial(page).boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(140);
     await nomEntier(page);
     await page.locator('.drive-top').screenshot({ path: resolve('captures', 'vague-o-manette', '01-bandeau-390.png') });
-
-    // Un appui bref sur la route, en pilote automatique : on propose de reprendre la main.
-    const mid = page.locator('.drive-mid');
-    await mid.tap({ position: { x: 195, y: 200 } });
-    await expect(page.getByText('Reprendre la main ?')).toBeVisible();
-
-    // Pilote automatique au premier lancement : le réalisateur est mis d'office.
-    await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'true');
-    // À la main, au doigt : le mode change à l'écran, la barre s'abaisse, l'amorce dit où poser le pouce ;
-    // la caméra passe en poursuite et le réalisateur se coupe.
-    await mode(page).tap();
-    await expect(stage(page)).toHaveAttribute('data-camera', 'poursuite');
+    await ouvrirReglages(page);
     await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'false');
-    await expect(mode(page)).toHaveAttribute('aria-checked', 'true');
-    await expect(mode(page)).toContainText('À la main');
-    await expect(bar(page)).toHaveAttribute('data-replie', 'true');
-    await expect(bar(page).getByRole('button', { name: 'Rentrer au garage' })).toBeHidden();
+    await fermerReglages(page);
     await expect(mid).toHaveAttribute('data-commande', 'manche');
     await expect(page.locator('.drive-amorce')).toBeVisible();
     await expect(page.locator('.drive-pedal')).toHaveCount(0);
@@ -262,7 +265,7 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await doigts.glisser(1, x0 + 4, y0 - 70);
     await expect(manche).toHaveAttribute('data-gaz', '1.00');
     await expect(manche).toHaveAttribute('data-frein', '0.00');
-    await expect(mode(page)).toContainText('À la main');
+    await expect(conduite(page)).toHaveAttribute('data-conduite', 'main');
     await shot(page, '03-manche-haut');
     await expect(dial(page)).toHaveAttribute('data-zone', /vert|orange|rouge/, { timeout: 60_000 });
     await expect(dial(page)).toHaveAttribute('data-zone', 'orange', { timeout: 120_000 });
@@ -286,7 +289,7 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect.poll(async () => Number(await page.getByRole('button', { name: 'NOS' }).getAttribute('data-reserve')), { timeout: 60_000 }).toBeLessThan(100);
 
     // Second doigt sur la pause : la sortie s'arrête, le manche reste tenu ; un autre appui la relance.
-    const pause = await centre(page, '.drive-top-droite > .drive-round');
+    const pause = await centre(page, '.drive-pause');
     await doigts.poser(3, pause.x, pause.y);
     await doigts.lever(3);
     await expect(page.locator('.drive-top').getByRole('button', { name: 'Reprendre' })).toBeVisible();
@@ -323,17 +326,18 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect.poll(async () => Number(await manche.getAttribute('data-placement'))).toBeLessThan(-0.2);
     await shot(page, '05b-manche-bas-gauche');
     await expect.poll(() => kmh(page), { timeout: 120_000 }).toBeLessThan(fast - 15);
-    await expect(mode(page)).toContainText('À la main');
+    await expect(conduite(page)).toHaveAttribute('data-conduite', 'main');
     await doigts.toutLever();
 
-    // Direction assistée, dans la barre : l'ancien comportement. Manche à gauche, la place glisse à
+    // Direction assistée, dans les réglages : l'ancien comportement. Manche à gauche, la place glisse à
     // gauche ; lâché sur le côté, elle tient puis revient sur la trajectoire. Puis retour à la direction libre.
-    await page.getByRole('button', { name: 'Afficher les commandes' }).tap();
-    await expect(page.getByRole('button', { name: 'Direction : Libre' })).toBeVisible();
-    await shot(page, 'portrait-barre-direction', 'vague-p-direction');
-    await page.getByRole('button', { name: 'Direction : Libre' }).tap();
-    await expect(page.getByRole('button', { name: 'Direction : Assistée' })).toBeVisible();
-    await page.getByRole('button', { name: 'Replier les commandes' }).tap();
+    const reglages = await ouvrirReglages(page);
+    await expect(reglages.getByRole('group', { name: 'Direction' }).getByRole('button', { name: 'Libre', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    // Les réglages ouverts mettent la course en pause.
+    await expect(page.locator('.drive-pause')).toHaveAttribute('aria-pressed', 'true');
+    await shot(page, 'portrait-reglages-direction', 'vague-p-direction');
+    await reglerSortie(page, 'Direction', 'Assistée');
+    await expect(page.locator('.drive-pause')).toHaveAttribute('aria-pressed', 'false');
     await doigts.poser(1, x0, y0);
     await doigts.glisser(1, x0, y0 - 50);
     await expect.poll(() => kmh(page), { timeout: 120_000 }).toBeGreaterThan(30);
@@ -345,31 +349,22 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await doigts.glisser(1, x0, y0 - 40);
     await expect.poll(() => ecart(page), { timeout: 150_000 }).toBeLessThan(loin - 0.8);
     await doigts.toutLever();
-    await page.getByRole('button', { name: 'Afficher les commandes' }).tap();
-    await page.getByRole('button', { name: 'Direction : Assistée' }).tap();
-    await expect(page.getByRole('button', { name: 'Direction : Libre' })).toBeVisible();
-    await page.getByRole('button', { name: 'Replier les commandes' }).tap();
+    await reglerSortie(page, 'Direction', 'Libre');
 
-    // La languette rappelle la barre (et « Rentrer au garage ») ; les pédales, au choix, et le retour au manche.
-    await page.getByRole('button', { name: 'Afficher les commandes' }).tap();
-    await expect(bar(page)).toHaveAttribute('data-replie', 'false');
-    await expect(bar(page).getByRole('button', { name: 'Rentrer au garage' })).toBeVisible();
-    await page.getByRole('button', { name: 'Commande : Manche' }).tap();
-    await expect(page.getByRole('button', { name: 'Commande : Pédales' })).toBeVisible();
+    // Les réglages rangent aussi « Rentrer au garage » ; les pédales, au choix, et le retour au manche.
+    await ouvrirReglages(page);
+    await expect(reglagesSortie(page).getByRole('button', { name: 'Rentrer au garage' })).toBeVisible();
+    await reglerSortie(page, 'Commande', 'Pédales');
     await expect(mid).toHaveAttribute('data-commande', 'pedales');
     await expect(page.locator('.drive-pedal[data-pedale="gaz"]')).toBeVisible();
-    await shot(page, '06-barre-pedales');
-    await page.getByRole('button', { name: 'Replier les commandes' }).tap();
-    await expect(bar(page)).toHaveAttribute('data-replie', 'true');
+    await shot(page, '06-reglages-pedales');
     const gaz = await centre(page, '.drive-pedal[data-pedale="gaz"]');
     await doigts.poser(1, gaz.x, gaz.y);
     await expect(page.locator('.drive-pedal[data-pedale="gaz"]')).toHaveAttribute('data-appui', 'true');
     await doigts.toutLever();
     await expect(page.locator('.drive-pedal[data-pedale="gaz"]')).toHaveAttribute('data-appui', 'false');
-    await page.getByRole('button', { name: 'Afficher les commandes' }).tap();
-    await page.getByRole('button', { name: 'Commande : Pédales' }).tap();
+    await reglerSortie(page, 'Commande', 'Manche');
     await expect(mid).toHaveAttribute('data-commande', 'manche');
-    await page.getByRole('button', { name: 'Replier les commandes' }).tap();
 
     // La radio : le mini-lecteur se déploie sans quitter la route ni mettre en pause.
     await page.locator('.drive-top').getByRole('button', { name: /^Radio/ }).tap();
@@ -382,21 +377,28 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await page.locator('.drive-top .quick-btn').tap();
     await expect(page.locator('#radio-mini')).toBeHidden();
 
-    // Retour au pilote automatique : la barre remonte d'elle-même ; la caméra reste la poursuite et le
-    // réalisateur reste coupé (seul un appui sur ses boutons les change).
-    await mode(page).tap();
-    await expect(mode(page)).toContainText('Pilote auto');
-    await expect(bar(page)).toHaveAttribute('data-replie', 'false');
-    await page.waitForTimeout(1500);
-    await expect(stage(page)).toHaveAttribute('data-camera', 'poursuite');
-    await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'false');
-
+    // « Pilote automatique » des réglages : le pilote reprend où l'on est (le chrono continue), le
+    // réalisateur revient (comme dans l'aperçu), plus de commandes ; un appui sur la route reprend la main.
+    const chrono = Number(await stage(page).getAttribute('data-chrono'));
+    await (await ouvrirReglages(page)).getByRole('button', { name: 'Pilote automatique' }).tap();
+    await expect(reglagesSortie(page)).toHaveCount(0);
+    await expect(conduite(page)).toHaveAttribute('data-conduite', 'auto');
+    await expect(page.locator('.drive-invite')).toHaveText('Touche l’écran pour reprendre la main');
+    await expect(page.locator('.drive-manche')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'NOS' })).toHaveCount(0);
+    await expect(stage(page)).toHaveAttribute('data-depart', 'parti');
+    await expect.poll(async () => Number(await stage(page).getAttribute('data-chrono')), { timeout: 150_000 }).toBeGreaterThan(chrono);
+    await ouvrirReglages(page);
+    await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'true');
+    await fermerReglages(page);
     // Petit téléphone, à la main, à l'arrêt (manche tiré vers le bas) : l'amorce revient, rien ne se
     // recouvre, le nom de la carte reste entier.
     await page.setViewportSize({ width: 360, height: 780 });
-    await mode(page).tap();
     const petit = await mid.boundingBox();
     if (!petit) throw new Error('zone des gestes introuvable');
+    await mid.tap({ position: { x: petit.width / 2, y: petit.height * 0.4 } });
+    await expect(conduite(page)).toHaveAttribute('data-conduite', 'main');
+    await expect(stage(page)).toHaveAttribute('data-camera', 'poursuite');
     await jusquALArret(page, doigts, petit.x + petit.width / 2, petit.y + petit.height * 0.4, 70);
     await expect(page.locator('.drive-amorce')).toBeVisible();
     await page.waitForTimeout(500);
@@ -404,9 +406,9 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await nomEntier(page);
     await sansRecouvrement(
       page,
-      ['.tuto-aide', '.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-round', '.drive-mode', '.drive-tab', '.drive-nos', '.drive-amorce'],
+      ['.tuto-aide', '.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-nos', '.drive-amorce'],
       360,
-      ['.tuto-aide', '.drive-top .quick-btn', '.drive-round', '.drive-mode', '.drive-tab', '.drive-nos'],
+      ['.tuto-aide', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-nos'],
     );
     expect(errors).toEqual([]);
   });
@@ -415,9 +417,12 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await page.setViewportSize({ width: 844, height: 390 });
     const errors: string[] = [];
     await sortir(page, errors);
-    await mode(page).tap();
-    await expect(mode(page)).toContainText('À la main');
-    await expect(bar(page)).toHaveAttribute('data-replie', 'true');
+    // L'aperçu en paysage : ni pavé ni compte-tours ; un appui lance la course, la manette apparaît.
+    await attendreApercu(page);
+    await expect(page.locator('.drive-pave')).toHaveCount(0);
+    await expect(dial(page)).toHaveCount(0);
+    await commencerCourse(page);
+    await expect(dial(page)).toBeVisible();
     // En paysage, la manette : GAZ, FREIN et NOS à droite ; le choix des pédales n'a pas lieu d'être.
     await expect(page.getByRole('button', { name: 'Gaz', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Frein', exact: true })).toBeVisible();
@@ -433,9 +438,9 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await shot(page, '08-paysage-arret');
     await sansRecouvrement(
       page,
-      ['.tuto-aide', '.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-round', '.drive-mode', '.drive-tab', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)', '.drive-amorce'],
+      ['.tuto-aide', '.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)', '.drive-amorce'],
       844,
-      ['.tuto-aide', '.drive-top .quick-btn', '.drive-round', '.drive-mode', '.drive-tab', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)'],
+      ['.tuto-aide', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)'],
     );
 
     // Le manche sous le pouce gauche (placement) et le GAZ sous le pouce droit, en même temps.

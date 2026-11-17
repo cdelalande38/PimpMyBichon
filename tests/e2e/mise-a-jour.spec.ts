@@ -19,7 +19,7 @@ import { dirname, extname, join, normalize, resolve, sep } from 'node:path';
 import type { Socket } from 'node:net';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { reloadSaved, waitOfflineReady } from './helpers.ts';
+import { commencerCourse, reloadSaved, waitOfflineReady } from './helpers.ts';
 
 const BASE_PATH = '/PimpMyBichon/';
 
@@ -494,6 +494,9 @@ test('en sortie de nuit, l’offre n’apparaît qu’à l’arrêt (pause), jam
   });
   await expect(page.locator(`.${DRIVE_STAGE_CLASS}`)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
   const offre = page.getByRole('button', { name: 'Nouvelle version prête : recharger l’atelier' });
+  await expect(offre).toHaveCount(0);
+  // L'aperçu roule : pas d'offre ; la course non plus, tant qu'elle roule.
+  await commencerCourse(page);
   await expect(offre).toHaveCount(0);
 
   const pause = page.getByRole('button', { name: /^(Pause|Reprendre)$/ });

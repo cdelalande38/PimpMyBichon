@@ -1,13 +1,9 @@
-/* Mini-carte de la sortie de nuit (src/ui/drive/MiniCarte.tsx) : un cadre de 124 px sous le nom de la
-   carte, la flèche d'annonce du prochain virage dans son coin haut gauche. Rien ne reçoit le doigt. */
+/* Mini-carte de la sortie de nuit (src/ui/drive/MiniCarte.tsx) : un cadre de 124 px dans la place
+   que l'écran de course lui réserve (.drive-minicarte-place, drive.css), la flèche d'annonce du prochain virage dans son coin haut gauche. Rien ne reçoit le doigt. */
 .minicarte {
   position: relative;
-  grid-column: 1 / -1;
-  grid-row: 2;
-  justify-self: start;
   width: 124px;
   height: 124px;
-  margin-top: 0.125rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 0.75rem;
   background: rgba(10, 9, 17, 0.6);

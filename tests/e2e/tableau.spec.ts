@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
+import { choisirCamera, openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
 
 // Tableau de bord vivant (demande du 16 novembre 2026 : « le compteur reste à 0, ça serait top qu'il
 // soit synchro avec le vrai compteur »). À la caméra embarquée, la vitesse affichée au tableau de
@@ -11,7 +11,6 @@ import { openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpe
 // captures/vague-p-tableau/.
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
-const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
 
 async function choisir(page: Page, vehicle: string): Promise<void> {
   await openEntry(page, 'Véhicule');
@@ -28,12 +27,7 @@ async function sortir(page: Page): Promise<void> {
 }
 
 async function embarquee(page: Page): Promise<void> {
-  for (let i = 0; i < 6; i += 1) {
-    const camera = (await stage(page).getAttribute('data-camera')) ?? '';
-    if (camera === 'embarquee') break;
-    await bar(page).getByRole('button', { name: 'Caméra suivante' }).tap();
-    await expect(stage(page)).not.toHaveAttribute('data-camera', camera);
-  }
+  await choisirCamera(page, 'Embarquée');
   await expect(stage(page)).toHaveAttribute('data-camera', 'embarquee');
 }
 
@@ -87,7 +81,7 @@ for (const vehicle of ['concept', 'cox', 'van']) {
       .toBe(true);
     await page.screenshot({ path: resolve(dir, `${vehicle}-embarquee-roule.png`) });
     // Une autre caméra : plus rien n'est affiché (la valeur disparaît).
-    await bar(page).getByRole('button', { name: 'Caméra suivante' }).tap();
+    await choisirCamera(page, 'Bord de route');
     await expect(stage(page)).not.toHaveAttribute('data-camera', 'embarquee');
     await expect(stage(page)).not.toHaveAttribute('data-tableau', /.*/);
   });

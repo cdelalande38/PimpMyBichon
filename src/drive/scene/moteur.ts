@@ -174,6 +174,8 @@ export class DriveEngine {
   /** Balises à chevrons des virages (src/drive/scene/chevrons.ts) ; publie les virages pour la mini-carte. */
   private readonly chevrons: Chevrons;
   private startId = '';
+  /** Départs à la main déjà pris en compte (src/state/drive.ts, `course`). */
+  private course = useDrive.getState().course;
   private readonly vehicleId: string;
   private readonly halfLengthHint: number;
   private readonly roles: ReturnType<typeof createRoleMaterials>;
@@ -316,7 +318,8 @@ export class DriveEngine {
     this.startId = start.id;
     this.pilot.reset(start.at);
     this.director.reset();
-    armerDepart(this.depart, this.pilot.motion.s, this.rail.loop);
+    // Aperçu (src/state/drive.ts) : départ lancé, sans feux ; la course, elle, part arrêtée aux feux.
+    armerDepart(this.depart, this.pilot.motion.s, this.rail.loop, useDrive.getState().apercu);
     this.pilot.setHold?.(true);
     this.lignes.poser(this.rail, this.pilot.motion.s, this.rig.measure?.halfLength ?? this.halfLengthHint);
     useDrive.getState().effacerArrivee();
@@ -364,13 +367,19 @@ export class DriveEngine {
     const drive = useDrive.getState();
     const dt = stepOf(delta, drive.paused, drive.slow);
     this.time += dt;
+    // « Commencer » ou « Repartir » : retour sur la ligne du départ, feux ; l'aperçu au bout d'un
+    // parcours ouvert reprend du départ.
+    if (drive.course !== this.course) {
+      this.course = drive.course;
+      this.start(this.startId);
+    } else if (drive.apercu && this.pilot.motion.finished) this.start(this.startId);
     // Départ arrêté : tenu sur la ligne tant que les feux ne sont pas au vert.
     const depart = this.depart;
     this.pilot.setHold?.(tenuSurLaLigne(depart));
     const motion = this.pilot.step(dt, drive.input, this.kind);
     const arrived = depart.phase === 'arrive';
     pasDepart(depart, dt, this.vehicleReady && !this.vehicleFailed && decor.status.loaded > 0 && this.frames > 2, motion.s, this.rail, motion.finished);
-    if (!arrived && depart.phase === 'arrive' && drive.map) drive.noterArrivee(cleTemps(drive.map, this.startId, this.vehicleId), depart.arrivee);
+    if (!arrived && depart.phase === 'arrive' && drive.map && !depart.lance) drive.noterArrivee(cleTemps(drive.map, this.startId, this.vehicleId), depart.arrivee);
     feuxSon.rouges = depart.rouges;
     feuxSon.vert = depart.vert;
     // Le pilote publié est celui qui roule (en mode strict de React, une scène écartée a pu le publier).

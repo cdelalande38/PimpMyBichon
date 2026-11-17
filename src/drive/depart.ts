@@ -8,6 +8,9 @@
 // d'arrivée : chaque passage de la ligne de départ fait un tour (dernier tour, meilleur tour) et le
 // chrono continue.
 //
+// Départ lancé (aperçu du début de sortie : la vitrine en pilote automatique) : tenu tant que la
+// route n'est pas prête, puis « parti » sans feux ni vert (aucun bip), et aucun temps gardé.
+//
 // Ni classement, ni adversaire, ni récompense ici : un mode de jeu (contre la montre, par exemple)
 // pourra lire cet état et y brancher les siens.
 
@@ -37,6 +40,8 @@ export interface ParcoursDepart {
 
 export interface EtatDepart {
   phase: PhaseDepart;
+  /** Départ lancé, sans feux (aperçu) : la scène ne garde pas de temps à l'arrivée. */
+  lance: boolean;
   /** Parcours en boucle : des tours, pas d'arrivée. */
   boucle: boolean;
   /** Feux rouges allumés (0 à `rouges`). */
@@ -69,6 +74,7 @@ export interface EtatDepart {
 export function createDepart(): EtatDepart {
   return {
     phase: 'attente',
+    lance: false,
     boucle: false,
     rouges: 0,
     vert: false,
@@ -86,9 +92,13 @@ export function createDepart(): EtatDepart {
   };
 }
 
-/** Nouveau départ arrêté depuis l'abscisse `s` : les feux reprendront dès que la route sera prête. */
-export function armerDepart(etat: EtatDepart, s: number, boucle = false): EtatDepart {
+/**
+ * Nouveau départ depuis l'abscisse `s` : arrêté (les feux reprendront dès que la route sera prête),
+ * ou `lance` (aperçu : parti sans feux dès que la route est prête).
+ */
+export function armerDepart(etat: EtatDepart, s: number, boucle = false, lance = false): EtatDepart {
   etat.phase = 'attente';
+  etat.lance = lance;
   etat.boucle = boucle;
   etat.rouges = 0;
   etat.vert = false;
@@ -134,6 +144,13 @@ export function pasDepart(etat: EtatDepart, dt: number, pret: boolean, s: number
   const pas = Number.isFinite(dt) && dt > 0 ? dt : 0;
   if (etat.phase === 'attente') {
     if (!pret) return etat;
+    if (etat.lance) {
+      // Aperçu : parti sans feux ; ni vert (aucun bip), ni lampes à effacer.
+      etat.phase = 'parti';
+      etat.depuisVert = Infinity;
+      etat.sPrec = Number.isFinite(s) ? s : etat.sPrec;
+      return etat;
+    }
     etat.phase = 'feux';
     etat.dansFeux = 0;
   }

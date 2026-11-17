@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, waitForBench, waitForScene, rentrerAuGarage } from './helpers.ts';
+import { choisirCamera, openApp, openEntry, pickMap, rentrerAuGarage, waitForBench, waitForScene } from './helpers.ts';
 
 // Le conducteur à bord en sortie de nuit (demande du 16 novembre 2026 : « il manque un pilote au
 // volant », « les motos il faut bien retirer la béquille pendant les sorties ») : il s'assoit dans la
@@ -11,7 +11,6 @@ import { openApp, openEntry, pickMap, waitForBench, waitForScene, rentrerAuGarag
 // captures/conducteur/.
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
-const bar = (page: Page) => page.getByRole('contentinfo', { name: 'Commandes de la sortie' });
 
 async function sortie(page: Page, vehicle: string): Promise<void> {
   await openEntry(page, 'Véhicule');
@@ -34,17 +33,12 @@ test('sortie de nuit : le conducteur est au volant de la Cox, la béquille du bo
   await sortie(page, 'cox');
   await expect(stage(page)).toHaveAttribute('data-conducteur', /assis|tete-cachee/, { timeout: 60_000 });
   // Caméra embarquée : à son œil, sa tête et son buste disparaissent.
-  for (let i = 0; i < 6; i += 1) {
-    const camera = (await stage(page).getAttribute('data-camera')) ?? '';
-    if (camera === 'embarquee') break;
-    await bar(page).getByRole('button', { name: 'Caméra suivante' }).tap();
-    await expect(stage(page)).not.toHaveAttribute('data-camera', camera);
-  }
+  await choisirCamera(page, 'Embarquée');
   await expect(stage(page)).toHaveAttribute('data-camera', 'embarquee');
   await expect(stage(page)).toHaveAttribute('data-conducteur', 'tete-cachee', { timeout: 30_000 });
   await page.screenshot({ path: resolve(dir, 'conducteur-cox-embarquee.png') });
   // Une autre caméra : il réapparaît entier.
-  await bar(page).getByRole('button', { name: 'Caméra suivante' }).tap();
+  await choisirCamera(page, 'Bord de route');
   await expect(stage(page)).not.toHaveAttribute('data-camera', 'embarquee');
   await expect(stage(page)).toHaveAttribute('data-conducteur', 'assis', { timeout: 30_000 });
   await page.screenshot({ path: resolve(dir, 'conducteur-cox-suivante.png') });
