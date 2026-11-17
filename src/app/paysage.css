@@ -1,0 +1,368 @@
+/* Le garage en paysage (téléphone tenu à deux mains : 844 × 390, 780 × 360). Écran plus large que haut
+   et bas, même requête que src/app/paysage.ts et que la sortie de nuit. Le portrait n'est jamais touché :
+   tout ce fichier vit sous cette requête, et il est chargé après les autres feuilles (src/app/App.tsx).
+
+   Disposition : le véhicule à gauche et au centre, cadré dans la zone libre ; le menu en colonne sur
+   toute la hauteur, à droite, sous le pouce droit (mêmes niveaux, même contenu que le dock du bas,
+   rendu « agrandi » : rangées à la ligne, contenu qui défile en hauteur) ; les boutons ronds en colonne
+   à gauche, sous le pouce gauche ; la marque et l'étiquette en haut de la zone libre ; le bouton « ? »
+   et la pastille d'état en haut à droite de la zone libre ; les panneaux en feuille latérale. Toute
+   commande garde 48 px. La scène ne bouge pas quand le menu s'ouvre ou se ferme : seule la vue glisse
+   (src/scene/GarageCanvas.tsx). */
+
+@media (orientation: landscape) and (max-height: 540px) {
+  :root {
+    /* Colonne du menu (largeur du doigt, pas plus), avec la zone de sécurité du bord droit. */
+    --p-menu: calc(clamp(16rem, 36vw, 22rem) + var(--safe-r));
+    /* Colonne des boutons ronds, à gauche. */
+    --p-rail: calc(var(--tap) + var(--gutter) + max(var(--gutter), var(--safe-l)));
+    --p-top: calc(0.625rem + var(--safe-t));
+  }
+
+  /* Pas de colonne centrée de 900 px : l'écran entier sert. */
+  .app:has(> .dock) {
+    max-width: none;
+  }
+
+  /* ───────────── Menu : une colonne à droite, sur toute la hauteur ───────────── */
+
+  .app > .dock:not(.photo-bar) {
+    grid-area: auto;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    width: var(--p-menu);
+    max-height: none;
+    --pad-l: var(--gutter);
+    --pad-r: calc(var(--gutter) + var(--safe-r));
+    padding: calc(0.5rem + var(--safe-t)) var(--pad-r) calc(0.5rem + var(--safe-b)) var(--pad-l);
+    border-top: 0;
+    border-left: 1px solid var(--line);
+    background: rgba(10, 9, 17, 0.95);
+    overflow: hidden;
+    pointer-events: auto;
+  }
+
+  /* Menu fermé : seule la pastille « Personnaliser » reste, en bas à droite, sous le pouce. */
+  .app > .dock[data-taille='ferme'] {
+    top: auto;
+    width: auto;
+    padding: 0 calc(var(--gutter) + var(--safe-r)) calc(0.5rem + var(--safe-b)) 0;
+    border-left: 0;
+    background: none;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  /* Sections et entrées : une liste verticale de rangées de 48 px, l'icône devant le mot. */
+  .app > .dock .dock-tabs-row {
+    flex: 1 1 auto;
+    align-items: stretch;
+    min-height: 0;
+  }
+
+  .app > .dock .dock-sections,
+  .app > .dock .dock-entries {
+    flex: 1 1 auto;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.25rem;
+    min-height: 0;
+    margin: 0;
+    padding: 0.25rem 0 0.25rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .app > .dock .dock-sections button,
+  .app > .dock .dock-entries button {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.75rem;
+    width: 100%;
+    min-height: 48px;
+    margin: 0;
+    padding: 0 0.75rem;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--line);
+    border-radius: 4px;
+    background: var(--panel);
+    color: var(--chrome);
+    font-size: 0.875rem;
+    letter-spacing: 0.04em;
+    text-align: left;
+  }
+
+  .app > .dock .dock-entries button {
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+
+  .app > .dock .dock-sections button[aria-current='true'],
+  .app > .dock .dock-entries button[aria-current='true'] {
+    border-color: var(--line);
+    border-left-color: var(--bleu);
+    background: rgba(59, 123, 255, 0.14);
+  }
+
+  .app > .dock .dock-sections .icon,
+  .app > .dock .dock-entries .icon {
+    flex: none;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  .app > .dock .dock-entries .dock-soon {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.125rem 0.75rem;
+  }
+
+  .app > .dock .dock-soon small {
+    margin-left: auto;
+  }
+
+  .app > .dock .dock-entries {
+    border-top: 1px solid var(--line);
+  }
+
+  /* Le contenu d'une entrée prend la hauteur qui reste et défile dedans. */
+  .app > .dock .dock-tab {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* ───────────── Boutons ronds : une colonne à gauche, sous le pouce gauche ───────────── */
+
+  body:has(.app > .dock) .hud {
+    position: absolute;
+    top: 0;
+    left: 0;
+    grid-area: auto;
+    padding: var(--p-top) 0 0 var(--p-rail);
+  }
+
+  body:has(.app > .dock) .quick {
+    position: fixed;
+    top: 50%;
+    left: calc(var(--gutter) + var(--safe-l));
+    flex-direction: column;
+    align-items: flex-start;
+    transform: translateY(-50%);
+  }
+
+  /* La ligne du morceau en cours s'étend à droite du bouton, dans la zone libre. */
+  body:has(.app > .dock) .radio-mini {
+    top: 50%;
+    right: auto;
+    left: calc(100% + 0.5rem);
+    width: min(17rem, calc(100vw - var(--p-rail) - var(--p-menu) - 2 * var(--gutter)));
+    padding: 0 0.5rem 0 0;
+    border-right: 2px solid var(--bleu);
+    border-left: 0;
+    transform: translateY(-50%);
+  }
+
+  /* Pastille d'état, « Nouvelle version », installation : en haut à droite de la zone libre, sous le « ? ». */
+  body:has(.app > .dock) .hud-side {
+    top: calc(var(--p-top) + 3.5rem);
+    right: calc(var(--p-menu) + var(--gutter));
+    max-width: calc(100vw - var(--p-rail) - var(--p-menu) - 2 * var(--gutter) - 8rem);
+  }
+
+  body:has(.app > .dock) .tuto-aide {
+    top: var(--p-top);
+    right: calc(var(--p-menu) + var(--gutter));
+    left: auto;
+  }
+
+  /* Menu fermé : la zone libre va jusqu'au bord droit. */
+  .app:has(> .dock[data-taille='ferme']) .hud-side,
+  body:has(.app > .dock[data-taille='ferme']) .tuto-aide {
+    right: calc(var(--gutter) + var(--safe-r));
+  }
+
+  /* Étiquette du véhicule : sous la marque, en haut de la zone libre. */
+  .app > .mid {
+    grid-area: auto;
+    position: absolute;
+    inset: 0 0 0 var(--p-rail);
+    padding: calc(var(--p-top) + 2.25rem) calc(var(--p-menu) + var(--gutter)) 0.5rem var(--gutter);
+  }
+
+  .app:has(> .dock[data-taille='ferme']) > .mid {
+    padding-right: calc(var(--gutter) + var(--safe-r));
+  }
+
+  .app > .mid > .tag {
+    max-width: 100%;
+  }
+
+  /* Contenus du menu pensés pour la largeur d'un téléphone en portrait : ici, la colonne est plus
+     étroite et haute de tout l'écran. */
+  body:has(.app > .dock) .engine-figures {
+    grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
+  }
+
+  body:has(.app > .dock) .engine-figures dd {
+    font-size: 1.5rem;
+  }
+
+  body:has(.app > .dock) .paint-picker {
+    max-height: none;
+  }
+
+  body:has(.app > .dock) .radio-tap-pill {
+    right: auto;
+    left: calc(100% + 0.5rem);
+    max-width: min(14rem, calc(100vw - var(--p-rail) - var(--p-menu) - 2 * var(--gutter)));
+  }
+
+  /* ───────────── Choix de la place, message du cadenas ───────────── */
+
+  body:has(.app > .dock) .places {
+    right: calc(var(--p-menu) + var(--gutter));
+    left: calc(var(--p-rail) + var(--gutter));
+    bottom: calc(0.5rem + var(--safe-b)) !important;
+  }
+
+  .app:has(> .dock[data-taille='ferme']) .places {
+    right: calc(var(--gutter) + var(--safe-r));
+  }
+
+  body:has(.app > .dock) .paint-notice {
+    right: calc(var(--p-menu) + var(--gutter));
+    left: calc(var(--p-rail) + var(--gutter));
+    bottom: calc(0.5rem + var(--safe-b)) !important;
+  }
+
+  /* ───────────── Mode photo : une barre basse, en une rangée ───────────── */
+
+  body:has(.app > .dock) .photo-bar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  body:has(.app > .dock) .photo-bar .photo-status,
+  body:has(.app > .dock) .photo-bar .strip {
+    flex: 1 1 100%;
+  }
+
+  body:has(.app > .dock) .photo-bar .framings {
+    flex: 1 1 0;
+    min-width: 18rem;
+  }
+
+  body:has(.app > .dock) .photo-bar .acts {
+    flex: 0 0 min(18rem, 38%);
+  }
+
+  /* ───────────── Panneaux : une feuille latérale à droite ───────────── */
+
+  body:has(.app > .dock) .sheet {
+    inset: 0 0 0 auto;
+    width: clamp(20rem, 46vw, 32rem);
+    max-width: none;
+    height: 100dvh;
+    margin: 0;
+  }
+
+  body:has(.app > .dock) .card {
+    height: 100%;
+    max-height: none;
+    padding: calc(0.75rem + var(--safe-t)) 0 calc(0.75rem + var(--safe-b));
+    border-top: 0;
+    border-left: 3px solid var(--ambre);
+    border-radius: 0;
+  }
+
+  body:has(.app > .dock) .card-scroll {
+    flex: 1 1 0;
+  }
+
+  /* Panneau « Atelier » : les rubriques et « Retour » partagent la dernière rangée (la hauteur est
+     rare en paysage : le contenu garde la place). */
+  body:has(.app > .dock) .card:has(> .atelier-tabs) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem 0;
+  }
+
+  body:has(.app > .dock) .card:has(> .atelier-tabs) > .card-scroll {
+    grid-column: 1 / -1;
+    height: 100%;
+  }
+
+  body:has(.app > .dock) .card:has(> .atelier-tabs) > .atelier-tabs {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    border-top: 0;
+  }
+
+  body:has(.app > .dock) .card:has(> .atelier-tabs) > .sheet-acts {
+    grid-column: 2;
+    grid-row: 2;
+    margin-left: 0;
+  }
+
+  /* « Sous le capot » : Mesurer et Comparer s'ajoutent à Retour, la rangée prend toute la largeur
+     sous les rubriques. */
+  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
+  }
+
+  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) > .atelier-tabs,
+  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) > .sheet-acts {
+    grid-column: 1;
+    margin-left: var(--pad-l);
+  }
+
+  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) > .atelier-tabs {
+    margin-left: 0;
+  }
+
+  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) > .sheet-acts {
+    grid-row: 3;
+  }
+
+  /* ───────────── Tutoriels : la carte dans la zone libre, jamais sur le menu ───────────── */
+
+  body:has(.app > .dock) .tuto-carte {
+    right: calc(var(--p-menu) + var(--gutter));
+    left: calc(var(--p-rail) + var(--gutter));
+    max-width: 30rem;
+  }
+
+  body:has(.dock.photo-bar) .tuto-carte {
+    right: calc(var(--gutter) + var(--safe-r));
+    left: calc(var(--gutter) + var(--safe-l));
+  }
+
+  /* ───────────── Écran de chargement ───────────── */
+
+  body:has(.app > .dock) .tuto-chargement {
+    justify-content: center;
+    padding-bottom: calc(1rem + var(--safe-b));
+  }
+
+  body:has(.app > .dock) .tuto-chargement-bas {
+    gap: 0.625rem;
+    max-width: 30rem;
+  }
+
+  body:has(.app > .dock) .tuto-marque b {
+    font-size: 2.25rem;
+  }
+}

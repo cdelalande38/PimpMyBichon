@@ -23,6 +23,8 @@ import { Tutos } from '../ui/tuto/Tutos.tsx';
 import { isSheetRoute } from './router.ts';
 import { SceneBoundary } from './SceneBoundary.tsx';
 import { useRoute } from './useRoute.ts';
+// Dernière feuille : ses règles de paysage passent après celles des composants (portrait inchangé).
+import './paysage.css';
 
 // three.js et la scène arrivent dans un second temps : la coque s'affiche d'abord.
 const GarageCanvas = lazy(() => import('../scene/GarageCanvas.tsx'));

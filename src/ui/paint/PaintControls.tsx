@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { finish as findFinish, FINISHES } from '../../data/finishes.ts';
+import { usePaysage } from '../../app/paysage.ts';
 import { PAINT_COLORS } from '../../data/paintColors.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import type { Hex, Paint, VehicleManifest } from '../../data/vehicleTypes.ts';
@@ -120,7 +121,10 @@ function PaintEditor({ manifest }: { manifest: VehicleManifest }) {
   const setLinked = useBuilds((state) => state.setLinked);
   const rememberColor = useBuilds((state) => state.rememberColor);
   // Dock agrandi : couleurs et finitions ensemble, sur plusieurs lignes, au lieu de l'alternance.
-  const wide = useDock((state) => state.expanded);
+  // Paysage : le menu est une colonne pleine hauteur, qui montre les options en pleine page.
+  const expanded = useDock((state) => state.expanded);
+  const paysage = usePaysage();
+  const wide = expanded || paysage;
 
   const zones = useMemo(() => orderedZones(manifest), [manifest]);
   // Zone maîtresse dans une phrase : « la carrosserie », « le réservoir » (manifeste).

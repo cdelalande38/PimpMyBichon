@@ -11,6 +11,7 @@
 // ferme le menu.
 
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { usePaysage } from '../app/paysage.ts';
 import { useSettling } from '../app/useRoute.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
 import type { VehicleManifest } from '../data/vehicleTypes.ts';
@@ -216,7 +217,11 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
   // l'affichage), et quand la taille de l'écran, du texte ou du contenu change.
   const [more, setMore] = useState(false);
   // Resté « agrandi » là où la poignée n'a rien à montrer : affiché compact, à sa hauteur utile.
-  const size = dockSize({ expanded: expanded && more, closed });
+  // Paysage : le menu est une colonne sur toute la hauteur, qui présente toujours ses options en
+  // pleine page (rangées à la ligne, contenu qui défile en hauteur) : « agrandi » pour les contenus,
+  // sans poignée ; la scène ne recadre rien en hauteur (src/scene/GarageCanvas.tsx).
+  const paysage = usePaysage();
+  const size = paysage && !closed ? 'agrandi' : dockSize({ expanded: expanded && more, closed });
 
   // Dock agrandi : son bord haut, mesuré à l'écran, sert à la scène pour recadrer le véhicule
   // au-dessus. Il bouge avec le contenu de l'onglet, la taille du texte et celle de l'écran.
@@ -241,7 +246,7 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
   }, [closed, sceneFailed, level, section, entryId, depth, vehicle.id, size]);
   useLayoutEffect(() => {
     const element = footer.current;
-    if (size !== 'agrandi' || !element) {
+    if (size !== 'agrandi' || !element || paysage) {
       setTop(null);
       return;
     }
@@ -254,7 +259,7 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
       observer.disconnect();
       window.removeEventListener('resize', measure);
     };
-  }, [size, setTop]);
+  }, [size, setTop, paysage]);
 
   // Échap : remonte d'un niveau, puis ferme le menu. Un panneau ouvert garde sa touche Échap.
   useEffect(() => {
@@ -320,7 +325,7 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
 
   return (
     <footer ref={footer} className="dock" data-taille={size} inert={settling || covered} aria-hidden={covered || undefined}>
-      <DockHeader vehicle={vehicle} handle={more} />
+      <DockHeader vehicle={vehicle} handle={more && !paysage} />
       {banners}
       <BenchControls />
     </footer>

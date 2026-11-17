@@ -4,6 +4,7 @@
 // Monté hors de la coque (.app) : il ne bouscule ni la grille de l'écran ni ses boutons.
 
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { usePaysage } from '../../app/paysage.ts';
 import { useRoute } from '../../app/useRoute.ts';
 import { activeEntry, visibleSections } from '../../data/dockMenu.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
@@ -82,6 +83,7 @@ function TutoDialog() {
   const texteId = useId();
   const [cible, setCible] = useState<ReturnType<typeof rectCible>>(null);
   const [hauteur, setHauteur] = useState(() => window.innerHeight);
+  const paysage = usePaysage();
 
   const tuto = ouvert ? tutoById(ouvert.id) : undefined;
   const index = ouvert && tuto ? Math.min(ouvert.etape, tuto.etapes.length - 1) : 0;
@@ -116,7 +118,13 @@ function TutoDialog() {
 
   // Cible dans le bas de l'écran (le dock) : la carte se pose juste au-dessus, pour la laisser voir.
   let place: CSSProperties | undefined;
-  if (cible && !liste && cible.top + cible.height / 2 > hauteur / 2 && cible.top - 24 >= 200) {
+  if (paysage) {
+    // Paysage : la carte reste dans la zone libre (src/app/paysage.css), en haut si la cible est dans le
+    // bas de l'écran (choix de la place, cadrages de la photo), en bas sinon.
+    if (cible && !liste && cible.top + cible.height / 2 > hauteur / 2) {
+      place = { top: 'calc(var(--gutter) + var(--safe-t))', bottom: 'auto' };
+    }
+  } else if (cible && !liste && cible.top + cible.height / 2 > hauteur / 2 && cible.top - 24 >= 200) {
     place = { bottom: `${Math.round(hauteur - cible.top + 12)}px`, maxHeight: `${Math.round(cible.top - 24)}px` };
   }
   const spot = cible && !liste ? cible : null;

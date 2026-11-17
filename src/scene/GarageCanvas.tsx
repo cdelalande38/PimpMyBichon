@@ -19,6 +19,7 @@ import type { VignetteEffect } from 'postprocessing';
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
 import { Box3, CircleGeometry, Color, DoubleSide, InstancedMesh, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera as Camera, Quaternion, Raycaster, Vector3, type Group, type Material, type Object3D } from 'three';
 import { SceneBoundary } from '../app/SceneBoundary.tsx';
+import { usePaysage } from '../app/paysage.ts';
 import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
 import { modelPresent, placeOf, resolveVehicle } from '../data/vehicles.ts';
@@ -47,6 +48,7 @@ import { SceneExtras } from './extras/SceneExtras.tsx';
 import {
   clampLook,
   DEFAULT_SEAT,
+  defaultZone,
   DOCK_SHIFT_MS,
   DOCK_TOP_MARGIN,
   dockShift,
@@ -64,8 +66,10 @@ import {
   placeEye,
   presentPose,
   seatMetrics,
+  zoneShift,
   type BoxSize,
   type Cast,
+  type FreeZone,
   type Look,
   type PlacedSeat,
 } from './fit.ts';
@@ -82,6 +86,10 @@ const { minPolar: MIN_POLAR, maxPolar: MAX_POLAR } = GARAGE.orbit;
 const NEAR = 0.1;
 /** Haut du dock compact, en part de la hauteur de l'écran, tant qu'il n'est pas mesuré. */
 const COMPACT_DOCK_TOP = 0.77;
+/** Paysage : bande haute gardée libre (marque, étiquette du véhicule), en part de la hauteur de l'écran. */
+const LANDSCAPE_TOP_MARGIN = 0.2;
+/** Paysage : marge entre la zone libre et les boutons ronds ou le menu, en pixels CSS. */
+const RAIL_GAP = 8;
 /** Boîte d'attente d'un véhicule pas encore mesuré, d'après son genre (demi-longueur : manifeste). */
 const WAITING_BOX = { car: { halfWidth: 0.9, height: 1.35 }, bike: { halfWidth: 0.4, height: 1.1 } } as const;
 const NO_HIDE: readonly string[] = [];
@@ -105,6 +113,15 @@ interface StageProps {
   stage: RefObject<HTMLDivElement | null>;
   /** Haut du dock compact à l'écran, en pixels CSS (`null` : pas encore mesuré). */
   compactTop: number | null;
+  /**
+   * Paysage : la zone libre entre les boutons ronds et le menu en colonne (menu ouvert), en pixels
+   * CSS ; `null` : pas encore mesurée, ou portrait. Le véhicule s'y cadre, que le menu soit ouvert ou non.
+   */
+  zone: FreeZone | null;
+  /** Paysage (téléphone tenu à deux mains) : menu en colonne à droite, pas de dock en bas. */
+  paysage: boolean;
+  /** Le menu est ouvert (colonne visible) : la vue glisse pour centrer le véhicule dans la zone libre. */
+  menuOpen: boolean;
 }
 
 /** Pose ou retire un attribut `data-*` sans toucher au DOM si rien ne change. */
@@ -237,7 +254,7 @@ function placeSignature(group: Object3D | null, rootName: string, view: Interior
   return [root.uuid, ...view.seat.anchors.map((name) => root.getObjectByName(name)?.children.find((child) => child.name === POSED)?.uuid ?? 'nu')].join('|');
 }
 
-function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, reducedMotion, stage, compactTop }: StageProps) {
+function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, reducedMotion, stage, compactTop, zone, paysage, menuOpen }: StageProps) {
   const width = useThree((state) => state.size.width);
   const height = useThree((state) => state.size.height);
   // Véhicule courant (store des builds), ou celui de départ du catalogue.
@@ -262,12 +279,18 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // partie libre entre la bande haute et le dock compact. Le dock agrandi décale ensuite la vue.
   const waiting = WAITING_BOX[vehicle.kind];
   const sizeKey = measure ? `${measure.halfLength}:${measure.halfWidth}:${measure.height}` : `${vehicle.halfLengthHint}:${waiting.halfWidth}:${waiting.height}`;
-  const bandBottom = compactTop ?? Math.round(height * COMPACT_DOCK_TOP);
+  // Paysage : pas de dock en bas, la partie libre est toute la hauteur sous la bande de la marque ;
+  // en largeur, la zone entre les boutons ronds et le menu (toute la largeur en mode photo, où le
+  // menu s'efface). Le menu ouvert ou fermé ne change pas le cadrage : seule la vue glisse.
+  const bandBottom = paysage ? height : (compactTop ?? Math.round(height * COMPACT_DOCK_TOP));
+  const bandTop = height * (paysage ? LANDSCAPE_TOP_MARGIN : DOCK_TOP_MARGIN);
+  const freeZone = paysage && !photo ? (zone ?? defaultZone(width)) : null;
+  const zoneWidth = freeZone ? freeZone.right - freeZone.left : width;
   const fit = useMemo(() => {
     const [hl, hw, h] = sizeKey.split(':').map(Number);
     const size: BoxSize = { halfLength: hl ?? 1, halfWidth: hw ?? 1, height: h ?? 1 };
-    return fitVehicle({ width, height, size, turn, azimuth, band: { top: height * DOCK_TOP_MARGIN, bottom: bandBottom } });
-  }, [width, height, sizeKey, turn, azimuth, bandBottom]);
+    return fitVehicle({ width, height, size, turn, azimuth, band: { top: bandTop, bottom: bandBottom }, zoneWidth });
+  }, [width, height, sizeKey, turn, azimuth, bandBottom, bandTop, zoneWidth]);
   const target = fit.target;
 
   // Ambiance : sources, lumières et étalonnage. La sonde de réflexion se refait à chaque changement.
@@ -409,26 +432,32 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // l'orbite, la coupe caméra et les mesures restent les mêmes) pour que le véhicule tienne dans la
   // partie libre au-dessus du dock. Transition courte, coupée si l'on demande moins de mouvement.
   // Rien en mode photo : le dock y est caché et la photo pose ses propres décalages.
-  const dockTop = useDock((state) => (state.expanded ? state.top : null));
+  const dockTop = useDock((state) => (state.expanded && !paysage ? state.top : null));
   // Vue intérieure : le point regardé se centre aussi dans la partie libre au-dessus du dock
   // compact (le levier et le bas du tableau de bord restent dans l'image).
-  const shiftGoal = photo ? 0 : outside ? dockShiftFrom(bandBottom, dockTop) : dockShift(height, dockTop ?? bandBottom);
-  const shift = useRef({ value: 0, from: 0, goal: 0, start: 0, applied: '' });
+  // Paysage : aucun décalage en hauteur (le menu est sur le côté) ; en largeur, la vue glisse vers la
+  // gauche, menu ouvert, pour que le véhicule soit au milieu de la zone libre (même mécanisme).
+  const shiftGoal = photo || paysage ? 0 : outside ? dockShiftFrom(bandBottom, dockTop) : dockShift(height, dockTop ?? bandBottom);
+  const shiftXGoal = photo || !paysage || !menuOpen ? 0 : zoneShift(width, freeZone);
+  const shift = useRef({ value: 0, from: 0, goal: 0, x: 0, xFrom: 0, xGoal: 0, start: 0, applied: '' });
   useEffect(() => {
     invalidate();
-  }, [shiftGoal, photo, invalidate]);
+  }, [shiftGoal, shiftXGoal, photo, invalidate]);
   useFrame((state) => {
     const s = shift.current;
     const now = performance.now();
-    if (s.goal !== shiftGoal) {
+    if (s.goal !== shiftGoal || s.xGoal !== shiftXGoal) {
       s.from = s.value;
       s.goal = shiftGoal;
+      s.xFrom = s.x;
+      s.xGoal = shiftXGoal;
       s.start = now;
     }
-    if (s.value !== s.goal) {
+    if (s.value !== s.goal || s.x !== s.xGoal) {
       const t = reducedMotion || photo ? 1 : (now - s.start) / DOCK_SHIFT_MS;
       s.value = t >= 1 ? s.goal : s.from + (s.goal - s.from) * easeOutCubic(t);
-      if (s.value !== s.goal) invalidate();
+      s.x = t >= 1 ? s.xGoal : s.xFrom + (s.xGoal - s.xFrom) * easeOutCubic(t);
+      if (s.value !== s.goal || s.x !== s.xGoal) invalidate();
     }
     const view = state.camera as Camera;
     if (photo) {
@@ -438,12 +467,12 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       return;
     }
     // Nouvelle taille d'écran : la caméra recalcule sa projection, le décalage se repose.
-    const key = `${width}x${height}:${s.value}`;
+    const key = `${width}x${height}:${s.x}:${s.value}`;
     if (s.applied === key) return;
-    if (s.value === 0) {
+    if (s.value === 0 && s.x === 0) {
       if (view.view?.enabled) view.clearViewOffset();
     } else {
-      view.setViewOffset(width, height, 0, s.value, width, height);
+      view.setViewOffset(width, height, s.x, s.value, width, height);
     }
     s.applied = key;
   }, -3);
@@ -495,6 +524,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     putData(element, 'vehiculeEcran', frame);
     putData(element, 'vehiculeLargeur', across);
     putData(element, 'decalage', String(Math.round(shift.current.value)));
+    putData(element, 'decalageX', String(Math.round(shift.current.x)));
   });
 
   // Rotation lente au temps : OrbitControls avance d'un angle fixe par image (deux fois plus vite à
@@ -891,11 +921,25 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
   const [compactTop, setCompactTop] = useState<number | null>(null);
   const dockExpanded = useDock((state) => state.expanded);
   const dockClosed = useDock((state) => state.closed);
+  // Paysage : zone libre entre les boutons ronds (gauche) et le menu en colonne (droite), mesurée à
+  // l'écran menu ouvert et gardée quand il se ferme (le cadrage ne change pas, seule la vue glisse).
+  const paysage = usePaysage();
+  const textSize = useSettings((state) => state.textSize);
+  const [zone, setZone] = useState<FreeZone | null>(null);
   useEffect(() => {
     let frame = 0;
     const measure = () => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
+        if (paysage) {
+          const menu = document.querySelector<HTMLElement>('.app > footer.dock:not(.photo-bar):not([data-taille="ferme"])');
+          const rail = document.querySelector<HTMLElement>('nav.quick');
+          if (menu && rail) {
+            const next = { left: Math.round(rail.getBoundingClientRect().right) + RAIL_GAP, right: Math.round(menu.getBoundingClientRect().left) - RAIL_GAP };
+            setZone((last) => (last && last.left === next.left && last.right === next.right ? last : next));
+          }
+          return;
+        }
         const dock = document.querySelector<HTMLElement>('footer.dock[data-taille="compact"]');
         if (dock) setCompactTop(Math.round(dock.getBoundingClientRect().top));
       });
@@ -909,7 +953,7 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
       for (const timer of later) window.clearTimeout(timer);
       window.removeEventListener('resize', measure);
     };
-  }, [dockExpanded, dockClosed, vehicle.id]);
+  }, [dockExpanded, dockClosed, vehicle.id, paysage, textSize]);
   useEffect(() => {
     const put = (element: HTMLDivElement, key: 'coupe' | 'trame' | 'tramePret' | 'programmes', value: string | null) => {
       if (value === null) delete element.dataset[key];
@@ -961,6 +1005,9 @@ export default function GarageCanvas({ paused, photo }: GarageCanvasProps) {
             reducedMotion={reducedMotion}
             stage={stage}
             compactTop={compactTop}
+            zone={paysage ? zone : null}
+            paysage={paysage}
+            menuOpen={!dockClosed}
           />
         )}
       </Canvas>

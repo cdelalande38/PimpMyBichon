@@ -140,7 +140,7 @@ export default defineConfig({
         start_url: base,
         scope: base,
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         background_color: NIGHT,
         theme_color: NIGHT,
         icons: [

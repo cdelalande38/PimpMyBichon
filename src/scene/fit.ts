@@ -203,6 +203,12 @@ export interface VehicleFrameInput {
   azimuth: number;
   /** Partie libre de l'écran (sous la marque, au-dessus du dock compact), en pixels CSS. */
   band: { top: number; bottom: number };
+  /**
+   * Largeur de la partie libre, quand elle est plus étroite que l'écran (paysage : l'écran moins le
+   * menu en colonne et les boutons ronds). Le véhicule en occupe `FRAME_SHARE` ; absente : la
+   * largeur de l'écran. La vue se décale ensuite de `zoneShift` pour le centrer dans cette zone.
+   */
+  zoneWidth?: number;
 }
 
 export interface VehicleFit extends CameraFit {
@@ -225,9 +231,10 @@ function bisect(lo: number, hi: number, tooLow: (value: number) => boolean): num
  * largeur (sans dépasser `FRAME_SHARE_HEIGHT` de la partie libre en hauteur), et la hauteur de
  * cible qui le centre verticalement dans la partie libre. Voiture ou moto, même règle.
  */
-export function fitVehicle({ width, height, size, turn, azimuth, band }: VehicleFrameInput): VehicleFit {
+export function fitVehicle({ width, height, size, turn, azimuth, band, zoneWidth }: VehicleFrameInput): VehicleFit {
   const w = Math.max(1, width);
   const h = Math.max(1, height);
+  const zone = Math.min(w, Math.max(1, zoneWidth ?? w));
   const fov = fitCamera(w, h, size.halfLength).fov;
   const bandTop = Math.min(Math.max(band.top, 0), h - 1);
   const bandBottom = Math.min(Math.max(band.bottom, bandTop + 1), h);
@@ -244,7 +251,7 @@ export function fitVehicle({ width, height, size, turn, azimuth, band }: Vehicle
     const y = targetY;
     const byWidth = bisect(0.5, 60, (d) => {
       const f = frameAt(d, y);
-      return f.right - f.left > FRAME_SHARE * w;
+      return f.right - f.left > FRAME_SHARE * zone;
     });
     const byHeight = bisect(0.5, 60, (d) => {
       const f = frameAt(d, y);
@@ -265,6 +272,35 @@ export function fitVehicle({ width, height, size, turn, azimuth, band }: Vehicle
     target: [0, targetY, 0],
     azimuth,
   };
+}
+
+/** Zone libre d'un écran en paysage : entre les boutons ronds (à gauche) et le menu en colonne (à droite). */
+export interface FreeZone {
+  left: number;
+  right: number;
+}
+
+/**
+ * Zone libre par défaut avant mesure du menu : le menu prend `MENU_SHARE` de la largeur, les
+ * boutons ronds `RAIL_SHARE`. Les parcours mesurent la vraie zone à l'écran (GarageCanvas).
+ */
+export const MENU_SHARE = 0.36;
+export const RAIL_SHARE = 0.09;
+
+export function defaultZone(width: number): FreeZone {
+  return { left: Math.round(width * RAIL_SHARE), right: Math.round(width * (1 - MENU_SHARE)) };
+}
+
+/**
+ * Paysage, menu ouvert : décalage horizontal de la vue, en pixels vers la gauche, qui amène la cible
+ * (au centre de l'image) au milieu de la zone libre. Menu fermé, ou zone déjà centrée : rien ne bouge.
+ * Même mécanisme que le décalage vertical du dock agrandi : la caméra ne bouge pas.
+ */
+export function zoneShift(width: number, zone: FreeZone | null): number {
+  if (zone === null || !Number.isFinite(zone.left) || !Number.isFinite(zone.right) || width <= 0) return 0;
+  const left = Math.min(Math.max(zone.left, 0), width);
+  const right = Math.min(Math.max(zone.right, left), width);
+  return Math.max(0, Math.round(width / 2 - (left + right) / 2));
 }
 
 /** Point de vue intérieur résolu : œil et point regardé (repère du véhicule). */
