@@ -1,5 +1,8 @@
 # CI et déploiement GitHub Pages de PimpMyBichon (§ 11 du cahier des charges).
 # Push sur main : build, contrôles, parcours Playwright, puis publication de dist/.
+# Les parcours tournent en WebGL logiciel, à une image par seconde dans la sortie de nuit : en un
+# seul job ils ont fini par dépasser 75 minutes (run annulé le 17 novembre 2026). Ils sont donc
+# répartis sur cinq jobs en parallèle (--shard) ; la publication attend le build et les cinq.
 # Pull request : mêmes contrôles, sans publication.
 # Les actions sont épinglées par SHA de commit ; le tag correspondant est en commentaire.
 name: Pages
@@ -22,10 +25,9 @@ concurrency:
 
 jobs:
   build:
-    name: Build, contrôles et parcours
+    name: Build et contrôles
     runs-on: ubuntu-24.04
-    # Les parcours tournent en WebGL logiciel : large, pour ne pas échouer sur une simple lenteur.
-    timeout-minutes: 75
+    timeout-minutes: 30
     env:
       # Un secret ne se lit pas dans un `if:` d'étape : on passe par une variable.
       # Elle vaut « false » tant que la clé n'est pas posée, et sur les forks.
@@ -67,6 +69,57 @@ jobs:
       - name: Contrôles (types, lint, garde-fous, assets, audio, tests unitaires)
         run: npm run check
 
+      - name: Envoyer le site à publier
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist
+
+  e2e:
+    name: Parcours (${{ matrix.part }}/5)
+    runs-on: ubuntu-24.04
+    # Les parcours tournent en WebGL logiciel : large, pour ne pas échouer sur une simple lenteur.
+    timeout-minutes: 60
+    strategy:
+      # Une part qui échoue n'arrête pas les autres : on veut voir tous les parcours rouges d'un coup.
+      fail-fast: false
+      matrix:
+        part: [1, 2, 3, 4, 5]
+    env:
+      HAS_ASSETS_KEY: ${{ secrets.ASSETS_DEPLOY_KEY != '' }}
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Installer Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      # Sons de banque, musique, modèles sous licence : ils vivent dans un dépôt privé,
+      # jamais ici. Le build passe avec ou sans lui.
+      - name: Récupérer les assets privés
+        if: env.HAS_ASSETS_KEY == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository_owner }}/PimpMyBichon-assets
+          ssh-key: ${{ secrets.ASSETS_DEPLOY_KEY }}
+          path: .private-assets
+          persist-credentials: false
+
+      - name: Signaler l'absence des assets privés
+        if: env.HAS_ASSETS_KEY != 'true'
+        run: echo "::notice title=Assets privés absents::Le build continue sans le dépôt privé. Emplacements audio muets et substituts déclarés, voir TODO_ASSETS.md."
+
+      - name: Construire le site
+        run: npm run build
+
       - name: Lire la version de Playwright
         id: playwright
         run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
@@ -87,31 +140,25 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
-      - name: Parcours Playwright (390 × 844, hors ligne compris)
-        run: npm run test:e2e
+      - name: Parcours Playwright (390 × 844, hors ligne compris), part ${{ matrix.part }} sur 5
+        run: npx playwright test --shard=${{ matrix.part }}/5
 
       - name: Conserver le rapport Playwright en cas d'échec
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright
+          name: playwright-${{ matrix.part }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Envoyer le site à publier
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: dist
-
   deploy:
     name: Publication sur GitHub Pages
     # Jamais sur une pull request, jamais depuis une autre branche que main.
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, e2e]
     runs-on: ubuntu-24.04
     # Un déploiement Pages doit tenir en 10 minutes (§ 11).
     timeout-minutes: 10
