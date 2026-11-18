@@ -87,7 +87,7 @@ export const DOCK_MENU: readonly DockSection[] = [
       { id: 'stickers', label: 'Stickers', icon: 'sticker', available: true },
       { id: 'carrosserie', label: 'Carrosserie', icon: 'portiere', available: false },
       { id: 'phares', label: 'Phares', icon: 'phare', available: true },
-      { id: 'ailerons', label: 'Ailerons', icon: 'aileron', available: false },
+      { id: 'ailerons', label: 'Ailerons', icon: 'aileron', available: true },
     ],
   },
   {

@@ -20,6 +20,7 @@ import { Icon } from './icons.tsx';
 import { PaintControls } from './paint/PaintControls.tsx';
 import { PharesPanel } from './phares/PharesPanel.tsx';
 import { PictoAmbiance } from './pictos/Pictos.tsx';
+import { PiecesPanel } from './pieces/PiecesPanel.tsx';
 import { useLevelScroll, useRevealPressed } from './scroll.ts';
 import { SortieEntree } from './drive/SortieEntree.tsx';
 import { StickersPanel } from './stickers/StickersPanel.tsx';
@@ -57,6 +58,7 @@ export const ENTRY_BODIES: Partial<Record<EntryId, () => ReactNode>> = {
   interieur: () => <HabitaclePanel />,
   stickers: () => <StickersPanel />,
   phares: () => <PharesPanel />,
+  ailerons: () => <PiecesPanel poste="aileron" />,
   preparation: () => <EnginePanel />,
   ambiance: () => <AmbianceChoices />,
   sortie: () => <SortieEntree />,

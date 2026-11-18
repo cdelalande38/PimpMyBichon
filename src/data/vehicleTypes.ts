@@ -368,6 +368,49 @@ export interface VehicleWheels {
   floor: number;
 }
 
+/**
+ * Profil d'une surface de pose, en paires [distance, descente] (mètres) : en travers (`crown`), à `z` de
+ * l'axe, la surface descend de tant à la verticale ; en long (`bend`), à `x` du point de pose (le long de
+ * la surface au bord de fuite, positif vers l'avant ; à l'horizontale sous les pieds, des deux côtés),
+ * elle passe de tant sous le plan de la normale.
+ */
+export type CrownProfile = ReadonlyArray<readonly [distance: number, drop: number]>;
+
+/**
+ * Où se posent les pieds d'un aileron sur supports (src/data/pieces.ts) : le milieu des pieds sur la
+ * surface, sur l'axe, et la normale de la surface en ce point.
+ */
+export interface PieceSupports {
+  anchor: VehiclePoint;
+  normal: VehiclePoint;
+  /** Entraxe des pieds, en mètres. */
+  spacing: number;
+  /** Envergure de la lame, dérives comprises, en mètres. */
+  span: number;
+  crown?: CrownProfile;
+  bend?: CrownProfile;
+}
+
+/**
+ * Un poste de pièce montée (catalogue public/assets/shared/pieces/) : le bord de fuite de la surface
+ * de pose, sur l'axe (becquet, queue de canard s'y posent), sa normale, sa largeur utile ; les pieds
+ * d'un aileron sur supports ; les options permises. Absent du manifeste : le poste n'existe pas.
+ */
+export interface PieceMount {
+  anchor: VehiclePoint;
+  normal: VehiclePoint;
+  /** Largeur utile au bord de fuite, en mètres. */
+  width: number;
+  crown?: CrownProfile;
+  bend?: CrownProfile;
+  /** Absent : les options sur supports ne sont pas permises. */
+  supports?: PieceSupports;
+  /** Options permises (identifiants du catalogue) ; absent : toutes celles que la surface accepte. */
+  options?: readonly string[];
+  /** Option d'origine ; absente : aucune pièce. */
+  default?: string;
+}
+
 export interface VehicleManifest {
   /** Égal au nom du dossier. */
   id: VehicleId;
@@ -417,6 +460,8 @@ export interface VehicleManifest {
   driver?: DriverSpec;
   /** Zones de livrée où se posent les stickers (src/data/stickersCalques.ts) ; absent : pas de stickers. */
   livery?: readonly LiveryZone[];
+  /** Pièces montées sur la caisse, poste par poste (aileron…, src/data/pieces.ts) ; absent : aucune. */
+  pieces?: Readonly<Record<string /* id de poste */, PieceMount>>;
 }
 
 /**

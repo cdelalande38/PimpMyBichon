@@ -102,6 +102,18 @@ export const TUTOS: readonly Tuto[] = [
     ],
   },
   {
+    id: 'ailerons',
+    ecrans: ['entree:ailerons'],
+    titre: 'Les ailerons',
+    but: 'Ici, tu poses un aileron sur ta voiture, du becquet discret à l’aileron démesuré.',
+    etapes: [
+      { texte: 'Fais défiler les ailerons et touche celui qui te plaît : il se pose tout de suite sur la caisse.', cible: 'footer.dock [data-testid="pieces"] .chips' },
+      { texte: 'Un cadenas et un prix : touche, puis « Acheter » avec les dollars de tes courses, et c’est posé.' },
+      { texte: 'L’aileron prend la peinture de la caisse. « Couleur propre » lui donne sa teinte et sa finition à lui.' },
+      { texte: '« D’origine » l’enlève. Sur une moto, pas d’aileron : c’est toi qui fends l’air.' },
+    ],
+  },
+  {
     id: 'roues',
     ecrans: ['entree:roues'],
     titre: 'Les roues',

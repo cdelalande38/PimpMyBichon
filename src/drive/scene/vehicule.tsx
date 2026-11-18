@@ -50,6 +50,7 @@ import { HEADLIGHT } from './materiaux.ts';
 import { routeLight } from '../../data/phares.ts';
 import { tintAdditive, useVehicleLights } from '../../scene/vehicle/phares.ts';
 import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
+import { usePieces } from '../../scene/vehicle/pieces.ts';
 import { DEFAULT_SEAT, placeEye, seatMetrics, type PlacedSeat } from '../../scene/fit.ts';
 import { bodyPoint, STILL_BODY, useBodyPose } from '../../scene/vehicle/wheels.ts';
 import { TableauVivant } from '../../scene/vehicle/tableau.ts';
@@ -423,6 +424,8 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     const [r, g, b] = routeLight(phares.couleur.color, HEADLIGHT.color);
     return new Color().setRGB(r, g, b);
   }, [phares.couleur]);
+  // Pièces montées (aileron…) du build, posées comme au garage.
+  usePieces(drive.prepared, vehicle, invalidate, bodyEnv);
   const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins, vehicle.kind), [drive, spins, vehicle.kind]);
   // Direction d'une moto : fourche, guidon et poignées tournent avec la roue avant ; remis droits au départ.
   const steering = useMemo(() => bikeSteering(drive.prepared.root, wheels, vehicle.kind), [drive, wheels, vehicle.kind]);

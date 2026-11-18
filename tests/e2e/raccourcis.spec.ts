@@ -52,7 +52,7 @@ test.describe('raccourcis et dock de personnalisation', () => {
     // fin de rangée. « Peinture » ouvre ses choix, et masque à son tour les entrées.
     await tabs(page).getByRole('button', { name: 'Custom', exact: true }).tap();
     const entries = dock(page).getByRole('navigation', { name: 'Entrées · Custom' }).getByRole('button');
-    await expect(entries).toHaveText([/^Peinture$/, /^Roues$/, /^Suspension$/, /^Intérieur$/, /^Stickers$/, /^Phares$/, /^Carrosserie/, /^Ailerons/]);
+    await expect(entries).toHaveText([/^Peinture$/, /^Roues$/, /^Suspension$/, /^Intérieur$/, /^Stickers$/, /^Phares$/, /^Ailerons$/, /^Carrosserie/]);
     await expect(entries.first()).toHaveAttribute('aria-current', 'true');
     await expect(entries.nth(1)).toBeEnabled();
     await expect(entries.nth(2)).toBeEnabled();

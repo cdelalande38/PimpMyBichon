@@ -9,7 +9,9 @@
 // qu'aucune, posée sur son ancre, ne traverse le plancher ni le tableau de bord (manifeste,
 // interior.clearance). Fabrique enfin le conducteur à bord, une tenue par genre de véhicule
 // (catalogue public/assets/shared/conducteur/, modelé par tools/vehicles/conducteur.mjs), tenu à son
-// budget (12 000 triangles, 4 appels de dessin) et compté avec le véhicule. Node seul, déterministe.
+// budget (12 000 triangles, 4 appels de dessin) et compté avec le véhicule. Fabrique aussi les pièces
+// montées sur la caisse (ailerons… : catalogue public/assets/shared/pieces/, modelées par
+// tools/vehicles/pieces.mjs), comptées au pire cas avec le véhicule qui les accepte. Node seul, déterministe.
 // Mode d'emploi : assets-src/vehicles/LISEZ-MOI.md.
 //
 //   node tools/vehicles/build.mjs [id…]      (sans id : tous les dossiers qui ont un model.mjs)
@@ -23,6 +25,7 @@ import * as kit from './kit.mjs';
 import { buildRim, buildTire, readCatalogue, rimFile, tireFile } from './roues.mjs';
 import * as habitacle from './habitacle.mjs';
 import * as conducteur from './conducteur.mjs';
+import * as montees from './pieces.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, 'assets-src', 'vehicles');
@@ -30,6 +33,7 @@ const OUT = join(ROOT, 'public', 'assets', 'vehicles');
 const WHEELS_OUT = join(ROOT, 'public', 'assets', 'shared', 'wheels');
 const INTERIOR_OUT = join(ROOT, 'public', 'assets', 'shared', 'habitacle');
 const DRIVER_OUT = join(ROOT, 'public', 'assets', 'shared', 'conducteur');
+const PIECES_OUT = join(ROOT, 'public', 'assets', 'shared', 'pieces');
 /** Budgets d'un véhicule complet à l'écran (§ 8) : maximum, roues posées comprises. */
 export const VEHICLE_MAX = Object.freeze({ triangles: 400_000, drawCalls: 80 });
 
@@ -174,6 +178,30 @@ export function buildDrivers() {
     writeFileSync(join(DRIVER_OUT, file), built.bytes);
     const summary = summarize(built.bytes);
     out.set(outfit.id, { kind: outfit.kind, summary, budget: conducteur.driverBudget(built, summary.triangles, catalogue) });
+  }
+  return out;
+}
+
+/**
+ * Pièces montées sur la caisse : un fichier par option de chaque poste (deux nœuds au plus,
+ * « surface » et « niveau »). Rend, par fichier, son résumé.
+ * @returns {Map<string, ReturnType<typeof summarize>>}
+ */
+export function buildPieces() {
+  const catalogue = montees.readCatalogue();
+  /** @type {Map<string, ReturnType<typeof summarize>>} */
+  const out = new Map();
+  mkdirSync(PIECES_OUT, { recursive: true });
+  for (const poste of catalogue.postes) {
+    for (const option of poste.options) {
+      const file = montees.pieceFile(poste.id, option.id);
+      const built = montees.buildPiece(option);
+      const m = new kit.Model(file.replace(/\.glb$/, ''));
+      m.add(built.node, built.parts);
+      const { bytes } = m.toGlb();
+      writeFileSync(join(PIECES_OUT, file), bytes);
+      out.set(file, summarize(bytes));
+    }
   }
   return out;
 }
@@ -329,6 +357,18 @@ async function main() {
     failed += 1;
     console.error(`conducteur : ${error instanceof Error ? error.message : error}`);
   }
+  /** @type {ReturnType<typeof buildPieces>} */
+  let mounted = new Map();
+  try {
+    const started = Date.now();
+    mounted = buildPieces();
+    const list = [...mounted].map(([file, s]) => `${file.replace(/\.glb$/, '')} ${s.triangles.toLocaleString('fr-FR')} tr. ${s.primitives} app.`);
+    console.log(`pièces montées : ${mounted.size} fichiers en ${((Date.now() - started) / 1000).toFixed(1)} s → ${relative(ROOT, PIECES_OUT)}`);
+    console.log(`  ${list.join(' · ')}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`pièces montées : ${error instanceof Error ? error.message : error}`);
+  }
   for (const id of ids) {
     const started = Date.now();
     try {
@@ -354,8 +394,12 @@ async function main() {
           full.triangles += driver.budget.triangles;
           full.drawCalls += driver.budget.drawCalls;
         }
+        // La pièce montée la plus lourde de chaque poste que le véhicule accepte (aileron…).
+        const posed = montees.piecesWorst(JSON.parse(readFileSync(join(OUT, id, 'vehicle.json'), 'utf8')), mounted);
+        full.triangles += posed.triangles;
+        full.drawCalls += posed.drawCalls;
         const over = full.triangles > VEHICLE_MAX.triangles || full.drawCalls > VEHICLE_MAX.drawCalls;
-        const extra = (inside.anchors > 0 ? ` et habitacle le plus lourd sur ${inside.anchors} ancres` : '') + (driver ? ', conducteur à bord' : '');
+        const extra = (inside.anchors > 0 ? ` et habitacle le plus lourd sur ${inside.anchors} ancres` : '') + (driver ? ', conducteur à bord' : '') + (posed.postes > 0 ? `, pièce montée la plus lourde (${posed.triangles.toLocaleString('fr-FR')} tr.)` : '');
         const line = `  complet, roues les plus lourdes sur ${full.anchors} ancres${extra} : ${full.triangles.toLocaleString('fr-FR')} triangles · ${full.drawCalls} appels de dessin (maximum § 8 : ${VEHICLE_MAX.triangles.toLocaleString('fr-FR')} et ${VEHICLE_MAX.drawCalls})`;
         if (over) {
           failed += 1;

@@ -9,6 +9,7 @@ import { BOITES_NOMMEES } from './boites.ts';
 import { FINISHES } from './finishes.ts';
 import { INTERIOR_CATALOGUE } from './habitacle.ts';
 import { checkLights } from './phares.ts';
+import { checkPieces } from './pieces.ts';
 import { WHEEL_CATALOGUE } from './wheels.ts';
 import type { EngineSpec, InteriorView, Paint, PlaceId, SkyMotif, VehicleId, VehicleManifest, Zone, ZoneGroup } from './vehicleTypes.ts';
 
@@ -413,6 +414,7 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
     checkInterior(raw, problems);
     checkInteriorParts(raw, problems);
     checkWheels(raw, problems);
+    checkPieces(raw, problems);
   }
   if (problems.length > 0) {
     throw new Error(`Manifeste de véhicule invalide, ${manifestPath(folder)} : ${problems.join(' ; ')}.`);

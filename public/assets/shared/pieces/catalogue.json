@@ -1,0 +1,62 @@
+{
+  "about": "Pièces montées sur la caisse, partagées entre véhicules (§ 5.4, § 6, § 8) : un poste par ligne de « postes », une option par ligne de ses « options ». npm run vehicles:build fabrique un fichier par option (tools/vehicles/pieces.mjs, nom <poste>_<option>.glb) ; l'app pose une option sur les véhicules dont le manifeste déclare le poste (section pieces : bord de fuite, normale, largeur utile, pieds des supports, options permises). Chaque fichier porte deux nœuds : « surface » (épouse la surface de pose au bord de fuite, mise à la largeur utile et au bombé) et « niveau » (reste de niveau ; ses pieds, au ras de y = 0, descendent sur la surface, sa lame se met à l'envergure). Matériaux : paint_piece (la couleur de la caisse ou une couleur propre) et les rôles. Substituts déclarés : placeholder_ailerons (TODO_ASSETS.md).",
+  "postes": [
+    {
+      "id": "aileron",
+      "label": "Aileron",
+      "absent": "n’a pas de place pour un aileron : sur une moto, c’est toi qui fends l’air.",
+      "colorLabel": "Couleur de l’aileron",
+      "none": { "id": "aucun", "label": "Sans aileron", "hint": "La ligne d’origine", "phrase": "sans aileron" },
+      "reference": { "width": 1.2, "feet": 0.3 },
+      "picto": "M3 9 L15 9 Q21 9 26 16 L37 16.5 Q42 17 43 21 L43 27 L3 27",
+      "options": [
+        {
+          "id": "becquet",
+          "style": "becquet",
+          "mount": "surface",
+          "label": "Becquet",
+          "phrase": "le becquet",
+          "hint": "Une lèvre discrète au bord du coffre",
+          "picto": "M35 16.6 L40 16.8 L41.5 14.2"
+        },
+        {
+          "id": "queue_de_canard",
+          "style": "queue_de_canard",
+          "mount": "surface",
+          "label": "Queue de canard",
+          "phrase": "la queue de canard",
+          "hint": "Le bord relevé, façon années soixante-dix",
+          "picto": "M29 16.2 Q37 16.4 41 11.5 L42.5 12.4 Q41 16.6 39 17"
+        },
+        {
+          "id": "bas",
+          "style": "aileron_bas",
+          "mount": "supports",
+          "label": "Aileron bas",
+          "phrase": "l’aileron bas",
+          "hint": "Une lame à ras du coffre, sur deux pattes",
+          "picto": "M33 16.4 L33 12.6 M27 12.4 L40 11.2 M40 9.4 L40 13.4"
+        },
+        {
+          "id": "haut",
+          "style": "aileron_haut",
+          "mount": "supports",
+          "label": "Aileron haut",
+          "phrase": "l’aileron haut",
+          "hint": "Une lame haute sur supports alu",
+          "picto": "M32 16.4 L30.5 7.4 M24 7.6 L39 5.6 M39 3 L39 9"
+        },
+        {
+          "id": "demesure",
+          "style": "demesure",
+          "mount": "supports",
+          "label": "Démesuré",
+          "phrase": "l’aileron démesuré",
+          "hint": "Plus large que la caisse, pour le spectacle",
+          "spanFactor": 1.12,
+          "picto": "M32 16.4 L29.5 3.6 M19 4 L40 1.6 M36 0.6 L42 0.6 L42 7.4 L36 7.4 Z"
+        }
+      ]
+    }
+  ]
+}
