@@ -84,12 +84,12 @@ test.describe('raccourcis et dock de personnalisation', () => {
       .toBeLessThanOrEqual(1);
   });
 
-  test('« Atelier » ouvre un panneau à deux rubriques ; un seul « Retour » le ferme', async ({ page }) => {
+  test('« Atelier » ouvre un panneau à trois rubriques ; un seul « Retour » le ferme', async ({ page }) => {
     await openApp(page);
     await openAtelier(page, 'Réglages');
     await expect(page).toHaveURL(/#\/reglages$/);
     const rubriques = page.getByRole('navigation', { name: 'Rubriques de l’atelier' });
-    await expect(rubriques.getByRole('button')).toHaveText(['Réglages', 'Sous le capot']);
+    await expect(rubriques.getByRole('button')).toHaveText(['Réglages', 'Sous le capot', 'Jeu']);
     await shot(page, '02-atelier-reglages');
 
     await rubriques.getByRole('button', { name: 'Sous le capot' }).click();

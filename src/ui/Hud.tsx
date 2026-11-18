@@ -11,6 +11,7 @@ import { useDock } from '../state/dock.ts';
 import { useView } from '../state/view.ts';
 import { openAtelier } from './AtelierSwitcher.tsx';
 import { Icon } from './icons.tsx';
+import { Solde } from './jeu/Solde.tsx';
 import { PlacePicker } from './PlacePicker.tsx';
 import { offlineLabel } from './labels.ts';
 import { RadioButton } from './radio/RadioButton.tsx';
@@ -124,6 +125,8 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
         <span aria-hidden="true">Pimp my</span>
         <b aria-hidden="true">Bichon</b>
       </h1>
+      {/* Le solde en dollars, discret, à côté de la marque : un appui ouvre Atelier › Jeu. */}
+      <Solde covered={covered} />
       <div className="hud-side">
         <OfflinePill />
         <UpdatePill covered={covered} />

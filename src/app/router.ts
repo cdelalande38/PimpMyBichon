@@ -6,6 +6,8 @@ export type Route =
   | { name: 'garage' }
   | { name: 'reglages' }
   | { name: 'capot' }
+  /** Le jeu : solde, boutique et hauts faits (rubrique du panneau « Atelier »). */
+  | { name: 'jeu' }
   | { name: 'commande' }
   /** La radio du garage : packs de musique, playlist, lecture (§ 5.12). */
   | { name: 'radio' }
@@ -38,6 +40,7 @@ const PAGES = new Map<string, Route>([
   ['/', GARAGE],
   ['/reglages', { name: 'reglages' }],
   ['/capot', { name: 'capot' }],
+  ['/jeu', { name: 'jeu' }],
   ['/commande', { name: 'commande' }],
   ['/radio', { name: 'radio' }],
   ['/photo', { name: 'photo' }],

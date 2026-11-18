@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { isSheetRoute, type Route, type SheetRouteName } from '../app/router.ts';
 import { closeSheet } from '../app/useRoute.ts';
 import { AtelierSwitcher, isAtelierRoute } from './AtelierSwitcher.tsx';
+import { JeuPanel } from './jeu/JeuPanel.tsx';
 import { RadioPanel } from './radio/RadioPanel.tsx';
 import { SettingsPanel } from './SettingsPanel.tsx';
 import { Sheet } from './Sheet.tsx';
@@ -28,6 +29,11 @@ const CONTENT: Record<SheetRouteName, SheetContent> = {
     title: 'Sous le capot',
     body: <UnderHoodPanel />,
     actions: <MeterButton />,
+  },
+  jeu: {
+    eyebrow: 'Atelier · jeu',
+    title: 'Ton compte',
+    body: <JeuPanel />,
   },
   radio: {
     eyebrow: 'Au garage',
