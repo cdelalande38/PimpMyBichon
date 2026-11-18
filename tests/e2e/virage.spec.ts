@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { openApp, openEntry, pickMap, waitForBench, waitForScene, rentrerAuGarage } from './helpers.ts';
+import { attendreSurLaRoute, auSec, openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const DIR = resolve('captures', 'vague-o-virage');
@@ -26,6 +26,8 @@ async function sortie(page: Page, vehicle: string): Promise<void> {
   await waitForBench(page);
   await openEntry(page, 'Sortie de nuit');
   await pickMap(page);
+  // Au sec : le parcours ne parle pas de météo, et sous la pluie le pilote automatique prend le lacet plus lentement.
+  await auSec(page);
   const start = page.locator('footer.dock').getByRole('group', { name: 'Départ' }).getByRole('button', { name: /rampe/i });
   await start.tap();
   await expect(start).toHaveAttribute('aria-pressed', 'true');
@@ -45,37 +47,49 @@ async function releves(page: Page): Promise<Releve[]> {
   return page.evaluate(() => (window as unknown as { __virage: Releve[] }).__virage.filter((r) => r.every(Number.isFinite)));
 }
 
-/** Roule jusqu'après le lacet ; une capture au plus fort du braquage. */
+/**
+ * Roule jusqu'après le lacet ; une capture au plus fort du braquage. Au sec, la Cox passe 275 m en 26 s
+ * de route, la moto plus tôt (tests/unit/drive-temps-route.test.ts) : délai en secondes de route, pas
+ * d'horloge (la CI tombe sous une image par seconde, la scène avance d'au plus 0,1 s par image).
+ */
 async function traverse(page: Page, name: string): Promise<Releve[]> {
   let shot = false;
-  await expect
-    .poll(
-      async () => {
-        const r = await releves(page);
-        const last = r[r.length - 1];
-        if (!shot && last && last[0] > 228 && last[0] < 246 && Math.abs(last[1]) >= 4) {
-          shot = true;
-          await page.screenshot({ path: resolve(DIR, `${name}.png`) });
-        }
-        return last?.[0] ?? 0;
-      },
-      { timeout: 300_000, intervals: [500] },
-    )
-    .toBeGreaterThan(275);
+  await attendreSurLaRoute(
+    page,
+    'après le lacet',
+    async () => {
+      const r = await releves(page);
+      const last = r[r.length - 1];
+      if (!shot && last && last[0] > 228 && last[0] < 246 && Math.abs(last[1]) >= 4) {
+        shot = true;
+        await page.screenshot({ path: resolve(DIR, `${name}.png`) });
+      }
+      return last?.[0] ?? 0;
+    },
+    (s) => s > 275,
+    { secondes: 60, horloge: 420_000, intervalle: 500 },
+  );
   return releves(page);
 }
 
 const within = (r: Releve[], from: number, to: number) => r.filter(([s]) => s >= from && s <= to);
 const peak = (r: Releve[], k: 1 | 2) => r.reduce((m, x) => (Math.abs(x[k]) > Math.abs(m) ? x[k] : m), 0);
 
-test('sortie de nuit : en virage, les roues braquent, la voiture roule, la moto penche', async ({ page }) => {
-  test.setTimeout(900_000);
+/** Garage ouvert, véhicules prêts ; rend la liste des erreurs de la page. */
+async function garage(page: Page): Promise<string[]> {
   mkdirSync(DIR, { recursive: true });
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await openApp(page);
   await waitForScene(page);
   await waitForBench(page);
+  return errors;
+}
+
+// Deux parcours plutôt qu'un : chacun tient en dix minutes sur une machine lente (vague R).
+test('sortie de nuit : en virage, les roues braquent, la voiture roule', async ({ page }) => {
+  test.setTimeout(600_000);
+  const errors = await garage(page);
 
   // Voiture : roues braquées à droite dans le lacet, caisse qui roule vers l'extérieur (à gauche).
   await sortie(page, 'cox');
@@ -86,11 +100,12 @@ test('sortie de nuit : en virage, les roues braquent, la voiture roule, la moto 
   expect(peak(carLacet, 2), 'roulis dans le lacet (°)').toBeLessThanOrEqual(-2);
   // En ligne droite après le lacet : tout revient à zéro.
   expect(within(car, 258, 330).some(([, b, r]) => Math.abs(b) <= 1 && Math.abs(r) <= 1), 'retour à zéro après le lacet').toBe(true);
+  expect(errors).toEqual([]);
+});
 
-  await rentrerAuGarage(page);
-  await expect(stage(page)).toHaveCount(0);
-  await waitForScene(page);
-  await waitForBench(page);
+test('sortie de nuit : en virage, la moto penche', async ({ page }) => {
+  test.setTimeout(600_000);
+  const errors = await garage(page);
 
   // Moto : elle se couche dans le lacet (à droite : roulis positif), sa roue avant braque un peu.
   await sortie(page, 'sportive');

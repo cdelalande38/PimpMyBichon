@@ -22,7 +22,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, commencerCourse, fermerReglages, ouvrirReglages, reglagesSortie, reglerSortie } from './helpers.ts';
+import { attendreApercu, attendreSurLaRoute, commencerCourse, fermerReglages, ouvrirReglages, reglagesSortie, reglerSortie } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const dial = (page: Page) => page.locator('.drive-dial');
@@ -225,10 +225,13 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect(page.getByRole('button', { name: 'NOS' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Réglages de la sortie' })).toBeVisible();
     await nomEntier(page);
-    // Pilote automatique au premier lancement : le réalisateur est mis d'office.
+    // Pilote automatique au premier lancement : le réalisateur est mis d'office. Météo au sec : le
+    // parcours ne parle pas de météo, et la pluie (par défaut) allonge d'un quart la montée en régime.
     await ouvrirReglages(page);
     await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'true');
+    await reglerSortie(page, 'Météo', 'Sec', { garder: true });
     await fermerReglages(page);
+    await expect(stage(page)).toHaveAttribute('data-meteo', 'sec');
     // Un appui bref sur la route : la course, à la main ; la caméra passe en poursuite, le réalisateur se
     // coupe ; l'amorce dit où poser le pouce ; le compte-tours agrandi apparaît.
     const mid = page.locator('.drive-mid');
@@ -270,10 +273,14 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect(conduite(page)).toHaveAttribute('data-conduite', 'main');
     await shot(page, '03-manche-haut');
     await expect(dial(page)).toHaveAttribute('data-zone', /vert|orange|rouge/, { timeout: 60_000 });
-    await expect(dial(page)).toHaveAttribute('data-zone', 'orange', { timeout: 120_000 });
-    const gear = Number(await dial(page).getAttribute('data-rapport'));
-    await expect.poll(async () => Number(await dial(page).getAttribute('data-rapport')), { timeout: 120_000, intervals: [100] }).toBeGreaterThan(gear);
-    await expect.poll(() => kmh(page), { timeout: 120_000 }).toBeGreaterThan(before + 30);
+    // Délais en secondes de route (temps de simulation), pas d'horloge : la CI tombe par moments sous
+    // une image par seconde. Au sec, plein gaz depuis l'arrêt, le concept est à l'orange en 3,3 s de
+    // route et passe la deuxième en 3,6 s (tests/unit/drive-temps-route.test.ts).
+    const rapport = async () => Number(await dial(page).getAttribute('data-rapport'));
+    await attendreSurLaRoute(page, 'compte-tours à l’orange', () => dial(page).getAttribute('data-zone'), (zone) => zone === 'orange', { secondes: 12, intervalle: 100 });
+    const gear = await rapport();
+    await attendreSurLaRoute(page, 'rapport suivant', rapport, (r) => r > gear, { secondes: 12, intervalle: 100 });
+    await attendreSurLaRoute(page, '+ 30 km/h', () => kmh(page), (v) => v > before + 30, { secondes: 15 });
     await expect(Number(await dial(page).getAttribute('data-rapport'))).toBeGreaterThanOrEqual(2);
 
     // Deux doigts à la fois : le manche reste tenu pendant qu'un second doigt envoie le NOS.

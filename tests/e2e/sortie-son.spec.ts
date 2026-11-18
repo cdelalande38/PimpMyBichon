@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { commencerCourse, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, reglagesSortie, reloadSaved, rentrerAuGarage } from './helpers.ts';
+import { attendreSurLaRoute, auSec, commencerCourse, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, reglagesSortie, reloadSaved, rentrerAuGarage } from './helpers.ts';
 
 // Son du moteur en sortie de nuit (§ 5.5, § 9) : au départ le moteur démarre et tourne, le régime
 // publié monte avec la vitesse et passe des rapports, le bouton « Moteur » coupe et remet (choix
@@ -68,9 +68,11 @@ async function shot(page: Page, name: string, dossier = 'vague-n-sonsortie'): Pr
   await page.screenshot({ path });
 }
 
-async function goOut(page: Page): Promise<void> {
+/** Part en sortie (première carte) ; `sec` : météo au sec, pour un parcours qui ne parle pas de météo. */
+async function goOut(page: Page, { sec = false }: { sec?: boolean } = {}): Promise<void> {
   await openEntry(page, 'Sortie de nuit');
   await pickMap(page);
+  if (sec) await auSec(page);
   await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
   await expect(page).toHaveURL(/#\/sortie$/);
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 90_000 });
@@ -87,7 +89,7 @@ test.describe('son du moteur en sortie', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
     expect(sounds).toEqual([]);
 
-    await goOut(page);
+    await goOut(page, { sec: true });
     // Le bouton est dans les réglages (l'aperçu roule derrière), assez grand pour le doigt.
     const button = engineButton(page);
     const temoin = engine(page);
@@ -105,20 +107,22 @@ test.describe('son du moteur en sortie', () => {
 
     // Le régime publié suit la vitesse : il monte avec elle et des rapports passent.
     const samples: { kmh: number; regime: number; rapport: number }[] = [];
-    await expect
-      .poll(
-        async () => {
-          samples.push({
-            kmh: Number(await stage(page).getAttribute('data-vitesse')),
-            regime: await numberAttr(page, 'data-regime'),
-            rapport: await numberAttr(page, 'data-rapport'),
-          });
-          return Math.max(...samples.map((sample) => sample.rapport));
-        },
-        // La deuxième passe vers 4 s de route ; en rendu logiciel la scène avance d'un dixième de seconde par image.
-        { timeout: 150_000, intervals: [250] },
-      )
-      .toBeGreaterThanOrEqual(2);
+    // La deuxième passe vers 4 s de route ; en rendu logiciel la scène avance d'un dixième de seconde par
+    // image et la CI tombe par moments sous une image par seconde : délai en secondes de route.
+    await attendreSurLaRoute(
+      page,
+      'deuxième rapport',
+      async () => {
+        samples.push({
+          kmh: Number(await stage(page).getAttribute('data-vitesse')),
+          regime: await numberAttr(page, 'data-regime'),
+          rapport: await numberAttr(page, 'data-rapport'),
+        });
+        return Math.max(...samples.map((sample) => sample.rapport));
+      },
+      (rapport) => rapport >= 2,
+      { secondes: 15 },
+    );
     const slow = samples.filter((sample) => sample.kmh < 8);
     const fast = samples.filter((sample) => sample.kmh >= 8);
     expect(fast.length).toBeGreaterThan(0);
@@ -241,7 +245,7 @@ test.describe('son du moteur en sortie', () => {
       await openApp(page);
       await putOnScreen(page, 'sportive');
       await reloadSaved(page);
-      await goOut(page);
+      await goOut(page, { sec: true });
       const mix = engine(page);
       const radioFacteur = async () => Number(await mix.getAttribute('data-radio'));
 
@@ -252,7 +256,8 @@ test.describe('son du moteur en sortie', () => {
       await expect(mix).toHaveAttribute('data-route', '0.70');
 
       // Un bruitage de rapport part au passage de rapport ; l'index n'est demandé qu'une fois.
-      await expect.poll(async () => Number(await mix.getAttribute('data-bruitages')), { timeout: 150_000, intervals: [250] }).toBeGreaterThan(0);
+      // Délai en secondes de route : la deuxième passe vers 4 s de route (CI : parfois moins d'une image par seconde).
+      await attendreSurLaRoute(page, 'bruitage de rapport', async () => Number(await mix.getAttribute('data-bruitages')), (n) => n > 0, { secondes: 15 });
       await expect(mix).toHaveAttribute('data-bruitage', 'rapport');
       expect(sfx.filter((path) => path === 'sfx.json')).toHaveLength(1);
       expect(sfx.some((path) => path.startsWith('rapport-1.ogg'))).toBe(true);
@@ -354,7 +359,7 @@ test.describe('son du moteur en sortie', () => {
       await openApp(page);
       await putOnScreen(page, 'sportive');
       await reloadSaved(page);
-      await goOut(page);
+      await goOut(page, { sec: true });
       const mix = engine(page);
       const nos = page.getByRole('button', { name: 'NOS' });
       const bruitages = async () => Number(await mix.getAttribute('data-bruitages'));
@@ -374,7 +379,8 @@ test.describe('son du moteur en sortie', () => {
       // Tant que la poussée dure, aucun autre coup ; une fois finie, toujours un seul.
       await expect(page.locator('.drive-dial')).toHaveAttribute('data-nos', 'true', { timeout: 30_000 });
       expect(await bruitages()).toBe(1);
-      await expect(page.locator('.drive-dial')).toHaveAttribute('data-nos', 'false', { timeout: 150_000 });
+      // La poussée dure 3 s de route (PILOT.nos.duration) : délai en secondes de route, pas d'horloge.
+      await attendreSurLaRoute(page, 'fin de la poussée', () => page.locator('.drive-dial').getAttribute('data-nos'), (v) => v === 'false', { secondes: 12 });
       expect(await bruitages()).toBe(1);
       await shot(page, 'nos-depart-390', 'vague-p-derapage');
 

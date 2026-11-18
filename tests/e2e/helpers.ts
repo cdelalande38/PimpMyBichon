@@ -335,6 +335,55 @@ export async function rentrerAuGarage(page: Page): Promise<void> {
 }
 
 /**
+ * Temps de route de la sortie, en secondes de SIMULATION : le chrono du départ (data-chrono, en
+ * dixièmes), qui tourne roues parties (aperçu compris) et s'arrête en pause, aux feux et à l'arrivée.
+ */
+export async function tempsDeRoute(page: Page): Promise<number> {
+  return Number((await page.locator('.drive-stage').getAttribute('data-chrono')) ?? 0) / 10;
+}
+
+/**
+ * Attend que `lire()` rende une valeur que `ok` accepte. Le délai se compte en secondes de ROUTE
+ * (`secondes`, temps de simulation lu sur data-chrono), pas d'horloge : en rendu logiciel, la CI tombe
+ * par moments sous une image par seconde et la scène n'avance que d'un dixième de seconde par image ;
+ * un délai d'horloge y mesure la machine, pas l'app (vague R : six parcours tombés ainsi). `horloge`
+ * (ms) n'est qu'un garde-fou contre une scène figée ; il doit tenir dans le délai du parcours. Rend la
+ * dernière valeur lue. Le relevé entre deux lectures (`intervalle`, ms) n'est pas une preuve.
+ */
+export async function attendreSurLaRoute<T>(
+  page: Page,
+  quoi: string,
+  lire: () => Promise<T>,
+  ok: (valeur: T) => boolean,
+  { secondes, horloge = 360_000, intervalle = 250 }: { secondes: number; horloge?: number; intervalle?: number },
+): Promise<T> {
+  const depart = await tempsDeRoute(page);
+  const debut = Date.now();
+  let valeur = await lire();
+  while (!ok(valeur)) {
+    const route = (await tempsDeRoute(page)) - depart;
+    if (route > secondes) throw new Error(`${quoi} : toujours ${JSON.stringify(valeur)} après ${route.toFixed(1)} s de route (délai : ${secondes} s de route)`);
+    if (Date.now() - debut > horloge) {
+      throw new Error(`${quoi} : toujours ${JSON.stringify(valeur)} après ${horloge / 1000} s d'horloge pour ${route.toFixed(1)} s de route seulement (scène figée ?)`);
+    }
+    await page.waitForTimeout(intervalle);
+    valeur = await lire();
+  }
+  return valeur;
+}
+
+/**
+ * Menu « Sortie de nuit », carte touchée : met la météo au sec. Pour les parcours qui ne parlent pas de
+ * météo : la pluie (réglage par défaut) allonge les accélérations à la main d'un quart et ralentit le
+ * pilote automatique en courbe (src/data/adherence.ts).
+ */
+export async function auSec(page: Page): Promise<void> {
+  const sec = page.locator('footer.dock').getByRole('group', { name: 'Météo' }).getByRole('button', { name: 'Sec', exact: true });
+  await sec.tap();
+  await expect(sec).toHaveAttribute('aria-pressed', 'true');
+}
+
+/**
  * Menu « Sortie de nuit » : touche une carte (la première par défaut). Rien n'est choisi à
  * l'ouverture du panneau ; les départs, la météo et « Sortir » n'apparaissent qu'ensuite.
  */

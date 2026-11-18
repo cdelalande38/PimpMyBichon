@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, capture, choisirCamera, commencerCourse, fermerReglages, openApp, openEntry, ouvrirReglages, rentrerAuGarage, waitForScene } from './helpers.ts';
+import { attendreApercu, attendreSurLaRoute, capture, choisirCamera, commencerCourse, fermerReglages, openApp, openEntry, ouvrirReglages, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 // Sortie de nuit, lot 1 (§ 5.5) : on entre par le menu (Garage · Sortie de nuit), on roule, on change
 // de caméra, on passe à la main, on rentre au garage. Le parcours ne lit que les attributs que la
@@ -50,9 +50,11 @@ test.describe('sortie de nuit', () => {
     await expect(stage(page)).toHaveAttribute('data-meteo', 'pluie');
 
     // Pilote automatique : l'abscisse et la vitesse avancent sans toucher l'écran.
+    // Délais en secondes de route (temps de simulation), pas d'horloge : la CI tombe par moments sous
+    // une image par seconde. Au pas de 0,1 s, sous la pluie, 10 km/h en moins d'une seconde, 20 m en 4 s.
     const s0 = await numberAttr(page, 'data-s');
-    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 90_000 }).toBeGreaterThan(10);
-    await expect.poll(() => numberAttr(page, 'data-s'), { timeout: 120_000 }).toBeGreaterThan(s0 + 20);
+    await attendreSurLaRoute(page, 'aperçu lancé', () => numberAttr(page, 'data-vitesse'), (v) => v > 10, { secondes: 10 });
+    await attendreSurLaRoute(page, 'aperçu qui avance', () => numberAttr(page, 'data-s'), (s) => s > s0 + 20, { secondes: 20 });
     await attendreApercu(page);
     await capture(page, 'sortie-route');
 
@@ -81,7 +83,9 @@ test.describe('sortie de nuit', () => {
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.mouse.move(cx, cy - 70, { steps: 4 });
-    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 120_000 }).toBeGreaterThan(25);
+    // Sous la pluie, plein gaz depuis la ligne : 25 km/h en 1,3 s de route ; 10 km/h perdus au frein à
+    // fond en 1,2 s ; 5 km/h repris en 1,1 s (tests/unit/drive-temps-route.test.ts).
+    await attendreSurLaRoute(page, 'gaz à fond', () => numberAttr(page, 'data-vitesse'), (v) => v > 25, { secondes: 8 });
     await expect(page.locator('.drive-speed b')).not.toHaveText('0');
     await page.mouse.up();
     // Manche vers le bas : le frein, à fond.
@@ -89,14 +93,14 @@ test.describe('sortie de nuit', () => {
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.mouse.move(cx, cy + 70, { steps: 4 });
-    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 60_000 }).toBeLessThan(Math.max(1, before - 10));
+    await attendreSurLaRoute(page, 'frein à fond', () => numberAttr(page, 'data-vitesse'), (v) => v < Math.max(1, before - 10), { secondes: 6 });
     await expect(page.locator('.drive-manche')).toHaveAttribute('data-frein', '1.00');
     await page.mouse.up();
     const stopped = await numberAttr(page, 'data-vitesse');
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.mouse.move(cx, cy - 70, { steps: 4 });
-    await expect.poll(() => numberAttr(page, 'data-vitesse'), { timeout: 60_000 }).toBeGreaterThan(stopped + 5);
+    await attendreSurLaRoute(page, 'gaz repris', () => numberAttr(page, 'data-vitesse'), (v) => v > stopped + 5, { secondes: 6 });
     await capture(page, 'sortie-main');
     await page.mouse.up();
 
