@@ -43,13 +43,14 @@ export interface MomentEtat {
   fenetres: number;
   bandeSonde: number;
   ombre: number;
+  ombreNette: number;
   matieres: Record<MatiereDuJour, Color>;
 }
 
 type Champ = Exclude<keyof MomentEtat, 'matieres'>;
 const COULEURS = ['zenith', 'milieu', 'horizon', 'lueur', 'teinteNuages', 'astre', 'astreCiel', 'ambianceCiel', 'ambianceSol', 'refletHorizon', 'refletZenith', 'brouillard', 'brume', 'voile'] as const satisfies readonly Champ[];
 const DIRECTIONS = ['lueurDirection', 'astreDirection'] as const satisfies readonly Champ[];
-const NOMBRES = ['etoiles', 'nuages', 'jour', 'astreIntensite', 'disque', 'ambianceIntensite', 'brouillardDensite', 'brumeDensite', 'voileMin', 'phares', 'lampadaires', 'neons', 'fenetres', 'bandeSonde', 'ombre'] as const satisfies readonly Champ[];
+const NOMBRES = ['etoiles', 'nuages', 'jour', 'astreIntensite', 'disque', 'ambianceIntensite', 'brouillardDensite', 'brumeDensite', 'voileMin', 'phares', 'lampadaires', 'neons', 'fenetres', 'bandeSonde', 'ombre', 'ombreNette'] as const satisfies readonly Champ[];
 
 function vide(): MomentEtat {
   const matieres = {} as Record<MatiereDuJour, Color>;
@@ -95,6 +96,7 @@ export function resoudre(look: Look, nuit: Readonly<Record<MatiereDuJour, Color 
   e.fenetres = look.fenetres;
   e.bandeSonde = look.bandeSonde;
   e.ombre = look.ombre;
+  e.ombreNette = look.ombreNette;
   for (const m of MATIERES_DU_JOUR) e.matieres[m].set(look.matieres[m] ?? nuit[m]);
   return e;
 }

@@ -22,12 +22,10 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
-  PlaneGeometry,
   Quaternion,
   Raycaster,
   ShaderMaterial,
   SpotLight,
-  Vector2,
   Vector3,
   type BufferGeometry,
   type Camera,
@@ -42,6 +40,7 @@ import { BASIS_TRANSCODER_DIR } from '../../data/bench.ts';
 import { modelUrl, placeOf } from '../../data/vehicles.ts';
 import type { InteriorView, VehicleManifest } from '../../data/vehicleTypes.ts';
 import { ATMOSPHERE_LAYER } from '../../render/layers.ts';
+import { SunShadow } from '../../render/sunShadow.ts';
 import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
 import { disposePrepared, paintZones, prepare, useVehicleWheels, WHEEL_NODE, type Prepared } from '../../scene/vehicle/VehicleModel.tsx';
 import { resolvePaints, useBuilds } from '../../state/builds.ts';
@@ -105,7 +104,7 @@ export interface DriveRig {
   beamGain: { value: number };
   /** Éblouissement des phares vus de face. */
   glareGain: { value: number };
-  /** Ombre portée par l'astre (le jour) : l'empreinte de l'ombre de contact, décalée au sol par le moteur de la scène. */
+  /** Ombre portée par l'astre (le jour) : la silhouette du véhicule (src/render/sunShadow.ts), tournée vers le soleil par le moteur de la scène. */
   cast: { mesh: Mesh; material: ShaderMaterial } | null;
 }
 
@@ -230,40 +229,6 @@ function disposeDrive(p: DrivePrepared): void {
   for (const g of p.owned.geometries) g.dispose();
   for (const m of p.owned.materials) m.dispose();
 }
-
-/** Ombre portée : marge du plan autour de l'empreinte du véhicule (décalage au plus et bord adouci), en mètres. */
-const CAST_PLANE_MARGIN = 2.6;
-
-// Ombre portée : boîte arrondie de l'empreinte (demi-longueur, demi-largeur), décalée de uOffset (repère
-// du véhicule, au sol), bord doux ; sous le véhicule, un cœur plus dense (le contact).
-const CAST_VERTEX = /* glsl */ `
-varying vec2 vPos;
-void main() {
-  vPos = position.xz;
-  // La chaussée passe un peu au-dessus du rail (bombé, dévers) : le plan est tiré de 0,25 m vers la
-  // caméra le long de la vue (même place à l'écran), pour ne jamais passer sous l'enrobé.
-  vec4 mv = modelViewMatrix * vec4( position, 1.0 );
-  mv.xyz *= max( 0.0, 1.0 - 0.25 / max( length( mv.xyz ), 0.5 ) );
-  gl_Position = projectionMatrix * mv;
-}`;
-const CAST_FRAGMENT = /* glsl */ `
-uniform vec2 uHalf;
-uniform vec2 uOffset;
-uniform float opacity;
-varying vec2 vPos;
-float pmbBoxDist( vec2 p, vec2 h, float r ) {
-  vec2 q = abs( p ) - h + r;
-  return length( max( q, 0.0 ) ) + min( max( q.x, q.y ), 0.0 ) - r;
-}
-void main() {
-  float r = min( uHalf.y, 0.6 );
-  // Ombre étirée : l'empreinte balayée de sa place au sol jusqu'à son décalage.
-  vec2 d = uOffset;
-  float t = clamp( dot( vPos, d ) / max( dot( d, d ), 1e-4 ), 0.0, 1.0 );
-  float sweep = 1.0 - smoothstep( -0.12, 0.28, pmbBoxDist( vPos - d * t, uHalf * vec2( 0.97, 0.95 ), r ) );
-  float core = 1.0 - smoothstep( -0.25, 0.12, pmbBoxDist( vPos, uHalf * vec2( 0.95, 0.92 ), r ) );
-  gl_FragColor = vec4( 0.0, 0.0, 0.0, min( max( sweep, core * 1.25 ), 1.0 ) * opacity );
-}`;
 
 /** Compile le programme d'un objet caché (montré le temps de la compilation) : rien à compiler quand il apparaît. */
 function compileHidden(object: Object3D, gl: WebGLRenderer, camera: Camera, scene: Scene): void {
@@ -425,7 +390,7 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     return new Color().setRGB(r, g, b);
   }, [phares.couleur]);
   // Pièces montées (aileron…) du build, posées comme au garage.
-  usePieces(drive.prepared, vehicle, invalidate, bodyEnv);
+  const pieces = usePieces(drive.prepared, vehicle, invalidate, bodyEnv);
   const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins, vehicle.kind), [drive, spins, vehicle.kind]);
   // Direction d'une moto : fourche, guidon et poignées tournent avec la roue avant ; remis droits au départ.
   const steering = useMemo(() => bikeSteering(drive.prepared.root, wheels, vehicle.kind), [drive, wheels, vehicle.kind]);
@@ -511,44 +476,24 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   // Ombre de contact (src/render/vehicleShadow.ts), rendue une fois, au sol sous la caisse.
   const shadow = useMemo(() => new VehicleShadowRig(shadowSize({ halfLength, halfWidth, height })), [halfLength, halfWidth, height]);
   useEffect(() => () => shadow.dispose(), [shadow]);
+  // Ombre portée par le soleil, le jour (src/render/sunShadow.ts ; moteur.ts, castShadow) : la
+  // silhouette du véhicule étirée à l'opposé du soleil, cachée la nuit ; cartes de hauteur rendues
+  // avec l'ombre de contact.
+  const cast = useMemo(() => new SunShadow({ halfLength, halfWidth, height }), [halfLength, halfWidth, height]);
+  useEffect(() => () => cast.dispose(), [cast]);
   const pending = useRef(true);
   useLayoutEffect(() => {
     pending.current = true;
     shadow.compile(gl);
-  }, [gl, shadow, stamp]);
+    cast.compile(gl);
+    // `pieces` : une pièce montée (aileron…) arrive après le modèle ; les ombres se refont avec elle.
+  }, [gl, shadow, cast, stamp, pieces]);
   useFrame(() => {
     if (!pending.current) return;
     pending.current = false;
     shadow.render(gl, drive.prepared.root, scene);
+    cast.render(gl, drive.prepared.root, rig.body, scene);
   });
-  // Ombre portée par l'astre, le jour (moteur.ts, castShadow) : l'empreinte du véhicule au sol, bords
-  // adoucis, plus dense dessous (contact) et étirée à l'opposé de l'astre. Calculée dans le nuanceur
-  // (aucune texture, un appel de dessin), cachée la nuit ; son programme est compilé dès le montage.
-  const cast = useMemo(() => {
-    const reach = CAST_PLANE_MARGIN;
-    const geometry = new PlaneGeometry(2 * (halfLength + reach), 2 * (halfWidth + reach)).rotateX(-Math.PI / 2);
-    const material = new ShaderMaterial({
-      uniforms: { uHalf: { value: new Vector2(halfLength, halfWidth) }, uOffset: { value: new Vector2() }, opacity: { value: 0 } },
-      vertexShader: CAST_VERTEX,
-      fragmentShader: CAST_FRAGMENT,
-      transparent: true,
-      depthWrite: false,
-    });
-    material.name = 'jour_ombre_portee';
-    const mesh = new Mesh(geometry, material);
-    mesh.name = 'ombre_portee';
-    mesh.position.y = 0.02;
-    mesh.renderOrder = 1;
-    mesh.visible = false;
-    return { mesh, material };
-  }, [halfLength, halfWidth]);
-  useEffect(
-    () => () => {
-      cast.material.dispose();
-      cast.mesh.geometry.dispose();
-    },
-    [cast],
-  );
   const camera = useThree((state) => state.camera);
   useLayoutEffect(() => compileHidden(cast.mesh, gl, camera, scene), [cast, gl, camera, scene]);
 

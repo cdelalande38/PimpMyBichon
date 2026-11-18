@@ -57,6 +57,8 @@ export const SIGN_COLORS: readonly string[] = ['#ff2bd6', '#22e4ff', '#ff3340', 
 
 const COLS = 4;
 const ROWS = 6;
+/** Cases de l'atlas (colonnes, rangées) : les caissons de jour y lisent leurs tubes (src/drive/scene/decor.ts). */
+export const SIGN_ATLAS = { cols: COLS, rows: ROWS } as const;
 const CW = 256;
 const CH = 128;
 

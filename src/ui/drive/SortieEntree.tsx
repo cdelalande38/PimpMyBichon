@@ -162,7 +162,7 @@ export function SortieEntree() {
         <div className="drive-weather" role="group" aria-label="Météo">
           {WEATHERS.map((item) => (
             <button key={item.id} type="button" className="btn drive-weather-btn" aria-pressed={weather === item.id} aria-label={item.label} onClick={() => setWeather(item.id)}>
-              <DriveIcon name={item.id} />
+              <DriveIcon name={item.id === 'sec' && moment === 'jour' ? 'soleil' : item.id} />
               <span>{item.label}</span>
             </button>
           ))}

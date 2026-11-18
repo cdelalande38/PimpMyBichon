@@ -109,8 +109,11 @@ function usePieceSources(vehicle: VehicleManifest, choice: string): Loaded {
 /**
  * Pose sur la caisse du véhicule préparé les pièces montées du build (aileron…) et tient leur peinture
  * à jour (couleur de la caisse ou couleur propre, part du reflet selon l'ambiance).
+ *
+ * Rend la signature de ce qui est posé (« aileron:haut ») : elle change quand une pièce arrive ou part.
+ * Qui dépend de la silhouette du véhicule (l'ombre portée de la sortie) s'y abonne pour se refaire.
  */
-export function usePieces(prepared: Prepared, vehicle: VehicleManifest, invalidate: () => void, bodyEnv: number, options: { preload?: boolean } = {}): void {
+export function usePieces(prepared: Prepared, vehicle: VehicleManifest, invalidate: () => void, bodyEnv: number, options: { preload?: boolean } = {}): string {
   const choice = useBuilds((state) => choiceSignature(vehicle, state.builds[vehicle.id]));
   const painted = useBuilds((state) => paintSignature(vehicle, state.builds[vehicle.id]));
   const loaded = usePieceSources(vehicle, choice);
@@ -180,4 +183,14 @@ export function usePieces(prepared: Prepared, vehicle: VehicleManifest, invalida
     });
     invalidate();
   }, [painted, postes, paints, bodyEnv, invalidate]);
+
+  return useMemo(() => {
+    const wanted = new Map(JSON.parse(choice) as Array<[string, string | null]>);
+    return postes
+      .map((poste) => {
+        const source = loaded[poste.id];
+        return wanted.get(poste.id) && source && vehicle.pieces?.[poste.id] ? `${poste.id}:${source.option.id}` : '';
+      })
+      .join('|');
+  }, [choice, loaded, postes, vehicle]);
 }

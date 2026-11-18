@@ -30,8 +30,12 @@ test.describe('sortie de jour', () => {
     const moments = dock.getByRole('group', { name: 'Moment' });
     await expect(moments.getByRole('button', { name: 'Nuit', exact: true })).toHaveAttribute('aria-pressed', 'true');
     const jour = moments.getByRole('button', { name: 'Jour', exact: true });
+    // « Sec » : une lune la nuit, un soleil le jour (vague T).
+    const sec = dock.getByRole('group', { name: 'Météo' }).getByRole('button', { name: 'Sec', exact: true });
+    await expect(sec.locator('svg circle')).toHaveCount(0);
     await jour.tap();
     await expect(jour).toHaveAttribute('aria-pressed', 'true');
+    await expect(sec.locator('svg circle')).toHaveCount(1);
     // 48 px au doigt.
     const box = await jour.boundingBox();
     expect(Math.min(box?.width ?? 0, box?.height ?? 0)).toBeGreaterThanOrEqual(47.5);

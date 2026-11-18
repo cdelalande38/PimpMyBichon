@@ -93,6 +93,13 @@ void main() {
   float cl = n2( cp ) * 0.55 + n2( cp * 2.3 + 7.1 ) * 0.3 + n2( cp * 5.1 + 2.3 ) * 0.15;
   cl = smoothstep( 0.5, 0.95, cl ) * smoothstep( 0.02, 0.2, y ) * uClouds;
   vec3 cloudLit = mix( uHorizon * 0.55 + uMoon * ( 0.05 + 0.5 * pow( m, 6.0 ) ), uCloudTint * ( 0.82 + 0.3 * pow( m, 4.0 ) - 0.12 * n2( cp * 3.1 + 1.7 ) ), uDay );
+  // Ciel couvert de jour (pluie, neige) : une couche de nuages qui a du relief, bancs plus sombres et
+  // trouées plus claires, plus lumineuse vers le zénith, au lieu d'un aplat gris (rien la nuit).
+  float overcast = smoothstep( 1.0, 2.0, uClouds ) * uDay;
+  if ( overcast > 0.0 ) {
+    float bank = n2( cp * 0.42 + 3.7 ) * 0.65 + n2( cp * 1.3 + 9.2 ) * 0.35;
+    cloudLit *= mix( 1.0, 0.6 + 0.66 * bank + 0.14 * smoothstep( 0.05, 0.7, y ), overcast );
+  }
   c = mix( c, cloudLit, min( cl * mix( 0.4, 0.9, uDay ), 1.0 ) );
   // Étoiles : une case de la voûte sur quelques centaines porte une étoile, plus rare vers l'horizon.
   vec3 cell = floor( d * 340.0 );

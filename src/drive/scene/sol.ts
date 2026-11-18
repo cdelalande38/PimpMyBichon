@@ -164,6 +164,16 @@ vec4 pmbSolTex( sampler2D t, vec2 p, float tile ) {
   return mix( a, b, m );
 }
 #endif
+// Plein jour : une herbe n'est jamais d'une seule teinte (pré fauché, herbe sèche, coins plus verts),
+// à plusieurs échelles (80, 22 et 5 m) ; facteur autour de 1, pesé par pmbJour à l'usage.
+vec3 pmbDayGrass( vec2 q ) {
+  float m1 = pmbNoise( q * 0.012 + 7.7 );
+  float m2 = pmbNoise( q * 0.045 + 2.9 );
+  float m3 = pmbNoise( q * 0.19 + 11.3 );
+  vec3 tint = mix( vec3( 0.84, 1.0, 0.92 ), vec3( 1.22, 1.08, 0.7 ), smoothstep( 0.3, 0.78, m1 * 0.6 + m2 * 0.4 ) );
+  float m4 = pmbNoise( q * 0.7 + 3.3 );
+  return tint * ( 0.78 + 0.3 * m2 + 0.18 * m3 + 0.12 * m4 );
+}
 `;
 
 /**
@@ -183,7 +193,8 @@ export const SOL_SURFACE = /* glsl */ `
     // Enrobé : granulats, liant, fissures fines ; en repère du monde pour que le marquage, posé
     // dessus, en suive exactement le grain.
     vec4 t = pmbSolTex( pmbSolEnrobe, q, pmbSolTuiles.x );
-    float mul = 0.4 + 1.2 * t.b;
+    // De jour, le grain se lit au soleil : moins de contraste (granulats moins noirs, moins blancs).
+    float mul = mix( 0.4 + 1.2 * t.b, 0.7 + 0.6 * t.b, pmbJour );
     pmbSolGrain = t.b;
     pmbSolLow = clamp( 0.5 - ( t.b - 0.5 ) * 2.0, 0.0, 1.0 );
     vec2 n = ( t.xy - 0.5 ) * 2.0;
@@ -264,6 +275,7 @@ export const SOL_SURFACE = /* glsl */ `
       float gravel = 1.0 - smoothstep( 0.25, 0.9, d + 0.35 * ( pmbNoise( q * 1.7 ) - 0.5 ) );
       vec3 gravelC = vec3( lum ) * vec3( 1.9, 1.8, 1.65 ) * ( 0.4 + 1.2 * g.b );
       vec3 grassC = base * ( 0.4 + 1.2 * t.b );
+      if ( pmbJour > 0.0 ) grassC = mix( grassC, grassC * pmbDayGrass( q ), pmbJour );
       diffuseColor.rgb = mix( grassC, gravelC, gravel );
       vec2 n = ( mix( t.xy, g.xy, gravel ) - 0.5 ) * 2.0;
       pmbSolN = vec3( n.x, 0.0, n.y ) * 0.4 * reliefNear;
@@ -287,6 +299,7 @@ export const SOL_SURFACE = /* glsl */ `
     vec3 base = diffuseColor.rgb;
     float lum = dot( base, vec3( 0.3, 0.59, 0.11 ) );
     vec3 grass = base * mix( vec3( 1.12, 1.0, 0.8 ), vec3( 0.9, 1.04, 1.15 ), macro ) * ( 0.4 + 1.2 * t.b );
+    if ( pmbJour > 0.0 ) grass = mix( grass, grass * pmbDayGrass( q ), pmbJour );
     vec3 dirt = vec3( lum ) * vec3( 1.45, 1.1, 0.78 ) * ( 0.4 + 1.2 * t.a );
     vec3 rock = vec3( lum ) * vec3( 1.5, 1.48, 1.45 ) * ( 0.4 + 1.2 * t.a );
     diffuseColor.rgb = mix( mix( grass, dirt, dirtM ), rock, rockM );
@@ -315,11 +328,18 @@ if ( abs( nW.y ) < 0.6 ) {
   float px = max( length( fwidth( p ) ), 1e-4 );
   float reliefNear = 1.0 - smoothstep( 0.01, 0.04, px );
   vec3 jitter = 1.0 + 0.1 * vec3( fract( seed * 3.7 ) - 0.5, fract( seed * 5.3 ) - 0.5, fract( seed * 9.1 ) - 0.5 );
-  diffuseColor.rgb *= jitter * ( 2.0 * t.b );
+  // De jour, l'enduit au soleil : grain moins contrasté (sinon la façade paraît tachée).
+  diffuseColor.rgb *= jitter * mix( 2.0 * t.b, 0.78 + 0.44 * t.b, pmbJour );
   // Soubassement (60 cm, éclaboussures) et coulures sous la corniche.
   float plinth = 1.0 - smoothstep( 0.45, 0.7, y + 0.15 * t.b );
   float streak = smoothstep( hgt - 2.2, hgt - 0.6, y ) * smoothstep( 0.45, 0.8, pmbNoise( vec2( p.x * 1.3, 0.0 ) + seed * 7.0 ) );
   diffuseColor.rgb *= ( 1.0 - 0.3 * plinth ) * ( 1.0 - 0.3 * streak );
+  if ( pmbJour > 0.0 ) {
+    // Plein jour : soubassement de pierre ou d'enduit plus sombre (90 cm), propre à chaque bâtiment.
+    float socle = ( 1.0 - smoothstep( 0.85, 0.92, y + 0.04 * t.b ) ) * step( 0.35, fract( seed * 2.9 ) );
+    vec3 stone = mix( vec3( 0.62, 0.6, 0.57 ), vec3( 0.5, 0.47, 0.44 ), fract( seed * 6.1 ) );
+    diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * stone * ( 0.85 + 0.3 * t.b ), socle * pmbJour );
+  }
   roughnessFactor = clamp( roughnessFactor * ( 0.6 + 0.8 * t.a ), 0.04, 1.0 );
   vec2 n = ( t.xy - 0.5 ) * 2.0 * ( 0.4 + 0.6 * k );
   pmbSolN = ( vec3( tdS.x, 0.0, tdS.y ) * n.x + vec3( 0.0, 1.0, 0.0 ) * n.y ) * 0.5 * reliefNear;

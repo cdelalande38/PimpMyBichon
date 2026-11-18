@@ -522,7 +522,7 @@ export function forgetModel(vehicle: Pick<VehicleManifest, 'id' | 'glb'>): void 
  * première image après sa pose ; remontée à chaque contexte WebGL rendu (clé d'époque), libérée au
  * démontage. Ses trois programmes sont lancés d'avance, avec ceux du véhicule.
  */
-function VehicleShadow({ caster, halfLength, halfWidth, height, stamp }: VehicleMeasure & { caster: Object3D; stamp: number }) {
+function VehicleShadow({ caster, halfLength, halfWidth, height, stamp, pieces }: VehicleMeasure & { caster: Object3D; stamp: number; pieces: string }) {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene);
   const invalidate = useThree((state) => state.invalidate);
@@ -533,7 +533,8 @@ function VehicleShadow({ caster, halfLength, halfWidth, height, stamp }: Vehicle
     pending.current = true;
     rig.compile(gl);
     invalidate();
-  }, [gl, rig, caster, invalidate, stamp]);
+    // `pieces` : une pièce montée (aileron…) change la silhouette, l'ombre de contact se refait.
+  }, [gl, rig, caster, invalidate, stamp, pieces]);
   useFrame(() => {
     if (!pending.current) return;
     pending.current = false;
@@ -587,7 +588,7 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   // Phares du build : lueur et glace des optiques, feux arrière (src/scene/vehicle/phares.ts).
   useVehicleLights(prepared.root, vehicle, { cloneRear: true, stageClass: 'stage', invalidate });
   // Pièces montées (aileron…) du build, sur la caisse (src/scene/vehicle/pieces.ts).
-  usePieces(prepared, vehicle, invalidate, bodyEnv, { preload: true });
+  const pieces = usePieces(prepared, vehicle, invalidate, bodyEnv, { preload: true });
 
   // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
   // vernis), et compilerait pour rien une variante de plus pendant le démarrage. Rendu à la
@@ -675,7 +676,7 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
           avec le modèle déjà en place. */}
       {/* Hors de la sonde : elle n'y entrerait qu'aux captures faites après le modèle (revue n° 7). */}
       <group userData={{ hideInProbe: true }}>
-        <VehicleShadow key={epoch} caster={prepared.root} halfLength={halfLength} halfWidth={halfWidth} height={height} stamp={stamp} />
+        <VehicleShadow key={epoch} caster={prepared.root} halfLength={halfLength} halfWidth={halfWidth} height={height} stamp={stamp} pieces={pieces} />
       </group>
     </>
   );

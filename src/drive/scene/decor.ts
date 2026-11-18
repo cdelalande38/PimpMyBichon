@@ -16,6 +16,7 @@ import {
   ConeGeometry,
   CylinderGeometry,
   Group,
+  InstancedBufferAttribute,
   InstancedMesh,
   Matrix4,
   Mesh,
@@ -28,6 +29,8 @@ import {
   type BufferGeometry,
   type Material,
   type Object3D,
+  type Texture,
+  type WebGLProgramParametersWithUniforms,
 } from 'three';
 import type { Rail } from '../contrat.ts';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -36,7 +39,7 @@ import { MAP_INSTANCE_STRIDE, MAP_SHOP_KINDS, MAP_SHOP_STRIDE, type MapChunk, ty
 import { NO_MIRROR_LAYER } from '../../render/layers.ts';
 import { createPose } from '../rail.ts';
 import { SKY } from './ciel.ts';
-import { DECOR_SIGN_CELLS, placeSigns, shopSignCell, type PlacedSigns, type SignSpot } from './enseignes.ts';
+import { DECOR_SIGN_CELLS, placeSigns, shopSignCell, SIGN_ATLAS, SIGN_SIZE, type PlacedSigns, type SignSpot } from './enseignes.ts';
 import { emitAttribute, isNoMirror, patchNight, type NightUniforms } from './materiaux.ts';
 import { facadeAttribute, roadAttribute, tunnelLamps, tunnelSpans, type Span } from './abri.ts';
 import { chunkAt, chunkPlan, wantedChunks, type DriveProfile } from './profil.ts';
@@ -218,6 +221,55 @@ void main() {
   gl_FragColor = vec4( pmbLampColor * ( core + halo ) * uGain * vFade * mix( 1.0, vStretch, 0.65 ), 1.0 );
 }`;
 
+/** Caisson d'une enseigne, de jour : bord autour des tubes (m), épaisseur (m) ; sa face avant affleure juste derrière les tubes. */
+export const SIGN_BOX = { border: 0.08, depth: 0.12, front: -0.015 } as const;
+
+function signBoxGeometry(): BufferGeometry {
+  const { border, depth, front } = SIGN_BOX;
+  return new BoxGeometry(SIGN_SIZE.width + 2 * border, SIGN_SIZE.height + 2 * border, depth).translate(0, 0, front - depth / 2);
+}
+
+/**
+ * Caissons des enseignes éteintes (de jour) : boîte laquée sombre, les tubes de verre éteints dessinés
+ * sur sa face avant d'après l'atlas des enseignes (canal rouge), à peine teintés de leur couleur ;
+ * éclairés par le soleil et le ciel comme le reste du décor. Rien la nuit (matière cachée : la nuit ne
+ * change pas).
+ */
+function signDayMaterial(atlas: { value: Texture | null }): MeshStandardMaterial {
+  const material = new MeshStandardMaterial({ color: '#ffffff', roughness: 0.45, metalness: 0.1, envMapIntensity: 0 });
+  material.name = 'jour_enseignes';
+  material.visible = false;
+  material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
+    shader.uniforms.pmbSignAtlas = atlas;
+    shader.vertexShader = `attribute float aCell;\nvarying vec2 vSignUv;\nvarying float vSignFront;\n${shader.vertexShader}`.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      {
+        vec2 local = clamp( position.xy / vec2( ${SIGN_SIZE.width.toFixed(3)}, ${SIGN_SIZE.height.toFixed(3)} ) + 0.5, 0.0, 1.0 );
+        float col = mod( aCell, ${SIGN_ATLAS.cols}.0 );
+        float row = floor( aCell / ${SIGN_ATLAS.cols}.0 );
+        vSignUv = vec2( ( col + local.x ) / ${SIGN_ATLAS.cols}.0, ( row + 1.0 - local.y ) / ${SIGN_ATLAS.rows}.0 );
+        vSignFront = step( 0.5, normal.z );
+      }`,
+    );
+    shader.fragmentShader = `uniform sampler2D pmbSignAtlas;\nvarying vec2 vSignUv;\nvarying float vSignFront;\n${shader.fragmentShader}`
+      .replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float pmbTube = smoothstep( 0.12, 0.55, texture2D( pmbSignAtlas, vSignUv ).r ) * vSignFront;
+        #ifdef USE_INSTANCING_COLOR
+        vec3 pmbTubeTint = vColor.rgb;
+        #else
+        vec3 pmbTubeTint = vec3( 1.0 );
+        #endif
+        diffuseColor.rgb = mix( vec3( 0.04, 0.042, 0.046 ), mix( vec3( 0.6, 0.61, 0.62 ), pmbTubeTint, 0.3 ), pmbTube );`,
+      )
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix( roughnessFactor, 0.2, pmbTube );');
+  };
+  material.customProgramCacheKey = () => 'pmb-jour-enseignes';
+  return material;
+}
+
 /** Matières et géométries partagées par tous les tronçons. */
 export class DecorKit {
   readonly tree = treeGeometry();
@@ -230,6 +282,10 @@ export class DecorKit {
   readonly halo = new PlaneGeometry(1, 1);
   /** Mât d'une enseigne sur pied : boîte unité, à l'échelle dans sa matrice. */
   readonly pole = new BoxGeometry(1, 1, 1, 1, 1, 1);
+  /** Caisson d'une enseigne (de jour), et l'atlas de ses tubes (posé avec les enseignes). */
+  readonly signBox = signBoxGeometry();
+  readonly signAtlas: { value: Texture | null } = { value: null };
+  readonly signDayMaterial = signDayMaterial(this.signAtlas);
 
   readonly treeMaterial: MeshStandardMaterial;
   readonly lampMaterial: MeshStandardMaterial;
@@ -298,9 +354,17 @@ export class DecorKit {
     this.farMaterial.customProgramCacheKey = () => 'pmb-nuit-lointain';
   }
 
+  /**
+   * Moment posé (0 la nuit, 1 le jour ; moteur.ts, applyMoment) : ce qui ne se montre que de jour. Les
+   * caissons des enseignes éteintes paraissent passé la mi-chemin (la nuit, ils ne sont pas dessinés).
+   */
+  poserJour(jour: number): void {
+    this.signDayMaterial.visible = jour > 0.5;
+  }
+
   dispose(): void {
-    for (const g of [this.tree, this.lamp, this.balise, ...this.panneaux, this.palm, this.feu, this.lens, this.halo, this.pole]) g.dispose();
-    for (const m of [this.treeMaterial, this.lampMaterial, this.baliseMaterial, this.lensMaterial, this.haloMaterial, this.farMaterial]) m.dispose();
+    for (const g of [this.tree, this.lamp, this.balise, ...this.panneaux, this.palm, this.feu, this.lens, this.halo, this.pole, this.signBox]) g.dispose();
+    for (const m of [this.treeMaterial, this.lampMaterial, this.baliseMaterial, this.lensMaterial, this.haloMaterial, this.farMaterial, this.signDayMaterial]) m.dispose();
   }
 }
 
@@ -568,6 +632,9 @@ export class Decor {
     if (placed?.signs) {
       owned.push(placed.signs.geometry);
       put(placed.signs);
+      const boxes = this.signBoxes(placed.signs);
+      owned.push(boxes.geometry);
+      put(boxes);
     }
     if (placed && placed.poles.length > 0) {
       const poles = new InstancedMesh(this.kit.pole, this.kit.lampMaterial, placed.poles.length);
@@ -703,6 +770,24 @@ export class Decor {
   }
 
   /**
+   * Caissons des enseignes d'un tronçon (de jour) : mêmes places, mêmes teintes et mêmes cases de
+   * l'atlas que leurs tubes ; un appel de dessin, et aucun la nuit (matière cachée).
+   */
+  private signBoxes(signs: InstancedMesh): InstancedMesh {
+    const geometry = this.kit.signBox.clone();
+    const cells = signs.geometry.getAttribute('aCell');
+    const cell = cells ? Float32Array.from(cells.array as ArrayLike<number>) : new Float32Array(signs.count);
+    geometry.setAttribute('aCell', new InstancedBufferAttribute(cell, 1));
+    const mesh = new InstancedMesh(geometry, this.kit.signDayMaterial, signs.count);
+    mesh.instanceMatrix.array.set(signs.instanceMatrix.array);
+    mesh.instanceMatrix.needsUpdate = true;
+    if (signs.instanceColor) mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(signs.instanceColor.array), 3);
+    mesh.computeBoundingSphere();
+    mesh.name = 'enseignes_caissons';
+    return mesh;
+  }
+
+  /**
    * Enseignes d'un tronçon. Commerces connus (OpenStreetMap) : une enseigne par commerce, du côté où
    * il est, au mot de sa nature, et des enseignes d’ambiance (un point tous les 36 m). Sinon, au
    * jugé : sur les façades des sections en agglomération, un point tous les 18 m.
@@ -739,6 +824,8 @@ export class Decor {
     }
     if (spots.length === 0) return null;
     group.updateMatrixWorld(true);
+    // L'atlas des tubes, pour les caissons de jour.
+    this.kit.signAtlas.value ??= (signs.material.uniforms.uAtlas?.value as Texture | undefined) ?? null;
     return placeSigns(walls, spots, group.position, signs.material);
   }
 

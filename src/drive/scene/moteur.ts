@@ -60,6 +60,7 @@ import { MomentMelange } from './moment.ts';
 import { DRIVE_PROFILES, due, fogDensity, lampWeights, nearestLamps, stepOf, type DriveProfile } from './profil.ts';
 import { MovingProbe } from './sonde.ts';
 import { cleanProbePass } from '../../render/probePass.ts';
+import { aimSunShadow } from '../../render/sunShadow.ts';
 import { roueEnPlus, rouesMotrices, wheelSteer } from './roues.ts';
 import { createRig, rollWheels, TAIL_LIGHT, type DriveModel, type DriveRig } from './vehicule.tsx';
 
@@ -98,8 +99,8 @@ const PROBE_BAND_GAIN = 0.5;
 /** Passage d'un moment à l'autre (nuit, jour) : part franchie par seconde. */
 const MOMENT_RATE = 1.5;
 
-/** Ombre portée du véhicule : hauteur (part de celle du véhicule) d'où l'astre la projette au sol, et décalage au plus (m). */
-const CAST_SHADOW = { height: 0.7, reach: 2, lift: 0.6 } as const;
+/** Ombre portée du véhicule : levée au plus du plan d'ombre sur l'enrobé au-dessus du rail (m). */
+const CAST_SHADOW = { lift: 0.6 } as const;
 
 /**
  * Brume au sol : sa base se cale sur le plan d'eau chargé le plus proche s'il est à moins de
@@ -768,6 +769,8 @@ export class DriveEngine {
     u.pmbHeadOn.value = e.phares;
     u.pmbGlow.value = e.fenetres;
     u.pmbLampOn.value = e.lampadaires;
+    u.pmbJour.value = e.jour;
+    this.kit.poserJour(e.jour);
     if (this.fog) {
       this.fog.color.copy(e.brouillard);
       this.fog.density = this.fogBase * e.brouillardDensite;
@@ -789,9 +792,9 @@ export class DriveEngine {
   }
 
   /**
-   * Ombre portée du véhicule par l'astre (src/drive/scene/vehicule.tsx, `cast`) : l'empreinte de
-   * l'ombre de contact, décalée au sol à l'opposé de l'astre (repère du véhicule), d'autant plus
-   * qu'il est bas ; invisible la nuit. Aucune allocation.
+   * Ombre portée du véhicule par l'astre (src/render/sunShadow.ts ; src/drive/scene/vehicule.tsx,
+   * `cast`) : la silhouette du véhicule, étirée à l'opposé de l'astre (direction dans le repère du
+   * véhicule), courte et douce sous un ciel couvert ; invisible la nuit. Aucune allocation.
    */
   private castShadow(heading: number, px: number, py: number, pz: number, opacity: number, off: boolean): void {
     const cast = this.rig.cast;
@@ -811,9 +814,7 @@ export class DriveEngine {
     let top = this.decor.relief.ground(px, pz, py + 1);
     top = Math.max(top, this.decor.relief.ground(px + sn * half, pz + c * half, py + 1), this.decor.relief.ground(px - sn * half, pz - c * half, py + 1));
     cast.mesh.position.y = (top === top ? Math.min(CAST_SHADOW.lift, Math.max(0, top - py)) : 0) + 0.02;
-    const h = (this.rig.measure?.height ?? 1.4) * CAST_SHADOW.height;
-    const k = Math.min(CAST_SHADOW.reach, h / Math.max(0.15, d.y));
-    (cast.material.uniforms.uOffset as { value: { set: (x: number, y: number) => void } }).value.set(-lx * k, -lz * k);
+    aimSunShadow(cast, lx, d.y, lz, this.moment.etat.ombreNette);
   }
 
   /**

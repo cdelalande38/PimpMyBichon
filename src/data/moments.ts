@@ -80,6 +80,8 @@ export interface Look {
   bandeSonde: number;
   /** Ombre portée du véhicule par l'astre (opacité, 0 : aucune ; l'ombre de contact reste). */
   ombre: number;
+  /** Netteté de cette ombre : 1, soleil franc (silhouette étirée à l'opposé du soleil) ; 0, ciel couvert (ombre courte et douce, sous le véhicule). */
+  ombreNette: number;
   /** Teinte des matières du décor ; absente : la teinte de nuit (src/drive/scene/materiaux.ts, ROLE_LOOKS). */
   matieres: Partial<Record<MatiereDuJour, Teinte>>;
 }
@@ -111,6 +113,7 @@ const NUIT: Omit<Look, 'ciel'> = {
   carrosserie: 5.5,
   bandeSonde: 0.5,
   ombre: 0,
+  ombreNette: 1,
   matieres: {},
 };
 
@@ -121,16 +124,18 @@ const SOLEIL: Direction = [0.45, 0.72, 0.53];
 
 /**
  * Teintes de plein jour des matières : de vrais albédos (linéaires), la nuit gardant les siens (1,5 à
- * 4 %). Enrobé 9 à 11 %, accotement 13 %, herbe 17 %, enduit des murs 42 % avant la teinte de la
- * famille du bâtiment (× 1 à 1,3 dans le nuanceur), béton 34 %, feuillage 7 %. Les textures du sol et
- * du bâti (src/drive/scene/sol.ts) modulent cette teinte autour de 1.
+ * 4 %). Enrobé 9 à 11 %, accotement 13 %, herbe 10 % (vert 11 %, rouge 9 % : vue avec ses textures
+ * le 18 novembre, l'herbe à 17 % paraissait fluo), enduit des murs 42 % avant la teinte du bâtiment
+ * (× 0,6 à 1,7 dans le nuanceur, une teinte d'enduit par bâtiment de jour), béton 34 %, feuillage 7 %.
+ * Les textures du sol et du bâti (src/drive/scene/sol.ts) modulent cette teinte autour de 1 ; de jour,
+ * l'herbe varie en plus par plaques (pmbDayGrass).
  */
 const MATIERES_JOUR: Look['matieres'] = {
   chaussee: '#5b5c61',
   voie: '#56575c',
   marquage: '#e6e4dc',
   accotement: '#6e6553',
-  terrain: '#5f7a40',
+  terrain: '#55653b',
   eau: '#0b1a24',
   mur: '#b4aa9e',
   ouvrage: '#9c9b96',
@@ -158,7 +163,8 @@ const JOUR_SEC: Look = {
   lointain: { voile: '#aabfd6', voileForce: 1, voileMin: 0.62 },
   image: { exposition: 1.0, bloom: 0.25, etalonnage: { shadows: '#34466e', highlights: '#fff0d8', amount: 0.05, saturation: 1.08, contrast: 1.05 } },
   carrosserie: 1.1,
-  ombre: 0.55,
+  ombre: 0.62,
+  ombreNette: 1,
 };
 
 const JOUR_PLUIE: Look = {
@@ -172,7 +178,8 @@ const JOUR_PLUIE: Look = {
   lointain: { voile: '#959ca4', voileForce: 1, voileMin: 0.75 },
   image: { exposition: 1.15, bloom: 0.2, etalonnage: { shadows: '#3a4658', highlights: '#eef2f6', amount: 0.05, saturation: 0.95, contrast: 1.04 } },
   carrosserie: 1.3,
-  ombre: 0.08,
+  ombre: 0.22,
+  ombreNette: 0,
 };
 
 const JOUR_NEIGE: Look = {
@@ -181,12 +188,13 @@ const JOUR_NEIGE: Look = {
   astre: { direction: SOLEIL, couleur: '#eef1f5', intensite: 0.7, teinteCiel: '#e8ebef', disque: 0 },
   ambiance: { ciel: '#dfe4ea', sol: '#8c9096', intensite: 1.9 },
   reflet: { horizon: '#dde1e6', zenith: '#b9c0c9' },
-  brouillard: { couleur: '#d3d8de', densite: 1.6 },
-  brume: { couleur: '#dce1e7', densite: 0.012 },
+  brouillard: { couleur: '#d3d8de', densite: 1.4 },
+  brume: { couleur: '#dce1e7', densite: 0.009 },
   lointain: { voile: '#d3d8de', voileForce: 1, voileMin: 0.85 },
   image: { exposition: 0.95, bloom: 0.15, etalonnage: { shadows: '#56637a', highlights: '#f4f6fa', amount: 0.04, saturation: 0.92, contrast: 1.03 } },
   carrosserie: 1.2,
-  ombre: 0.12,
+  ombre: 0.25,
+  ombreNette: 0,
 };
 
 /** Chaque moment, par météo. */

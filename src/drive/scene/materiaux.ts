@@ -103,6 +103,12 @@ export interface NightUniforms {
   /** Moment (src/data/moments.ts) : fenêtres allumées (1 la nuit, 0 le jour) et têtes de lampadaire allumées. */
   pmbGlow: { value: number };
   pmbLampOn: { value: number };
+  /**
+   * Part du jour (0 la nuit, 1 en plein jour ; src/data/moments.ts, `ciel.jour`) : teintes et dessins
+   * de plein jour (vitres, enduits, herbe, enrobé). Chaque ajout de jour y est pesé : à 0, la nuit
+   * reste exactement celle d'avant.
+   */
+  pmbJour: { value: number };
 }
 
 /**
@@ -161,6 +167,7 @@ export function createNightUniforms(): NightUniforms {
     pmbReflectionTexel: { value: new Vector2(1, 1) },
     pmbGlow: { value: 1 },
     pmbLampOn: { value: 1 },
+    pmbJour: { value: 0 },
   };
 }
 
@@ -305,6 +312,7 @@ uniform mat4 pmbReflectionMatrix;
 uniform float pmbReflectionStrength;
 uniform float pmbGlow;
 uniform float pmbLampOn;
+uniform float pmbJour;
 // Hachage sans sinus (le sinus d'un grand nombre se dégrade en aplats sur le processeur graphique),
 // périodique sur 1024 cases : sans couture, sans motif visible à l'échelle de la carte.
 float pmbHash( vec2 p ) {
@@ -469,6 +477,9 @@ if ( pmbSnowL > 0.001 ) {
 #endif
 vec3 pmbFacadeEmit = vec3( 0.0 );
 float pmbGlass = 0.0;
+// De jour : reflet minimal des vitres (verre ordinaire, tours à vitrage réfléchissant) et part des baies au loin.
+float pmbGlassR0 = 0.0;
+float pmbGlassFar = 0.0;
 #ifdef PMB_FACADE
 {
   // Façade dessinée par la matière : vPmbFacade = (pied, sommet, graine) du bâtiment.
@@ -484,6 +495,22 @@ float pmbGlass = 0.0;
   if ( fam < 0.5 ) wallTint = hs < 0.4 ? vec3( 0.62, 0.58, 0.52 ) : ( hs < 0.75 ? vec3( 0.72, 0.68, 0.6 ) : vec3( 0.55, 0.5, 0.46 ) );
   else if ( fam < 1.5 ) wallTint = hs < 0.3 ? vec3( 0.78, 0.66, 0.5 ) : ( hs < 0.55 ? vec3( 0.8, 0.77, 0.7 ) : ( hs < 0.8 ? vec3( 0.66, 0.64, 0.62 ) : vec3( 0.78, 0.6, 0.55 ) ) );
   else wallTint = hs < 0.5 ? vec3( 0.55, 0.58, 0.62 ) : vec3( 0.66, 0.66, 0.64 );
+  if ( pmbJour > 0.0 ) {
+    // Plein jour : chaque bâtiment a son enduit (blanc cassé, crème, ocre, saumon, jaune pâle, pierre,
+    // terre cuite, béton) ; les tours, béton clair, pierre ou bardage sombre.
+    float hd = fract( seed * 13.37 );
+    vec3 dayTint;
+    if ( fam > 1.5 ) dayTint = hd < 0.4 ? vec3( 0.6, 0.66, 0.74 ) : ( hd < 0.75 ? vec3( 0.76, 0.77, 0.74 ) : vec3( 0.44, 0.5, 0.6 ) );
+    else if ( hd < 0.18 ) dayTint = vec3( 0.9, 0.99, 1.06 );
+    else if ( hd < 0.34 ) dayTint = vec3( 0.86, 0.87, 0.78 );
+    else if ( hd < 0.46 ) dayTint = vec3( 0.8, 0.64, 0.4 );
+    else if ( hd < 0.57 ) dayTint = vec3( 0.86, 0.67, 0.6 );
+    else if ( hd < 0.68 ) dayTint = vec3( 0.88, 0.88, 0.64 );
+    else if ( hd < 0.8 ) dayTint = vec3( 0.72, 0.73, 0.72 );
+    else if ( hd < 0.88 ) dayTint = vec3( 0.7, 0.5, 0.38 );
+    else dayTint = vec3( 0.58, 0.64, 0.7 );
+    wallTint = mix( wallTint, dayTint, pmbJour );
+  }
   diffuseColor.rgb *= wallTint * 1.6;
   ${SOL_FACADE}
   if ( abs( nW.y ) < 0.6 ) {
@@ -558,11 +585,27 @@ float pmbGlass = 0.0;
     float blind = h2 > 0.45 && h2 < 0.62 ? 0.55 + 0.45 * mix( step( 0.5, fract( fy * 18.0 ) ), 0.5, smoothstep( 0.02, 0.05, wv ) ) : 1.0;
     float glow = lit * ( 0.8 + 1.6 * fract( h2 * 13.0 ) ) * blind * ( fam > 1.5 ? 0.9 : 1.0 );
     // Au loin : la moyenne (part des baies allumées), sans motif.
-    vec3 near = mix( wall, vec3( 0.012 ), win );
+    vec3 inside = vec3( 0.012 );
+    if ( pmbJour > 0.0 ) {
+      // Plein jour : derrière le reflet du ciel, l'intérieur se devine : pièce sombre, voilage plus ou
+      // moins tiré, store à demi baissé ; vitrines du rez-de-chaussée un peu plus claires.
+      float wx = clamp( ( fx - x0 ) / max( 1.0 - 2.0 * x0, 0.05 ), 0.0, 1.0 );
+      float wy = clamp( ( fy - y0 ) / max( y1 - y0, 0.05 ), 0.0, 1.0 );
+      float h3 = fract( h1 * 7.13 + h2 * 3.71 );
+      vec3 room = vec3( 0.028, 0.027, 0.026 ) * ( 0.6 + 0.9 * h2 ) + ( shop > 0.5 ? vec3( 0.05, 0.045, 0.04 ) : vec3( 0.0 ) );
+      float sheer = h3 < 0.32 && fam < 1.5 ? step( wx, 0.35 + 0.65 * fract( h3 * 9.1 ) ) : 0.0;
+      float blindDay = h3 > 0.8 ? step( 1.0 - ( 0.25 + 0.6 * fract( h3 * 5.3 ) ), wy ) * mix( 0.75 + 0.25 * step( 0.5, fract( wy * 22.0 ) ), 0.87, smoothstep( 0.02, 0.05, wv ) ) : 0.0;
+      vec3 day = mix( room, vec3( 0.34, 0.33, 0.31 ) * ( 0.8 + 0.3 * h2 ), sheer );
+      day = mix( day, vec3( 0.26, 0.24, 0.21 ), blindDay );
+      inside = mix( inside, day, pmbJour );
+      pmbGlassR0 = fam > 1.5 ? 0.2 : ( shop > 0.5 ? 0.07 : 0.09 );
+    }
+    vec3 near = mix( wall, inside, win );
     float winAvg = ( 1.0 - 2.0 * x0 ) * ( y1 - y0 );
     diffuseColor.rgb = mix( near, wall * ( 1.0 - winAvg * 0.8 ), far );
     pmbFacadeEmit = mix( win * tint * glow, tint * litP * winAvg * 1.2, far );
     pmbGlass = win * ( 1.0 - far );
+    pmbGlassFar = winAvg * far;
     roughnessFactor = mix( roughnessFactor, 0.1, pmbGlass );
   } else {
     // Toit-terrasse vu de dessous ou de dessus (rare) : rien de plus.
@@ -702,7 +745,10 @@ const OUTPUT_PATCH = /* glsl */ `
     // Ciel réfléchi calculé (le décor ne prend pas la sonde) : vitres, métal des glissières.
     vec3 R = reflect( -pmbV, pmbNw );
     R.y = abs( R.y );
-    pmbExtra += pmbSky( R ) * mix( pmbF, 1.0, PMB_SKY_METAL ) * PMB_SKY * mix( 0.6, 1.0, pmbGloss );
+    vec3 sky = pmbSky( R );
+    // De jour, l'acier galvanisé (glissières, mâts) renvoie un ciel terni, pas un miroir bleu.
+    if ( pmbJour > 0.0 ) sky = mix( sky, vec3( dot( sky, vec3( 0.3, 0.59, 0.11 ) ) ), 0.6 * pmbJour ) * ( 1.0 - 0.35 * pmbJour );
+    pmbExtra += sky * mix( pmbF, 1.0, PMB_SKY_METAL ) * PMB_SKY * mix( 0.6, 1.0, pmbGloss );
   }
   #endif
   #ifdef PMB_FACADE
@@ -710,6 +756,13 @@ const OUTPUT_PATCH = /* glsl */ `
     vec3 R = reflect( -pmbV, pmbNw );
     R.y = abs( R.y );
     pmbExtra += pmbSky( R ) * pmbF * pmbGlass * 0.9;
+    if ( pmbJour > 0.0 ) {
+      // Plein jour : les vitres renvoient le ciel même vues de face (double vitrage, verre réfléchissant
+      // des tours, à peine teinté) ; au loin, la moyenne des baies.
+      vec3 sky = pmbSky( R ) * mix( vec3( 1.0 ), vec3( 0.82, 0.94, 0.98 ), step( 0.15, pmbGlassR0 ) );
+      pmbExtra += sky * pmbJour * ( max( pmbF, pmbGlassR0 ) - pmbF ) * pmbGlass * 0.9;
+      pmbExtra += mix( pmbSkyHorizon, pmbSkyZenith, 0.35 ) * pmbJour * pmbGlassFar * 0.12;
+    }
   }
   #endif
   #ifdef PMB_SNOW
