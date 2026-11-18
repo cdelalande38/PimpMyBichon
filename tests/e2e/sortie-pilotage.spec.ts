@@ -356,7 +356,10 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect.poll(async () => (await releves(page)).ecartMax, { timeout: 120_000 }).toBeGreaterThan(avant + 0.8);
     const loin = await ecart(page);
     await doigts.glisser(1, x0, y0 - 40);
-    await expect.poll(() => ecart(page), { timeout: 150_000 }).toBeLessThan(loin - 0.8);
+    // Le retour vers la trajectoire est une approche lente : on prouve qu'elle revient franchement
+    // (0,3 m), en secondes de route. Attendre 0,8 m demandait la fin de l'approche, hors de portée
+    // d'une machine à une image par seconde (CI du 18 novembre 2026 : 0,7 m → 0,2 m en 150 s d'horloge).
+    await attendreSurLaRoute(page, 'direction assistée : retour vers la trajectoire', () => ecart(page), (valeur) => valeur < loin - 0.3, { secondes: 25, horloge: 300_000 });
     await doigts.toutLever();
     await reglerSortie(page, 'Direction', 'Libre');
 
