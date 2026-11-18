@@ -51,6 +51,10 @@ async function commandesA48(page: Page): Promise<void> {
 }
 
 test.describe('jeu : dollars, boutique, hauts faits', () => {
+  // Délai large pour tout le fichier : en CI (rendu logiciel, machine lente), une capture d'écran attend
+  // parfois le rendu plus d'une minute (runs du 18 novembre 2026), et l'un de ces parcours retient la publication.
+  test.describe.configure({ timeout: 180_000 });
+
   test('le solde au garage, un achat avec confirmation, un solde insuffisant, tout gardé au rechargement', { tag: '@essentiel' }, async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
