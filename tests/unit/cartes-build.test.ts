@@ -231,6 +231,8 @@ describe('boucle, tunnel et bâtiment au-dessus', () => {
     const noms = new Set(r.chunks.flatMap((c) => (json(b.fichiers.get(c.file) as Uint8Array).meshes as Array<{ name: string }>).map((m) => m.name)));
     for (const n of ['fusion_ouvrage', 'fusion_fenetre', 'fusion_mur', 'fusion_eau']) expect(noms).toContain(n);
     expect(b.mesures.terrainSurRoute).toBe(0);
+    // Ni herbe sous la voûte ni plaque sur la chaussée ou le trottoir (tunnel compris).
+    expect(b.mesures.solSurRoute.fautes).toBe(0);
     expect(b.mesures.tunnels).toBe(1);
     expect(b.mesures.batiments).toBe(1);
     // Aucun mur de bâtiment ne descend sous la voûte : le point le plus bas des murs est au-dessus de la chaussée + 7 m.
@@ -309,12 +311,15 @@ describe('lacets : la route n’est jamais sous le terrain', () => {
   it('sans la garde, le terrain d’une branche recouvre la chaussée de l’autre (le contrôle le voit)', () => {
     expect(sans.mesures.chausseeCouverte).toBeGreaterThan(0);
     expect(sans.mesures.terrainSurRoute).toBeGreaterThan(0);
+    expect(sans.mesures.solSurRoute.fautes).toBeGreaterThan(0);
   });
 
   it('avec la garde, rien au-dessus de la chaussée, raccord exact au trottoir', () => {
     expect(avec.mesures.terrainRefuse).toBeGreaterThan(0);
     expect(avec.mesures.chausseeCouverte).toBe(0);
     expect(avec.mesures.ecartBord).toBeLessThan(0.01);
+    // Aucune plaque d'herbe, même de quelques centimètres : le terrain est découpé et passe dessous.
+    expect(avec.mesures.solSurRoute.fautes).toBe(0);
   });
 
   it('le contrôle des tronçons écrits (check.mjs) donne le même verdict que la fabrication', () => {
@@ -361,6 +366,9 @@ describe.skipIf(listeCartes(reelle).every((id) => !existsSync(join(reelle, id, '
         expect(mesures.ecartBord, id).toBeLessThan(0.01);
         expect(mesures.terrainSurRoute, id).toBe(0);
         expect(mesures.couverts.slice(0, 5), id).toEqual([]);
+        // Herbe sur la route (vu sur le circuit de Monaco le 18 novembre 2026) : aucun point de la
+        // chaussée ni des bas-côtés sous le terrain, tunnels et ponts compris.
+        expect(mesures.solSurRoute.fautes, id).toBe(0);
         expect(mesures.batimentsEcartes / mesures.batiments, id).toBeLessThan(0.01);
       }
     },

@@ -17,7 +17,7 @@ import { ShapeUtils, Vector2 } from 'three';
 import { apercu } from './apercu.mjs';
 import { plafonner, semer } from './arbres.mjs';
 import { repartirEau } from './eau.mjs';
-import { chausseeCouverte, gardeChaussee, resumerCouverture } from './couverture.mjs';
+import { chausseeCouverte, gardeChaussee, PLAFOND_TUNNEL, resumerCouverture, resumerSolSurChaussee, solSurChaussee } from './couverture.mjs';
 import { aire, boite, dansPolygone, hasard, indexPolyligne, simplifier } from './geom2d.mjs';
 import { Assembleur, ecrireGlb } from './maillage.mjs';
 import { DOSSIER_MATIERES as SOL_DIR, ecrireMatieres } from './matieres.mjs';
@@ -41,6 +41,21 @@ const RETRAIT_BATI = 0.5;
  * une autre valeur).
  */
 const RAYON_MIN = 8;
+/**
+ * Garde du terrain : aucun triangle d'herbe au-dessus de l'emprise protégée (chaussée et trottoirs,
+ * trottoirs relevés de 5 cm), m. À 10 cm (jusqu'au 18 novembre 2026), le terrain plat d'un port
+ * affleurait sur la chaussée par plaques (« flaques d'herbe »).
+ */
+const TOL_TERRAIN = 0;
+/** Côté au-dessous duquel une pièce de terrain découpée qui passe encore au-dessus de l'emprise est écartée, m. */
+const DECOUPE_MIN = 1;
+/**
+ * Dessus du trottoir protégé, relevé au-dessus du vrai (le terrain qui le rejoint à son bord, au
+ * centimètre près, n'est pas découpé), m. À 5 cm, l'herbe affleurait de 2 à 3 cm au bord des trottoirs.
+ */
+const RELEVE_TROTTOIR = 0.008;
+/** Abaissement du terrain découpé sous l'emprise protégée, m. */
+const ABAISSE = 0.15;
 /** Tunnels : hauteur des piédroits, de la voûte, et du dessus (terrain recouvrant), au-dessus de l'axe. */
 const TUNNEL = { piedroit: 5.2, voute: 6, dessus: 7.2 };
 
@@ -280,12 +295,19 @@ export function buildMap(id, o = {}) {
     return { i, s, p, hw, sw, e, y, ye, bordure, ground: se.ground, urban: se.urban, n: n0, dec };
   });
   // Emprise protégée : chaussée et trottoirs de toutes les passes du parcours, hors tunnel, en
-  // triangles (chaussée bombée ; dessus du trottoir relevé de 5 cm). Aucun
+  // triangles (chaussée bombée ; dessus du trottoir relevé de RELEVE_TROTTOIR). Aucun
   // triangle de terrain ni de route voisine ne passe au-dessus (garde.couvre) : là où le parcours se
   // frôle, s'enroule en lacets ou se croise, le terrain d'une passe s'arrête au bord de la chaussée
   // de l'autre au lieu de la recouvrir.
   /** @type {number[]} */
   const protege = [];
+  /**
+   * Emprise protégée sous la voûte des tunnels : aucun terrain entre elle et le plafond
+   * (PLAFOND_TUNNEL) ; le terrain qui recouvre la voûte reste. Sans elle, l'herbe d'un talus voisin
+   * replié par un virage traversait la chaussée à l'entrée du tunnel (vu le 18 novembre 2026).
+   * @type {number[]}
+   */
+  const protegeTunnel = [];
   /** Coupe en travers protégée au point i : [u, hauteur] de gauche à droite. @param {number} i */
   const coupeProtegee = (i) => {
     const se = sec[i] ?? /** @type {typeof sections[0]} */ (sections[0]);
@@ -293,7 +315,7 @@ export function buildMap(id, o = {}) {
     const pf = /** @type {typeof profils[0]} */ (profils[Math.min(NS - 1, Math.round(i / K))]);
     const hw = Math.max((largeur[i] ?? 6) / 2, se.width / 2 - 0.3) + Math.abs(pf.dec);
     const e = hw + (se.urban ? 2.2 : 1.0);
-    const yt = y + (se.urban ? 0.14 : -0.05) + 0.05;
+    const yt = y + (se.urban ? 0.14 : -0.05) + RELEVE_TROTTOIR;
     return [
       [-e, yt],
       [-hw, yt],
@@ -305,7 +327,8 @@ export function buildMap(id, o = {}) {
     ];
   };
   for (let i = 0; i < N - 1; i += 1) {
-    if ((sec[i]?.ground ?? 'sol') === 'tunnel' || (sec[i + 1]?.ground ?? 'sol') === 'tunnel') continue;
+    const sousVoute = (sec[i]?.ground ?? 'sol') === 'tunnel' || (sec[i + 1]?.ground ?? 'sol') === 'tunnel';
+    const dest = sousVoute ? protegeTunnel : protege;
     const [A, B] = [i, i + 1].map((k) => {
       const p = /** @type {number[]} */ (rail[k]);
       const t = /** @type {number[]} */ (T[k]);
@@ -317,11 +340,103 @@ export function buildMap(id, o = {}) {
       const b0 = /** @type {number[]} */ (B?.[k]);
       const b1 = /** @type {number[]} */ (B?.[k + 1]);
       // Les deux bandes verticales (bordure) n'ont pas d'aire : la garde les ignore.
-      protege.push(...a0, ...b0, ...b1, ...a0, ...b1, ...a1);
+      dest.push(...a0, ...b0, ...b1, ...a0, ...b1, ...a1);
     }
   }
-  const garde = gardeChaussee(o.sansGarde ? [] : protege);
-  /** Abscisses (à 50 m près) des triangles de terrain refusés par la garde : diagnostic. @type {Set<number>} */
+  const garde0 = gardeChaussee(o.sansGarde ? [] : protege);
+  const gardeTunnel = gardeChaussee(o.sansGarde ? [] : protegeTunnel);
+  const garde = {
+    /**
+     * Le triangle passe-t-il au-dessus de l'emprise protégée (de plus de `tol` m), ou sous la voûte
+     * d'un tunnel ? @param {number[]} a @param {number[]} b @param {number[]} c @param {number} tol
+     */
+    couvre: (a, b, c, tol) => garde0.couvre(a, b, c, tol) || gardeTunnel.couvre(a, b, c, tol, PLAFOND_TUNNEL),
+    /** Hauteur de l'emprise protégée à ciel ouvert en (x, z), −Infinity hors d'elle. @param {number} x @param {number} z */
+    hauteur: (x, z) => garde0.hauteur(x, z),
+  };
+  /** Pièces de terrain écartées après découpe (au-dessus de l'emprise), et leur aire, m². */
+  let piecesEcartees = 0;
+  let aireEcartee = 0;
+  let aireEcarteeTunnel = 0;
+  /** Aire écartée à ciel ouvert par abscisse (à 50 m près), m² : diagnostic. @type {Map<number, number>} */
+  const zonesEcartees = new Map();
+  /**
+   * Pose un triangle de terrain (sommets déjà dans l'assembleur, sens conservé). S'il passe au-dessus
+   * de l'emprise protégée, même de quelques centimètres (les « flaques d'herbe » sur la chaussée), il
+   * est coupé en deux au milieu de son plus grand côté, récursivement ; un milieu qui tombe sur
+   * l'emprise à ciel ouvert est abaissé à ABAISSE sous elle (le terrain passe sous la chaussée et le
+   * trottoir). Les pièces qui ne dépassent plus sont posées ; celles qui dépassent encore sont
+   * écartées quand leur plus grand côté descend sous DECOUPE_MIN (sous la voûte d'un tunnel, ou à
+   * moins de DECOUPE_MIN du bord de l'emprise). Renvoie vrai si le triangle a été découpé.
+   * @param {Assembleur} te @param {number} i0 @param {number} i1 @param {number} i2
+   */
+  const poserTerrain = (te, i0, i1, i2) => {
+    const S = (/** @type {number} */ k) => [te.pos[k * 3] ?? 0, te.pos[k * 3 + 1] ?? 0, te.pos[k * 3 + 2] ?? 0];
+    if (!garde.couvre(S(i0), S(i1), S(i2), TOL_TERRAIN)) {
+      te.tri(i0, i1, i2);
+      return false;
+    }
+    /** @type {Map<string, number>} */
+    const milieux = new Map();
+    const milieu = (/** @type {number} */ a, /** @type {number} */ b) => {
+      const cle = a < b ? `${a}|${b}` : `${b}|${a}`;
+      let m = milieux.get(cle);
+      if (m === undefined) {
+        const A = S(a);
+        const B = S(b);
+        const x = ((A[0] ?? 0) + (B[0] ?? 0)) / 2;
+        const z = ((A[2] ?? 0) + (B[2] ?? 0)) / 2;
+        // Hors de l'emprise, hauteur −Infinity : le milieu reste sur le côté.
+        const h = garde.hauteur(x, z);
+        const y = ((A[1] ?? 0) + (B[1] ?? 0)) / 2;
+        m = te.sommet(x, h === -Infinity ? y : Math.min(y, h - ABAISSE), z);
+        milieux.set(cle, m);
+      }
+      return m;
+    };
+    const couper = (/** @type {number} */ a, /** @type {number} */ b, /** @type {number} */ c, prof = 0) => {
+      const A = S(a);
+      const B = S(b);
+      const C = S(c);
+      if (!garde.couvre(A, B, C, TOL_TERRAIN)) {
+        te.tri(a, b, c);
+        return;
+      }
+      const lab = Math.hypot((A[0] ?? 0) - (B[0] ?? 0), (A[2] ?? 0) - (B[2] ?? 0));
+      const lbc = Math.hypot((B[0] ?? 0) - (C[0] ?? 0), (B[2] ?? 0) - (C[2] ?? 0));
+      const lca = Math.hypot((C[0] ?? 0) - (A[0] ?? 0), (C[2] ?? 0) - (A[2] ?? 0));
+      if (Math.max(lab, lbc, lca) <= DECOUPE_MIN || prof >= 24) {
+        const aire = Math.abs(((B[0] ?? 0) - (A[0] ?? 0)) * ((C[2] ?? 0) - (A[2] ?? 0)) - ((C[0] ?? 0) - (A[0] ?? 0)) * ((B[2] ?? 0) - (A[2] ?? 0))) / 2;
+        piecesEcartees += 1;
+        aireEcartee += aire;
+        if (gardeTunnel.couvre(A, B, C, TOL_TERRAIN, PLAFOND_TUNNEL)) aireEcarteeTunnel += aire;
+        else {
+          const pp = idxRail.proche(((A[0] ?? 0) + (B[0] ?? 0) + (C[0] ?? 0)) / 3, ((A[2] ?? 0) + (B[2] ?? 0) + (C[2] ?? 0)) / 3, dl);
+          const k = Math.round((pp.i * step) / 50) * 50;
+          zonesEcartees.set(k, (zonesEcartees.get(k) ?? 0) + aire);
+        }
+        return;
+      }
+      // Coupe du plus grand côté en son milieu (sens conservé) : une lanière fine n'est coupée que
+      // dans sa longueur.
+      if (lab >= lbc && lab >= lca) {
+        const m = milieu(a, b);
+        couper(a, m, c, prof + 1);
+        couper(m, b, c, prof + 1);
+      } else if (lbc >= lca) {
+        const m = milieu(b, c);
+        couper(b, m, a, prof + 1);
+        couper(m, c, a, prof + 1);
+      } else {
+        const m = milieu(c, a);
+        couper(c, m, b, prof + 1);
+        couper(m, a, b, prof + 1);
+      }
+    };
+    couper(i0, i1, i2);
+    return true;
+  };
+  /** Abscisses (à 50 m près) des triangles de terrain découpés par la garde (poserTerrain) : diagnostic. @type {Set<number>} */
   const zonesRefusees = new Set();
   let terrainRefuse = 0;
 
@@ -508,13 +623,12 @@ export function buildMap(id, o = {}) {
       const acc = [-1, 1].map((cote) => [ac.sommet(...P(cote * pr.hw, pr.y)), ac.sommet(...P(cote * pr.hw, pr.y + pr.bordure)), ac.sommet(...P(cote * pr.e, pr.ye))]);
       const ter = [0, 1].map((cc) => Array.from({ length: nT }, (_, k) => te.sommet(terX[at(s, cc, k)] ?? 0, terY[at(s, cc, k)] ?? 0, terZ[at(s, cc, k)] ?? 0)));
       const prev = prevRoute.pop();
-      /** Triangle de terrain, sauf s'il passe au-dessus de la chaussée ou d'un trottoir. @param {number} i0 @param {number} i1 @param {number} i2 */
+      /** Triangle de terrain, découpé là où il passe au-dessus de la chaussée ou d'un trottoir. @param {number} i0 @param {number} i1 @param {number} i2 */
       const terre = (i0, i1, i2) => {
-        const v = [i0, i1, i2].map((k) => [te.pos[k * 3] ?? 0, te.pos[k * 3 + 1] ?? 0, te.pos[k * 3 + 2] ?? 0]);
-        if (garde.couvre(/** @type {number[]} */ (v[0]), /** @type {number[]} */ (v[1]), /** @type {number[]} */ (v[2]), 0.1)) {
+        if (poserTerrain(te, i0, i1, i2)) {
           terrainRefuse += 1;
           zonesRefusees.add(Math.round((pr.i * step) / 50) * 50);
-        } else te.tri(i0, i1, i2);
+        }
       };
       if (prev && s > a) {
         const [pr0, pacc, pter] = /** @type {[number[], number[][], number[][]]} */ (/** @type {unknown} */ (prev));
@@ -673,12 +787,14 @@ export function buildMap(id, o = {}) {
   //     du couloir, aux mêmes talus que les profils. Les deux rayons extrêmes reprennent les sommets du
   //     dernier profil de terrain : aucune fente.
   if (!boucle) {
-    /** Triangle tourné vers le haut (ordre corrigé d'après sa normale). @param {Assembleur} m @param {number} a @param {number} b @param {number} c */
-    const dessus = (m, a, b, c) => {
+    /** Triangle tourné vers le haut (ordre corrigé d'après sa normale). @param {Assembleur} m @param {number} a @param {number} b @param {number} c @param {boolean} [terrain] */
+    const dessus = (m, a, b, c, terrain = false) => {
       const P = (/** @type {number} */ k, /** @type {number} */ j) => m.pos[k * 3 + j] ?? 0;
       const ny = (P(b, 2) - P(a, 2)) * (P(c, 0) - P(a, 0)) - (P(b, 0) - P(a, 0)) * (P(c, 2) - P(a, 2));
-      if (ny >= 0) m.tri(a, b, c);
-      else m.tri(a, c, b);
+      const [i, j, k] = ny >= 0 ? [a, b, c] : [a, c, b];
+      // Terrain : découpé là où il passe au-dessus de l'emprise (poserTerrain), comme les profils.
+      if (!terrain) m.tri(i, j, k);
+      else if (poserTerrain(m, i, j, k)) terrainRefuse += 1;
     };
     for (const [s, sens, c] of /** @type {Array<[number, number, number]>} */ ([
       [0, -1, 0],
@@ -740,9 +856,7 @@ export function buildMap(id, o = {}) {
             [r0[k], r1[k], r1[k + 1]],
             [r0[k], r1[k + 1], r0[k + 1]],
           ]) {
-            const v = [i0, i1, i2].map((q) => [te.pos[(q ?? 0) * 3] ?? 0, te.pos[(q ?? 0) * 3 + 1] ?? 0, te.pos[(q ?? 0) * 3 + 2] ?? 0]);
-            if (garde.couvre(/** @type {number[]} */ (v[0]), /** @type {number[]} */ (v[1]), /** @type {number[]} */ (v[2]), 0.1)) terrainRefuse += 1;
-            else dessus(te, /** @type {number} */ (i0), /** @type {number} */ (i1), /** @type {number} */ (i2));
+            dessus(te, /** @type {number} */ (i0), /** @type {number} */ (i1), /** @type {number} */ (i2), true);
           }
         }
     }
@@ -1490,6 +1604,9 @@ export function buildMap(id, o = {}) {
   // Contrôle : aucun point de la chaussée (hors tunnel) sous le décor ni sous le relief lointain.
   const maillagesEnMemoire = parChunk.flatMap((m) => [...m].map(([role, a]) => ({ role, positions: a.pos, index: a.idx })));
   const couverture = chausseeCouverte(route, maillagesEnMemoire, [{ role: 'lointain', positions: far.pos, index: far.idx }]);
+  // Contrôle : aucune herbe (terrain, eau, relief lointain) au-dessus de la surface roulée, bas-côtés,
+  // tunnels et ponts compris (« npm run maps:check » refuse la carte sinon).
+  const solSurRoute = solSurChaussee(route, maillagesEnMemoire, [{ role: 'lointain', positions: far.pos, index: far.idx }]);
   // Contrôle : chaussée continue sous les roues, largeur dessinée, rail au milieu (tools/maps/continuite.mjs).
   const continuite = continuiteChaussee(route, maillagesEnMemoire);
   const largeurs = resumerContinuite(continuite);
@@ -1509,7 +1626,12 @@ export function buildMap(id, o = {}) {
     ecartAxe,
     terrainSurRoute: couverture.couverts.filter((c) => c.role === 'terrain').length,
     terrainReplie: replies,
+    piecesEcartees,
+    aireEcartee,
+    aireEcarteeTunnel,
+    zonesEcartees: [...zonesEcartees].filter(([, a]) => a >= 1).sort((x, y) => y[1] - x[1]).map(([k, a]) => `${k} m : ${a.toFixed(0)} m²`),
     terrainRefuse,
+    solSurRoute: { points: solSurRoute.points, fautes: solSurRoute.fautes.length, ...resumerSolSurChaussee(solSurRoute.fautes) },
     sommetsTerrain: terX.length,
     zonesRefusees: [...zonesRefusees].sort((x, y) => x - y),
     chausseeCouverte: couverture.couverts.length,
@@ -1596,7 +1718,12 @@ async function main() {
       );
       console.log(
         `  pente ${(m.penteMax * 100).toFixed(1)} % au plus · rayon ${m.rayonMin.toFixed(0)} m au moins · dents de scie ${(m.dentsDeScie * 100).toFixed(1)} cm · ` +
-          `bord chaussée-terrain ${m.ecartBord.toFixed(2)} m · talus ${m.talusMax.toFixed(1)} m au plus · axe-terrain nu ${m.ecartAxe.toFixed(1)} m · triangles de terrain écartés de la chaussée : ${m.terrainRefuse}${m.zonesRefusees.length ? ` (vers ${m.zonesRefusees.slice(0, 12).join(', ')} m)` : ''} · replié contre une autre portion : ${m.terrainReplie} sommets`,
+          `bord chaussée-terrain ${m.ecartBord.toFixed(2)} m · talus ${m.talusMax.toFixed(1)} m au plus · axe-terrain nu ${m.ecartAxe.toFixed(1)} m · triangles de terrain découpés au bord de l'emprise : ${m.terrainRefuse}${m.zonesRefusees.length ? ` (vers ${m.zonesRefusees.slice(0, 12).join(', ')} m)` : ''} · replié contre une autre portion : ${m.terrainReplie} sommets · pièces écartées après découpe : ${m.piecesEcartees} (${m.aireEcartee.toFixed(0)} m², dont ${m.aireEcarteeTunnel.toFixed(0)} m² sous une voûte${m.zonesEcartees.length ? ` ; à ciel ouvert : ${m.zonesEcartees.slice(0, 6).join(', ')}` : ''})`,
+      );
+      const ss = m.solSurRoute;
+      console.log(
+        `  herbe au-dessus de la surface roulée (tunnels compris) : ${ss.fautes} points sur ${ss.points}` +
+          (ss.fautes ? ` (chaussée ${ss.chaussee}, bas-côtés ${ss.bord} ; ${Object.entries(ss.parSol).map(([k, v]) => `${k} ${v}`).join(', ')} ; jusqu'à ${ss.dyMax.toFixed(2)} m ; vers ${ss.zones.slice(0, 16).join(', ')} m)` : ''),
       );
       console.log(
         `  chaussée couverte (hors tunnel) : ${m.chausseeCouverte} points` +
