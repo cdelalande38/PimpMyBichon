@@ -75,6 +75,37 @@
   background: rgba(10, 9, 17, 0.97);
 }
 
+/* Dans le menu de la sortie (src/ui/drive/SortieEntree.tsx) : le panneau prend la hauteur du menu, la
+   fiche défile seule, et « Sortir » est posé sous elle, jamais par-dessus (rien ne passe derrière lui). */
+.drive-entry > .entree-carriere {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  pointer-events: auto;
+}
+
+.drive-entry > .entree-carriere > .carriere {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.drive-entry > .entree-carriere > .carriere > .carriere-corps {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-bottom: 0.5rem;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.drive-entry > .entree-carriere > .carriere > .carriere-go {
+  position: static;
+  flex: none;
+  padding: 0.25rem 0 0;
+  background: none;
+}
+
 .carriere-sortir {
   flex: 1;
   flex-direction: column;

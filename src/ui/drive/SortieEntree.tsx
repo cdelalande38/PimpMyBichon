@@ -57,10 +57,12 @@ export function SortieEntree() {
   }
 
   return (
-    <div className="drive-entry" data-etape={etape} data-agrandir={etape === 'reglages' ? 'd-office' : undefined}>
+    <div className="drive-entry" data-etape={etape} data-agrandir={etape === 'reglages' || etape === 'carriere' ? 'd-office' : undefined}>
       {etape === 'mode' && <EtapeMode />}
+      {/* La carrière : la fiche défile dans le panneau, « Sortir » reste dessous, hors de ce qui défile
+          (retour du 18 novembre 2026 : la fiche passait derrière le bouton, et le menu était trop bas). */}
       {etape === 'carriere' && (
-        <div className="entree-corps">
+        <div className="entree-carriere">
           <CarrierePanneau />
         </div>
       )}
