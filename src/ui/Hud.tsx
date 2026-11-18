@@ -12,6 +12,7 @@ import { useView } from '../state/view.ts';
 import { openAtelier } from './AtelierSwitcher.tsx';
 import { Icon } from './icons.tsx';
 import { Solde } from './jeu/Solde.tsx';
+import { PastilleCarriere } from './carriere/RappelCarriere.tsx';
 import { PlacePicker } from './PlacePicker.tsx';
 import { offlineLabel } from './labels.ts';
 import { RadioButton } from './radio/RadioButton.tsx';
@@ -157,6 +158,8 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
               <Icon name="route" />
             </button>
           )}
+          {/* La carrière : la météo et le numéro du prochain rendez-vous, tant qu'elle n'est pas bouclée ; un appui l'ouvre. */}
+          {!sceneFailed && <PastilleCarriere />}
           {!sceneFailed && <InteriorButton />}
         </nav>
       </div>

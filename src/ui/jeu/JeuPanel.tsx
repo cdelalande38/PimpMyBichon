@@ -9,6 +9,7 @@ import { possedeDans } from '../../jeu/achats.ts';
 import { progression } from '../../jeu/hautsFaits.ts';
 import { useJeu } from '../../state/jeu.ts';
 import { Achat } from './Achat.tsx';
+import { RappelCarriere } from '../carriere/RappelCarriere.tsx';
 import { dollars, gain, kilometres, pluriel } from './libelles.ts';
 import './jeu.css';
 
@@ -183,6 +184,7 @@ export function JeuPanel() {
   return (
     <>
       <Resume />
+      <RappelCarriere />
       <nav className="tabs" aria-label="Rubriques du jeu">
         {ONGLETS.map((item) => (
           <button key={item.id} type="button" aria-current={onglet === item.id ? 'true' : undefined} onClick={() => setOnglet(item.id)}>

@@ -11,6 +11,7 @@ import { formatChrono } from '../../drive/depart.ts';
 import { formatSpec, indulgence, seuilsMedailles, tempsReference } from '../../data/courses.ts';
 import type { Bilan, FamilleArticle, Medaille } from '../../jeu/contrat.ts';
 import { DriveIcon } from './icones.tsx';
+import { ProchainRendezVous } from '../carriere/ProchainRendezVous.tsx';
 
 const MEDAILLE_LABEL: Readonly<Record<Medaille, string>> = { or: 'Médaille d’or', argent: 'Médaille d’argent', bronze: 'Médaille de bronze' };
 
@@ -122,6 +123,8 @@ export function FinCourseVue({ bilan, onRejouer, onGarage }: FinCourseVueProps) 
             Solde : <b>{formatDollars(bilan.solde)}</b>
           </p>
         </div>
+
+        <ProchainRendezVous bilan={bilan} />
 
         <div className="fin-course-bloc fin-course-debloque" aria-labelledby="fin-course-debloque-titre">
           <h3 id="fin-course-debloque-titre">Débloqué</h3>

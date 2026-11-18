@@ -41,6 +41,7 @@ import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
 import { MiniCarte } from './MiniCarte.tsx';
 import { AnnonceBalade } from './Balade.tsx';
+import { EtiquetteRendezVous } from '../carriere/EnSortie.tsx';
 import { ArriveePanneau, ChronoSortie, FeuxDepart } from './Depart.tsx';
 import { FinCourse } from './FinCourse.tsx';
 import { DriveIcon } from './icones.tsx';
@@ -96,6 +97,7 @@ function DriveTop({ apercu, reglages, ouvrirReglages }: { apercu: boolean; regla
     <header className="drive-top" data-apercu={apercu || undefined}>
       <div className="drive-where">
         <span className="drive-map">{map?.name ?? 'Sortie'}</span>
+        <EtiquetteRendezVous />
         {!apercu && (
           <span className="drive-progress" role="progressbar" aria-label="Progression" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
             <i style={{ width: `${progress}%` }} />

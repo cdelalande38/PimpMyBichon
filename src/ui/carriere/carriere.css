@@ -1,0 +1,449 @@
+/* Le mode carrière : panneau, fiche d'un rendez-vous, rappel au garage, pastille, écran de fin, sortie.
+   Tailles en rem (elles suivent le réglage du texte) ; toute commande offre 48 px au doigt. */
+
+/* ───────────── Panneau ───────────── */
+
+/* Le panneau défile en hauteur ; « Sortir » reste collé en bas, entier, sous le pouce (dock du bas en
+   portrait, colonne étroite en paysage, ou panneau de l'atelier). */
+.carriere {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.carriere-corps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.carriere-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.125rem 0.75rem;
+}
+
+.carriere-surtitre {
+  color: var(--ambre);
+  font-family: var(--display);
+  font-size: 0.875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.carriere-compte {
+  color: var(--mute);
+  font-size: 0.75rem;
+}
+
+/* Une case par rendez-vous : réussi (plein), courant (cerclé), à venir (vide). */
+.carriere-jalons {
+  display: flex;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carriere-jalons li {
+  flex: 1 1 0;
+  height: 6px;
+  border: 1px solid var(--line);
+  border-radius: 1px;
+}
+
+.carriere-jalons li[data-etat='reussi'] {
+  border-color: var(--ambre);
+  background: var(--ambre);
+}
+
+.carriere-jalons li[data-etat='courant'] {
+  border-color: var(--ambre);
+  box-shadow: 0 0 6px rgba(255, 178, 36, 0.6);
+}
+
+.carriere-go {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  padding: 0.25rem 0;
+  background: rgba(10, 9, 17, 0.97);
+}
+
+.carriere-sortir {
+  flex: 1;
+  flex-direction: column;
+  gap: 0;
+  min-height: var(--tap-chip);
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
+  line-height: 1.1;
+}
+
+.carriere-sortir small {
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  opacity: 0.85;
+}
+
+.carriere-note {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.8125rem;
+}
+
+.carriere-bouclee h3 {
+  margin: 0;
+  color: var(--ambre);
+  font-family: var(--display);
+  font-size: 1.125rem;
+  font-weight: 400;
+}
+
+.carriere-bouclee p {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+/* ───────────── Fiche d'un rendez-vous ───────────── */
+
+.carriere-fiche {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+  padding: 0.5rem 0.625rem;
+  border-left: 3px solid var(--ambre);
+  background: rgba(16, 14, 26, 0.6);
+}
+
+.carriere-fiche-numero {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.carriere-fiche-titre {
+  margin: 0;
+  color: var(--chrome);
+  font-family: var(--display);
+  font-size: 1.0625rem;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+}
+
+.carriere-fiche-lieu {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.carriere-fiche-lieu .picto {
+  color: var(--ambre);
+}
+
+.carriere-fiche-lieu-texte {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.carriere-fiche-lieu-texte b {
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+.carriere-fiche-lieu-texte small {
+  color: var(--mute);
+  font-size: 0.75rem;
+}
+
+.carriere-fiche-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.carriere-fiche-conditions li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 1.75rem;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.carriere-fiche-conditions .drive-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.carriere-fiche-conditions li[data-meteo='pluie'],
+.carriere-fiche-conditions li[data-meteo='neige'] {
+  border-color: rgba(59, 123, 255, 0.6);
+}
+
+.carriere-fiche-enjeu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.carriere-fiche-enjeu div {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.carriere-fiche-enjeu dt {
+  color: var(--mute);
+  font-size: 0.75rem;
+}
+
+.carriere-fiche-enjeu dd {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.carriere-fiche-enjeu dd small {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.carriere-fiche-conseil {
+  margin: 0;
+  color: var(--chrome);
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.carriere-fiche-conseil b {
+  margin-right: 0.25rem;
+  color: var(--ambre);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ───────────── Rappel dans Atelier › Jeu ───────────── */
+
+.carriere-rappel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ambre);
+  border-radius: 4px;
+  background: rgba(16, 14, 26, 0.6);
+}
+
+.carriere-rappel-tete {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.carriere-rappel-texte {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.carriere-rappel-texte h3 {
+  margin: 0;
+  color: var(--ambre);
+  font-family: var(--display);
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.carriere-rappel-texte p {
+  margin: 0.125rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.carriere-rappel-voir {
+  flex: none;
+}
+
+/* Déplié dans l'atelier : le titre « Carrière » est déjà celui du rappel, les cases disent l'avancée. */
+.carriere-rappel-panneau .carriere-tete {
+  display: none;
+}
+
+.carriere-rappel {
+  scroll-margin-top: 0.25rem;
+}
+
+/* Paysage : dans la feuille latérale, le titre défile avec le contenu et le « ? » reste en haut à droite ;
+   le rappel ramené en haut s'arrête dessous. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .carriere-rappel {
+    scroll-margin-top: 3.75rem;
+  }
+}
+
+/* Dans l'atelier, « Sortir » colle au bas du panneau tant que la carrière dépliée est à l'écran. */
+.carriere-rappel-panneau .carriere-go {
+  background: var(--sheet);
+}
+
+/* ───────────── Bouton rond au garage ───────────── */
+
+/* Dans la colonne des raccourcis : la météo du prochain rendez-vous, son numéro en pastille au coin. */
+.carriere-rond {
+  color: var(--ambre);
+}
+
+.carriere-rond .drive-icon {
+  width: 1.375rem;
+  height: 1.375rem;
+}
+
+.carriere-rond-numero {
+  position: absolute;
+  right: -0.25rem;
+  bottom: -0.25rem;
+  display: grid;
+  place-items: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: var(--ambre);
+  color: var(--night);
+  font-family: var(--display);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ───────────── Écran de fin ───────────── */
+
+.carriere-fin h3 {
+  margin: 0;
+  color: var(--ambre);
+  font-family: var(--display);
+  font-size: 1.0625rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.carriere-fin[data-verdict='manque'] h3 {
+  color: var(--rouge);
+}
+
+.carriere-fin-phrase,
+.carriere-fin-note {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+.carriere-fin-note {
+  color: var(--mute);
+  font-size: 0.8125rem;
+}
+
+.carriere-fin-prochain {
+  margin: 0.25rem 0 0.25rem;
+  color: var(--mute);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.carriere-fin-actes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.carriere-fin-actes .btn {
+  flex: 1 1 9rem;
+  min-height: var(--tap);
+  gap: 0.4rem;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .fin-course-defile > .carriere-fin {
+    grid-column: 2;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* ───────────── En sortie ───────────── */
+
+.drive-rendez-vous {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+  color: var(--ambre);
+  line-height: 1.2;
+}
+
+.drive-rendez-vous b {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.drive-rendez-vous small {
+  color: var(--chrome);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.drive-impose {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+/* Réglages de la sortie : les choix imposés se lisent, grisés ; celui du rendez-vous reste lisible. */
+.drive-reglages .drive-puce:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.drive-reglages .drive-puce:disabled[aria-pressed='true'] {
+  opacity: 0.9;
+}
+
+/* Paysage : avec le bouton de la carrière, la colonne des raccourcis compte six ronds ; elle se resserre
+   pour tenir dans 360 px de haut, texte très grand compris (6 × 55 px + 5 × 5 px). */
+@media (orientation: landscape) and (max-height: 540px) {
+  body:has(.app > .dock) .quick:has(> .carriere-rond) {
+    gap: 0.25rem;
+  }
+}

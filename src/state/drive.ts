@@ -19,6 +19,11 @@
 // sauvegarde d'avant (version 1), restée sur la balade d'origine, y repart une fois (`migrerDrivePrefs`),
 // puis le choix du joueur est respecté. La dernière sortie (carte et départ, `derniere`) est gardée : le
 // menu de la sortie (src/ui/drive/SortieEntree.tsx) se rouvre sur ses réglages.
+// Carrière (src/data/carriere.ts, demande du 18 novembre 2026) : `lancerRendezVous` part sur un rendez-vous
+// où tout est imposé (carte, départ, format, météo, moment) ; les choix libres sont mis de côté
+// (`rendezVous.libre`), jamais écrasés dans la sauvegarde, et reviennent au garage (`leave`). Météo, moment
+// et format ne se changent pas pendant un rendez-vous ; à l'arrivée, la carrière juge la course
+// (src/jeu/carriereCloture.ts) après la clôture ordinaire.
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -29,6 +34,8 @@ import type { CourseFinie } from '../drive/course.ts';
 import { cleRecord, estFormat, FORMAT_PAR_DEFAUT, indulgence, medailleDe, seuilsMedailles, tempsReference } from '../data/courses.ts';
 import type { Bilan, FormatCourse, MomentCourse, ResultatCourse } from '../jeu/contrat.ts';
 import { cloturerCourse } from '../jeu/bilan.ts';
+import { conclureRendezVous } from '../jeu/carriereCloture.ts';
+import type { RendezVous } from '../data/carriere.ts';
 import { mapById, MAPS } from '../data/maps.ts';
 import { MOMENT_PAR_DEFAUT, momentOf, type Moment } from '../data/moments.ts';
 import type { MapId } from '../data/mapTypes.ts';
@@ -297,9 +304,28 @@ export interface DriveState extends DriveStore {
    * le pilote automatique reprend le volant derrière l'écran de fin (tour d'honneur).
    */
   terminerCourse: (course: CourseFinie) => void;
+  /** Rendez-vous de carrière en cours (tout imposé), ou `null` en sortie libre. Jamais sauvegardé. */
+  rendezVous: RendezVousEnCours | null;
+  /** Prépare la sortie d'un rendez-vous : carte, départ, format, météo et moment imposés ; l'appelant ouvre la sortie. */
+  lancerRendezVous: (rdv: RendezVous, numero: number, total: number) => void;
 }
 
 /** Bilan sans rien (économie absente ou en erreur) : l'écran de fin montre quand même le résultat. */
+/** Rendez-vous de carrière de la sortie en cours ; les choix libres (météo, moment, format) attendent à côté. */
+export interface RendezVousEnCours {
+  id: string;
+  /** Numéro dans la suite (1 pour le premier) et nombre de rendez-vous. */
+  numero: number;
+  total: number;
+  libre: Pick<DrivePrefs, 'moment' | 'weather' | 'format'>;
+}
+
+/** Relecture de la sauvegarde pendant un rendez-vous : les choix relus vont de côté, l'imposé reste. */
+export function garderImpose<T extends Pick<DriveState, 'moment' | 'weather' | 'format' | 'rendezVous'>>(current: Pick<DriveState, 'moment' | 'weather' | 'format' | 'rendezVous'>, next: T): T {
+  if (!current.rendezVous) return next;
+  return { ...next, moment: current.moment, weather: current.weather, format: current.format, rendezVous: { ...current.rendezVous, libre: { moment: next.moment, weather: next.weather, format: next.format } } };
+}
+
 export function bilanVide(resultat: ResultatCourse): Bilan {
   return { resultat, gains: { dollars: 0, detail: [] }, solde: 0, hautsFaits: [], deblocages: [] };
 }
@@ -368,7 +394,8 @@ export const useDrive = create<DriveState>()(
         set({
           map: target.id,
           start: wanted,
-          derniere: { map: target.id, start: wanted },
+          // Un rendez-vous de carrière ne remplace pas la dernière sortie libre (celle que rouvre le menu).
+          ...(state.rendezVous ? {} : { derniere: { map: target.id, start: wanted } }),
           apercu: true,
           fondu: 'non',
           fin: null,
@@ -383,14 +410,17 @@ export const useDrive = create<DriveState>()(
       leave: () =>
         set((state) =>
           state.map === null
-            ? state
-            : { map: null, start: null, apercu: true, fondu: 'non', fin: null, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            ? state.rendezVous
+              ? { rendezVous: null, ...state.rendezVous.libre }
+              : state
+            : { map: null, start: null, apercu: true, fondu: 'non', fin: null, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY }, ...(state.rendezVous ? { rendezVous: null, ...state.rendezVous.libre } : {}) },
         ),
       setCamera: (camera) => set({ camera, director: false }),
       nextCamera: () => set((state) => ({ camera: nextCameraOf(state.camera), director: false })),
       setDirector: (director) => set({ director }),
-      setWeather: (weather) => set({ weather }),
-      setMoment: (moment) => set({ moment }),
+      // Pendant un rendez-vous de carrière, la météo, le moment et le format sont imposés.
+      setWeather: (weather) => set((state) => (state.rendezVous ? state : { weather })),
+      setMoment: (moment) => set((state) => (state.rendezVous ? state : { moment })),
       // Le compteur du NOS suit d'un mode à l'autre : le pilote ne compte que les nouveaux appuis.
       setAuto: (auto) =>
         set((state) => {
@@ -444,7 +474,7 @@ export const useDrive = create<DriveState>()(
           return { meilleurs: sanitizeMeilleurs(meilleurs), arrivee: { temps, meilleur, precedent } };
         }),
       effacerArrivee: () => set((state) => (state.arrivee === null ? state : { arrivee: null })),
-      setFormat: (format) => set((state) => (!estFormat(format) || state.format === format ? state : { format })),
+      setFormat: (format) => set((state) => (!estFormat(format) || state.format === format || state.rendezVous ? state : { format })),
       fin: null,
       terminerCourse: (course) => {
         // Une seule clôture par course finie (src/jeu/bilan.ts paie et enregistre) : hors de la mise à jour du store.
@@ -457,6 +487,8 @@ export const useDrive = create<DriveState>()(
         } catch {
           fin = bilanVide(resultat);
         }
+        // Carrière : le rendez-vous est jugé, sa prime (une fois) s'ajoute au bilan.
+        if (state.rendezVous) fin = conclureRendezVous(state.rendezVous.id, fin);
         const cle = cleRecord(course.carte, course.depart, course.format);
         const temps = Math.round(course.temps * 1000);
         set((now) => {
@@ -468,33 +500,47 @@ export const useDrive = create<DriveState>()(
           return { fin, meilleurs: sanitizeMeilleurs(meilleurs), input: { ...AUTO_INPUT, ...nos }, director: true };
         });
       },
+      rendezVous: null,
+      lancerRendezVous: (rdv, numero, total) =>
+        set((state) => ({
+          rendezVous: { id: rdv.id, numero, total, libre: state.rendezVous?.libre ?? { moment: state.moment, weather: state.weather, format: state.format } },
+          choice: { map: rdv.carte, start: rdv.depart },
+          moment: rdv.moment,
+          weather: rdv.meteo,
+          format: rdv.format,
+        })),
     }),
     {
       name: DRIVE_KEY,
       version: DRIVE_VERSION,
       storage: createJSONStorage(() => idbStorage),
       // Les meilleurs temps et la dernière sortie ne sont écrits qu'une fois posés.
-      partialize: ({ moment, weather, camera, commande, direction, format, meilleurs, derniere }) => ({
-        moment,
-        weather,
-        camera,
-        commande,
-        direction,
-        format,
-        ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}),
-        ...(derniere ? { derniere } : {}),
-      }),
+      partialize: (state) => {
+        // Pendant un rendez-vous, ce sont les choix libres mis de côté qui se gardent, pas l'imposé.
+        const { moment, weather, camera, commande, direction, format, meilleurs, derniere } = { ...state, ...state.rendezVous?.libre };
+        return {
+          moment,
+          weather,
+          camera,
+          commande,
+          direction,
+          format,
+          ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}),
+          ...(derniere ? { derniere } : {}),
+        };
+      },
       migrate: (persisted, version) => ({
         ...migrerDrivePrefs(persisted, version),
         meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs),
         derniere: sanitizeDerniere((persisted as { derniere?: unknown } | null)?.derniere),
       }),
-      merge: (persisted, current) => ({
-        ...current,
-        ...sanitizeDrivePrefs(persisted),
-        meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs),
-        derniere: sanitizeDerniere((persisted as { derniere?: unknown } | null)?.derniere),
-      }),
+      merge: (persisted, current) =>
+        garderImpose(current, {
+          ...current,
+          ...sanitizeDrivePrefs(persisted),
+          meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs),
+          derniere: sanitizeDerniere((persisted as { derniere?: unknown } | null)?.derniere),
+        }),
       onRehydrateStorage: () => () => {
         useDrive.setState({ hydrated: true });
       },

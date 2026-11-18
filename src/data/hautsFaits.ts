@@ -44,6 +44,8 @@ export const CHAMPS = [
   'cumul.vitesseMax',
   'cumul.gains',
   'cumul.achats',
+  /** La carrière (src/data/carriere.ts) : 1 quand tous ses rendez-vous sont réussis. Lu et accordé par la carrière (src/jeu/carriereCloture.ts), jamais par le lecteur des courses. */
+  'carriere.bouclee',
 ] as const;
 export type Champ = (typeof CHAMPS)[number];
 
@@ -98,4 +100,6 @@ export const HAUTS_FAITS: readonly HautFaitDef[] = [
   { id: 'cent-kilometres', label: 'Le grand voyage', description: 'Roule cent kilomètres en tout.', recompense: { dollars: 200, articles: ['sticker-trophee-route'] }, quand: [plus('cumul.distance', 100_000)] },
   { id: 'premier-jour', label: 'Au grand jour', description: 'Finis une course de jour.', recompense: { dollars: 20 }, quand: [plus('cumul.jour', 1)] },
   { id: 'mille-dollars', label: 'Les poches pleines', description: 'Gagne mille dollars en course.', recompense: { dollars: 100 }, quand: [plus('cumul.gains', 1000)] },
+  // La carrière (vague U) : accordé par la carrière à son dernier rendez-vous réussi.
+  { id: 'carriere-bouclee', label: 'Carrière bouclée', description: 'Réussis tous les rendez-vous de la carrière.', recompense: { dollars: 100 }, quand: [egal('carriere.bouclee', 1)] },
 ];

@@ -20,6 +20,7 @@ import { PREVENIR_BALADE } from './baladeAnnonce.ts';
 import { DriveIcon, type DriveIconName } from './icones.tsx';
 import { entrerManette, manettePossible, quitterManette, useManette } from './manette.ts';
 import { MixageCurseurs } from './Mixage.tsx';
+import { RouteImposee } from '../carriere/EnSortie.tsx';
 import './reglages.css';
 
 /** Ouverture des réglages ; la course (pas l'aperçu) se met en pause tant qu'ils sont ouverts. */
@@ -160,6 +161,8 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
   const moment = useDrive((state) => state.moment);
   const commande = useDrive((state) => state.commande);
   const direction = useDrive((state) => state.direction);
+  // Rendez-vous de carrière : le moment et la météo sont imposés (src/ui/carriere/EnSortie.tsx).
+  const impose = useDrive((state) => state.rendezVous !== null);
   // Course lancée (pas l'aperçu, pas une balade, pas arrivée) : le pilote automatique la termine, et
   // la commande le dit avant l'appui. L'état de départ ne bouge pas tant que les réglages sont ouverts
   // (la course est en pause) ; la phase de la télémétrie relance ce calcul si elle change.
@@ -212,8 +215,9 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
             <Bascule nom="Ralenti" aide="Tout passe au ralenti" icone="ralenti" actif={slow} onBascule={() => drive().setSlow(!slow)} />
           </Rubrique>
           <Rubrique titre="Route">
-            <Choix nom="Moment" options={MOMENTS} valeur={moment} onChoix={(id) => drive().setMoment(id)} />
-            <Choix nom="Météo" options={WEATHERS} valeur={weather} onChoix={(id) => drive().setWeather(id)} />
+            {impose && <RouteImposee />}
+            {!impose && <Choix nom="Moment" options={MOMENTS} valeur={moment} onChoix={(id) => drive().setMoment(id)} />}
+            {!impose && <Choix nom="Météo" options={WEATHERS} valeur={weather} onChoix={(id) => drive().setWeather(id)} />}
           </Rubrique>
           <Rubrique titre="Conduite">
             {/* En paysage, toujours la manette : le choix du manche ou des pédales vaut en portrait. */}

@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import type { HautFait } from '../jeu/contrat.ts';
 import { acheterDans, possedeDans, type IssueAchat } from '../jeu/achats.ts';
+import { nettoyerProgression, progressionVide, type ProgressionCarriere } from '../jeu/carriere.ts';
 import { verifierCumuls } from '../jeu/cloture.ts';
 import { etatVide, nettoyerEtat, type EtatJeu } from '../jeu/etat.ts';
 import { visible } from '../jeu/hautsFaits.ts';
@@ -21,6 +22,8 @@ export type ResultatAchat = IssueAchat & { hautsFaits?: readonly HautFait[] };
 
 export interface JeuState extends EtatJeu {
   hydrated: boolean;
+  /** Mode carrière (src/jeu/carriere.ts) : les rendez-vous réussis et leurs résultats ; remis à zéro avec le reste. */
+  carriere: ProgressionCarriere;
   /** Remplace l'état du jeu (utilisé par la clôture d'une course, src/jeu/bilan.ts). */
   appliquer: (etat: EtatJeu) => void;
   /** Achète un article de la boutique ; l'état ne change que si l'achat réussit. */
@@ -38,6 +41,7 @@ export const useJeu = create<JeuState>()(
   persist(
     (set, get) => ({
       ...etatVide(),
+      carriere: progressionVide(),
       hydrated: false,
       appliquer: (etat) => set(etatDe(etat)),
       acheter: (id) => {
@@ -48,15 +52,16 @@ export const useJeu = create<JeuState>()(
         set(etatDe(suite.etat));
         return { ...issue, etat: suite.etat, hautsFaits: suite.hautsFaits.map(visible) };
       },
-      remettreAZero: () => set(etatVide()),
+      remettreAZero: () => set({ ...etatVide(), carriere: progressionVide() }),
     }),
     {
       name: JEU_KEY,
       version: JEU_VERSION,
       storage: createJSONStorage(() => idbStorage),
-      partialize: (state) => etatDe(state),
-      migrate: (persisted) => nettoyerEtat(persisted),
-      merge: (persisted, current) => ({ ...current, ...nettoyerEtat(persisted) }),
+      // La progression de la carrière voyage avec le jeu ; une sauvegarde d'avant la carrière part de zéro.
+      partialize: (state) => ({ ...etatDe(state), carriere: state.carriere }),
+      migrate: (persisted) => ({ ...nettoyerEtat(persisted), carriere: nettoyerProgression((persisted as { carriere?: unknown } | null)?.carriere) }),
+      merge: (persisted, current) => ({ ...current, ...nettoyerEtat(persisted), carriere: nettoyerProgression((persisted as { carriere?: unknown } | null)?.carriere) }),
       onRehydrateStorage: () => () => {
         useJeu.setState({ hydrated: true });
       },

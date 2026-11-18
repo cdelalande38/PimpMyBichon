@@ -24,6 +24,7 @@ Claude Code tient ce fichier à jour : chaque substitut encore en place y figure
 | Modèles de la vague 2 (berline 90, pick-up, 4x4, coupé) | 12 | à sourcer |
 | Direction articulée des vrais modèles (demande du 16 novembre 2026 : « voir la voiture qui tourne, roues plus direction ») : en sortie, les roues avant braquent autour de leur centre (src/drive/scene/roues.ts) ; une moto tourne aussi les pièces nommées `fourche`, `guidon`, `poignee_gauche` et `poignee_droite` autour de l'axe qui va du moyeu avant au milieu des poignées, les mains du motard avec elles. Un vrai modèle doit garder ces pièces séparées (roue avant, fourche avec ses tés, guidon) et chaque roue avec son pivot au centre ; sans elles, la roue avant d'une moto braque seule, et à peine | 12 | à fournir avec les vrais modèles |
 | Son du NOS en sortie de nuit (souffle de la bouteille à l'ouverture, une prise sous licence libre, à jouer sous le moteur) : sans prise, l'emplacement reste muet et la poussée ne s'entend que par le moteur qui monte (src/drive/pilote.ts) | 8 | à sourcer |
+| Son d’un rendez-vous de carrière réussi et de la carrière bouclée (vague U, src/ui/carriere/) : une courte prise sous licence libre, ou générée et versée avec l’accord du commanditaire ; sans prise, rien ne sonne (aucun son fabriqué par le code). La carrière n’attend aucun autre asset : miniatures des tracés et icônes de météo existantes | 13 | à sourcer |
 
 ## Substituts en place
 
