@@ -100,6 +100,9 @@ export interface NightUniforms {
   pmbReflectionMatrix: { value: Matrix4 };
   pmbReflectionStrength: { value: number };
   pmbReflectionTexel: { value: Vector2 };
+  /** Moment (src/data/moments.ts) : fenêtres allumées (1 la nuit, 0 le jour) et têtes de lampadaire allumées. */
+  pmbGlow: { value: number };
+  pmbLampOn: { value: number };
 }
 
 /**
@@ -156,6 +159,8 @@ export function createNightUniforms(): NightUniforms {
     pmbReflectionMatrix: { value: new Matrix4() },
     pmbReflectionStrength: { value: 0 },
     pmbReflectionTexel: { value: new Vector2(1, 1) },
+    pmbGlow: { value: 1 },
+    pmbLampOn: { value: 1 },
   };
 }
 
@@ -298,6 +303,8 @@ uniform sampler2D pmbReflection;
 uniform sampler2D pmbReflectionBlur;
 uniform mat4 pmbReflectionMatrix;
 uniform float pmbReflectionStrength;
+uniform float pmbGlow;
+uniform float pmbLampOn;
 // Hachage sans sinus (le sinus d'un grand nombre se dégrade en aplats sur le processeur graphique),
 // périodique sur 1024 cases : sans couture, sans motif visible à l'échelle de la carte.
 float pmbHash( vec2 p ) {
@@ -590,13 +597,13 @@ pmbGloss = clamp( 1.0 - roughnessFactor * 1.6, 0.0, 1.0 );
 const EMISSIVE_PATCH = /* glsl */ `
 #include <emissivemap_fragment>
 #ifdef PMB_EMIT
-totalEmissiveRadiance += vPmbEmit * pmbLampColor * 9.0;
+totalEmissiveRadiance += vPmbEmit * pmbLampColor * 9.0 * pmbLampOn;
 #endif
 #ifdef PMB_WINDOWS
 // Réglettes des tunnels (bandes horizontales sous la voûte) : lumière chaude, franche.
 totalEmissiveRadiance += vec3( 1.0, 0.72, 0.42 ) * 3.2 * step( 0.5, abs( normalize( vPmbNormal ).y ) );
 #endif
-totalEmissiveRadiance += pmbFacadeEmit;
+totalEmissiveRadiance += pmbFacadeEmit * pmbGlow;
 `;
 
 const OUTPUT_PATCH = /* glsl */ `

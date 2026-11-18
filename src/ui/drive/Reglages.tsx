@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { closeSheet } from '../../app/useRoute.ts';
 import { CAMERA_IDS, type CameraId } from '../../drive/contrat.ts';
 import { basculerMoteur, useSonSortie } from '../../drive/son.ts';
+import { MOMENTS } from '../../data/moments.ts';
 import { CAMERA_LABELS, COMMANDES, DIRECTIONS, useDrive, WEATHERS } from '../../state/drive.ts';
 import { useEngineSoundPrefs } from '../../state/engineSound.ts';
 import { DriveIcon, type DriveIconName } from './icones.tsx';
@@ -154,6 +155,7 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
   const director = useDrive((state) => state.director);
   const slow = useDrive((state) => state.slow);
   const weather = useDrive((state) => state.weather);
+  const moment = useDrive((state) => state.moment);
   const commande = useDrive((state) => state.commande);
   const direction = useDrive((state) => state.direction);
   const croix = useRef<HTMLButtonElement>(null);
@@ -202,6 +204,7 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
             <Bascule nom="Ralenti" aide="Tout passe au ralenti" icone="ralenti" actif={slow} onBascule={() => drive().setSlow(!slow)} />
           </Rubrique>
           <Rubrique titre="Route">
+            <Choix nom="Moment" options={MOMENTS} valeur={moment} onChoix={(id) => drive().setMoment(id)} />
             <Choix nom="Météo" options={WEATHERS} valeur={weather} onChoix={(id) => drive().setWeather(id)} />
           </Rubrique>
           <Rubrique titre="Conduite">

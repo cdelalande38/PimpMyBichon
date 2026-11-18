@@ -8,7 +8,9 @@
 import {
   Box3,
   Color,
+  DirectionalLight,
   FogExp2,
+  HemisphereLight,
   Matrix4,
   Object3D,
   PointLight,
@@ -16,6 +18,7 @@ import {
   type BufferGeometry,
   type DataTexture,
   type InstancedMesh,
+  type MeshStandardMaterial,
   type Points,
   type ShaderMaterial,
   type Fog,
@@ -27,6 +30,7 @@ import {
 import { feuxSon } from '../../audio/sfx/feux.ts';
 import { meteoSon } from '../../audio/sfx/meteo.ts';
 import { resolveStart } from '../../data/maps.ts';
+import { MATIERES_DU_JOUR, type MatiereDuJour } from '../../data/moments.ts';
 import type { MapRoute } from '../../data/mapTypes.ts';
 import type { VehicleManifest } from '../../data/vehicleTypes.ts';
 import type { SurfaceUniforms } from '../../render/floor.ts';
@@ -51,7 +55,8 @@ import { Chevrons } from './chevrons.ts';
 import { LignesDepart } from './lignes.ts';
 import { createSignAtlas, createSignMaterial } from './enseignes.ts';
 import type { Relief } from './relief.ts';
-import { createNightUniforms, createRoleMaterials, LAMP_FADE, MAX_LAMPS, MAX_NEONS, MIST, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
+import { createNightUniforms, createRoleMaterials, LAMP_FADE, MAX_LAMPS, MAX_NEONS, REAL_LAMPS, type NightUniforms } from './materiaux.ts';
+import { MomentMelange } from './moment.ts';
 import { DRIVE_PROFILES, due, fogDensity, lampWeights, nearestLamps, stepOf, type DriveProfile } from './profil.ts';
 import { MovingProbe } from './sonde.ts';
 import { cleanProbePass } from '../../render/probePass.ts';
@@ -87,8 +92,14 @@ const WEATHER_STEPS = ['completes', 'allegees', 'minimales'] as const;
 /** Plan proche de la caméra : 0,3 m (deux fois plus de précision de profondeur au loin) ; embarquée : 0,12 m. */
 const NEAR = { default: 0.3, cockpit: 0.12 } as const;
 
-/** Force de la bande d'horizon vue par la sonde (reflet clair qui dessine la caisse). */
+/** Force de la bande d'horizon vue par la sonde (reflet clair qui dessine la caisse) : celle de la nuit (src/data/moments.ts). */
 const PROBE_BAND_GAIN = 0.5;
+
+/** Passage d'un moment à l'autre (nuit, jour) : part franchie par seconde. */
+const MOMENT_RATE = 1.5;
+
+/** Ombre portée du véhicule : hauteur (part de celle du véhicule) d'où l'astre la projette au sol, et décalage au plus (m). */
+const CAST_SHADOW = { height: 0.7, reach: 2, lift: 0.6 } as const;
 
 /**
  * Brume au sol : sa base se cale sur le plan d'eau chargé le plus proche s'il est à moins de
@@ -206,6 +217,15 @@ export class DriveEngine {
   /** Bande d'horizon de la sonde (src/drive/scene/ciel.ts, createProbeBand). */
   private readonly band = createProbeBand({ value: PROBE_BAND_GAIN });
   private readonly kind: VehicleManifest['kind'];
+  /** Moment (nuit, jour) mêlé à la météo du ciel (src/drive/scene/moment.ts), et ce qu'il règle. */
+  private readonly moment: MomentMelange;
+  private readonly momentMaterials: Array<[MatiereDuJour, MeshStandardMaterial]> = [];
+  /** Passage de la nuit (0) au jour (1) ; -1 avant la première image (posé d'un coup). */
+  private day = -1;
+  private readonly sun = new DirectionalLight();
+  private readonly hemi = new HemisphereLight();
+  private fog: FogExp2 | null = null;
+  private fogBase = 0;
   private readonly level: QualityLevel;
   private readonly route: MapRoute;
   private attached: { scene: Scene; fog: Fog | FogExp2 | null; environment: Texture | null } | null = null;
@@ -289,15 +309,30 @@ export class DriveEngine {
     this.signAtlas = typeof document === 'undefined' ? null : createSignAtlas();
     this.signMaterial = this.signAtlas ? createSignMaterial(this.signAtlas, this.uniforms.pmbTime, this.profile.fogFar) : null;
     if (this.signMaterial) this.decor.signs = { material: this.signMaterial, rail: this.rail };
+    // Matières dont la teinte suit le moment : rôles des tronçons, arbres, relief lointain.
+    const nuit = {} as Record<MatiereDuJour, Color>;
+    for (const m of MATIERES_DU_JOUR) {
+      const material = m === 'arbre' ? this.kit.treeMaterial : m === 'lointain' ? this.kit.farMaterial : this.roles.get(m);
+      if (!material) continue;
+      this.momentMaterials.push([m, material]);
+      nuit[m] = material.color.clone();
+    }
+    this.moment = new MomentMelange(nuit);
+    this.sun.name = 'sortie_astre';
+    this.hemi.name = 'sortie_ambiance';
+    this.applyMoment(0, 0, 0);
   }
 
   /** Accroche le décor, le ciel, la brume et la sonde à la scène ; règle la caméra. */
   attach(scene: Scene, camera: PerspectiveCamera): void {
     this.attached = { scene, fog: scene.fog, environment: scene.environment };
     this.band.layers.set(PROBE_ONLY_LAYER);
-    scene.add(this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, this.chevrons.group, ...this.lampLights);
+    scene.add(this.hemi, this.sun, this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, this.chevrons.group, ...this.lampLights);
     if (this.townGlow) scene.add(this.townGlow);
-    scene.fog = new FogExp2(new Color(SKY.fog), fogDensity(this.profile.fogFar));
+    this.fogBase = fogDensity(this.profile.fogFar);
+    this.fog = new FogExp2(new Color(SKY.fog), this.fogBase);
+    scene.fog = this.fog;
+    this.applyMoment(Math.max(0, this.day), this.sky0.rain, this.sky0.snow);
     scene.environment = this.probe.target.texture;
     camera.near = NEAR.default;
     camera.far = 24000;
@@ -309,7 +344,7 @@ export class DriveEngine {
   detach(): void {
     const a = this.attached;
     if (!a) return;
-    a.scene.remove(this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, this.chevrons.group, ...this.lampLights);
+    a.scene.remove(this.hemi, this.sun, this.decor.root, this.sky, this.rain, this.farLights, this.band, this.lignes.group, this.chevrons.group, ...this.lampLights);
     if (this.townGlow) a.scene.remove(this.townGlow);
     a.scene.fog = a.fog;
     a.scene.environment = a.environment;
@@ -374,6 +409,7 @@ export class DriveEngine {
     rig.tails = model?.tails ?? [];
     rig.tailBase = model?.tails[0]?.emissiveIntensity ?? 10;
     rig.tailLight = model?.tailLight ?? null;
+    rig.cast = model?.cast ?? null;
     if (model) {
       rig.headLocal.copy(model.head);
       rig.headSpread = model.headSpread;
@@ -452,7 +488,8 @@ export class DriveEngine {
       const boost = motion.boost ?? 0;
       if (boost > 0.01 && !this.tailColor) this.tailColor = rig.tailLight.color.clone();
       if (this.tailColor) rig.tailLight.color.copy(this.tailColor).lerp(NOS_GLOW.color, boost);
-      rig.tailLight.intensity = (motion.braking ? TAIL_CANDELA.brake : TAIL_CANDELA.rest) + boost * NOS_GLOW.candela;
+      // Lueur rouge sur la chaussée : la nuit seulement (comme les phares) ; les feux eux-mêmes restent allumés de jour.
+      rig.tailLight.intensity = ((motion.braking ? TAIL_CANDELA.brake : TAIL_CANDELA.rest) + boost * NOS_GLOW.candela) * this.moment.etat.phares;
     }
     rig.group.updateMatrixWorld();
 
@@ -514,6 +551,12 @@ export class DriveEngine {
     sky0.snow += (goal.snow - sky0.snow) * k;
     this.wet = sky0.wet;
     const wet = Math.max(sky0.rain, sky0.snow);
+    // Moment : la nuit ou le jour, en fondu, mêlé à la météo du ciel (src/data/moments.ts).
+    const dayGoal = drive.moment === 'jour' ? 1 : 0;
+    this.day = this.day < 0 ? dayGoal : this.day + (dayGoal - this.day) * Math.min(1, delta * MOMENT_RATE * 2);
+    if (Math.abs(this.day - dayGoal) < 0.002) this.day = dayGoal;
+    this.applyMoment(this.day, sky0.rain, sky0.snow);
+    const look = this.moment.etat;
     const here = localWeather(sky0, decor.spans, motion.s, this.here);
     // Les bruitages de route écoutent la même météo locale (src/audio/sfx/meteo.ts) : objet réécrit sur place.
     meteoSon.posee = true;
@@ -541,7 +584,7 @@ export class DriveEngine {
     this.mistBase = Math.min(this.mistBase, py - 1.5);
     uniforms.pmbMistBase.value = this.mistBase;
     // Économie : pas de brume au sol (§ 8 : le niveau économie coupe la brume ; l'horizon garde la sienne).
-    uniforms.pmbMistDensity.value = this.level === 'eco' ? 0 : MIST.density * (1 + 0.3 * here.rain + 0.5 * here.snow);
+    uniforms.pmbMistDensity.value = this.level === 'eco' ? 0 : look.brumeDensite * (1 + 0.3 * here.rain + 0.5 * here.snow);
     {
       // Les plus proches d'un point 10 m devant le véhicule, à chaque image. Les deux premiers sont
       // aussi de vraies lumières (elles éclairent la caisse et font leur flaque) ; tous gardent leur
@@ -553,6 +596,13 @@ export class DriveEngine {
       const work = this.nearWork;
       const found = nearestLamps(decor.lamps, decor.lampCount, sx, sz, keep + 1, work, this.order, this.dist);
       const n = lampWeights(this.dist, found, keep, REAL_LAMPS, LAMP_FADE, uniforms.pmbLampW.value, this.realShare);
+      // Lampadaires éteints le jour (src/data/moments.ts) : flaques, reflets et vraies lumières en fondu.
+      const lampOn = look.lampadaires;
+      if (lampOn !== 1) {
+        const lw = uniforms.pmbLampW.value;
+        for (let i = 0; i < n * 2; i += 1) lw[i] = (lw[i] ?? 0) * lampOn;
+        for (let i = 0; i < REAL_LAMPS; i += 1) this.realShare[i] = (this.realShare[i] ?? 0) * lampOn;
+      }
       const lamps = uniforms.pmbLamps.value;
       lamps.set(work.subarray(0, keep * 3));
       for (let i = 0; i < REAL_LAMPS; i += 1) {
@@ -560,7 +610,7 @@ export class DriveEngine {
         light.intensity = i < n ? LAMP_CANDELA * (this.realShare[i] ?? 0) : 0;
         light.position.set(lamps[i * 3] ?? 0, (lamps[i * 3 + 1] ?? 0) - 0.3, lamps[i * 3 + 2] ?? 0);
       }
-      uniforms.pmbLampCount.value = n;
+      uniforms.pmbLampCount.value = lampOn > 0 ? n : 0;
       // Enseignes les plus proches du même point : leur lumière colorée, en fondu de même.
       const m0 = nearestLamps(decor.neonPositions, decor.neonCount, sx, sz, MAX_NEONS + 1, work, this.order, this.dist);
       const m = lampWeights(this.dist, m0, MAX_NEONS, 0, LAMP_FADE, this.neonW2, this.neonShare);
@@ -572,15 +622,15 @@ export class DriveEngine {
         colors[k * 3] = decor.neonColors[i * 3] ?? 0;
         colors[k * 3 + 1] = decor.neonColors[i * 3 + 1] ?? 0;
         colors[k * 3 + 2] = decor.neonColors[i * 3 + 2] ?? 0;
-        nw[k] = this.neonW2[k * 2] ?? 0;
+        nw[k] = (this.neonW2[k * 2] ?? 0) * look.neons;
       }
-      uniforms.pmbNeonCount.value = m;
+      uniforms.pmbNeonCount.value = look.neons > 0 ? m : 0;
     }
     const sky = this.sky.material.uniforms;
     this.sky.position.copy(camera.position);
     (sky.uTime as { value: number }).value = elapsed;
-    (sky.uStars as { value: number }).value = 1 - 0.9 * wet;
-    (sky.uClouds as { value: number }).value = 1 + 0.6 * wet + 0.3 * sky0.snow;
+    (sky.uStars as { value: number }).value = look.etoiles;
+    (sky.uClouds as { value: number }).value = look.nuages;
     const far = this.farLights.material.uniforms;
     (far.uTime as { value: number }).value = elapsed;
     (far.uPixel as { value: number }).value = gl.getPixelRatio();
@@ -602,11 +652,12 @@ export class DriveEngine {
       (rain.uShelterT as { value: Vector3 }).value.set(tx / hl, tz / hl, span ? span.halfWidth : 0);
       (rain.uSpan as { value: { set: (x: number, y: number) => void } }).value.set(span ? span.from : 1, span ? span.to : 0);
     }
-    rig.beamGain.value = 0.012 + 0.022 * here.rain + 0.03 * here.snow;
-    rig.glareGain.value = 1 + 0.6 * here.rain + 0.4 * here.snow;
+    rig.beamGain.value = (0.012 + 0.022 * here.rain + 0.03 * here.snow) * look.phares;
+    rig.glareGain.value = (1 + 0.6 * here.rain + 0.4 * here.snow) * look.phares;
     // Neige : la lueur des lampadaires prend dans l'air (halos plus larges).
     (this.kit.haloMaterial.uniforms.uSize as { value: number }).value = 3.2 * (1 + 0.5 * here.snow);
-    (this.kit.haloMaterial.uniforms.uGain as { value: number }).value = 1.3 * (1 + 0.35 * here.snow + 0.2 * here.rain);
+    (this.kit.haloMaterial.uniforms.uGain as { value: number }).value = 1.3 * (1 + 0.35 * here.snow + 0.2 * here.rain) * look.lampadaires;
+    this.castShadow(heading, px, py, pz, look.ombre, off?.ombre === true);
 
     // Sonde (une face par image) et reflet planaire de la chaussée.
     this.probeAt.set(px, py + 1.1, pz);
@@ -671,6 +722,7 @@ export class DriveEngine {
       putData(stage, 'camera', cameraId);
       putData(stage, 'troncons', String(decor.status.loaded));
       putData(stage, 'meteo', drive.weather);
+      putData(stage, 'moment', drive.moment);
       putData(stage, 'depart', depart.phase);
       putData(stage, 'chrono', String(Math.floor(depart.chrono / 100)));
       putData(stage, 'abri', here.rain + here.snow + here.wet < 1e-3 && wet > 0 ? 'oui' : 'non');
@@ -678,6 +730,88 @@ export class DriveEngine {
       putData(stage, 'braquage', String(Math.round((steer * 180) / Math.PI)));
       putData(stage, 'roulis', String(Math.round((motion.roll * 180) / Math.PI)));
     }
+  }
+
+  /**
+   * Pose le moment mêlé (src/drive/scene/moment.ts) sur ce qu'il règle : lumières du ciel, ciel,
+   * brouillard, brume, reflets calculés, matières, lumières de la nuit (phares, lampadaires, néons,
+   * fenêtres), relief lointain, bande de la sonde. Rien n'est réécrit quand rien n'a changé.
+   */
+  private applyMoment(day: number, rain: number, snow: number): void {
+    if (!this.moment.melanger(day, rain, snow)) return;
+    const e = this.moment.etat;
+    const u = this.uniforms;
+    this.hemi.color.copy(e.ambianceCiel);
+    this.hemi.groundColor.copy(e.ambianceSol);
+    this.hemi.intensity = e.ambianceIntensite;
+    this.sun.color.copy(e.astre);
+    this.sun.intensity = e.astreIntensite;
+    this.sun.position.copy(e.astreDirection);
+    const sky = this.sky.material.uniforms;
+    (sky.uZenith as { value: Color }).value.copy(e.zenith);
+    (sky.uMiddle as { value: Color }).value.copy(e.milieu);
+    (sky.uHorizon as { value: Color }).value.copy(e.horizon);
+    (sky.uGlow as { value: Color }).value.copy(e.lueur);
+    (sky.uGlowDir as { value: Vector3 }).value.copy(e.lueurDirection);
+    (sky.uMoonDir as { value: Vector3 }).value.copy(e.astreDirection);
+    (sky.uMoon as { value: Color }).value.copy(e.astreCiel);
+    (sky.uDay as { value: number }).value = e.jour;
+    (sky.uDisk as { value: number }).value = e.disque;
+    (sky.uCloudTint as { value: Color }).value.copy(e.teinteNuages);
+    u.pmbMoonDir.value.copy(e.astreDirection);
+    u.pmbMoonColor.value.copy(e.astreCiel);
+    u.pmbSkyHorizon.value.copy(e.refletHorizon);
+    u.pmbSkyZenith.value.copy(e.refletZenith);
+    u.pmbMistColor.value.copy(e.brume);
+    u.pmbHeadOn.value = e.phares;
+    u.pmbGlow.value = e.fenetres;
+    u.pmbLampOn.value = e.lampadaires;
+    if (this.fog) {
+      this.fog.color.copy(e.brouillard);
+      this.fog.density = this.fogBase * e.brouillardDensite;
+    }
+    for (const [m, material] of this.momentMaterials) material.color.copy(e.matieres[m]);
+    this.kit.farHaze.copy(e.voile);
+    this.kit.farHazeMin.value = e.voileMin;
+    const band = this.band.material.uniforms;
+    (band.uColor as { value: Color }).value.copy(e.horizon);
+    (band.uGain as { value: number }).value = e.bandeSonde;
+    // Lumières de la nuit éteintes : rien n'est dessiné (lumières lointaines, lueur des villages, halos, enseignes).
+    this.farLights.visible = e.lampadaires > 0.001;
+    if (this.townGlow) this.townGlow.visible = e.lampadaires > 0.001;
+    this.kit.haloMaterial.visible = e.lampadaires > 0.001;
+    if (this.signMaterial) {
+      (this.signMaterial.uniforms.uOn as { value: number }).value = e.neons;
+      this.signMaterial.visible = e.neons > 0.001;
+    }
+  }
+
+  /**
+   * Ombre portée du véhicule par l'astre (src/drive/scene/vehicule.tsx, `cast`) : l'empreinte de
+   * l'ombre de contact, décalée au sol à l'opposé de l'astre (repère du véhicule), d'autant plus
+   * qu'il est bas ; invisible la nuit. Aucune allocation.
+   */
+  private castShadow(heading: number, px: number, py: number, pz: number, opacity: number, off: boolean): void {
+    const cast = this.rig.cast;
+    if (!cast) return;
+    cast.mesh.visible = opacity > 0.01 && !off;
+    if (!cast.mesh.visible) return;
+    (cast.material.uniforms.opacity as { value: number }).value = opacity;
+    const d = this.moment.etat.astreDirection;
+    const c = Math.cos(heading);
+    const sn = Math.sin(heading);
+    // Repère du véhicule (cap autour de +Y) : avant +X, côté +Z.
+    const lx = d.x * c - d.z * sn;
+    const lz = d.x * sn + d.z * c;
+    // Posée sur l'enrobé, qui passe un peu au-dessus du rail (bombé, dévers) : le plus haut du sol au
+    // milieu et aux deux flancs du véhicule (sonde du décor).
+    const half = this.rig.measure?.halfWidth ?? 0.9;
+    let top = this.decor.relief.ground(px, pz, py + 1);
+    top = Math.max(top, this.decor.relief.ground(px + sn * half, pz + c * half, py + 1), this.decor.relief.ground(px - sn * half, pz - c * half, py + 1));
+    cast.mesh.position.y = (top === top ? Math.min(CAST_SHADOW.lift, Math.max(0, top - py)) : 0) + 0.02;
+    const h = (this.rig.measure?.height ?? 1.4) * CAST_SHADOW.height;
+    const k = Math.min(CAST_SHADOW.reach, h / Math.max(0.15, d.y));
+    (cast.material.uniforms.uOffset as { value: { set: (x: number, y: number) => void } }).value.set(-lx * k, -lz * k);
   }
 
   /**
@@ -805,5 +939,7 @@ export class DriveEngine {
     this.signMaterial?.dispose();
     this.signAtlas?.dispose();
     for (const l of this.lampLights) l.dispose();
+    this.sun.dispose();
+    this.hemi.dispose();
   }
 }

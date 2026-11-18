@@ -238,6 +238,9 @@ export class DecorKit {
   readonly lensMaterial = new MeshBasicMaterial({ color: '#ffffff' });
   readonly haloMaterial: ShaderMaterial;
   readonly farMaterial: MeshStandardMaterial;
+  /** Voile d'horizon du relief lointain et sa part minimale (0 la nuit ; de jour, il est loin et voilé) : src/data/moments.ts. */
+  readonly farHaze: Color;
+  readonly farHazeMin = { value: 0 };
 
   constructor(uniforms: NightUniforms, fogFar: number) {
     this.pole.setAttribute('pmbEmit', emitAttribute(this.pole.getAttribute('position').count, Infinity));
@@ -277,16 +280,18 @@ export class DecorKit {
     this.farMaterial.fog = false;
     this.farMaterial.name = 'nuit_lointain';
     const haze = new Color(SKY.horizon).multiplyScalar(0.55);
+    this.farHaze = haze;
     this.farMaterial.onBeforeCompile = (shader) => {
       shader.uniforms.uHaze = { value: haze };
+      shader.uniforms.uHazeMin = this.farHazeMin;
       shader.vertexShader = shader.vertexShader.replace(
         '#include <project_vertex>',
         `#include <project_vertex>
         gl_Position.z = ( 0.99985 + 0.00014 * clamp( log2( max( gl_Position.w, 150.0 ) / 150.0 ) / 7.4, 0.0, 1.0 ) ) * gl_Position.w;`,
       );
-      shader.fragmentShader = `uniform vec3 uHaze;\n${shader.fragmentShader}`.replace(
+      shader.fragmentShader = `uniform vec3 uHaze;\nuniform float uHazeMin;\n${shader.fragmentShader}`.replace(
         '#include <opaque_fragment>',
-        `outgoingLight = mix( outgoingLight, uHaze, smoothstep( 1200.0, 11000.0, length( vViewPosition ) ) * 0.8 );
+        `outgoingLight = mix( outgoingLight, uHaze, max( smoothstep( 1200.0, 11000.0, length( vViewPosition ) ) * 0.8, uHazeMin ) );
         #include <opaque_fragment>`,
       );
     };

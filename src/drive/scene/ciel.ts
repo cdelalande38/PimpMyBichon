@@ -55,6 +55,10 @@ uniform float uStars;
 uniform float uClouds;
 uniform vec3 uMoonDir;
 uniform vec3 uMoon;
+// Jour (src/data/moments.ts) : 0 la nuit ; 1, soleil, nuages opaques de teinte uCloudTint ; uDisk, éclat du soleil (0 sous un ciel couvert).
+uniform float uDay;
+uniform float uDisk;
+uniform vec3 uCloudTint;
 varying vec3 vDir;
 float h3( vec3 p ) { return fract( sin( dot( p, vec3( 12.9898, 78.233, 37.719 ) ) ) * 43758.5453 ); }
 float h2( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
@@ -78,13 +82,18 @@ void main() {
   float disk = smoothstep( 0.99988, 0.99993, m );
   vec3 tangent = d - uMoonDir * m;
   float mare = n2( tangent.xy * 900.0 + 3.0 ) * 0.5 + n2( tangent.yz * 2300.0 ) * 0.5;
-  c += uMoon * ( disk * ( 4.5 - 1.6 * mare ) + pow( m, 2200.0 ) * 0.9 + pow( m, 160.0 ) * 0.14 + pow( m, 8.0 ) * 0.06 );
-  // Voiles de nuages, éclairés du côté de la lune ; ils cachent les étoiles qu'ils couvrent.
+  vec3 moonLight = uMoon * ( disk * ( 4.5 - 1.6 * mare ) + pow( m, 2200.0 ) * 0.9 + pow( m, 160.0 ) * 0.14 + pow( m, 8.0 ) * 0.06 );
+  // Soleil : disque éblouissant, auréole serrée et large lueur autour de lui.
+  float sun = smoothstep( 0.99986, 0.99992, m );
+  vec3 sunLight = uMoon * ( uDisk * ( sun * 24.0 + pow( m, 900.0 ) * 1.6 + pow( m, 60.0 ) * 0.22 ) + pow( m, 5.0 ) * 0.1 );
+  c += mix( moonLight, sunLight, uDay );
+  // Voiles de nuages, éclairés du côté de la lune ; ils cachent les étoiles qu'ils couvrent. De jour,
+  // des nuages opaques, plus clairs du côté du soleil.
   vec2 cp = d.xz / ( max( d.y, 0.0 ) + 0.18 ) * vec2( 0.7, 2.2 ) + vec2( uTime * 0.004, uTime * 0.002 );
   float cl = n2( cp ) * 0.55 + n2( cp * 2.3 + 7.1 ) * 0.3 + n2( cp * 5.1 + 2.3 ) * 0.15;
   cl = smoothstep( 0.5, 0.95, cl ) * smoothstep( 0.02, 0.2, y ) * uClouds;
-  vec3 cloudLit = uHorizon * 0.55 + uMoon * ( 0.05 + 0.5 * pow( m, 6.0 ) );
-  c = mix( c, cloudLit, cl * 0.4 );
+  vec3 cloudLit = mix( uHorizon * 0.55 + uMoon * ( 0.05 + 0.5 * pow( m, 6.0 ) ), uCloudTint * ( 0.82 + 0.3 * pow( m, 4.0 ) - 0.12 * n2( cp * 3.1 + 1.7 ) ), uDay );
+  c = mix( c, cloudLit, min( cl * mix( 0.4, 0.9, uDay ), 1.0 ) );
   // Étoiles : une case de la voûte sur quelques centaines porte une étoile, plus rare vers l'horizon.
   vec3 cell = floor( d * 340.0 );
   float h = h3( cell );
@@ -113,6 +122,9 @@ export function createSky(): Mesh<SphereGeometry, ShaderMaterial> {
       uClouds: { value: 1 },
       uMoonDir: { value: new Vector3(...MOON.direction).normalize() },
       uMoon: { value: new Color(MOON.color) },
+      uDay: { value: 0 },
+      uDisk: { value: 1 },
+      uCloudTint: { value: new Color() },
     },
     side: BackSide,
     depthWrite: false,

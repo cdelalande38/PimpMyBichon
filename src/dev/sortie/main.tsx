@@ -9,6 +9,7 @@
 //   s=<m>            abscisse de départ (sinon le premier départ de la carte)
 //   camera=<id>      poursuite (défaut), rasante, avant, embarquee, travelling, orbite ; realisateur
 //   meteo=pluie      pluie ou neige (sec par défaut)
+//   moment=jour      jour ou nuit (nuit par défaut)
 //   qualite=<niveau> eco, standard, max (sinon le réglage de l'app)
 //   propre           sans le cartouche d'information
 //   peinture=<finition>:<rrggbb>  peinture de la zone maîtresse (finition de src/data/finishes.ts)
@@ -43,15 +44,18 @@ interface Aller {
   s?: number;
   camera?: string;
   meteo?: string;
+  /** nuit ou jour (src/data/moments.ts). */
+  moment?: string;
 }
 
-function appliquer({ camera: brut, meteo }: Aller) {
+function appliquer({ camera: brut, meteo, moment }: Aller) {
   // « orbite@1.6 » : caméra d'orbite, angle autour du véhicule en radians (0 derrière lui).
   const [camera, yaw] = (brut ?? '').split('@');
   if (yaw !== undefined) useDrive.setState((state) => ({ orbit: { ...state.orbit, yaw: Number(yaw) } }));
   if (camera === 'realisateur') useDrive.setState({ director: true });
   else if (camera && (CAMERA_IDS as readonly string[]).includes(camera)) useDrive.setState({ director: false, camera: camera as CameraId });
   if (meteo === 'pluie' || meteo === 'sec' || meteo === 'neige') useDrive.setState({ weather: meteo });
+  if (moment === 'nuit' || moment === 'jour') useDrive.setState({ moment });
 }
 
 const frames = (n: number) =>
@@ -70,7 +74,7 @@ let premier = true;
 async function aller(v: Aller): Promise<void> {
   // La pluie monte et descend en deux secondes environ : on attend qu'elle soit posée (et au premier
   // plan, la météo enregistrée du joueur peut encore s'effacer).
-  const meteoChange = premier || (v.meteo !== undefined && v.meteo !== useDrive.getState().weather);
+  const meteoChange = premier || (v.meteo !== undefined && v.meteo !== useDrive.getState().weather) || (v.moment !== undefined && v.moment !== useDrive.getState().moment);
   premier = false;
   appliquer(v);
   if (typeof v.s === 'number') driveDebug.seek?.(v.s);
@@ -441,7 +445,7 @@ async function demarrer() {
   }
   const peinture = /^([a-z-]+):#?([0-9a-f]{6})$/i.exec(params.get('peinture') ?? '');
   if (peinture) peindre(vehicle, peinture[1] ?? '', peinture[2] ?? '');
-  appliquer({ camera: params.get('camera') ?? 'poursuite', meteo: params.get('meteo') ?? 'sec' });
+  appliquer({ camera: params.get('camera') ?? 'poursuite', meteo: params.get('meteo') ?? 'sec', moment: params.get('moment') ?? 'nuit' });
   const s = params.get('s');
   if (s !== null) void ready().then(() => driveDebug.seek?.(Number(s)));
   (window as unknown as { pmbSortie: unknown }).pmbSortie = { aller, mesurer: () => driveDebug.measure?.(), cadence, scintillement, postes, gpu, pret: () => driveDebug.settled?.() ?? false, debug: driveDebug, drive: useDrive, peindre: (finish: string, color: string) => peindre(vehicle, finish, color), caisse: () => releveCaisse(vehicle), sonde: profilSonde };

@@ -26,6 +26,7 @@ import { cleRecord, estFormat, FORMAT_PAR_DEFAUT, indulgence, medailleDe, seuils
 import type { Bilan, FormatCourse, MomentCourse, ResultatCourse } from '../jeu/contrat.ts';
 import { cloturerCourse } from '../jeu/bilan.ts';
 import { mapById, MAPS } from '../data/maps.ts';
+import { MOMENT_PAR_DEFAUT, momentOf, type Moment } from '../data/moments.ts';
 import type { MapId } from '../data/mapTypes.ts';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
@@ -70,8 +71,9 @@ export const DIRECTIONS: readonly { id: DriveDirection; label: string }[] = [
   { id: 'assistee', label: 'Assistée' },
 ];
 
-/** Ce qui est sauvegardé : la météo, la caméra, la commande, la direction et le format préférés. */
+/** Ce qui est sauvegardé : le moment (nuit, jour), la météo, la caméra, la commande, la direction et le format préférés. */
 export interface DrivePrefs {
+  moment: Moment;
   weather: Weather;
   camera: CameraId;
   commande: DriveCommande;
@@ -79,7 +81,7 @@ export interface DrivePrefs {
   format: FormatCourse;
 }
 
-export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ weather: 'pluie', camera: 'poursuite', commande: 'manche', direction: 'libre', format: FORMAT_PAR_DEFAUT });
+export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ moment: MOMENT_PAR_DEFAUT, weather: 'pluie', camera: 'poursuite', commande: 'manche', direction: 'libre', format: FORMAT_PAR_DEFAUT });
 
 /** Caméra mise en passant « À la main ». */
 export const CAMERA_A_LA_MAIN: CameraId = 'poursuite';
@@ -159,7 +161,7 @@ export function sanitizeDrivePrefs(raw: unknown): DrivePrefs {
   const commande = COMMANDES.some((item) => item.id === source.commande) ? (source.commande as DriveCommande) : DEFAULT_DRIVE_PREFS.commande;
   const direction = DIRECTIONS.some((item) => item.id === source.direction) ? (source.direction as DriveDirection) : DEFAULT_DRIVE_PREFS.direction;
   const format = estFormat(source.format) ? source.format : DEFAULT_DRIVE_PREFS.format;
-  return { weather, camera, commande, direction, format };
+  return { moment: momentOf(source.moment), weather, camera, commande, direction, format };
 }
 
 /** Caméra suivante dans l'ordre du contrat (après l'orbite, on revient à la poursuite). */
@@ -174,6 +176,8 @@ function sameTelemetry(a: DriveTelemetry, b: DriveTelemetry): boolean {
 
 export interface DriveState extends DriveStore {
   hydrated: boolean;
+  /** Moment de la sortie : nuit (par défaut) ou jour (src/data/moments.ts). */
+  moment: Moment;
   /** Commande préférée à la main, en portrait : le manche ou les pédales. */
   commande: DriveCommande;
   /** Direction préférée à la main : libre ou assistée. */
@@ -220,6 +224,8 @@ export interface DriveState extends DriveStore {
   nextCamera: () => void;
   setDirector: (director: boolean) => void;
   setWeather: (weather: Weather) => void;
+  /** Nuit ou jour (src/data/moments.ts), choisi à côté de la météo. */
+  setMoment: (moment: Moment) => void;
   /**
    * Pilote automatique (vrai) ou conduite à la main (faux, pédales relâchées). En passant à la main :
    * caméra de poursuite, réalisateur coupé ; le retour au pilote automatique ne les change pas.
@@ -350,6 +356,7 @@ export const useDrive = create<DriveState>()(
       nextCamera: () => set((state) => ({ camera: nextCameraOf(state.camera), director: false })),
       setDirector: (director) => set({ director }),
       setWeather: (weather) => set({ weather }),
+      setMoment: (moment) => set({ moment }),
       // Le compteur du NOS suit d'un mode à l'autre : le pilote ne compte que les nouveaux appuis.
       setAuto: (auto) =>
         set((state) => {
@@ -433,7 +440,7 @@ export const useDrive = create<DriveState>()(
       version: DRIVE_VERSION,
       storage: createJSONStorage(() => idbStorage),
       // Les meilleurs temps ne sont écrits qu'une fois le premier posé.
-      partialize: ({ weather, camera, commande, direction, format, meilleurs }) => ({ weather, camera, commande, direction, format, ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}) }),
+      partialize: ({ moment, weather, camera, commande, direction, format, meilleurs }) => ({ moment, weather, camera, commande, direction, format, ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}) }),
       migrate: (persisted) => ({ ...sanitizeDrivePrefs(persisted), meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs) }),
       merge: (persisted, current) => ({ ...current, ...sanitizeDrivePrefs(persisted), meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs) }),
       onRehydrateStorage: () => () => {

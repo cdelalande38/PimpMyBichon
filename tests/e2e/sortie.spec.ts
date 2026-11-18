@@ -157,7 +157,7 @@ test.describe('sortie de nuit', () => {
     expect(await tailles()).toBeGreaterThanOrEqual(4);
   });
 
-  test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les trois météos', async ({ page }) => {
+  test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les trois météos, puis de jour', async ({ page }) => {
     test.setTimeout(300_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -183,6 +183,12 @@ test.describe('sortie de nuit', () => {
       await page.waitForTimeout(2_000);
     }
     expect([...seen].sort()).toEqual(['neige', 'pluie', 'sec']);
+    // Le jour (vague S) : mêmes programmes que la nuit, sous la dernière météo ; puis retour à la nuit.
+    for (const [nom, moment] of [['Jour', 'jour'], ['Nuit', 'nuit']] as const) {
+      await panneau.getByRole('group', { name: 'Moment' }).getByRole('button', { name: nom, exact: true }).tap();
+      await expect(stage(page)).toHaveAttribute('data-moment', moment);
+      await page.waitForTimeout(2_000);
+    }
     expect(errors).toEqual([]);
   });
 

@@ -19,7 +19,7 @@ import { QUALITY_PROFILES, type QualityLevel } from '../../render/quality.ts';
 import { useDrive } from '../../state/drive.ts';
 import { driveDebug } from './debug.ts';
 import { DriveEngine } from './moteur.ts';
-import { NIGHT_AMBIANCE, NIGHT_LIGHTS } from './nuit.ts';
+import { bodyEnvOf, sortieAmbiance } from './nuit.ts';
 import { DriveVehicle, type DriveModel } from './vehicule.tsx';
 
 export interface DriveSceneProps {
@@ -62,6 +62,12 @@ export function DriveScene({ map, vehicle, level, floatTargets, stage }: DriveSc
   const base = mapFileUrl(map, '');
   const { route, failed } = useRoute(map);
   const engine = useMemo(() => (route ? new DriveEngine(base, route, level, vehicle) : null), [base, route, level, vehicle]);
+  // Moment et météo (src/data/moments.ts) : étalonnage de l'image et reflet sur la carrosserie. Le
+  // ciel, ses lumières et les matières suivent dans le moteur, en fondu.
+  const moment = useDrive((state) => state.moment);
+  const weather = useDrive((state) => state.weather);
+  const ambiance = sortieAmbiance(moment, weather);
+  const bodyEnv = bodyEnvOf(moment, weather);
 
   const setDpr = useThree((state) => state.setDpr);
   useLayoutEffect(() => {
@@ -145,16 +151,14 @@ export function DriveScene({ map, vehicle, level, floatTargets, stage }: DriveSc
 
   return (
     <>
-      <hemisphereLight args={[NIGHT_LIGHTS.sky, NIGHT_LIGHTS.ground, NIGHT_LIGHTS.ambient]} />
-      <directionalLight color={NIGHT_LIGHTS.moon} intensity={NIGHT_LIGHTS.moonIntensity} position={NIGHT_LIGHTS.moonDirection} />
       {engine && (
         <SceneBoundary key={vehicle.id} onFail={onVehicleFail}>
           <Suspense fallback={null}>
-            <DriveVehicle vehicle={vehicle} rig={engine.rig} bodyEnv={NIGHT_LIGHTS.bodyEnv} beams={engine.profile.beams} onModel={onModel} />
+            <DriveVehicle vehicle={vehicle} rig={engine.rig} bodyEnv={bodyEnv} beams={engine.profile.beams} onModel={onModel} />
           </Suspense>
         </SceneBoundary>
       )}
-      <PostChain ambiance={NIGHT_AMBIANCE} profile={quality} accumulate={accumulate} vignette={vignette} floatTargets={floatTargets} />
+      <PostChain ambiance={ambiance} profile={quality} accumulate={accumulate} vignette={vignette} floatTargets={floatTargets} />
     </>
   );
 }

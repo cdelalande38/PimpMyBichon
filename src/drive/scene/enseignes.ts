@@ -178,6 +178,8 @@ void main() {
 const SIGN_FRAGMENT = /* glsl */ `
 uniform sampler2D uAtlas;
 uniform float uTime;
+// Néons allumés (1 la nuit) ou éteints (0 le jour) : src/data/moments.ts.
+uniform float uOn;
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vFade;
@@ -187,7 +189,7 @@ void main() {
   // Une enseigne sur sept grésille.
   float flicker = vSeed > 0.86 ? step( 0.25, fract( sin( floor( uTime * 9.0 + vSeed * 50.0 ) * 12.9898 ) * 43758.5453 ) ) * 0.85 + 0.15 : 1.0;
   vec3 c = vColor * ( a.r * 7.0 + a.g * a.g * 1.1 ) + vec3( 1.0 ) * a.r * a.r * 1.5;
-  gl_FragColor = vec4( c * flicker * vFade, 1.0 );
+  gl_FragColor = vec4( c * flicker * vFade * uOn, 1.0 );
 }`;
 
 /** Matière des enseignes : additive, double face, fondue dans la brume au loin. */
@@ -195,7 +197,7 @@ export function createSignMaterial(atlas: DataTexture, time: { value: number }, 
   const material = new ShaderMaterial({
     vertexShader: SIGN_VERTEX,
     fragmentShader: SIGN_FRAGMENT,
-    uniforms: { uAtlas: { value: atlas }, uTime: time, uFogFar: { value: fogFar } },
+    uniforms: { uAtlas: { value: atlas }, uTime: time, uFogFar: { value: fogFar }, uOn: { value: 1 } },
     transparent: true,
     depthWrite: false,
     blending: AdditiveBlending,

@@ -16,6 +16,7 @@ import { openSheet } from '../../app/useRoute.ts';
 import { AIDES_FORMAT, FORMATS, formatCouru, formatPossible, formatSpec, PHRASE_SANS_BOUCLE } from '../../data/courses.ts';
 import { creditLine, loadRoute, MAPS, resolveMap } from '../../data/maps.ts';
 import type { MapManifest, MapStart } from '../../data/mapTypes.ts';
+import { MOMENTS } from '../../data/moments.ts';
 import { useDrive, WEATHERS } from '../../state/drive.ts';
 import { PictoCarte } from '../pictos/Pictos.tsx';
 import { useRevealPressed } from '../scroll.ts';
@@ -49,6 +50,8 @@ export function SortieEntree() {
   const setWeather = useDrive((state) => state.setWeather);
   const format = useDrive((state) => state.format);
   const setFormat = useDrive((state) => state.setFormat);
+  const moment = useDrive((state) => state.moment);
+  const setMoment = useDrive((state) => state.setMoment);
   // La carte touchée dans ce panneau ; `null` tant qu'on n'a rien touché (le choix gardé ne compte pas ici).
   const [picked, setPicked] = useState<string | null>(null);
   const map = picked ? resolveMap(picked) : undefined;
@@ -148,6 +151,13 @@ export function SortieEntree() {
       <p className="drive-credits" data-credits={map.id}>
         Données de la carte : {map.credits.map(creditLine).join(' ; ')}.
       </p>
+      <div className="drive-weather" role="group" aria-label="Moment">
+        {MOMENTS.map((item) => (
+          <button key={item.id} type="button" className="btn drive-weather-btn" aria-pressed={moment === item.id} onClick={() => setMoment(item.id)}>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
       <div className="drive-go-row">
         <div className="drive-weather" role="group" aria-label="Météo">
           {WEATHERS.map((item) => (

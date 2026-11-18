@@ -21,11 +21,15 @@ import {
   Group,
   Mesh,
   MeshStandardMaterial,
+  PlaneGeometry,
   Quaternion,
   Raycaster,
+  ShaderMaterial,
   SpotLight,
+  Vector2,
   Vector3,
   type BufferGeometry,
+  type Camera,
   type Material,
   type Object3D,
   type Scene,
@@ -96,6 +100,8 @@ export interface DriveRig {
   beamGain: { value: number };
   /** Éblouissement des phares vus de face. */
   glareGain: { value: number };
+  /** Ombre portée par l'astre (le jour) : l'empreinte de l'ombre de contact, décalée au sol par le moteur de la scène. */
+  cast: { mesh: Mesh; material: ShaderMaterial } | null;
 }
 
 /**
@@ -107,7 +113,31 @@ export interface DriveRig {
  * lui, hors du cône : elle n'en reçoit plus rien. La lumière ponctuelle l'éclairait de face à 0,35 m
  * (caisse claire « brûlée » de dos, rose : 63 % de pixels saturés pour une Cox blanche en poursuite).
  */
-export const TAIL_LIGHT = { back: 0.35, height: 0.7, heightShare: 0.4, aim: 1.5, angle: Math.PI / 3, penumbra: 0.5, candela: { rest: 5, brake: 18, nos: 40 } } as const;
+export const TAIL_LIGHT = { back: 0.35, height: 0.7, heightShare: 0.4, aim: 1.5, angle: Math.PI / 3, penumbra: 0.5, candela: { rest: 5, brake: 18, nos: 40 }, glow: { substitut: 10, modele: 24 } } as const;
+
+/**
+ * Feu arrière d'un modèle : la matière du rôle « tail » des substituts, ou, sur un vrai modèle, toute
+ * matière qui luit en rouge franc (émission rouge, vert et bleu sous 15 % du rouge : ni clignotant
+ * orangé, ni tableau de bord ambré). Aucun nom de modèle ici.
+ */
+export function isTailMaterial(m: Material): m is MeshStandardMaterial {
+  if (!(m instanceof MeshStandardMaterial)) return false;
+  if (m.name === 'tail') return true;
+  const e = m.emissive;
+  return m.emissiveIntensity > 0 && e.r > 0.3 && e.g < e.r * 0.15 && e.b < e.r * 0.15;
+}
+
+/**
+ * Lueur minimale d'un feu arrière en sortie (`TAIL_LIGHT.glow` : composante la plus forte de
+ * l'émission × intensité). Les substituts gardent la leur (blocs de feux larges) ; un vrai modèle aux
+ * feux en bandeaux fins (le concept : 1 × 10, comme les substituts, sur quelques pixels de haut) se
+ * voyait à peine de dos, la nuit : sa lueur est portée à `modele` (vague S).
+ */
+export function tailIntensity(m: MeshStandardMaterial): number {
+  const glow = m.name === 'tail' ? TAIL_LIGHT.glow.substitut : TAIL_LIGHT.glow.modele;
+  const peak = Math.max(m.emissive.r, m.emissive.g, m.emissive.b);
+  return peak > 0 && peak * m.emissiveIntensity < glow ? glow / peak : m.emissiveIntensity;
+}
 
 export function createRig(): DriveRig {
   const group = new Group();
@@ -133,6 +163,7 @@ export function createRig(): DriveRig {
     headSpread: 0.65,
     beamGain: { value: 0.05 },
     glareGain: { value: 1 },
+    cast: null,
   };
 }
 
@@ -176,10 +207,11 @@ export function prepareForDrive(source: Group, vehicle: VehicleManifest): DriveP
   prepared.root.traverse((o) => {
     if (!(o instanceof Mesh) || Array.isArray(o.material)) return;
     const m = o.material as Material;
-    if (m.name !== 'tail' || !(m instanceof MeshStandardMaterial)) return;
+    if (!isTailMaterial(m)) return;
     let clone = tailClones.get(m);
     if (!clone) {
       clone = m.clone();
+      clone.emissiveIntensity = tailIntensity(clone);
       tailClones.set(m, clone);
     }
     o.material = clone;
@@ -192,6 +224,48 @@ function disposeDrive(p: DrivePrepared): void {
   disposePrepared(p.prepared);
   for (const g of p.owned.geometries) g.dispose();
   for (const m of p.owned.materials) m.dispose();
+}
+
+/** Ombre portée : marge du plan autour de l'empreinte du véhicule (décalage au plus et bord adouci), en mètres. */
+const CAST_PLANE_MARGIN = 2.6;
+
+// Ombre portée : boîte arrondie de l'empreinte (demi-longueur, demi-largeur), décalée de uOffset (repère
+// du véhicule, au sol), bord doux ; sous le véhicule, un cœur plus dense (le contact).
+const CAST_VERTEX = /* glsl */ `
+varying vec2 vPos;
+void main() {
+  vPos = position.xz;
+  // La chaussée passe un peu au-dessus du rail (bombé, dévers) : le plan est tiré de 0,25 m vers la
+  // caméra le long de la vue (même place à l'écran), pour ne jamais passer sous l'enrobé.
+  vec4 mv = modelViewMatrix * vec4( position, 1.0 );
+  mv.xyz *= max( 0.0, 1.0 - 0.25 / max( length( mv.xyz ), 0.5 ) );
+  gl_Position = projectionMatrix * mv;
+}`;
+const CAST_FRAGMENT = /* glsl */ `
+uniform vec2 uHalf;
+uniform vec2 uOffset;
+uniform float opacity;
+varying vec2 vPos;
+float pmbBoxDist( vec2 p, vec2 h, float r ) {
+  vec2 q = abs( p ) - h + r;
+  return length( max( q, 0.0 ) ) + min( max( q.x, q.y ), 0.0 ) - r;
+}
+void main() {
+  float r = min( uHalf.y, 0.6 );
+  // Ombre étirée : l'empreinte balayée de sa place au sol jusqu'à son décalage.
+  vec2 d = uOffset;
+  float t = clamp( dot( vPos, d ) / max( dot( d, d ), 1e-4 ), 0.0, 1.0 );
+  float sweep = 1.0 - smoothstep( -0.12, 0.28, pmbBoxDist( vPos - d * t, uHalf * vec2( 0.97, 0.95 ), r ) );
+  float core = 1.0 - smoothstep( -0.25, 0.12, pmbBoxDist( vPos, uHalf * vec2( 0.95, 0.92 ), r ) );
+  gl_FragColor = vec4( 0.0, 0.0, 0.0, min( max( sweep, core * 1.25 ), 1.0 ) * opacity );
+}`;
+
+/** Compile le programme d'un objet caché (montré le temps de la compilation) : rien à compiler quand il apparaît. */
+function compileHidden(object: Object3D, gl: WebGLRenderer, camera: Camera, scene: Scene): void {
+  const visible = object.visible;
+  object.visible = true;
+  gl.compile(object, camera, scene);
+  object.visible = visible;
 }
 
 /** Lancer de rayon qui voit les deux faces (un dossier vu de face, un pavillon vu d'en dessous). */
@@ -280,6 +354,8 @@ export interface DriveModel {
   /** Milieu des phares, dans le repère du véhicule, et demi-écart des deux phares (0 pour une moto). */
   head: Vector3;
   headSpread: number;
+  /** Ombre portée par l'astre (le jour). */
+  cast: NonNullable<DriveRig['cast']>;
 }
 
 interface DriveVehicleProps {
@@ -423,15 +499,46 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     pending.current = false;
     shadow.render(gl, drive.prepared.root, scene);
   });
+  // Ombre portée par l'astre, le jour (moteur.ts, castShadow) : l'empreinte du véhicule au sol, bords
+  // adoucis, plus dense dessous (contact) et étirée à l'opposé de l'astre. Calculée dans le nuanceur
+  // (aucune texture, un appel de dessin), cachée la nuit ; son programme est compilé dès le montage.
+  const cast = useMemo(() => {
+    const reach = CAST_PLANE_MARGIN;
+    const geometry = new PlaneGeometry(2 * (halfLength + reach), 2 * (halfWidth + reach)).rotateX(-Math.PI / 2);
+    const material = new ShaderMaterial({
+      uniforms: { uHalf: { value: new Vector2(halfLength, halfWidth) }, uOffset: { value: new Vector2() }, opacity: { value: 0 } },
+      vertexShader: CAST_VERTEX,
+      fragmentShader: CAST_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+    });
+    material.name = 'jour_ombre_portee';
+    const mesh = new Mesh(geometry, material);
+    mesh.name = 'ombre_portee';
+    mesh.position.y = 0.02;
+    mesh.renderOrder = 1;
+    mesh.visible = false;
+    return { mesh, material };
+  }, [halfLength, halfWidth]);
+  useEffect(
+    () => () => {
+      cast.material.dispose();
+      cast.mesh.geometry.dispose();
+    },
+    [cast],
+  );
+  const camera = useThree((state) => state.camera);
+  useLayoutEffect(() => compileHidden(cast.mesh, gl, camera, scene), [cast, gl, camera, scene]);
 
   useLayoutEffect(() => {
-    onModel({ wheels, steering, tails: drive.tails, tailLight: lights.tail, measure: { halfLength, halfWidth, height }, head: new Vector3(lights.x, lights.y, 0), headSpread: lights.spread });
+    onModel({ wheels, steering, tails: drive.tails, tailLight: lights.tail, measure: { halfLength, halfWidth, height }, head: new Vector3(lights.x, lights.y, 0), headSpread: lights.spread, cast });
     return () => onModel(null);
-  }, [drive, wheels, steering, lights, halfLength, halfWidth, height, onModel]);
+  }, [drive, wheels, steering, lights, halfLength, halfWidth, height, onModel, cast]);
 
   return (
     <primitive object={rig.group} dispose={null}>
       <primitive object={shadow.root} dispose={null} />
+      <primitive object={cast.mesh} dispose={null} />
       <primitive object={rig.body} dispose={null}>
         <primitive object={drive.prepared.root} dispose={null} />
         {tableau && <primitive object={tableau} dispose={null} />}

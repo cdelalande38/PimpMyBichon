@@ -27,8 +27,9 @@ beforeEach(() => {
 
 describe('préférences', () => {
   it('lecture tolérante : une valeur inconnue retombe sur l’origine', () => {
-    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ weather: 'sec', camera: 'orbite', commande: 'manche', direction: 'libre', format: 'balade' });
-    expect(sanitizeDrivePrefs({ weather: 'neige', camera: 'orbite', commande: 'pedales', direction: 'assistee', format: 'tours3' })).toEqual({
+    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ moment: 'nuit', weather: 'sec', camera: 'orbite', commande: 'manche', direction: 'libre', format: 'balade' });
+    expect(sanitizeDrivePrefs({ moment: 'jour', weather: 'neige', camera: 'orbite', commande: 'pedales', direction: 'assistee', format: 'tours3' })).toEqual({
+      moment: 'jour',
       weather: 'neige',
       camera: 'orbite',
       commande: 'pedales',
@@ -41,7 +42,8 @@ describe('préférences', () => {
       'pluie',
       [],
       {},
-      { weather: 'grele', camera: 'drone', commande: 'volant', direction: 'auto' },
+      { moment: 'aube', weather: 'grele', camera: 'drone', commande: 'volant', direction: 'auto' },
+      { moment: '__proto__' },
       { weather: '__proto__' },
       { camera: '__proto__' },
       { commande: '__proto__' },
@@ -64,15 +66,17 @@ describe('préférences', () => {
     drive.getState().setCommande('pedales');
     drive.getState().setDirection('assistee');
     drive.getState().setFormat('tour1');
+    drive.getState().setMoment('jour');
     drive.getState().enter(first.id, null);
     drive.getState().setSlow(true);
     await vi.waitFor(async () => {
       const raw = await get<string>(DRIVE_KEY, db());
-      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ weather: 'sec', camera: 'avant', commande: 'pedales', direction: 'assistee', format: 'tour1' });
+      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ moment: 'jour', weather: 'sec', camera: 'avant', commande: 'pedales', direction: 'assistee', format: 'tour1' });
     });
     const again = await launch();
     const state = again.getState();
-    expect({ weather: state.weather, camera: state.camera, commande: state.commande, direction: state.direction, format: state.format, map: state.map, slow: state.slow }).toEqual({
+    expect({ moment: state.moment, weather: state.weather, camera: state.camera, commande: state.commande, direction: state.direction, format: state.format, map: state.map, slow: state.slow }).toEqual({
+      moment: 'jour',
       weather: 'sec',
       camera: 'avant',
       commande: 'pedales',
@@ -84,10 +88,10 @@ describe('préférences', () => {
   });
 
   it('une sauvegarde trafiquée ne bloque pas l’ouverture', async () => {
-    await set(DRIVE_KEY, JSON.stringify({ state: { weather: '<script>', camera: 12, commande: { a: 1 }, direction: 7, format: 'tours9' }, version: 1 }), db());
+    await set(DRIVE_KEY, JSON.stringify({ state: { moment: ['jour'], weather: '<script>', camera: 12, commande: { a: 1 }, direction: 7, format: 'tours9' }, version: 1 }), db());
     const drive = await launch();
-    const { weather, camera, commande, direction, format } = drive.getState();
-    expect({ weather, camera, commande, direction, format }).toEqual(DEFAULT_DRIVE_PREFS);
+    const { moment, weather, camera, commande, direction, format } = drive.getState();
+    expect({ moment, weather, camera, commande, direction, format }).toEqual(DEFAULT_DRIVE_PREFS);
   });
 });
 

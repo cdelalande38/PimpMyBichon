@@ -33,9 +33,10 @@ export interface DriveDebug {
   /**
    * Postes de coût coupés pour la mesure (page d'aperçu) : « reflet » (reflet planaire), « sonde »
    * (sonde de réflexion), « gouttes » (pluie ou neige qui tombe), « mouille » (matières mouillées),
-   * « garde » (garde de cadence de la météo : pour mesurer le coût entier de la pluie).
+   * « garde » (garde de cadence de la météo : pour mesurer le coût entier de la pluie), « ombre »
+   * (ombre portée du véhicule, le jour).
    */
-  off?: Partial<Record<'reflet' | 'sonde' | 'gouttes' | 'mouille' | 'garde', boolean>>;
+  off?: Partial<Record<'reflet' | 'sonde' | 'gouttes' | 'mouille' | 'garde' | 'ombre', boolean>>;
   /** Temps arrêté (le véhicule ne bouge plus, l'image continue d'être rendue) : mesure du scintillement. */
   figer?: boolean;
   /** Appelé après chaque image composée (lecture des pixels de l'image, page d'aperçu). */
