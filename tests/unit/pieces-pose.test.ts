@@ -141,7 +141,7 @@ describe('ailerons posés sur les trois voitures', () => {
     for (const vehicle of MANIFESTS) {
       const model = vehicle.placeholder === 'placeholder_banc' ? await storedModel(vehicle.id) : await builtModel(vehicle.id);
       const mount = vehicle.pieces?.aileron;
-      if (!mount) continue;
+      if (!mount || 'rail' in mount) continue;
       const xs = [mount.anchor[0], mount.supports?.anchor[0] ?? mount.anchor[0]];
       maps.set(vehicle.id, new HeightMap(model, { x: [Math.min(...xs) - 0.6, Math.max(...xs) + 0.6], z: [-1.2, 1.2] }));
     }

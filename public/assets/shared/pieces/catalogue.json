@@ -1,5 +1,8 @@
 {
-  "about": "Pièces montées sur la caisse, partagées entre véhicules (§ 5.4, § 6, § 8) : un poste par ligne de « postes », une option par ligne de ses « options ». npm run vehicles:build fabrique un fichier par option (tools/vehicles/pieces.mjs, nom <poste>_<option>.glb) ; l'app pose une option sur les véhicules dont le manifeste déclare le poste (section pieces : bord de fuite, normale, largeur utile, pieds des supports, options permises). Chaque fichier porte deux nœuds : « surface » (épouse la surface de pose au bord de fuite, mise à la largeur utile et au bombé) et « niveau » (reste de niveau ; ses pieds, au ras de y = 0, descendent sur la surface, sa lame se met à l'envergure). Matériaux : paint_piece (la couleur de la caisse ou une couleur propre) et les rôles. Substituts déclarés : placeholder_ailerons (TODO_ASSETS.md).",
+  "about": "Pièces montées sur la caisse, partagées entre véhicules (§ 5.4, § 6, § 8) : un poste par ligne de « postes », une option par ligne de ses « options ». npm run vehicles:build fabrique un fichier par option (tools/vehicles/pieces.mjs, nom <poste>_<option>.glb) ; l'app pose une option sur les véhicules dont le manifeste déclare le poste (section pieces : bord de fuite, normale, largeur utile, pieds des supports, options permises). Chaque fichier porte un nœud : « surface » (épouse la surface de pose au bord de fuite, mise à la largeur utile et au bombé), « niveau » (reste de niveau ; ses pieds, au ras de y = 0, descendent sur la surface, sa lame se met à l'envergure) ou « rail » (kit carrosserie : suit la ligne de pose du manifeste, section rail, sur l'axe ou en paire gauche-droite si le poste porte mirror ; rise et depth disent sa hauteur au-dessus et sous la ligne, que l'app tasse au besoin). Un groupe réunit plusieurs postes sous une entrée du menu (Carrosserie). Matériaux : paint_piece (la couleur de la caisse ou une couleur propre) et les rôles. Substituts déclarés : placeholder_ailerons et placeholder_kit_carrosserie (TODO_ASSETS.md).",
+  "groupes": [
+    {"id": "carrosserie", "label": "Kit carrosserie", "absent": "n’a pas de kit carrosserie : sur une moto, pas de bas de caisse à habiller."}
+  ],
   "postes": [
     {
       "id": "aileron",
@@ -55,6 +58,132 @@
           "hint": "Plus large que la caisse, pour le spectacle",
           "spanFactor": 1.12,
           "picto": "M32 16.4 L29.5 3.6 M19 4 L40 1.6 M36 0.6 L42 0.6 L42 7.4 L36 7.4 Z"
+        }
+      ]
+    },
+    {
+      "id": "lame",
+      "label": "Lame avant",
+      "groupe": "carrosserie",
+      "absent": "n’a pas de bouclier où poser une lame avant.",
+      "colorLabel": "Couleur de la lame",
+      "none": {"id": "aucune", "label": "Sans lame", "hint": "Le bouclier d’origine", "phrase": "sans lame"},
+      "reference": {"width": 1.2, "ends": 0.1},
+      "picto": "M3 8 L14 8 Q20 8 25 14 L39 15.5 Q44 16.5 44 20 L44 23 L35 23 Q35 17.5 29.5 17.5 Q24 17.5 24 23 L3 23",
+      "options": [
+        {
+          "id": "discrete",
+          "style": "lame_discrete",
+          "mount": "rail",
+          "label": "Discrète",
+          "phrase": "la lame discrète",
+          "hint": "Une lèvre fine sous le bouclier",
+          "rise": 0.02,
+          "depth": 0.026,
+          "picto": "M38 24 L45.5 24.6"
+        },
+        {
+          "id": "sport",
+          "style": "lame_sport",
+          "mount": "rail",
+          "label": "Sport à dérives",
+          "phrase": "la lame sport",
+          "hint": "Un menton anguleux, deux dérives",
+          "rise": 0.035,
+          "depth": 0.072,
+          "picto": "M36 24.2 L46.5 25.2 M46.5 22.4 L46.5 28"
+        },
+        {
+          "id": "course",
+          "style": "lame_course",
+          "mount": "rail",
+          "label": "Large de course",
+          "phrase": "la lame de course",
+          "hint": "Une lame noire qui rase la piste",
+          "rise": 0.05,
+          "depth": 0.047,
+          "picto": "M33 25.6 L47.5 25.6 M37.5 25.6 L43.5 21.6 M47.5 21 L47.5 28.4"
+        }
+      ]
+    },
+    {
+      "id": "jupes",
+      "label": "Jupes",
+      "groupe": "carrosserie",
+      "mirror": true,
+      "plural": true,
+      "absent": "n’a pas de bas de caisse où poser des jupes.",
+      "colorLabel": "Couleur des jupes",
+      "none": {"id": "aucunes", "label": "Sans jupes", "hint": "Les bas de caisse d’origine", "phrase": "sans jupes"},
+      "reference": {"width": 2.0, "ends": 0.12},
+      "picto": "M2 19 L2 14 Q6 9 14 8 L30 8 Q38 9 44 14 L46 19 L40 19 Q40 14.5 35.5 14.5 Q31 14.5 31 19 L17 19 Q17 14.5 12.5 14.5 Q8 14.5 8 19 Z",
+      "options": [
+        {
+          "id": "fines",
+          "style": "jupes_fines",
+          "mount": "rail",
+          "label": "Fines",
+          "phrase": "les jupes fines",
+          "hint": "Un jonc qui affine le bas de caisse",
+          "rise": 0.025,
+          "depth": 0.05,
+          "picto": "M18.5 20.6 L29.5 20.6"
+        },
+        {
+          "id": "sport",
+          "style": "jupes_sport",
+          "mount": "rail",
+          "label": "Sport",
+          "phrase": "les jupes sport",
+          "hint": "Une arête vive, une dérive noire",
+          "rise": 0.06,
+          "depth": 0.085,
+          "picto": "M18.5 21.2 L29.5 21.2 M29.6 18.6 L31 23.4"
+        },
+        {
+          "id": "larges",
+          "style": "jupes_larges",
+          "mount": "rail",
+          "label": "Larges",
+          "phrase": "les jupes larges",
+          "hint": "Un caisson bombé, une lame noire",
+          "rise": 0.1,
+          "depth": 0.115,
+          "picto": "M18 18.6 L30 18.6 L30.6 22 L17.4 22 Z M16.5 24 L31.5 24"
+        }
+      ]
+    },
+    {
+      "id": "diffuseur",
+      "label": "Diffuseur",
+      "groupe": "carrosserie",
+      "absent": "n’a pas de bas de caisse arrière où poser un diffuseur.",
+      "colorLabel": "Couleur du diffuseur",
+      "none": {"id": "aucun", "label": "Sans diffuseur", "hint": "Le dessous d’origine", "phrase": "sans diffuseur"},
+      "reference": {"width": 1.4, "ends": 0.08},
+      "picto": "M3 9 L15 9 Q21 9 26 16 L37 16.5 Q42 17 43 21 L43 25 L3 25",
+      "options": [
+        {
+          "id": "simple",
+          "style": "diffuseur_simple",
+          "mount": "rail",
+          "label": "Simple",
+          "phrase": "le diffuseur simple",
+          "hint": "Une jupe arrière, quatre ailettes",
+          "rise": 0.03,
+          "depth": 0.07,
+          "picto": "M33 26.6 L44 25.4 M37 26.2 L37 28.6 M41 25.8 L41 28.4"
+        },
+        {
+          "id": "ailettes",
+          "style": "diffuseur_ailettes",
+          "mount": "rail",
+          "label": "À ailettes",
+          "phrase": "le diffuseur à ailettes",
+          "hint": "Un fond noir, sept ailettes hautes",
+          "rise": 0.045,
+          "depth": 0.1,
+          "picto": "M31 27.4 L45 24.8 M34 26.9 L34 29.6 M37 26.4 L37 29.6 M40 25.8 L40 29.6 M43 25.2 L43 29.6"
         }
       ]
     }

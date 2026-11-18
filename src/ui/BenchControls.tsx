@@ -17,10 +17,12 @@ import { useDock } from '../state/dock.ts';
 import { EchappementPanel } from './echappement/EchappementPanel.tsx';
 import { EnginePanel } from './engine/EnginePanel.tsx';
 import { HabitaclePanel } from './habitacle/HabitaclePanel.tsx';
+import { MoteurPanel } from './moteur/MoteurPanel.tsx';
 import { Icon } from './icons.tsx';
 import { PaintControls } from './paint/PaintControls.tsx';
 import { PharesPanel } from './phares/PharesPanel.tsx';
 import { PictoAmbiance } from './pictos/Pictos.tsx';
+import { PiecesGroupe } from './pieces/PiecesGroupe.tsx';
 import { PiecesPanel } from './pieces/PiecesPanel.tsx';
 import { useLevelScroll, useRevealPressed } from './scroll.ts';
 import { SortieEntree } from './drive/SortieEntree.tsx';
@@ -59,8 +61,10 @@ export const ENTRY_BODIES: Partial<Record<EntryId, () => ReactNode>> = {
   interieur: () => <HabitaclePanel />,
   stickers: () => <StickersPanel />,
   phares: () => <PharesPanel />,
+  carrosserie: () => <PiecesGroupe groupe="carrosserie" />,
   ailerons: () => <PiecesPanel poste="aileron" />,
   preparation: () => <EnginePanel />,
+  moteur: () => <MoteurPanel />,
   echappement: () => <EchappementPanel />,
   ambiance: () => <AmbianceChoices />,
   sortie: () => <SortieEntree />,

@@ -1,5 +1,5 @@
-// Panneau d'un poste de pièce montée (Custom · Ailerons aujourd'hui ; sorties d'échappement, lame avant,
-// jupes ensuite), tiré des données : les options du catalogue que le manifeste du véhicule permet
+// Panneau d'un poste de pièce montée (Custom · Ailerons ; lame avant, jupes et diffuseur sous Custom ·
+// Carrosserie, src/ui/pieces/PiecesGroupe.tsx), tiré des données : les options du catalogue que le manifeste du véhicule permet
 // (src/data/pieces.ts), chacune avec sa silhouette, l'option posée cochée. Ce qui n'est pas acquis porte
 // un cadenas et son prix : un appui ouvre le bloc d'achat partagé (src/ui/jeu/Achat.tsx), et l'option se
 // pose une fois payée. L'origine et l'absence de pièce sont toujours libres. La pièce prend la peinture
@@ -126,7 +126,7 @@ export function PiecesPanel({ poste: posteId }: { poste: string }) {
           key={buying.id}
           article={buyingArticle}
           nom={buying.phrase}
-          fait={`Payé : ${buying.phrase} t’appartient, et c’est posé.`}
+          fait={`Payé : ${buying.phrase} ${poste.plural ? 't’appartiennent' : 't’appartient'}, et c’est posé.`}
           onClose={() => setAchat(null)}
           onDone={(text) => {
             setAchat(null);

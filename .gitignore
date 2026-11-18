@@ -45,9 +45,12 @@ public/assets/shared/habitacle/*.glb
 # Le conducteur à bord : GLB produits par npm run vehicles:build depuis tools/vehicles/conducteur.mjs ;
 # le catalogue public/assets/shared/conducteur/catalogue.json reste versionné.
 public/assets/shared/conducteur/*.glb
-# Pièces montées sur la caisse (ailerons…) : GLB produits par npm run vehicles:build depuis
+# Pièces montées sur la caisse (ailerons, kit carrosserie…) : GLB produits par npm run vehicles:build depuis
 # tools/vehicles/pieces.mjs ; le catalogue public/assets/shared/pieces/catalogue.json reste versionné.
 public/assets/shared/pieces/*.glb
+# Moteurs de l'établi, un par famille : GLB produits par npm run vehicles:build depuis
+# tools/vehicles/moteurs.mjs ; le catalogue public/assets/shared/engines/catalogue.json reste versionné.
+public/assets/shared/engines/*/*.glb
 
 # Cartes de sortie : réponses brutes des fournisseurs (assets-src/maps/<id>/brut/) et fichiers produits
 # par npm run maps:build depuis assets-src/maps/<id>/donnees.json. Le manifeste map.json reste versionné.

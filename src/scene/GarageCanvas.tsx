@@ -26,6 +26,7 @@ import { modelPresent, placeOf, resolveVehicle } from '../data/vehicles.ts';
 import type { Build, CabinLighting, InteriorView, PlaceId } from '../data/vehicleTypes.ts';
 import { cabinFor, INTERIOR_SLOTS, SKY_TUNE } from '../data/habitacle.ts';
 import { GARAGE } from '../data/garage.ts';
+import { ETABLI_POLAR } from '../data/moteurs.ts';
 import { CAMERA_LAYERS } from '../render/layers.ts';
 import { AccumulatePass } from '../render/photo/AccumulatePass.ts';
 import { CONTROLS_DAMPING, controlsDamping, slowSpinSpeed } from '../render/frameMeter.ts';
@@ -78,6 +79,8 @@ import {
 } from './fit.ts';
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
+import { Etabli } from './moteur/Etabli.tsx';
+import { useEtabli, useEtabliOuvert } from './moteur/etabli.ts';
 import { SceneProbe } from './SceneProbe.tsx';
 import { useZoneFraming } from './useZoneFraming.ts';
 import { buildPanel } from './vehicle/tableau.ts';
@@ -283,6 +286,10 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // départ commencerait à se charger pour rien avant celui qu'on avait laissé à l'écran.
   const buildsRead = useBuilds((state) => state.hydrated);
   const present = modelPresent(vehicle);
+  // Mécanique · Moteur : le moteur sorti sur son support remplace le véhicule (coupe franche), et la
+  // caméra cadre la boîte de l'établi (catalogue des moteurs) au lieu de celle du véhicule.
+  const etabli = useEtabliOuvert(vehicle);
+  const framePolar = etabli ? ETABLI_POLAR : undefined;
   // Cadrage d'attente, puis cadrage sur la demi-longueur mesurée une fois le modèle posé. La
   // mesure entière sert aussi à la coupe caméra (volume protégé autour du véhicule). Une mesure
   // ne vaut que pour son véhicule : au changement, retour au cadrage d'attente du nouveau.
@@ -298,19 +305,25 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // Cadrage de départ : la boîte mesurée (ou celle d'attente) à 80 % de la largeur, centrée dans la
   // partie libre entre la bande haute et le dock compact. Le dock agrandi décale ensuite la vue.
   const waiting = WAITING_BOX[vehicle.kind];
-  const sizeKey = measure ? `${measure.halfLength}:${measure.halfWidth}:${measure.height}` : `${vehicle.halfLengthHint}:${waiting.halfWidth}:${waiting.height}`;
+  const sizeKey = etabli
+    ? `${etabli.cadre.halfLength}:${etabli.cadre.halfWidth}:${etabli.cadre.height}`
+    : measure
+      ? `${measure.halfLength}:${measure.halfWidth}:${measure.height}`
+      : `${vehicle.halfLengthHint}:${waiting.halfWidth}:${waiting.height}`;
   // Paysage : pas de dock en bas, la partie libre est toute la hauteur sous la bande de la marque ;
   // en largeur, la zone entre les boutons ronds et le menu (toute la largeur en mode photo, où le
   // menu s'efface). Le menu ouvert ou fermé ne change pas le cadrage : seule la vue glisse.
-  const bandBottom = paysage ? height : (compactTop ?? Math.round(height * COMPACT_DOCK_TOP));
+  // L'établi se cadre au-dessus de son panneau (son haut à l'écran, mesuré par le panneau).
+  const etabliCover = useEtabli((state) => state.coverTop);
+  const bandBottom = paysage ? height : etabli && etabliCover !== null ? etabliCover : (compactTop ?? Math.round(height * COMPACT_DOCK_TOP));
   const bandTop = height * (paysage ? LANDSCAPE_TOP_MARGIN : DOCK_TOP_MARGIN);
   const freeZone = paysage && !photo ? (zone ?? defaultZone(width)) : null;
   const zoneWidth = freeZone ? freeZone.right - freeZone.left : width;
   const frameInput = useMemo<VehicleFrameInput>(() => {
     const [hl, hw, h] = sizeKey.split(':').map(Number);
     const size: BoxSize = { halfLength: hl ?? 1, halfWidth: hw ?? 1, height: h ?? 1 };
-    return { width, height, size, turn, azimuth, band: { top: bandTop, bottom: bandBottom }, zoneWidth };
-  }, [width, height, sizeKey, turn, azimuth, bandBottom, bandTop, zoneWidth]);
+    return { width, height, size, turn, azimuth, ...(framePolar !== undefined ? { polar: framePolar } : {}), band: { top: bandTop, bottom: bandBottom }, zoneWidth };
+  }, [width, height, sizeKey, turn, azimuth, framePolar, bandBottom, bandTop, zoneWidth]);
   const fit = useMemo(() => fitVehicle(frameInput), [frameInput]);
   const target = fit.target;
 
@@ -353,7 +366,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     failed.current = `${vehicle.id}:${attempt}`;
     setStatus('erreur');
   };
-  const position = useMemo(() => orbitPosition(fit.target, fit.distance, fit.azimuth), [fit]);
+  const position = useMemo(() => orbitPosition(fit.target, fit.distance, fit.azimuth, framePolar), [fit, framePolar]);
   const home = useMemo(() => ({ position, target: fit.target, fov: fit.fov }), [position, fit]);
   // Vue de départ de la caméra et de ses contrôles : elle ne change qu'avec le véhicule, sa mesure
   // ou son côté de présentation (alors la caméra repart de là). Tourner l'écran change le cadrage
@@ -407,7 +420,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   const rootName = vehicle.placeholder ?? `vehicule_${vehicle.id}`;
   // Groupe du véhicule dans la pièce : la scène y lit les ancres des sièges et le pavillon.
   const vehicleGroup = useRef<Group>(null);
-  const wantInside = viewMode === 'interieur' && interiorView !== undefined && !photo && !measuring;
+  const wantInside = viewMode === 'interieur' && interiorView !== undefined && !photo && !measuring && !etabli;
   useEffect(() => {
     if (viewMode === 'interieur' && !wantInside) setViewMode('atelier');
   }, [viewMode, wantInside, setViewMode]);
@@ -532,6 +545,8 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // Vue intérieure : la vue (data-vue), le regard relatif à l'axe du manifeste (data-regard, en
   // degrés) ; en atelier, la position de la caméra (data-camera, en centimètres).
   const corner = useMemo(() => new Vector3(), []);
+  // L'établi ouvert : c'est sa boîte (le moteur sur son support) qui est à l'écran.
+  const framed = etabli ? etabli.cadre : measure;
   useFrame((state) => {
     const element = stage.current;
     if (!element) return;
@@ -553,7 +568,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     } else if (phase === 'out') putData(element, 'orbite', null);
     let frame: string | null = null;
     let across: string | null = null;
-    if (measure && phase === 'out') {
+    if (framed && phase === 'out') {
       const view = state.camera;
       view.updateMatrixWorld();
       const cos = Math.cos(turn);
@@ -562,9 +577,9 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       let bottom = -Infinity;
       let left = Infinity;
       let right = -Infinity;
-      for (const x of [-measure.halfLength, measure.halfLength]) {
-        for (const z of [-measure.halfWidth, measure.halfWidth]) {
-          for (const y of [0, measure.height]) {
+      for (const x of [-framed.halfLength, framed.halfLength]) {
+        for (const z of [-framed.halfWidth, framed.halfWidth]) {
+          for (const y of [0, framed.height]) {
             corner.set(x * cos + z * sin, y, -x * sin + z * cos).project(view);
             const screen = ((1 - corner.y) / 2) * height;
             top = Math.min(top, screen);
@@ -888,7 +903,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
           réseau), le garage reste et l'étiquette le dit. Un véhicule et un essai par clé : en changer
           libère l'ancien (modèle, peinture, ombre) et remet à zéro le garde-fou. */}
       {/* Pose du véhicule dans la pièce (nez à gauche, ou à droite selon presentSide) : on tourne son groupe, pas le modèle. */}
-      <group ref={vehicleGroup} rotation-y={turn}>
+      <group ref={vehicleGroup} rotation-y={turn} visible={!etabli}>
         {buildsRead && present !== false && (
           <SceneBoundary key={`${vehicle.id}:${attempt}`} onFail={onFail}>
             <Suspense fallback={null}>
@@ -904,6 +919,12 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
           </group>
         )}
       </group>
+      {/* L'établi moteur, posé comme le véhicule ; son fichier ne se charge qu'à l'ouverture de l'entrée. */}
+      {etabli && (
+        <group rotation-y={turn}>
+          <Etabli key={etabli.id} famille={etabli} bodyEnv={ambiance.bodyEnv} stage={stage} />
+        </group>
+      )}
 
       <PostChain ambiance={ambiance} profile={profile} accumulate={accumulate} vignette={vignette} floatTargets={floatTargets} />
       {/* Depuis la vue intérieure, la photo attend que la caméra soit revenue en orbite (sortie immédiate). */}

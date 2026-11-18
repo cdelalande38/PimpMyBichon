@@ -24,7 +24,7 @@ import {
   validatePiecesCatalogue,
 } from '../../src/data/pieces.ts';
 import { validateManifest, VEHICLES, vehicleById } from '../../src/data/vehicles.ts';
-import type { PieceMount, VehicleManifest } from '../../src/data/vehicleTypes.ts';
+import type { PieceMount, PieceSurfaceMount, VehicleManifest } from '../../src/data/vehicleTypes.ts';
 import { readCatalogue } from '../../tools/vehicles/pieces.mjs';
 
 const aileron = posteById('aileron');
@@ -34,7 +34,7 @@ const vehicle = (id: string): VehicleManifest => {
   return found;
 };
 
-const MOUNT: PieceMount = {
+const MOUNT: PieceSurfaceMount = {
   anchor: [-2, 1, 0],
   normal: [0, 1, 0],
   width: 1,
@@ -64,9 +64,9 @@ describe('catalogue des pièces montées', () => {
 });
 
 describe('poste par véhicule', () => {
-  it('les trois voitures ont un aileron, les motos n’en ont pas', () => {
+  it('les trois voitures ont un aileron (et le kit carrosserie), les motos n’en ont pas', () => {
     for (const vehicle of VEHICLES) {
-      expect(postesOf(vehicle).map((poste) => poste.id), vehicle.id).toEqual(vehicle.kind === 'car' ? ['aileron'] : []);
+      expect(postesOf(vehicle).map((poste) => poste.id), vehicle.id).toEqual(vehicle.kind === 'car' ? ['aileron', 'lame', 'jupes', 'diffuseur'] : []);
       if (vehicle.kind === 'bike') expect(resolvePiece(vehicle, undefined, 'aileron')).toBeNull();
     }
   });
@@ -189,8 +189,10 @@ describe('géométrie de pose', () => {
   it('envergure : pieds rigides à l’entraxe, bouts de lame à la demi-envergure, rien ne se croise', () => {
     if (!aileron) return;
     const ref = aileron.reference;
-    expect(spanMap(ref.feet, ref, 0.4, 0.8)).toBeCloseTo(0.2);
-    expect(spanMap(ref.feet + 0.01, ref, 0.4, 0.8) - spanMap(ref.feet - 0.01, ref, 0.4, 0.8)).toBeCloseTo(0.02);
+    const feet = ref.feet ?? 0;
+    expect(feet).toBeGreaterThan(0);
+    expect(spanMap(feet, ref, 0.4, 0.8)).toBeCloseTo(0.2);
+    expect(spanMap(feet + 0.01, ref, 0.4, 0.8) - spanMap(feet - 0.01, ref, 0.4, 0.8)).toBeCloseTo(0.02);
     expect(spanMap(ref.width / 2, ref, 0.4, 0.8)).toBeCloseTo(0.8);
     expect(spanMap(-ref.width / 2 - 0.01, ref, 0.4, 0.8)).toBeCloseTo(-0.81);
     let last = -Infinity;
@@ -221,7 +223,7 @@ describe('géométrie de pose', () => {
     const surface = fitPositions([0, 0, 0, 0, 0, 0.6, 0.1, 0.05, 0], 'surface', mount, aileron, {});
     expect([...surface].map((v) => Number(v.toFixed(4)))).toEqual([-2, 1, 0, -2, 0.98, 0.5, -1.9, 1.05, 0]);
     // Pied à x = 0,1 sur une pente de 0,75 : il monte de 7,5 cm, et descend du bombé à l'entraxe ; la lame ne bouge pas.
-    const level = fitPositions([0.1, -0.004, aileron.reference.feet, 0.1, 0.3, 0], 'niveau', mount, aileron, {});
+    const level = fitPositions([0.1, -0.004, aileron.reference.feet ?? 0, 0.1, 0.3, 0], 'niveau', mount, aileron, {});
     expect(level[0]).toBeCloseTo(-1.7);
     expect(level[1]).toBeCloseTo(1 - 0.004 + 0.075 - 0.01);
     expect(level[2]).toBeCloseTo(0.3);

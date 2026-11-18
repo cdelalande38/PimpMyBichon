@@ -63,7 +63,7 @@ describe('manifeste du bobber', () => {
   });
 
   it('donne le moteur de la fiche', () => {
-    expect(manifest.engine).toEqual({ label: 'bicylindre en V refroidi par air', fuel: 'essence', feed: 'carburateur', boost: 'atmo', power: 67, sound: 'bicylindre-v' });
+    expect(manifest.engine).toEqual({ label: 'bicylindre en V refroidi par air', fuel: 'essence', feed: 'carburateur', boost: 'atmo', power: 67, sound: 'bicylindre-v', model: 'bicylindre-v' });
   });
 });
 

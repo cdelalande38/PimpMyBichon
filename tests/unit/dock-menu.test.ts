@@ -25,7 +25,7 @@ describe('arbre du dock', () => {
     }
   });
 
-  it('les entrées prévues : Peinture, Roues, Suspension, Intérieur, Stickers, Phares et Ailerons puis une « bientôt » ; Préparation et Échappement puis Moteur « bientôt » ; Ambiance et Sortie', () => {
+  it('les entrées prévues : Peinture, Roues, Suspension, Intérieur, Stickers, Carrosserie, Phares et Ailerons ; Préparation, Moteur et Échappement ; Ambiance et Sortie', () => {
     const custom = DOCK_MENU.find((section) => section.id === 'custom');
     const mecanique = DOCK_MENU.find((section) => section.id === 'mecanique');
     expect(custom && sectionEntries(custom).map((entry) => [entry.label, entry.available])).toEqual([
@@ -34,14 +34,14 @@ describe('arbre du dock', () => {
       ['Suspension', true],
       ['Intérieur', true],
       ['Stickers', true],
+      ['Carrosserie', true],
       ['Phares', true],
       ['Ailerons', true],
-      ['Carrosserie', false],
     ]);
     expect(mecanique && sectionEntries(mecanique).map((entry) => [entry.label, entry.available])).toEqual([
       ['Préparation', true],
+      ['Moteur', true],
       ['Échappement', true],
-      ['Moteur', false],
     ]);
     // Garage : l'ambiance, puis la sortie (§ 5.5), toutes deux disponibles.
     const garage = DOCK_MENU.find((section) => section.id === 'garage');
@@ -50,7 +50,7 @@ describe('arbre du dock', () => {
       ['Sortie', true],
     ]);
     // Masquées d'un coup : il ne reste que les entrées disponibles.
-    expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture', 'roues', 'suspension', 'interieur', 'stickers', 'phares', 'ailerons']);
+    expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture', 'roues', 'suspension', 'interieur', 'stickers', 'carrosserie', 'phares', 'ailerons']);
   });
 
   it('« Mécanique » n’existe que pour un véhicule à moteur déclaré', () => {
@@ -62,7 +62,8 @@ describe('arbre du dock', () => {
     const custom = DOCK_MENU.find((section) => section.id === 'custom');
     if (!custom) throw new Error('section Custom absente');
     expect(activeEntry(custom, undefined)?.id).toBe('peinture');
-    expect(activeEntry(custom, 'carrosserie')?.id).toBe('peinture');
+    expect(activeEntry(custom, 'carrosserie')?.id).toBe('carrosserie');
+    expect(activeEntry({ id: 'custom', label: 'Custom', entries: [{ id: 'peinture', label: 'Peinture', available: true }, { id: 'carrosserie', label: 'Carrosserie', available: false }] }, 'carrosserie')?.id).toBe('peinture');
     expect(sectionOf('ambiance')?.id).toBe('garage');
     expect(sectionOf('sortie')?.id).toBe('garage');
     expect(sectionOf('preparation')?.id).toBe('mecanique');

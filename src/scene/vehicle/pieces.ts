@@ -1,7 +1,8 @@
-// Pièces montées sur la caisse du véhicule à l'écran (aileron…, src/data/pieces.ts) : l'option du build,
-// chargée du catalogue partagé (public/assets/shared/pieces/), posée sur la caisse (elle suit l'assiette)
-// d'après la section `pieces` du manifeste : chaque sommet est mis à la largeur, à la pente et au bombé
-// de la surface de pose (fitPositions). La pièce prend la peinture de la carrosserie, ou sa couleur
+// Pièces montées sur la caisse du véhicule à l'écran (aileron, kit carrosserie…, src/data/pieces.ts) :
+// l'option du build, chargée du catalogue partagé (public/assets/shared/pieces/), posée sur la caisse
+// (elle suit l'assiette) d'après la section `pieces` du manifeste : chaque sommet est mis à la largeur, à
+// la pente et au bombé de la surface de pose, ou le long du rail (fitPositions) ; une paire (jupes) se
+// pose à droite et reçoit son miroir à gauche. La pièce prend la peinture de la carrosserie, ou sa couleur
 // propre (partPaints, mêmes finitions), dans un matériau à elle : la livrée (stickers) n'y glisse pas.
 // Elle reçoit les reflets de l'environnement comme la caisse. Partagé par le garage (VehicleModel.tsx)
 // et la sortie de nuit (src/drive/scene/vehicule.tsx). Aucun identifiant de véhicule ni d'option ici.
@@ -10,11 +11,11 @@
 // pièce reste posée jusqu'à l'arrivée de la nouvelle.
 
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { BufferAttribute, Group, Mesh, MeshStandardMaterial, type BufferGeometry, type Material, type MeshPhysicalMaterial, type Object3D } from 'three';
+import { BufferAttribute, BufferGeometry, Group, Mesh, MeshStandardMaterial, type Material, type MeshPhysicalMaterial, type Object3D } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { finish as findFinish } from '../../data/finishes.ts';
 import { MATERIAL_ROLES } from '../../data/materialRoles.ts';
-import { fitPositions, optionsFor, PIECE_NODES, PIECES_DIR, pieceFile, piecePaint, postesOf, resolvePiece, type PieceOption } from '../../data/pieces.ts';
+import { fitPositions, flipWinding, mirrorZ, optionsFor, PIECE_NODES, PIECES_DIR, pieceFile, piecePaint, postesOf, resolvePiece, type PieceOption } from '../../data/pieces.ts';
 import type { Build, Paint, VehicleManifest } from '../../data/vehicleTypes.ts';
 import { applyPaint, createPaintMaterial } from '../../render/paint.ts';
 import { masterZone, resolvePaint, useBuilds } from '../../state/builds.ts';
@@ -61,13 +62,27 @@ function roleMaterial(name: string): MeshStandardMaterial {
   return material;
 }
 
-/** Nœud de la pièce qui porte ce maillage : « surface » ou « niveau » (noms de tools/vehicles/pieces.mjs). */
+/** Nœud de la pièce qui porte ce maillage : « surface » ou « niveau » (noms de tools/vehicles/pieces.mjs) ; une pièce sur rail se pose d'après son manifeste. */
 function nodeOf(mesh: Object3D): string {
   for (let node: Object3D | null = mesh; node; node = node.parent) {
     if (node.name.startsWith(PIECE_NODES.level)) return PIECE_NODES.level;
     if (node.name.startsWith(PIECE_NODES.surface)) return PIECE_NODES.surface;
   }
   return PIECE_NODES.surface;
+}
+
+/** Géométrie d'une paire : les sommets posés à droite, puis leur miroir à gauche (triangles retournés). */
+function withMirror(source: BufferGeometry, fitted: Float32Array): BufferGeometry {
+  const count = fitted.length / 3;
+  const index = source.index ? Array.from(source.index.array) : Array.from({ length: count }, (_, i) => i);
+  const positions = new Float32Array(fitted.length * 2);
+  positions.set(fitted);
+  positions.set(mirrorZ(fitted), fitted.length);
+  const left = flipWinding(index.map((i) => i + count));
+  const pair = new BufferGeometry();
+  pair.setAttribute('position', new BufferAttribute(positions, 3));
+  pair.setIndex([...index, ...left]);
+  return pair;
 }
 
 /** Pour chaque poste : l'option choisie (`null` : aucune pièce). Une clé stable, sans les couleurs. */
@@ -143,18 +158,22 @@ export function usePieces(prepared: Prepared, vehicle: VehicleManifest, invalida
       const group = new Group();
       group.name = `piece_${poste.id}`;
       source.gltf.scene.updateMatrixWorld(true);
+      const floor = vehicle.wheels?.floor;
       source.gltf.scene.traverse((object) => {
         if (!(object instanceof Mesh)) return;
         const geometry = (object.geometry as BufferGeometry).clone().applyMatrix4(object.matrixWorld);
-        const fitted = fitPositions(geometry.getAttribute('position').array, nodeOf(object), mount, poste, source.option);
-        geometry.setAttribute('position', new BufferAttribute(fitted, 3));
-        geometry.computeVertexNormals();
-        geometry.computeBoundingBox();
-        geometry.computeBoundingSphere();
-        geometries.push(geometry);
+        const fitted = fitPositions(geometry.getAttribute('position').array, nodeOf(object), mount, poste, source.option, floor);
         const name = (object.material as Material).name;
         const material: Material = name.startsWith('paint_') ? (paints.get(poste.id) ?? roleMaterial('black')) : roleMaterial(name);
-        const mesh = new Mesh(geometry, material);
+        // Une paire (jupes) : la pièce de droite et son miroir à gauche, dans le même maillage (un seul
+        // appel de dessin), triangles du miroir remis à l'endroit.
+        const posed = poste.mirror ? withMirror(geometry, fitted) : geometry;
+        if (!poste.mirror) geometry.setAttribute('position', new BufferAttribute(fitted, 3));
+        posed.computeVertexNormals();
+        posed.computeBoundingBox();
+        posed.computeBoundingSphere();
+        geometries.push(posed);
+        const mesh = new Mesh(posed, material);
         mesh.name = `${group.name}_${name}`;
         mesh.renderOrder = VEHICLE_RENDER_ORDER;
         group.add(mesh);

@@ -1,5 +1,6 @@
-// Cadrage de la zone de livrée choisie dans Custom › Stickers, côté scène du garage (src/scene/
-// GarageCanvas.tsx). Tant que le panneau des stickers le demande (src/scene/cadrageZone.ts), la caméra
+// Cadrage de la zone de livrée choisie dans Custom › Stickers (ou du poste choisi dans Custom ›
+// Carrosserie, cadre donné tel quel), côté scène du garage (src/scene/GarageCanvas.tsx). Tant que le
+// panneau des stickers le demande (src/scene/cadrageZone.ts), la caméra
 // quitte la vue d'atelier pour la zone (fitZone, src/scene/fit.ts, d'après src/data/framings.ts), la
 // montre en grand dans ce que le panneau laisse libre, la rotation lente s'arrête ; le doigt peut
 // encore tourner et pincer autour d'elle. En quittant les stickers, la caméra revient à la vue d'avant
@@ -67,7 +68,10 @@ const toPose = (position: Vector3, target: Vector3): OrbitPose => ({ position: [
 export function useZoneFraming({ vehicle, turn, width, height, paysage, bandTop, bandBottom, zone, allowed, instant, polar, controls, home, stage }: ZoneFramingOptions): ZoneFraming {
   const focus = useZoneFocus((state) => state.focus);
   const coverTop = useZoneFocus((state) => state.coverTop);
-  const spec = focus?.vehicle === vehicle.id ? vehicle.livery?.find((item) => item.id === focus.zone) : undefined;
+  const spec = useMemo(() => {
+    if (focus?.vehicle !== vehicle.id) return undefined;
+    return focus.box ? { id: focus.zone, ...focus.box } : vehicle.livery?.find((item) => item.id === focus.zone);
+  }, [focus, vehicle]);
   const engaged = spec !== undefined;
   // Partie libre : sous la marque, au-dessus du panneau (portrait) ; entre les boutons ronds et le menu (paysage).
   const free: ScreenFrame = paysage

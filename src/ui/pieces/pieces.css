@@ -205,3 +205,54 @@
 footer.dock[data-taille='compact'] .pieces .pieces-hint {
   display: none;
 }
+
+/* Entrée à plusieurs postes (Custom · Carrosserie) : la rangée des postes au-dessus du panneau du poste. */
+.pieces-groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pieces-postes {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.pieces-poste {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.0625rem;
+  min-width: 48px;
+  min-height: var(--tap);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--edge);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  color: var(--chrome);
+  font: inherit;
+  line-height: 1.15;
+  text-align: left;
+}
+
+.pieces-poste b {
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.pieces-poste small {
+  color: var(--mute);
+  font-size: 0.6875rem;
+  overflow-wrap: anywhere;
+}
+
+.pieces-poste[aria-pressed='true'] {
+  border-color: var(--ambre);
+  color: var(--ambre);
+}
+
+.pieces-poste[aria-pressed='true'] small {
+  color: currentColor;
+}

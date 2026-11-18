@@ -8,6 +8,7 @@ import { TRANSMISSIONS } from './adherence.ts';
 import { BOITES_NOMMEES } from './boites.ts';
 import { FINISHES } from './finishes.ts';
 import { INTERIOR_CATALOGUE } from './habitacle.ts';
+import { checkEngineModel } from './moteurs.ts';
 import { checkLights } from './phares.ts';
 import { checkPieces } from './pieces.ts';
 import { WHEEL_CATALOGUE } from './wheels.ts';
@@ -89,6 +90,7 @@ function checkEngine(raw: unknown, problems: string[]): void {
   if (!FEEDS.includes(raw.feed as EngineSpec['feed'])) problems.push(`engine.feed doit valoir ${FEEDS.join(' ou ')}`);
   if (!BOOSTS.includes(raw.boost as EngineSpec['boost'])) problems.push(`engine.boost doit valoir ${BOOSTS.join(', ')}`);
   if (!positive(raw.power)) problems.push('engine.power doit être un nombre de chevaux positif');
+  checkEngineModel(raw.model, problems);
 }
 
 /** Performances sur la route : masse, vitesse de pointe et adhérence dans des bornes plausibles ; boîte connue. */

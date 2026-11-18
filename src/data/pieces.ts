@@ -1,53 +1,85 @@
 /// <reference types="vite/client" />
 // Pièces montées sur la caisse (§ 5.4, § 6, demande du 17 novembre 2026) : un système de postes
-// (aileron aujourd'hui ; sorties d'échappement, lame avant, jupes ensuite) piloté par les données.
+// (aileron ; kit carrosserie : lame avant, jupes, diffuseur) piloté par les données.
 // Le catalogue partagé, public/assets/shared/pieces/catalogue.json, dit les postes et leurs options
 // (fabriquées par npm run vehicles:build, tools/vehicles/pieces.mjs) ; le manifeste d'un véhicule dit,
 // poste par poste (section `pieces`), où la pièce se pose et ce qu'il accepte. Un poste absent du
 // manifeste n'existe pas pour ce véhicule. Ce fichier résout, sans rien connaître d'aucun véhicule,
 // l'option posée (une option inconnue ou non permise retombe sur l'origine), sa peinture, et la pose
-// de chaque sommet d'une pièce dans le repère du véhicule (pur, testé sans navigateur).
+// de chaque sommet d'une pièce dans le repère du véhicule (pur, testé sans navigateur). Trois poses :
+// « surface » et « supports » (aileron : un point de pose sur l'axe) ; « rail » (kit carrosserie : la
+// pièce suit une ligne de la caisse, sur l'axe ou en paire gauche-droite, une seule géométrie en miroir).
 //
 // Dans le build : parts.<poste> (identifiant d'option ; l'origine n'est pas écrite), partPaints.<poste>
 // (couleur propre ; absente : la peinture de la carrosserie).
 
 import type { ArticleBoutique } from './boutique.ts';
 import { FINISHES } from './finishes.ts';
-import type { Build, CrownProfile, Paint, PieceMount, PieceSupports, VehicleManifest } from './vehicleTypes.ts';
+import type { LiveryFace } from './stickersCalques.ts';
+import type { Build, CrownProfile, Paint, PieceMount, PieceRailMount, PieceSupports, PieceSurfaceMount, VehicleManifest, VehiclePoint } from './vehicleTypes.ts';
 
 export interface PieceOption {
   id: string;
   /** Famille de modelage (tools/vehicles/pieces.mjs). */
   style: string;
-  /** « surface » : épouse la surface au bord de fuite ; « supports » : aileron de niveau sur pieds. */
-  mount: 'surface' | 'supports';
+  /**
+   * « surface » : épouse la surface au bord de fuite ; « supports » : aileron de niveau sur pieds ;
+   * « rail » : suit une ligne de la caisse (kit carrosserie, section `rail` du manifeste).
+   */
+  mount: 'surface' | 'supports' | 'rail';
   label: string;
   /** Le nom avec son article, pour les phrases : « l’aileron haut ». */
   phrase: string;
   hint?: string;
   /** Envergure : part de celle du manifeste (aileron démesuré : plus large). Absente : 1. */
   spanFactor?: number;
+  /**
+   * Pièce sur rail : hauteur modelée au-dessus de la ligne (contre la face) et sous elle, en mètres.
+   * L'app la tasse, sans la déformer autrement, là où la face est moins haute (`rise` du manifeste) ou
+   * le bas de caisse plus proche (`wheels.floor`).
+   */
+  rise?: number;
+  depth?: number;
   /** Silhouette de l'option (tracé SVG, boîte 48 × 30), posée sur celle du poste. */
   picto: string;
+}
+
+/** Un groupe de postes réunis sous une entrée du menu (kit carrosserie). */
+export interface PieceGroupe {
+  id: string;
+  label: string;
+  /** Fin de phrase après le nom d'un véhicule qui n'a aucun poste du groupe. */
+  absent: string;
 }
 
 export interface PiecePoste {
   id: string;
   label: string;
+  /** Groupe du poste (une entrée qui en réunit plusieurs) ; absent : le poste a son entrée à lui. */
+  groupe?: string;
+  /** Pièce sur rail en paire gauche-droite : le manifeste donne le flanc droit, la gauche est son miroir. */
+  mirror?: boolean;
+  /** Le nom du poste est un pluriel (« les jupes ») : les phrases s'accordent. */
+  plural?: boolean;
   /** Fin de phrase après le nom d'un véhicule qui n'a pas ce poste. */
   absent: string;
   /** Nom du réglage de couleur propre : « Couleur de l’aileron ». */
   colorLabel: string;
   /** L'absence de pièce : toujours permise, toujours libre. */
   none: { id: string; label: string; hint?: string; phrase: string };
-  /** Cotes de modelage des options : largeur, milieu des pieds (z), en mètres. */
-  reference: { width: number; feet: number };
+  /**
+   * Cotes de modelage des options, en mètres : largeur (le long du rail pour une pièce sur rail),
+   * milieu des pieds (z ; postes sur supports), longueur gardée telle quelle à chaque bout (pièce sur
+   * rail : le milieu seul s'étire à la longueur du rail).
+   */
+  reference: { width: number; feet?: number; ends?: number };
   /** Silhouette commune (tracé SVG, boîte 48 × 30) : l'arrière d'une caisse. */
   picto: string;
   options: readonly PieceOption[];
 }
 
 export interface PiecesCatalogue {
+  groupes?: readonly PieceGroupe[];
   postes: readonly PiecePoste[];
 }
 
@@ -55,7 +87,7 @@ export interface PiecesCatalogue {
 export const PIECES_DIR = 'assets/shared/pieces/';
 
 /** Nœuds d'un fichier de pièce (mêmes noms que tools/vehicles/pieces.mjs, NODES). */
-export const PIECE_NODES = Object.freeze({ surface: 'surface', level: 'niveau' });
+export const PIECE_NODES = Object.freeze({ surface: 'surface', level: 'niveau', rail: 'rail' });
 
 /** Pièce sur supports : sous cette hauteur (repère de la pièce), tout descend sur la surface (pieds, semelles). */
 export const FOOT_BAND = 0.012;
@@ -74,6 +106,13 @@ export function validatePiecesCatalogue(raw: unknown): PiecesCatalogue {
   const where = 'public/assets/shared/pieces/catalogue.json';
   if (!isObject(raw) || !Array.isArray(raw.postes) || raw.postes.length === 0) throw new Error(`Catalogue des pièces invalide, ${where} : « postes » doit être une liste non vide.`);
   const problems: string[] = [];
+  const groupes = new Set<string>();
+  if (raw.groupes !== undefined && !Array.isArray(raw.groupes)) problems.push('groupes doit être une liste');
+  (Array.isArray(raw.groupes) ? raw.groupes : []).forEach((groupe: unknown, i) => {
+    if (!isObject(groupe) || typeof groupe.id !== 'string' || !ID.test(groupe.id) || !text(groupe.label) || !text(groupe.absent)) problems.push(`groupes[${i}] doit porter id, label et absent`);
+    else if (groupes.has(groupe.id)) problems.push(`groupes[${i}].id « ${groupe.id} » en double`);
+    else groupes.add(groupe.id);
+  });
   const postes = new Set<string>();
   raw.postes.forEach((poste: unknown, i) => {
     const at = `postes[${i}]`;
@@ -85,11 +124,20 @@ export function validatePiecesCatalogue(raw: unknown): PiecesCatalogue {
     postes.add(poste.id);
     const none = poste.none;
     if (!isObject(none) || typeof none.id !== 'string' || !ID.test(none.id) || !text(none.label) || !text(none.phrase)) problems.push(`${at}.none doit porter id, label et phrase`);
-    const ref = poste.reference;
-    if (!isObject(ref) || typeof ref.width !== 'number' || typeof ref.feet !== 'number' || ref.feet <= FOOT_HALF || ref.feet + FOOT_HALF >= ref.width / 2 - TIP) {
-      problems.push(`${at}.reference doit porter width et feet (milieu des pieds, entre ${FOOT_HALF} m et la demi-largeur moins ${FOOT_HALF + TIP} m)`);
-    }
+    if (poste.groupe !== undefined && !(typeof poste.groupe === 'string' && groupes.has(poste.groupe))) problems.push(`${at}.groupe doit citer un groupe du catalogue`);
+    for (const key of ['mirror', 'plural']) if (poste[key] !== undefined && typeof poste[key] !== 'boolean') problems.push(`${at}.${key} doit être vrai ou faux`);
     const options = Array.isArray(poste.options) ? poste.options : [];
+    const mounts = new Set(options.map((option: unknown) => (isObject(option) ? option.mount : undefined)));
+    const ref = poste.reference;
+    if (!isObject(ref) || typeof ref.width !== 'number' || !(ref.width > 0.2 && ref.width <= 4)) problems.push(`${at}.reference doit porter width (largeur de modelage, de 0,2 à 4 m)`);
+    else {
+      if (mounts.has('supports') && (typeof ref.feet !== 'number' || ref.feet <= FOOT_HALF || ref.feet + FOOT_HALF >= ref.width / 2 - TIP)) {
+        problems.push(`${at}.reference doit porter feet (milieu des pieds, entre ${FOOT_HALF} m et la demi-largeur moins ${FOOT_HALF + TIP} m)`);
+      }
+      if (ref.ends !== undefined && !(typeof ref.ends === 'number' && ref.ends >= 0 && ref.ends < ref.width / 2 - 0.05)) problems.push(`${at}.reference.ends doit être une longueur de 0 à la demi-largeur moins 5 cm`);
+    }
+    if (mounts.has('rail') && mounts.size > 1) problems.push(`${at}.options : un poste sur rail n'a que des options sur rail`);
+    if (poste.mirror === true && !mounts.has('rail')) problems.push(`${at}.mirror ne vaut que pour un poste sur rail`);
     if (options.length === 0) problems.push(`${at}.options : au moins une option`);
     const seen = new Set<string>(isObject(none) && typeof none.id === 'string' ? [none.id] : []);
     options.forEach((option: unknown, j) => {
@@ -99,17 +147,19 @@ export function validatePiecesCatalogue(raw: unknown): PiecesCatalogue {
         typeof option.id !== 'string' ||
         !ID.test(option.id) ||
         !text(option.style) ||
-        (option.mount !== 'surface' && option.mount !== 'supports') ||
+        (option.mount !== 'surface' && option.mount !== 'supports' && option.mount !== 'rail') ||
         !text(option.label) ||
         !text(option.phrase) ||
         !text(option.picto)
       ) {
-        problems.push(`${o} doit porter id, style, mount (surface ou supports), label, phrase et picto`);
+        problems.push(`${o} doit porter id, style, mount (surface, supports ou rail), label, phrase et picto`);
         return;
       }
       if (seen.has(option.id)) problems.push(`${o}.id « ${option.id} » en double (ou égal à none.id)`);
       seen.add(option.id);
       if (option.spanFactor !== undefined && !(typeof option.spanFactor === 'number' && option.spanFactor >= 1 && option.spanFactor <= 1.5)) problems.push(`${o}.spanFactor doit être un facteur de 1 à 1,5`);
+      const height = (value: unknown) => typeof value === 'number' && value >= 0 && value <= 0.4;
+      if (option.mount === 'rail' && !(height(option.rise) && height(option.depth))) problems.push(`${o} : une option sur rail porte rise et depth (de 0 à 0,4 m)`);
     });
   });
   if (problems.length > 0) throw new Error(`Catalogue des pièces invalide, ${where} : ${problems.join(' ; ')}.`);
@@ -136,12 +186,30 @@ export function mountOf(vehicle: Pick<VehicleManifest, 'pieces'>, poste: string)
   return vehicle.pieces?.[poste];
 }
 
-/** Options qu'un véhicule accepte sur un poste (sans l'absence de pièce) : celles du manifeste, que la surface permet. */
+/** Vrai pour un poste posé le long d'une ligne de la caisse (kit carrosserie). */
+export const isRailMount = (mount: PieceMount): mount is PieceRailMount => 'rail' in mount;
+
+/** La pose du manifeste reçoit-elle cette option ? Rail pour rail ; supports seulement s'ils sont déclarés. */
+function accepts(mount: PieceMount, option: PieceOption): boolean {
+  if (isRailMount(mount)) return option.mount === 'rail';
+  return option.mount === 'surface' || (option.mount === 'supports' && mount.supports !== undefined);
+}
+
+/** Options qu'un véhicule accepte sur un poste (sans l'absence de pièce) : celles du manifeste, que la pose permet. */
 export function optionsFor(vehicle: Pick<VehicleManifest, 'pieces'>, poste: string, catalogue: PiecesCatalogue = PIECES_CATALOGUE): PieceOption[] {
   const mount = mountOf(vehicle, poste);
   const item = posteById(poste, catalogue);
   if (!mount || !item) return [];
-  return item.options.filter((option) => (!mount.options || mount.options.includes(option.id)) && (option.mount === 'surface' || mount.supports !== undefined));
+  return item.options.filter((option) => (!mount.options || mount.options.includes(option.id)) && accepts(mount, option));
+}
+
+export function groupeById(id: string, catalogue: PiecesCatalogue = PIECES_CATALOGUE): PieceGroupe | undefined {
+  return catalogue.groupes?.find((groupe) => groupe.id === id);
+}
+
+/** Postes d'un groupe, dans l'ordre du catalogue (tous, que le véhicule les ait ou non). */
+export function postesDuGroupe(groupe: string, catalogue: PiecesCatalogue = PIECES_CATALOGUE): PiecePoste[] {
+  return catalogue.postes.filter((poste) => poste.groupe === groupe);
 }
 
 /** Option d'origine d'un poste (celle du manifeste, sinon l'absence de pièce). */
@@ -271,6 +339,57 @@ function normal(value: unknown): boolean {
   return point(value) && Math.hypot(...value) > 0.5 && Math.hypot(...value) < 1.5;
 }
 
+/** Problèmes d'une pose sur rail (`pieces.<poste>` d'un poste dont les options sont sur rail). */
+function checkRail(where: string, mount: Raw, poste: PiecePoste, problems: string[]): void {
+  for (const key of ['anchor', 'normal', 'width', 'crown', 'bend', 'supports']) if (mount[key] !== undefined) problems.push(`${where}.${key} : un poste sur rail n'a que rail et rise`);
+  const rail = mount.rail;
+  if (!Array.isArray(rail) || rail.length < 3 || !rail.every(point)) {
+    problems.push(`${where}.rail doit lister au moins trois points de trois nombres, en mètres`);
+  } else {
+    const points = rail as VehiclePoint[];
+    let ok = true;
+    for (let i = 1; i < points.length; i += 1) {
+      const [a, b] = [points[i - 1] as VehiclePoint, points[i] as VehiclePoint];
+      const step = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+      if (step < 0.005 || step > 0.3) ok = false;
+    }
+    if (!ok) problems.push(`${where}.rail : deux points voisins sont à 5 mm au moins et à 30 cm au plus`);
+    if (poste.mirror) {
+      if (!points.every((p) => p[2] >= 0.05)) problems.push(`${where}.rail : une paire se donne sur le flanc droit (z de 5 cm au moins)`);
+    } else if ((points[0] as VehiclePoint)[2] !== 0 || !points.every((p, i) => i === 0 || p[2] > (points[i - 1] as VehiclePoint)[2])) {
+      problems.push(`${where}.rail : une pièce sur l'axe part du point sur l'axe (z = 0), z croissant`);
+    } else if (railPath(railPoints({ rail: points }, false)).length < 2 * (poste.reference.ends ?? 0) + 0.1) {
+      problems.push(`${where}.rail : trop court pour les bouts de la pièce`);
+    }
+  }
+  if (!(typeof mount.rise === 'number' && mount.rise >= 0 && mount.rise <= 0.4)) problems.push(`${where}.rise doit être une hauteur de face de 0 à 0,4 m`);
+}
+
+/** Problèmes d'une pose sur surface (aileron : bord de fuite, normale, largeur utile, supports). */
+function checkSurface(where: string, mount: Raw, problems: string[]): void {
+  if (mount.rail !== undefined) problems.push(`${where}.rail : ce poste se pose sur une surface (anchor, normal, width)`);
+  if (!point(mount.anchor)) problems.push(`${where}.anchor doit porter trois nombres, en mètres (bord de fuite, sur l'axe)`);
+  if (!normal(mount.normal)) problems.push(`${where}.normal doit être un vecteur unitaire (trois nombres)`);
+  if (!(typeof mount.width === 'number' && mount.width >= 0.1 && mount.width <= 3)) problems.push(`${where}.width doit être une largeur utile de 0,1 à 3 m`);
+  if (mount.crown !== undefined && !crown(mount.crown)) problems.push(`${where}.crown doit lister des paires [z, descente] en mètres, z croissant de 0 à 2`);
+  if (mount.bend !== undefined && !bend(mount.bend)) problems.push(`${where}.bend doit lister des paires [x, descente] en mètres, x croissant, non nul, de −2 à 2`);
+  const supports = mount.supports;
+  if (supports !== undefined) {
+    const ok =
+      isObject(supports) &&
+      point(supports.anchor) &&
+      normal(supports.normal) &&
+      typeof supports.spacing === 'number' &&
+      supports.spacing >= 2 * FOOT_HALF + 0.02 &&
+      typeof supports.span === 'number' &&
+      supports.span <= 3 &&
+      supports.span >= supports.spacing + 2 * (FOOT_HALF + TIP) + 0.01 &&
+      (supports.crown === undefined || crown(supports.crown)) &&
+      (supports.bend === undefined || bend(supports.bend));
+    if (!ok) problems.push(`${where}.supports doit porter anchor et normal (trois nombres), spacing (entraxe des pieds, 0,09 m au moins) et span (envergure, au moins l'entraxe plus 0,2 m, 3 m au plus), crown et bend facultatifs`);
+  }
+}
+
 /** Problèmes de la section `pieces` d'un manifeste brut, ajoutés à `problems`. */
 export function checkPieces(raw: Raw, problems: string[], catalogue: PiecesCatalogue = PIECES_CATALOGUE): void {
   const pieces = raw.pieces;
@@ -290,26 +409,8 @@ export function checkPieces(raw: Raw, problems: string[], catalogue: PiecesCatal
       problems.push(`${where} doit être un objet`);
       continue;
     }
-    if (!point(mount.anchor)) problems.push(`${where}.anchor doit porter trois nombres, en mètres (bord de fuite, sur l'axe)`);
-    if (!normal(mount.normal)) problems.push(`${where}.normal doit être un vecteur unitaire (trois nombres)`);
-    if (!(typeof mount.width === 'number' && mount.width >= 0.1 && mount.width <= 3)) problems.push(`${where}.width doit être une largeur utile de 0,1 à 3 m`);
-    if (mount.crown !== undefined && !crown(mount.crown)) problems.push(`${where}.crown doit lister des paires [z, descente] en mètres, z croissant de 0 à 2`);
-    if (mount.bend !== undefined && !bend(mount.bend)) problems.push(`${where}.bend doit lister des paires [x, descente] en mètres, x croissant, non nul, de −2 à 2`);
-    const supports = mount.supports;
-    if (supports !== undefined) {
-      const ok =
-        isObject(supports) &&
-        point(supports.anchor) &&
-        normal(supports.normal) &&
-        typeof supports.spacing === 'number' &&
-        supports.spacing >= 2 * FOOT_HALF + 0.02 &&
-        typeof supports.span === 'number' &&
-        supports.span <= 3 &&
-        supports.span >= supports.spacing + 2 * (FOOT_HALF + TIP) + 0.01 &&
-        (supports.crown === undefined || crown(supports.crown)) &&
-        (supports.bend === undefined || bend(supports.bend));
-      if (!ok) problems.push(`${where}.supports doit porter anchor et normal (trois nombres), spacing (entraxe des pieds, 0,09 m au moins) et span (envergure, au moins l'entraxe plus 0,2 m, 3 m au plus), crown et bend facultatifs`);
-    }
+    if (poste.options.some((option) => option.mount === 'rail')) checkRail(where, mount, poste, problems);
+    else checkSurface(where, mount, problems);
     const known = poste.options.map((option) => option.id);
     if (mount.options !== undefined && !(Array.isArray(mount.options) && mount.options.length > 0 && mount.options.every((option) => typeof option === 'string' && known.includes(option)))) {
       problems.push(`${where}.options doit citer des options du catalogue (${known.join(', ')})`);
@@ -360,7 +461,7 @@ export function bendDrop(profile: CrownProfile | undefined, x: number): number {
 export function spanMap(z: number, reference: PiecePoste['reference'], spacing: number, halfSpan: number): number {
   const a = Math.abs(z);
   const half = reference.width / 2;
-  const feet = reference.feet;
+  const feet = reference.feet ?? 0;
   const target = spacing / 2;
   const tipStart = half - TIP;
   let out: number;
@@ -399,9 +500,22 @@ function slopeOf(n: Vec3): number {
  * posé : nœud « surface » tourné sur la normale au bord de fuite, mis à la largeur utile et cintré au
  * bombé en travers et au profil en long (en avant du bord de fuite seulement : ce qui le dépasse reste
  * en porte-à-faux) ; nœud « niveau » posé aux pieds, mis à l'entraxe et à l'envergure, ses pieds
- * descendus sur la surface (plan de la normale, bombé et profil en long compris). Rend un nouveau tableau.
+ * descendus sur la surface (plan de la normale, bombé et profil en long compris) ; pose sur rail :
+ * voir fitRail (`floor` : bas de caisse d'origine, `wheels.floor` du manifeste). Rend un nouveau tableau.
  */
-export function fitPositions(source: ArrayLike<number>, node: string, mount: PieceMount, poste: PiecePoste, option: Pick<PieceOption, 'spanFactor'>): Float32Array {
+export function fitPositions(
+  source: ArrayLike<number>,
+  node: string,
+  mount: PieceMount,
+  poste: PiecePoste,
+  option: Pick<PieceOption, 'spanFactor' | 'rise' | 'depth'>,
+  floor?: number,
+): Float32Array {
+  if (isRailMount(mount)) return fitRail(source, mount, poste, option, floor);
+  return fitSurface(source, node, mount, poste, option);
+}
+
+function fitSurface(source: ArrayLike<number>, node: string, mount: PieceSurfaceMount, poste: PiecePoste, option: Pick<PieceOption, 'spanFactor'>): Float32Array {
   const out = new Float32Array(source.length);
   if (node === PIECE_NODES.level && mount.supports) {
     const supports: PieceSupports = mount.supports;
@@ -433,3 +547,195 @@ export function fitPositions(source: ArrayLike<number>, node: string, mount: Pie
   return out;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Pose sur rail (kit carrosserie) : la pièce suit une ligne de la caisse
+
+/** Jour gardé entre le bas d'une pièce sur rail et le bas de caisse d'origine, en mètres. */
+export const RAIL_CLEARANCE = 0.006;
+/** Pas de la courbe lisse tendue sur les points du rail : tant de tronçons entre deux points. */
+const RAIL_SUBDIVISIONS = 8;
+
+/**
+ * Points du rail complet. Pièce sur l'axe : le symétrique des points du manifeste, puis eux ; paire :
+ * les points du flanc droit tels quels. Ordonnés pour que la normale sortante (haut × tangente) regarde
+ * dehors : la pièce, modelée en repère direct (X dehors, Y en haut, Z le long du rail), n'est jamais
+ * retournée.
+ */
+export function railPoints(mount: Pick<PieceRailMount, 'rail'>, mirror: boolean): VehiclePoint[] {
+  const half = mount.rail;
+  const full: VehiclePoint[] = mirror ? [...half] : [...half.slice(1).reverse().map(([x, y, z]): VehiclePoint => [x, y, -z]), ...half];
+  const i = Math.min(Math.floor((full.length - 1) / 2), full.length - 2);
+  const a = full[i] as VehiclePoint;
+  const b = full[i + 1] as VehiclePoint;
+  // Normale sortante en plan : (tz, −tx) ; le milieu du tronçon, vu du centre du véhicule.
+  const outward = (b[2] - a[2]) * (a[0] + b[0]) - (b[0] - a[0]) * (a[2] + b[2]);
+  return outward < 0 ? full.reverse() : full;
+}
+
+/** Courbe dense tendue sur les points d'un rail : points, tangentes en plan, longueurs cumulées. */
+export interface RailPath {
+  /** x, y, z à la suite. */
+  points: Float64Array;
+  /** Tangente en plan, unitaire : tx, tz à la suite. */
+  tangents: Float64Array;
+  /** Longueur cumulée à chaque point, en mètres. */
+  lengths: Float64Array;
+  length: number;
+}
+
+/** Courbe de Catmull-Rom (uniforme) par les points du rail, découpée finement. */
+export function railPath(points: readonly VehiclePoint[]): RailPath {
+  const m = points.length;
+  const p = (i: number): VehiclePoint => {
+    if (i < 0) {
+      const [a, b] = [points[0] as VehiclePoint, points[1] as VehiclePoint];
+      return [2 * a[0] - b[0], 2 * a[1] - b[1], 2 * a[2] - b[2]];
+    }
+    if (i >= m) {
+      const [a, b] = [points[m - 1] as VehiclePoint, points[m - 2] as VehiclePoint];
+      return [2 * a[0] - b[0], 2 * a[1] - b[1], 2 * a[2] - b[2]];
+    }
+    return points[i] as VehiclePoint;
+  };
+  const count = (m - 1) * RAIL_SUBDIVISIONS + 1;
+  const out = new Float64Array(count * 3);
+  let k = 0;
+  for (let i = 0; i < m - 1; i += 1) {
+    const [p0, p1, p2, p3] = [p(i - 1), p(i), p(i + 1), p(i + 2)];
+    for (let j = 0; j < RAIL_SUBDIVISIONS; j += 1) {
+      const t = j / RAIL_SUBDIVISIONS;
+      const [t2, t3] = [t * t, t * t * t];
+      for (let c = 0; c < 3; c += 1) {
+        const [a, b, d, e] = [p0[c] as number, p1[c] as number, p2[c] as number, p3[c] as number];
+        out[k * 3 + c] = 0.5 * (2 * b + (d - a) * t + (2 * a - 5 * b + 4 * d - e) * t2 + (3 * b - a - 3 * d + e) * t3);
+      }
+      k += 1;
+    }
+  }
+  const last = points[m - 1] as VehiclePoint;
+  out.set(last, k * 3);
+  const lengths = new Float64Array(count);
+  for (let i = 1; i < count; i += 1) {
+    lengths[i] = (lengths[i - 1] as number) + Math.hypot((out[i * 3] as number) - (out[i * 3 - 3] as number), (out[i * 3 + 1] as number) - (out[i * 3 - 2] as number), (out[i * 3 + 2] as number) - (out[i * 3 - 1] as number));
+  }
+  const tangents = new Float64Array(count * 2);
+  for (let i = 0; i < count; i += 1) {
+    const [a, b] = [Math.max(0, i - 1), Math.min(count - 1, i + 1)];
+    const tx = (out[b * 3] as number) - (out[a * 3] as number);
+    const tz = (out[b * 3 + 2] as number) - (out[a * 3 + 2] as number);
+    const len = Math.hypot(tx, tz) || 1;
+    tangents[i * 2] = tx / len;
+    tangents[i * 2 + 1] = tz / len;
+  }
+  return { points: out, tangents, lengths, length: lengths[count - 1] as number };
+}
+
+/** Point du rail à l'abscisse curviligne `s` et normale sortante en plan ; au-delà des bouts, le rail se prolonge tout droit. */
+export function railAt(path: RailPath, s: number, out: { x: number; y: number; z: number; nx: number; nz: number }): void {
+  const { points, tangents, lengths } = path;
+  const last = lengths.length - 1;
+  if (s <= 0 || s >= path.length) {
+    const i = s <= 0 ? 0 : last;
+    const [tx, tz] = [tangents[i * 2] as number, tangents[i * 2 + 1] as number];
+    const d = s <= 0 ? s : s - path.length;
+    out.x = (points[i * 3] as number) + tx * d;
+    out.y = points[i * 3 + 1] as number;
+    out.z = (points[i * 3 + 2] as number) + tz * d;
+    out.nx = tz;
+    out.nz = -tx;
+    return;
+  }
+  let [lo, hi] = [0, last];
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if ((lengths[mid] as number) <= s) lo = mid;
+    else hi = mid;
+  }
+  const span = (lengths[lo + 1] as number) - (lengths[lo] as number);
+  const u = span > 0 ? (s - (lengths[lo] as number)) / span : 0;
+  const at = (k: number) => (points[lo * 3 + k] as number) + ((points[lo * 3 + 3 + k] as number) - (points[lo * 3 + k] as number)) * u;
+  out.x = at(0);
+  out.y = at(1);
+  out.z = at(2);
+  const tx = (tangents[lo * 2] as number) * (1 - u) + (tangents[lo * 2 + 2] as number) * u;
+  const tz = (tangents[lo * 2 + 1] as number) * (1 - u) + (tangents[lo * 2 + 3] as number) * u;
+  const len = Math.hypot(tx, tz) || 1;
+  out.nx = tz / len;
+  out.nz = -tx / len;
+}
+
+/**
+ * Abscisse le long du rail d'un sommet à `z` (repère de la pièce, de −width/2 à +width/2) : les bouts
+ * (`reference.ends`) gardent leur longueur, le milieu s'étire ou se resserre à la longueur du rail.
+ */
+export function railAbscissa(z: number, reference: PiecePoste['reference'], length: number): number {
+  const width = reference.width;
+  const ends = Math.min(reference.ends ?? 0, length / 2 - 0.01, width / 2 - 0.01);
+  const u = z + width / 2;
+  if (u <= ends) return u;
+  if (u >= width - ends) return length - (width - u);
+  return ends + ((u - ends) * (length - 2 * ends)) / (width - 2 * ends);
+}
+
+/**
+ * Pose sur rail : chaque sommet (x dehors, y en haut, z le long de la pièce) va sur le rail à son
+ * abscisse (railAbscissa), écarté de x sur la normale sortante, à y du rail. Ce qui monte au-dessus du
+ * rail (y > 0) se tasse si la face d'aplomb est moins haute que la pièce (`rise`) ; ce qui descend
+ * dessous se tasse pour ne jamais passer sous le bas de caisse d'origine (`floor`, moins RAIL_CLEARANCE) :
+ * à l'assiette la plus basse, la pièce garde la garde au sol de la caisse. Une paire (poste `mirror`)
+ * se pose ainsi à droite ; la gauche est son miroir (mirrorZ).
+ */
+export function fitRail(source: ArrayLike<number>, mount: PieceRailMount, poste: PiecePoste, option: Pick<PieceOption, 'rise' | 'depth'>, floor?: number): Float32Array {
+  const path = railPath(railPoints(mount, poste.mirror === true));
+  const up = option.rise && option.rise > mount.rise ? mount.rise / option.rise : 1;
+  const out = new Float32Array(source.length);
+  const at = { x: 0, y: 0, z: 0, nx: 0, nz: 0 };
+  for (let i = 0; i < source.length; i += 3) {
+    const x = source[i] as number;
+    const y = source[i + 1] as number;
+    railAt(path, railAbscissa(source[i + 2] as number, poste.reference, path.length), at);
+    let k = up;
+    if (y < 0) k = floor === undefined || !option.depth ? 1 : Math.min(1, Math.max(0, (at.y - floor - RAIL_CLEARANCE) / option.depth));
+    out[i] = at.x + x * at.nx;
+    out[i + 1] = at.y + y * k;
+    out[i + 2] = at.z + x * at.nz;
+  }
+  return out;
+}
+
+/** Symétrique gauche-droite de sommets posés (z → −z) ; l'ordre des triangles est à retourner (flipWinding). */
+export function mirrorZ(positions: ArrayLike<number>): Float32Array {
+  const out = Float32Array.from(positions);
+  for (let i = 2; i < out.length; i += 3) out[i] = -(out[i] as number);
+  return out;
+}
+
+/** Retourne l'ordre des sommets de chaque triangle (indices à la suite, trois par triangle). */
+export function flipWinding<T extends { length: number; [index: number]: number }>(indices: T): T {
+  for (let i = 0; i + 2 < indices.length; i += 3) {
+    const t = indices[i + 1] as number;
+    indices[i + 1] = indices[i + 2] as number;
+    indices[i + 2] = t;
+  }
+  return indices;
+}
+
+/**
+ * Cadre d'un poste sur rail pour la caméra du garage (src/scene/fit.ts, fitZone) : la face regardée
+ * (avant, flanc droit, arrière, d'après la normale sortante au milieu du rail), le centre et la taille
+ * de la boîte qui entoure la ligne et la pièce.
+ */
+export function railZone(mount: Pick<PieceRailMount, 'rail'>, mirror: boolean): { face: LiveryFace; center: VehiclePoint; size: [number, number, number] } {
+  const points = railPoints(mount, mirror);
+  const path = railPath(points);
+  const at = { x: 0, y: 0, z: 0, nx: 0, nz: 0 };
+  railAt(path, path.length / 2, at);
+  const face: LiveryFace = Math.abs(at.nx) >= Math.abs(at.nz) ? (at.nx > 0 ? '+x' : '-x') : at.nz > 0 ? '+z' : '-z';
+  const xs = points.map((q) => q[0]);
+  const ys = points.map((q) => q[1]);
+  const zs = points.map((q) => q[2]);
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+  const low = Math.min(...ys);
+  const along = face === '+z' || face === '-z' ? x1 - x0 : z1 - z0;
+  return { face, center: [(x0 + x1) / 2, low + 0.12, (z0 + z1) / 2], size: [along + 0.2, 0.42, 0.3] };
+}

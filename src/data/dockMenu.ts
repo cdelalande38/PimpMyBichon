@@ -85,7 +85,7 @@ export const DOCK_MENU: readonly DockSection[] = [
       { id: 'interieur', label: 'Intérieur', icon: 'siege', available: true },
       // Poser des stickers sur les zones de livrée du véhicule (§ 5.3, premier lot).
       { id: 'stickers', label: 'Stickers', icon: 'sticker', available: true },
-      { id: 'carrosserie', label: 'Carrosserie', icon: 'portiere', available: false },
+      { id: 'carrosserie', label: 'Carrosserie', icon: 'portiere', available: true },
       { id: 'phares', label: 'Phares', icon: 'phare', available: true },
       { id: 'ailerons', label: 'Ailerons', icon: 'aileron', available: true },
     ],
@@ -97,7 +97,8 @@ export const DOCK_MENU: readonly DockSection[] = [
     requires: 'engine',
     entries: [
       { id: 'preparation', label: 'Préparation', icon: 'compteur', available: true },
-      { id: 'moteur', label: 'Moteur', icon: 'moteur', available: false },
+      // L'établi (§ 5.11, premier lot) : le moteur sorti sur son support, vue éclatée, traitements par pièce.
+      { id: 'moteur', label: 'Moteur', icon: 'moteur', available: true },
       { id: 'echappement', label: 'Échappement', icon: 'echappement', available: true },
     ],
   },

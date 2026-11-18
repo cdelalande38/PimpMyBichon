@@ -11,7 +11,9 @@
 // (catalogue public/assets/shared/conducteur/, modelé par tools/vehicles/conducteur.mjs), tenu à son
 // budget (12 000 triangles, 4 appels de dessin) et compté avec le véhicule. Fabrique aussi les pièces
 // montées sur la caisse (ailerons… : catalogue public/assets/shared/pieces/, modelées par
-// tools/vehicles/pieces.mjs), comptées au pire cas avec le véhicule qui les accepte. Node seul, déterministe.
+// tools/vehicles/pieces.mjs), comptées au pire cas avec le véhicule qui les accepte. Fabrique enfin les
+// moteurs de l'établi, un par famille (catalogue public/assets/shared/engines/, modelés par
+// tools/vehicles/moteurs.mjs), tenus à leur budget et à leur cadre. Node seul, déterministe.
 // Mode d'emploi : assets-src/vehicles/LISEZ-MOI.md.
 //
 //   node tools/vehicles/build.mjs [id…]      (sans id : tous les dossiers qui ont un model.mjs)
@@ -26,6 +28,7 @@ import { buildRim, buildTire, readCatalogue, rimFile, tireFile } from './roues.m
 import * as habitacle from './habitacle.mjs';
 import * as conducteur from './conducteur.mjs';
 import * as montees from './pieces.mjs';
+import * as moteurs from './moteurs.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, 'assets-src', 'vehicles');
@@ -34,6 +37,7 @@ const WHEELS_OUT = join(ROOT, 'public', 'assets', 'shared', 'wheels');
 const INTERIOR_OUT = join(ROOT, 'public', 'assets', 'shared', 'habitacle');
 const DRIVER_OUT = join(ROOT, 'public', 'assets', 'shared', 'conducteur');
 const PIECES_OUT = join(ROOT, 'public', 'assets', 'shared', 'pieces');
+const ENGINES_OUT = join(ROOT, 'public', 'assets', 'shared', 'engines');
 /** Budgets d'un véhicule complet à l'écran (§ 8) : maximum, roues posées comprises. */
 export const VEHICLE_MAX = Object.freeze({ triangles: 400_000, drawCalls: 80 });
 
@@ -207,6 +211,60 @@ export function buildPieces() {
 }
 
 /**
+ * Moteurs de l'établi : un fichier par famille que l'outil sait modeler (<famille>/moteur.glb). Rend,
+ * par famille, son résumé et les problèmes trouvés : budget (§ 8 : 80 000 triangles, appels de dessin
+ * de l'option la plus lourde), cadre de la caméra trop loin du moteur assemblé (chaque cote du cadre
+ * entre 70 % et 110 % de celle du moteur : la caméra serre le moteur sans le perdre).
+ * @returns {Map<string, { summary: ReturnType<typeof summarize>, drawCalls: number, problems: string[] }>}
+ */
+export function buildEngines() {
+  const catalogue = moteurs.readCatalogue();
+  /** @type {Map<string, { summary: ReturnType<typeof summarize>, drawCalls: number, problems: string[] }>} */
+  const out = new Map();
+  for (const famille of catalogue.familles) {
+    if (!moteurs.MODELED.includes(famille.id)) continue;
+    const { bytes } = moteurs.engineModel(famille, catalogue).toGlb();
+    const file = join(ENGINES_OUT, moteurs.engineFile(famille.id));
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, bytes);
+    const summary = summarize(bytes);
+    // Appels de dessin à l'écran : une seule option de chaque échange est montrée (la plus lourde comptée).
+    const shown = engineDrawCalls(bytes, famille);
+    /** @type {string[]} */
+    const problems = [];
+    if (summary.triangles > catalogue.budget.triangles) problems.push(`${summary.triangles} triangles (maximum ${catalogue.budget.triangles})`);
+    if (shown > catalogue.budget.drawCalls) problems.push(`${shown} appels de dessin (maximum ${catalogue.budget.drawCalls})`);
+    const { halfLength, halfWidth, height } = famille.cadre;
+    const real = [Math.max(-summary.min[0], summary.max[0]), Math.max(-summary.min[2], summary.max[2]), summary.max[1]];
+    const off = [halfLength, halfWidth, height].some((value, i) => value < 0.7 * (real[i] ?? 0) || value > 1.1 * (real[i] ?? 0));
+    if (off) problems.push(`cadre (${halfLength} × ${halfWidth} × ${height} m) trop loin du moteur assemblé (${real.map((v) => v.toFixed(2)).join(' × ')} m)`);
+    out.set(famille.id, { summary, drawCalls: shown, problems });
+  }
+  return out;
+}
+
+/**
+ * Appels de dessin d'un moteur à l'écran : toutes les primitives, sauf celles des options d'échange
+ * qui ne sont pas montrées (on garde, par échange, l'option la plus lourde).
+ * @param {Uint8Array} bytes @param {import('./moteurs.mjs').Famille} famille
+ */
+function engineDrawCalls(bytes, famille) {
+  const parsed = parseGlb(bytes);
+  if (!parsed.ok) throw new Error(`GLB illisible : ${parsed.message}`);
+  const { json } = parsed.container;
+  /** @type {Map<string, number>} */
+  const byNode = new Map();
+  for (const node of /** @type {any[]} */ (json.nodes ?? [])) if (node.mesh !== undefined) byNode.set(node.name, json.meshes[node.mesh].primitives.length);
+  let total = [...byNode.values()].reduce((sum, value) => sum + value, 0);
+  for (const piece of famille.pieces) {
+    if (!piece.echange) continue;
+    const counts = piece.echange.options.map((option) => Object.keys(option.noeuds).reduce((sum, node) => sum + (byNode.get(`${moteurs.PART_PREFIX}${node}`) ?? 0), 0));
+    total -= counts.reduce((sum, value) => sum + value, 0) - Math.max(0, ...counts);
+  }
+  return total;
+}
+
+/**
  * Pose de chaque ancre d'habitacle d'un GLB de véhicule : translation et rotation (quaternion).
  * @param {Uint8Array} bytes
  * @returns {Map<string, { t: number[], q: [number, number, number, number] }>}
@@ -368,6 +426,23 @@ async function main() {
   } catch (error) {
     failed += 1;
     console.error(`pièces montées : ${error instanceof Error ? error.message : error}`);
+  }
+  try {
+    const started = Date.now();
+    const engines = buildEngines();
+    for (const [id, e] of engines) {
+      const s = e.summary;
+      const size = /** @type {const} */ ([0, 1, 2]).map((i) => (s.max[i] - s.min[i]).toFixed(2)).join(' × ');
+      const line = `moteur ${id} : ${s.triangles.toLocaleString('fr-FR')} triangles · ${e.drawCalls} appels de dessin à l'écran (${s.primitives} en tout) · ${s.nodes.length - 1} nœuds · boîte ${size} m · ${(s.bytes / 1024).toFixed(0)} Kio`;
+      if (e.problems.length > 0) {
+        failed += 1;
+        console.error(`${line} : ${e.problems.join(' ; ')}`);
+      } else console.log(line);
+    }
+    console.log(`  ${engines.size} moteurs en ${((Date.now() - started) / 1000).toFixed(1)} s → ${relative(ROOT, ENGINES_OUT)}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`moteurs : ${error instanceof Error ? error.message : error}`);
   }
   for (const id of ids) {
     const started = Date.now();

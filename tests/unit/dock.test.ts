@@ -6,6 +6,7 @@ import { createStore, get, set } from 'idb-keyval';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DOCK_TOP_MARGIN, dockShift, easeOutCubic } from '../../src/scene/fit.ts';
 import { DEFAULT_DOCK, DOCK_KEY, dockSize, entryOf, sanitizeDock, sanitizeLevels } from '../../src/state/dock.ts';
+import { DOCK_MENU } from '../../src/data/dockMenu.ts';
 
 describe('taille du dock', () => {
   it('part du dock compact', () => {
@@ -87,10 +88,13 @@ describe('pile des niveaux du dock', () => {
     // Hors de la peinture, rien ne s'empile.
     dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
     expect(dock().levels).toEqual([]);
-    // Une entrée « bientôt » ne s'ouvre pas.
-    dock().setSection('custom');
-    dock().setEntry('carrosserie');
-    expect(entryOf('custom', dock().entries)).toBe('peinture');
+    // Une entrée « bientôt » ne s'ouvre pas (s'il en reste une au menu ; Carrosserie ne l'est plus).
+    const bientot = DOCK_MENU.flatMap((section) => section.entries.filter((entry) => !entry.available).map((entry) => [section.id, entry.id] as const))[0];
+    if (bientot) {
+      dock().setSection(bientot[0]);
+      dock().setEntry(bientot[1]);
+      expect(entryOf(bientot[0], dock().entries)).not.toBe(bientot[1]);
+    }
     // Ouverture de l'extérieur, sur une zone : le dock se rouvre s'il était fermé.
     dock().setClosed(true);
     dock().openEntry('peinture', 'jantes');

@@ -152,7 +152,7 @@ describe('catalogue des véhicules', () => {
     expect(concept?.placeholder).toBe('placeholder_banc');
     expect(concept?.adapt?.glass?.materials).toContain('Glass');
     expect(concept?.adapt?.logoTextures?.length).toBeGreaterThan(0);
-    expect(concept?.engine).toEqual({ label: 'V8 central', fuel: 'essence', feed: 'injection', boost: 'atmo', power: 480, sound: 'v8' });
+    expect(concept?.engine).toEqual({ label: 'V8 central', fuel: 'essence', feed: 'injection', boost: 'atmo', power: 480, sound: 'v8', model: 'v8' });
     expect(concept?.zones.filter((zone) => zone.group === 'accastillage').map((zone) => zone.id)).toEqual(['jantes', 'etriers', 'sellerie']);
   });
 

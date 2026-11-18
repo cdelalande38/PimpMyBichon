@@ -1,0 +1,873 @@
+{
+  "about": "Moteurs de l'établi (§ 5.11, § 8) : un modèle par famille, partagé par les véhicules dont le manifeste le nomme (engine.model). npm run vehicles:build fabrique <famille>/moteur.glb (tools/vehicles/moteurs.mjs) : un nœud « support » (le support tournant, jamais traité) et un nœud part_<nom> par morceau de pièce. Une pièce est une zone de l'établi : elle liste ses nœuds avec leur vecteur d'éclatement (mètres, vue éclatée à fond), ou, si elle s'échange, ses options, chacune avec ses nœuds. Repère : mètres, +Y vers le haut, +X vers l'avant du moteur, origine au sol au pied du support. « cadre » : la boîte que la caméra cadre (demi-longueur sur X, demi-largeur sur Z, hauteur depuis le sol) ; « orientation » : 0 ou 180, le demi-tour donné au moteur sur son support pour que son plus beau côté regarde la caméra de départ. Matières d'origine : paint_<matière> (brut de fonderie, fonte, tôle…), qui reçoivent les traitements si elles sont « traitable », et les rôles (chrome, alu, black, rubber), qui ne bougent pas. Substituts déclarés : placeholder_moteurs (TODO_ASSETS.md).",
+  "budget": {
+    "triangles": 80000,
+    "drawCalls": 60
+  },
+  "matieres": [
+    {
+      "id": "paint_fonte",
+      "label": "aluminium brut de fonderie",
+      "color": "#8a8c8f",
+      "metalness": 0.5,
+      "roughness": 0.64,
+      "traitable": true
+    },
+    {
+      "id": "paint_fer",
+      "label": "fonte grise",
+      "color": "#5a5c5f",
+      "metalness": 0.45,
+      "roughness": 0.7,
+      "traitable": true
+    },
+    {
+      "id": "paint_tole",
+      "label": "tôle peinte en noir",
+      "color": "#1a1b1e",
+      "metalness": 0.15,
+      "roughness": 0.46,
+      "traitable": true
+    },
+    {
+      "id": "paint_acier",
+      "label": "acier zingué",
+      "color": "#9ea2a8",
+      "metalness": 0.8,
+      "roughness": 0.4,
+      "traitable": true
+    },
+    {
+      "id": "paint_noir",
+      "label": "peinture moteur noire",
+      "color": "#111113",
+      "metalness": 0.25,
+      "roughness": 0.4,
+      "traitable": true
+    },
+    {
+      "id": "paint_chrome",
+      "label": "chromé d'origine",
+      "color": "#eef0f3",
+      "metalness": 1,
+      "roughness": 0.07,
+      "traitable": true
+    },
+    {
+      "id": "paint_fils",
+      "label": "gaine noire",
+      "color": "#161616",
+      "metalness": 0,
+      "roughness": 0.55,
+      "traitable": true
+    },
+    {
+      "id": "paint_filtre",
+      "label": "coton huilé rouge",
+      "color": "#a3161a",
+      "metalness": 0,
+      "roughness": 0.9,
+      "traitable": false
+    }
+  ],
+  "familles": [
+    {
+      "id": "quatre-a-plat",
+      "label": "4 cylindres à plat refroidi par air",
+      "placeholder": true,
+      "orientation": 180,
+      "cadre": {
+        "halfLength": 0.34,
+        "halfWidth": 0.36,
+        "height": 1.02
+      },
+      "pieces": [
+        {
+          "id": "carters",
+          "label": "Carters",
+          "phrase": "les carters",
+          "noeuds": {
+            "carters": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "cylindres",
+          "label": "Cylindres",
+          "phrase": "les cylindres",
+          "noeuds": {
+            "cylindres_g": [
+              0,
+              0,
+              -0.13
+            ],
+            "cylindres_d": [
+              0,
+              0,
+              0.13
+            ]
+          }
+        },
+        {
+          "id": "culasses",
+          "label": "Culasses",
+          "phrase": "les culasses",
+          "noeuds": {
+            "culasses_g": [
+              0,
+              0,
+              -0.26
+            ],
+            "culasses_d": [
+              0,
+              0,
+              0.26
+            ]
+          }
+        },
+        {
+          "id": "cache_culbuteurs",
+          "label": "Cache-culbuteurs",
+          "phrase": "les cache-culbuteurs",
+          "noeuds": {
+            "cache_culbuteurs_g": [
+              0,
+              0,
+              -0.38
+            ],
+            "cache_culbuteurs_d": [
+              0,
+              0,
+              0.38
+            ]
+          }
+        },
+        {
+          "id": "toles",
+          "label": "Tôles de refroidissement",
+          "phrase": "les tôles de refroidissement",
+          "noeuds": {
+            "toles": [
+              0,
+              0.24,
+              0
+            ]
+          }
+        },
+        {
+          "id": "turbine",
+          "label": "Turbine",
+          "phrase": "la turbine",
+          "noeuds": {
+            "turbine": [
+              -0.26,
+              0.24,
+              0
+            ]
+          }
+        },
+        {
+          "id": "alternateur",
+          "label": "Alternateur",
+          "phrase": "l’alternateur",
+          "noeuds": {
+            "alternateur": [
+              0.06,
+              0.44,
+              0
+            ]
+          }
+        },
+        {
+          "id": "poulies",
+          "label": "Poulies",
+          "phrase": "les poulies",
+          "noeuds": {
+            "poulies": [
+              -0.24,
+              0.04,
+              0
+            ]
+          }
+        },
+        {
+          "id": "collecteur",
+          "label": "Collecteur d’admission",
+          "phrase": "le collecteur d’admission",
+          "noeuds": {
+            "collecteur": [
+              0.1,
+              0.16,
+              0
+            ]
+          }
+        },
+        {
+          "id": "carburateur",
+          "label": "Carburateur",
+          "phrase": "le carburateur",
+          "noeuds": {
+            "carburateur": [
+              0.12,
+              0.3,
+              0
+            ]
+          }
+        },
+        {
+          "id": "filtres",
+          "label": "Filtre à air",
+          "phrase": "le filtre à air",
+          "echange": {
+            "label": "Filtre à air",
+            "origine": "boitier",
+            "options": [
+              {
+                "id": "boitier",
+                "label": "Boîtier d’origine",
+                "hint": "Le gros bol à bain d’huile",
+                "noeuds": {
+                  "filtre_boitier": [
+                    0.12,
+                    0.5,
+                    0
+                  ]
+                }
+              },
+              {
+                "id": "cornets",
+                "label": "Cornet",
+                "hint": "Le carbu à l’air libre",
+                "noeuds": {
+                  "filtre_cornet": [
+                    0.12,
+                    0.5,
+                    0
+                  ]
+                }
+              },
+              {
+                "id": "coniques",
+                "label": "Filtre conique",
+                "hint": "Un cône en coton rouge",
+                "noeuds": {
+                  "filtre_conique": [
+                    0.12,
+                    0.5,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "distributeur",
+          "label": "Distributeur et bobine",
+          "phrase": "le distributeur",
+          "noeuds": {
+            "distributeur": [
+              0.12,
+              0.3,
+              -0.12
+            ]
+          }
+        },
+        {
+          "id": "fils",
+          "label": "Fils de bougie",
+          "phrase": "les fils de bougie",
+          "traitements": [
+            "brut",
+            "peinture"
+          ],
+          "noeuds": {
+            "fils": [
+              0.06,
+              0.4,
+              0
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "bicylindre-v",
+      "label": "bicylindre en V refroidi par air",
+      "placeholder": true,
+      "orientation": 0,
+      "cadre": {
+        "halfLength": 0.27,
+        "halfWidth": 0.26,
+        "height": 0.92
+      },
+      "pieces": [
+        {
+          "id": "carters",
+          "label": "Carters",
+          "phrase": "les carters",
+          "noeuds": {
+            "carters": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "cylindres",
+          "label": "Cylindres",
+          "phrase": "les cylindres",
+          "noeuds": {
+            "cylindre_avant": [
+              0.054,
+              0.129,
+              0
+            ],
+            "cylindre_arriere": [
+              -0.054,
+              0.129,
+              0
+            ]
+          }
+        },
+        {
+          "id": "culasses",
+          "label": "Culasses",
+          "phrase": "les culasses",
+          "noeuds": {
+            "culasse_avant": [
+              0.099,
+              0.24,
+              0
+            ],
+            "culasse_arriere": [
+              -0.099,
+              0.24,
+              0
+            ]
+          }
+        },
+        {
+          "id": "cache_culbuteurs",
+          "label": "Cache-culbuteurs",
+          "phrase": "les cache-culbuteurs",
+          "noeuds": {
+            "cache_culbuteurs_avant": [
+              0.145,
+              0.351,
+              0
+            ],
+            "cache_culbuteurs_arriere": [
+              -0.145,
+              0.351,
+              0
+            ]
+          }
+        },
+        {
+          "id": "carter_distribution",
+          "label": "Carter de distribution",
+          "phrase": "le carter de distribution",
+          "noeuds": {
+            "carter_distribution": [
+              0,
+              0,
+              0.2
+            ]
+          }
+        },
+        {
+          "id": "carter_primaire",
+          "label": "Carter primaire",
+          "phrase": "le carter primaire",
+          "noeuds": {
+            "carter_primaire": [
+              0,
+              0,
+              -0.22
+            ]
+          }
+        },
+        {
+          "id": "collecteur",
+          "label": "Collecteur d’admission",
+          "phrase": "le collecteur d’admission",
+          "noeuds": {
+            "collecteur": [
+              0,
+              0.12,
+              0.12
+            ]
+          }
+        },
+        {
+          "id": "carburateur",
+          "label": "Carburateur",
+          "phrase": "le carburateur",
+          "noeuds": {
+            "carburateur": [
+              0,
+              0.1,
+              0.24
+            ]
+          }
+        },
+        {
+          "id": "filtres",
+          "label": "Filtre à air",
+          "phrase": "le filtre à air",
+          "echange": {
+            "label": "Filtre à air",
+            "origine": "boitier",
+            "options": [
+              {
+                "id": "boitier",
+                "label": "Filtre rond d’origine",
+                "hint": "Le gros couvercle rond chromé",
+                "noeuds": {
+                  "filtre_boitier": [
+                    0,
+                    0.1,
+                    0.4
+                  ]
+                }
+              },
+              {
+                "id": "cornets",
+                "label": "Cornet",
+                "hint": "Le carbu à l’air libre",
+                "noeuds": {
+                  "filtre_cornet": [
+                    0,
+                    0.1,
+                    0.4
+                  ]
+                }
+              },
+              {
+                "id": "coniques",
+                "label": "Filtre conique",
+                "hint": "Un cône en coton rouge",
+                "noeuds": {
+                  "filtre_conique": [
+                    0,
+                    0.1,
+                    0.4
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "filtre_huile",
+          "label": "Filtre à huile",
+          "phrase": "le filtre à huile",
+          "noeuds": {
+            "filtre_huile": [
+              0.2,
+              -0.06,
+              0
+            ]
+          }
+        },
+        {
+          "id": "fils",
+          "label": "Bobine et fils de bougie",
+          "phrase": "les fils de bougie",
+          "traitements": [
+            "brut",
+            "peinture"
+          ],
+          "noeuds": {
+            "fils": [
+              -0.12,
+              0.16,
+              0.06
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "quatre-en-ligne-moto",
+      "label": "4 cylindres en ligne",
+      "placeholder": true,
+      "orientation": 0,
+      "cadre": {
+        "halfLength": 0.3,
+        "halfWidth": 0.3,
+        "height": 1.0
+      },
+      "pieces": [
+        {
+          "id": "carters",
+          "label": "Carters",
+          "phrase": "les carters",
+          "noeuds": {
+            "carters": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "carter_huile",
+          "label": "Carter d’huile",
+          "phrase": "le carter d’huile",
+          "noeuds": {
+            "carter_huile": [
+              0,
+              -0.08,
+              0
+            ]
+          }
+        },
+        {
+          "id": "bloc",
+          "label": "Bloc cylindres",
+          "phrase": "le bloc cylindres",
+          "noeuds": {
+            "bloc": [
+              0.06,
+              0.104,
+              0
+            ]
+          }
+        },
+        {
+          "id": "culasse",
+          "label": "Culasse",
+          "phrase": "la culasse",
+          "noeuds": {
+            "culasse": [
+              0.12,
+              0.208,
+              0
+            ]
+          }
+        },
+        {
+          "id": "cache_culbuteurs",
+          "label": "Couvre-culasse",
+          "phrase": "le couvre-culasse",
+          "noeuds": {
+            "cache_culbuteurs": [
+              0.18,
+              0.312,
+              0
+            ]
+          }
+        },
+        {
+          "id": "bobines",
+          "label": "Bobines",
+          "phrase": "les bobines",
+          "traitements": [
+            "brut",
+            "peinture"
+          ],
+          "noeuds": {
+            "bobines": [
+              0.23,
+              0.4,
+              0
+            ]
+          }
+        },
+        {
+          "id": "collecteur",
+          "label": "Collecteur d’échappement",
+          "phrase": "le collecteur d’échappement",
+          "noeuds": {
+            "collecteur": [
+              0.16,
+              -0.02,
+              0.1
+            ]
+          }
+        },
+        {
+          "id": "papillons",
+          "label": "Corps de papillon",
+          "phrase": "les corps de papillon",
+          "noeuds": {
+            "papillons": [
+              -0.14,
+              0.12,
+              0
+            ]
+          }
+        },
+        {
+          "id": "filtres",
+          "label": "Filtres à air",
+          "phrase": "les filtres à air",
+          "echange": {
+            "label": "Admission",
+            "origine": "boitier",
+            "options": [
+              {
+                "id": "boitier",
+                "label": "Boîte à air d’origine",
+                "hint": "Sous le réservoir, bien à l’abri",
+                "noeuds": {
+                  "filtre_boitier": [
+                    -0.24,
+                    0.24,
+                    0
+                  ]
+                }
+              },
+              {
+                "id": "cornets",
+                "label": "Cornets",
+                "hint": "Quatre pavillons chromés",
+                "noeuds": {
+                  "filtre_cornet": [
+                    -0.24,
+                    0.24,
+                    0
+                  ]
+                }
+              },
+              {
+                "id": "coniques",
+                "label": "Filtres coniques",
+                "hint": "Quatre cônes en coton rouge",
+                "noeuds": {
+                  "filtre_conique": [
+                    -0.24,
+                    0.24,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "carter_alternateur",
+          "label": "Carter d’alternateur",
+          "phrase": "le carter d’alternateur",
+          "noeuds": {
+            "carter_alternateur": [
+              0,
+              0,
+              -0.16
+            ]
+          }
+        },
+        {
+          "id": "carter_embrayage",
+          "label": "Carter d’embrayage",
+          "phrase": "le carter d’embrayage",
+          "noeuds": {
+            "carter_embrayage": [
+              0,
+              0,
+              0.18
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "v8",
+      "label": "V8 à 90°",
+      "placeholder": true,
+      "orientation": 0,
+      "cadre": {
+        "halfLength": 0.36,
+        "halfWidth": 0.3,
+        "height": 1.05
+      },
+      "pieces": [
+        {
+          "id": "bloc",
+          "label": "Bloc",
+          "phrase": "le bloc",
+          "noeuds": {
+            "bloc": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "carter_huile",
+          "label": "Carter d’huile",
+          "phrase": "le carter d’huile",
+          "noeuds": {
+            "carter_huile": [
+              0,
+              -0.09,
+              0
+            ]
+          }
+        },
+        {
+          "id": "culasses",
+          "label": "Culasses",
+          "phrase": "les culasses",
+          "noeuds": {
+            "culasses_g": [
+              0,
+              0.099,
+              -0.099
+            ],
+            "culasses_d": [
+              0,
+              0.099,
+              0.099
+            ]
+          }
+        },
+        {
+          "id": "cache_culbuteurs",
+          "label": "Couvre-culasses",
+          "phrase": "les couvre-culasses",
+          "noeuds": {
+            "cache_culbuteurs_g": [
+              0,
+              0.191,
+              -0.191
+            ],
+            "cache_culbuteurs_d": [
+              0,
+              0.191,
+              0.191
+            ]
+          }
+        },
+        {
+          "id": "bobines",
+          "label": "Bobines",
+          "phrase": "les bobines",
+          "traitements": [
+            "brut",
+            "peinture"
+          ],
+          "noeuds": {
+            "bobines_g": [
+              0,
+              0.269,
+              -0.269
+            ],
+            "bobines_d": [
+              0,
+              0.269,
+              0.269
+            ]
+          }
+        },
+        {
+          "id": "collecteur",
+          "label": "Collecteur d’admission",
+          "phrase": "le collecteur d’admission",
+          "noeuds": {
+            "collecteur": [
+              0,
+              0.32,
+              0
+            ]
+          }
+        },
+        {
+          "id": "filtres",
+          "label": "Filtre à air",
+          "phrase": "le filtre à air",
+          "echange": {
+            "label": "Admission",
+            "origine": "boitier",
+            "options": [
+              {
+                "id": "boitier",
+                "label": "Boîte à air d’origine",
+                "hint": "Fermée, devant le papillon",
+                "noeuds": {
+                  "filtre_boitier": [
+                    0.26,
+                    0.32,
+                    0
+                  ]
+                }
+              },
+              {
+                "id": "cornets",
+                "label": "Cornet",
+                "hint": "Un grand pavillon chromé",
+                "noeuds": {
+                  "filtre_cornet": [
+                    0.26,
+                    0.32,
+                    0
+                  ]
+                }
+              },
+              {
+                "id": "coniques",
+                "label": "Filtre conique",
+                "hint": "Un gros cône en coton rouge",
+                "noeuds": {
+                  "filtre_conique": [
+                    0.26,
+                    0.32,
+                    0
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "id": "echappement",
+          "label": "Collecteurs d’échappement",
+          "phrase": "les collecteurs d’échappement",
+          "noeuds": {
+            "echappement_g": [
+              0,
+              -0.02,
+              -0.2
+            ],
+            "echappement_d": [
+              0,
+              -0.02,
+              0.2
+            ]
+          }
+        },
+        {
+          "id": "poulies",
+          "label": "Poulies",
+          "phrase": "les poulies",
+          "noeuds": {
+            "poulies": [
+              0.24,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "id": "alternateur",
+          "label": "Alternateur",
+          "phrase": "l’alternateur",
+          "noeuds": {
+            "alternateur": [
+              0.12,
+              -0.04,
+              0.2
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

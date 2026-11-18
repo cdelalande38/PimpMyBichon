@@ -103,6 +103,11 @@ export interface EngineSpec {
    * `npm run sons:build`). Absente, ou sans sons fabriqués : le moteur reste muet.
    */
   sound?: string;
+  /**
+   * Modèle du moteur sur l'établi (§ 5.11) : une famille du catalogue public/assets/shared/engines/
+   * (src/data/moteurs.ts). Absent : l'entrée « Moteur » dit que le modèle reste à faire.
+   */
+  model?: string;
 }
 
 /**
@@ -413,12 +418,20 @@ export interface PieceSupports {
   bend?: CrownProfile;
 }
 
+/** Ce qu'un poste de pièce montée permet sur ce véhicule, quelle que soit sa pose. */
+interface PieceChoices {
+  /** Options permises (identifiants du catalogue) ; absent : toutes celles que la pose accepte. */
+  options?: readonly string[];
+  /** Option d'origine ; absente : aucune pièce. */
+  default?: string;
+}
+
 /**
- * Un poste de pièce montée (catalogue public/assets/shared/pieces/) : le bord de fuite de la surface
- * de pose, sur l'axe (becquet, queue de canard s'y posent), sa normale, sa largeur utile ; les pieds
- * d'un aileron sur supports ; les options permises. Absent du manifeste : le poste n'existe pas.
+ * Un poste de pièce montée sur une surface (catalogue public/assets/shared/pieces/) : le bord de fuite
+ * de la surface de pose, sur l'axe (becquet, queue de canard s'y posent), sa normale, sa largeur
+ * utile ; les pieds d'un aileron sur supports ; les options permises.
  */
-export interface PieceMount {
+export interface PieceSurfaceMount extends PieceChoices {
   anchor: VehiclePoint;
   normal: VehiclePoint;
   /** Largeur utile au bord de fuite, en mètres. */
@@ -427,11 +440,25 @@ export interface PieceMount {
   bend?: CrownProfile;
   /** Absent : les options sur supports ne sont pas permises. */
   supports?: PieceSupports;
-  /** Options permises (identifiants du catalogue) ; absent : toutes celles que la surface accepte. */
-  options?: readonly string[];
-  /** Option d'origine ; absente : aucune pièce. */
-  default?: string;
 }
+
+/**
+ * Un poste de pièce posée le long d'une ligne de la caisse (kit carrosserie : lame avant, jupes,
+ * diffuseur ; src/data/pieces.ts, fitRail). `rail` : des points sur la face extérieure, en bas de
+ * caisse, à quelques centimètres l'un de l'autre. Pièce sur l'axe (lame, diffuseur) : du point sur
+ * l'axe (z = 0) vers un bout, la pièce prend aussi le symétrique ; paire (jupes, poste `mirror` du
+ * catalogue) : sur le flanc droit, de l'avant vers l'arrière, la pièce gauche est son miroir. La pièce
+ * descend sous la ligne au plus jusqu'au bas de caisse (`wheels.floor`) et monte au plus de `rise` contre
+ * la face (là où elle reste d'aplomb).
+ */
+export interface PieceRailMount extends PieceChoices {
+  rail: readonly VehiclePoint[];
+  /** Hauteur de face d'aplomb au-dessus de la ligne, en mètres. */
+  rise: number;
+}
+
+/** Un poste de pièce montée : sur une surface ou le long d'une ligne. Absent du manifeste : le poste n'existe pas. */
+export type PieceMount = PieceSurfaceMount | PieceRailMount;
 
 export interface VehicleManifest {
   /** Égal au nom du dossier. */
@@ -482,7 +509,7 @@ export interface VehicleManifest {
   driver?: DriverSpec;
   /** Zones de livrée où se posent les stickers (src/data/stickersCalques.ts) ; absent : pas de stickers. */
   livery?: readonly LiveryZone[];
-  /** Pièces montées sur la caisse, poste par poste (aileron…, src/data/pieces.ts) ; absent : aucune. */
+  /** Pièces montées sur la caisse, poste par poste (aileron, kit carrosserie…, src/data/pieces.ts) ; absent : aucune. */
   pieces?: Readonly<Record<string /* id de poste */, PieceMount>>;
   /** Sorties d'échappement (flammes, finition) ; absent : ni flammes ni finition. */
   exhaust?: ExhaustSpec;

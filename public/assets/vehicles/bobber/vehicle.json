@@ -67,7 +67,8 @@
     "feed": "carburateur",
     "boost": "atmo",
     "power": 67,
-    "sound": "bicylindre-v"
+    "sound": "bicylindre-v",
+    "model": "bicylindre-v"
   },
   "performance": { "mass": 365, "topKmh": 160, "grip": 6.5, "transmission": "propulsion" },
   "driver": { "reach": 0.93, "leanExtra": 0.18, "hangOff": 0.02 },
