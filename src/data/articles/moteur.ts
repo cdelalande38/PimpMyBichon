@@ -4,10 +4,12 @@
 // les véhicules ; chaque option d'échange qui n'est pas d'origine aussi (les filtres à air), quelle que
 // soit la famille du moteur. Identifiants : src/data/moteurs.ts (articleTraitement, articleEchange).
 // Repères de prix : une course d'un tour rapporte 40 $ à 125 $ (src/data/economie.ts) ; le noir satiné
-// se paie en une course, le chrome en trois à six.
+// se paie en une course, le chrome en trois à six. Les niveaux d'optimisation (prix et gains dans
+// src/data/optimisation.ts) suivent la même règle : un article par niveau, pour tous les moteurs.
 
 import type { ArticleBoutique } from '../boutique.ts';
 import { articleEchange, articleTraitement, traitementById, type TraitementId } from '../moteurs.ts';
+import { articleNiveau, OPTIMISATIONS } from '../optimisation.ts';
 
 /** Prix de chaque traitement payant, en dollars. */
 export const PRIX_TRAITEMENTS: Readonly<Partial<Record<TraitementId, number>>> = Object.freeze({
@@ -41,4 +43,15 @@ export const ARTICLES_MOTEUR: readonly ArticleBoutique[] = [
     description: DESCRIPTIONS[id as TraitementId] ?? '',
   })),
   ...ECHANGES_PAYANTS.map((item) => ({ id: articleEchange(item.piece, item.option), famille: 'piece' as const, label: item.label, prix: item.prix, description: item.description })),
+  // Optimisation (src/data/optimisation.ts) : chaque niveau au-dessus de l'origine est un article, qui
+  // vaut pour la même sorte de pièce sur tous les moteurs (les culasses de la Cox comme celles du V8).
+  ...Object.values(OPTIMISATIONS).flatMap((genre) =>
+    genre.niveaux.map((niveau) => ({
+      id: articleNiveau(genre.id, niveau.id),
+      famille: 'piece' as const,
+      label: `${genre.label} · ${niveau.label}`,
+      prix: niveau.prix,
+      description: `${niveau.effet} + ${niveau.puissance} % de puissance, sur tous tes moteurs.`,
+    })),
+  ),
 ];

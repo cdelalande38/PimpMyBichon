@@ -1,6 +1,7 @@
 // État de l'établi moteur, partagé entre le panneau (src/ui/moteur/MoteurPanel.tsx) et la scène du
 // garage (src/scene/moteur/Etabli.tsx, GarageCanvas.tsx) : l'écart de la vue éclatée, la pièce choisie
-// et le haut du panneau à l'écran (le moteur se cadre au-dessus, comme une zone de stickers). Rien n'est
+// (surlignée), celle dont le panneau montre les actions (cadrée de près) et le haut du panneau à
+// l'écran (le moteur se cadre au-dessus, comme une zone de stickers). Rien n'est
 // sauvegardé : la séance seulement. L'établi est ouvert tant que l'entrée Mécanique · Moteur est à
 // l'écran et que le moteur du véhicule a un modèle (src/data/moteurs.ts, engine.model).
 
@@ -16,9 +17,12 @@ export interface EtabliState {
   piece: string | null;
   /** Haut du panneau à l'écran (le dock qui le porte), en pixels CSS ; `null` : pas mesuré. */
   coverTop: number | null;
+  /** Pièce dont le panneau montre les actions : la caméra la cadre (Etabli.tsx) ; `null` : tout le moteur. */
+  cadree: string | null;
   setEclate: (value: number) => void;
   setPiece: (piece: string | null) => void;
   setCoverTop: (top: number | null) => void;
+  setCadree: (piece: string | null) => void;
 }
 
 /** Écart en deçà duquel un panneau qui bouge un peu ne recadre pas le moteur, en pixels CSS. */
@@ -28,8 +32,10 @@ export const useEtabli = create<EtabliState>()((set) => ({
   eclate: 0,
   piece: null,
   coverTop: null,
+  cadree: null,
   setEclate: (value) => set({ eclate: Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0 }),
   setPiece: (piece) => set({ piece }),
+  setCadree: (cadree) => set({ cadree }),
   setCoverTop: (top) =>
     set((state) => {
       if (top === state.coverTop) return state;

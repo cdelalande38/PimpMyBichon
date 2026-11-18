@@ -46,7 +46,8 @@ function DockHandle() {
 /** Libellé d'un niveau dans le fil : la zone et son étape, ou le nuancier. */
 function levelCrumbs(level: DockLevel, vehicle: VehicleManifest): string[] {
   // Sortie : le choix qui a mené à l'étape (« Libre », « Monaco », « Le circuit »).
-  if (level.kind === 'sortie') return [level.libelle];
+  // Moteur, Carrosserie : l'élément choisi (« Culasses », « Jupes »).
+  if (level.kind === 'sortie' || level.kind === 'element') return [level.libelle];
   if (level.kind === 'zone') {
     const zone = vehicle.zones.find((item) => item.id === level.zone);
     return [zone?.label ?? level.zone, level.step === 'finition' ? 'Finition' : 'Couleur'];

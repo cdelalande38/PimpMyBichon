@@ -206,7 +206,8 @@ footer.dock[data-taille='compact'] .pieces .pieces-hint {
   display: none;
 }
 
-/* Entrée à plusieurs postes (Custom · Carrosserie) : la rangée des postes au-dessus du panneau du poste. */
+/* Entrée à plusieurs postes (Custom · Carrosserie) : la rangée des postes, puis, à l'étape suivante, le
+   panneau du poste choisi à sa place. */
 .pieces-groupe {
   display: flex;
   flex-direction: column;

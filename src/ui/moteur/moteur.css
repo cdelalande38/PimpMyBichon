@@ -1,6 +1,8 @@
-/* Mécanique · Moteur (l'établi) : le curseur de la vue éclatée, la rangée des pièces, celle des
-   traitements de la pièce choisie (cadenas et prix pour ce qui s'achète), les teintes, l'échange et
-   « D'origine ». Toute commande offre 48 px au doigt ; les tailles suivent le réglage du texte (rem). */
+/* Mécanique · Moteur (l'établi), en deux étapes : la pièce (curseur de la vue éclatée, rangée des
+   pièces, total du moteur, « D'origine »), puis ses actions en volets (finition : traitements et
+   teintes ; optimisation : niveaux et gains ; échange), cadenas et prix pour ce qui s'achète. Toute
+   commande offre 48 px au doigt ; les tailles suivent le réglage du texte (rem). Les règles visent
+   `.moteur …` : elles ne dépendent pas de l'ordre des feuilles dans le paquet. */
 
 .moteur {
   display: flex;
@@ -155,11 +157,106 @@
 }
 
 .moteur-note {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.125rem;
   min-width: 0;
   margin: 0;
   color: var(--mute);
   font-size: 0.75rem;
+}
+
+/* Total du moteur, à l'étape « Pièce » : ce que les pièces optimisées lui donnent. */
+.moteur .moteur-total {
+  color: var(--chrome);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.moteur .moteur-total b {
+  color: var(--ambre);
+}
+
+/* Rappel du niveau d'optimisation dans la liste des pièces. */
+.moteur .chip .moteur-piece-niveau {
+  color: var(--ambre);
+}
+
+.moteur .chip[aria-pressed='true'] .moteur-piece-niveau {
+  color: #7a4a00;
+}
+
+/* Volets des actions d'une pièce : une rangée de boutons qui se partagent la largeur (et passent à la
+   ligne faute de place, colonne étroite du paysage ou très grand texte). */
+.moteur .moteur-volets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.moteur .moteur-volet {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.0625rem;
+  min-width: max-content;
+  min-height: var(--tap);
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--edge);
+  border-bottom-width: 3px;
+  border-radius: 0.5rem;
+  background: var(--panel);
+  color: var(--chrome);
+  font: inherit;
+  text-align: left;
+}
+
+.moteur .moteur-volet b {
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+}
+
+.moteur .moteur-volet small {
+  color: var(--mute);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.moteur .moteur-volet[aria-pressed='true'] {
+  border-color: var(--ambre);
+  color: var(--ambre);
+}
+
+.moteur .moteur-rubrique {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Niveaux d'optimisation : le gain d'abord (ce qu'on gagne avant d'acheter), puis le prix. */
+.moteur .chip .moteur-gain {
+  color: var(--ok);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.moteur .chip[aria-pressed='true'] .moteur-gain {
+  color: #1d5b35;
+}
+
+.moteur .moteur-niveau[data-verrou='ferme'] b {
+  opacity: 0.8;
+}
+
+.moteur .moteur-effet {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.8125rem;
 }
 
 .moteur-head > .moteur-reset {

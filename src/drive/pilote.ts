@@ -224,7 +224,8 @@ export interface PerformanceRoute extends DrivePerformance {
 
 /**
  * Performances d'un véhicule pour la route, tirées de son manifeste : puissance (`engine.power`,
- * préparation du build comprise : reprogrammation, carburation), masse, vitesse de pointe,
+ * préparation du build comprise : reprogrammation, carburation, et les pièces optimisées sur l'établi,
+ * src/data/optimisation.ts, que computePrep cumule), masse, vitesse de pointe,
  * adhérence, boîte ; un kit nitro monté grossit la poussée du NOS. Ce qui manque prend la valeur
  * d'un véhicule moyen de son genre. La vitesse de pointe est bornée par la boîte. Les pneus, leur
  * largeur et l'assiette du build (`preparation`) jouent selon la météo.

@@ -3,6 +3,7 @@
 // aucun passage au banc. Rien n'est écrit par véhicule : tout se déduit de `EngineSpec`.
 // Les choix vivent dans le build, poste par poste (`Build.parts`), sous les identifiants ci-dessous.
 
+import { coefficientPieces } from './optimisation.ts';
 import type { Build, EngineSpec, VehicleManifest } from './vehicleTypes.ts';
 
 export type Boost = EngineSpec['boost'];
@@ -143,17 +144,8 @@ export interface EnginePrep {
   withNitro: number;
 }
 
-/**
- * Chiffres de la fiche : puissance d'origine, gain, puissance préparée (arrondis au cheval) et,
- * à part, le nitro. `null` : pas de moteur déclaré.
- */
-export function computePrep(
-  vehicle: Pick<VehicleManifest, 'engine' | 'kind'>,
-  build: Pick<Build, 'parts'> | undefined,
-): EnginePrep | null {
-  const { engine, kind } = vehicle;
-  if (!engine || !Number.isFinite(engine.power) || engine.power <= 0) return null;
-  const origin = Math.round(engine.power);
+/** Coefficient et nitro des postes de la fiche (sans les pièces optimisées de l'établi). */
+function prepOf(engine: EngineSpec, kind: VehicleKind, build: Pick<Build, 'parts'> | undefined): { ratio: number; nitro: number } {
   let ratio = 1;
   let nitro = 0;
   for (const slot of slotsFor(engine)) {
@@ -162,8 +154,40 @@ export function computePrep(
     if (slot.effect === 'ratio') ratio *= ratioOf(option, engine.boost);
     else nitro += option.shot?.[kind] ?? 0;
   }
-  const prepared = Math.round(engine.power * ratio);
+  return { ratio, nitro };
+}
+
+/**
+ * Chiffres de la fiche : puissance d'origine, gain, puissance préparée (arrondis au cheval) et,
+ * à part, le nitro. `null` : pas de moteur déclaré. Les pièces optimisées sur l'établi (Mécanique ·
+ * Moteur, src/data/optimisation.ts) multiplient la puissance préparée : gain et total les comprennent.
+ */
+export function computePrep(
+  vehicle: Pick<VehicleManifest, 'engine' | 'kind'>,
+  build: Pick<Build, 'parts'> | undefined,
+): EnginePrep | null {
+  const { engine, kind } = vehicle;
+  if (!engine || !Number.isFinite(engine.power) || engine.power <= 0) return null;
+  const origin = Math.round(engine.power);
+  const { ratio, nitro } = prepOf(engine, kind, build);
+  const prepared = Math.round(engine.power * ratio * coefficientPieces(engine, build));
   return { origin, gain: prepared - origin, prepared, nitro, withNitro: prepared + nitro };
+}
+
+/**
+ * Part des pièces optimisées de l'établi dans la puissance : leur gain en pour cent, la puissance sur
+ * laquelle il s'applique (préparation comprise, en chevaux, non arrondie) et les chevaux qu'il apporte.
+ * `null` : pas de moteur déclaré.
+ */
+export function gainPieces(
+  vehicle: Pick<VehicleManifest, 'engine' | 'kind'>,
+  build: Pick<Build, 'parts'> | undefined,
+): { pourcent: number; base: number; chevaux: number } | null {
+  const { engine, kind } = vehicle;
+  if (!engine || !Number.isFinite(engine.power) || engine.power <= 0) return null;
+  const base = engine.power * prepOf(engine, kind, build).ratio;
+  const coefficient = coefficientPieces(engine, build);
+  return { pourcent: Math.round((coefficient - 1) * 100), base, chevaux: Math.round(base * coefficient) - Math.round(base) };
 }
 
 /** Libellés courts du moteur, pour la ligne d'en-tête de la fiche. */

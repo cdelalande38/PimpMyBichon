@@ -115,6 +115,7 @@
           "id": "culasses",
           "label": "Culasses",
           "phrase": "les culasses",
+          "optimisation": "culasses",
           "noeuds": {
             "culasses_g": [
               0,
@@ -197,6 +198,7 @@
           "id": "collecteur",
           "label": "Collecteur d’admission",
           "phrase": "le collecteur d’admission",
+          "optimisation": "admission",
           "noeuds": {
             "collecteur": [
               0.1,
@@ -209,6 +211,7 @@
           "id": "carburateur",
           "label": "Carburateur",
           "phrase": "le carburateur",
+          "optimisation": "carburation",
           "noeuds": {
             "carburateur": [
               0.12,
@@ -221,6 +224,7 @@
           "id": "filtres",
           "label": "Filtre à air",
           "phrase": "le filtre à air",
+          "optimisation": "filtre",
           "echange": {
             "label": "Filtre à air",
             "origine": "boitier",
@@ -268,6 +272,7 @@
           "id": "distributeur",
           "label": "Distributeur et bobine",
           "phrase": "le distributeur",
+          "optimisation": "allumage",
           "noeuds": {
             "distributeur": [
               0.12,
@@ -338,6 +343,7 @@
           "id": "culasses",
           "label": "Culasses",
           "phrase": "les culasses",
+          "optimisation": "culasses",
           "noeuds": {
             "culasse_avant": [
               0.099,
@@ -396,6 +402,7 @@
           "id": "collecteur",
           "label": "Collecteur d’admission",
           "phrase": "le collecteur d’admission",
+          "optimisation": "admission",
           "noeuds": {
             "collecteur": [
               0,
@@ -408,6 +415,7 @@
           "id": "carburateur",
           "label": "Carburateur",
           "phrase": "le carburateur",
+          "optimisation": "carburation",
           "noeuds": {
             "carburateur": [
               0,
@@ -420,6 +428,7 @@
           "id": "filtres",
           "label": "Filtre à air",
           "phrase": "le filtre à air",
+          "optimisation": "filtre",
           "echange": {
             "label": "Filtre à air",
             "origine": "boitier",
@@ -479,6 +488,7 @@
           "id": "fils",
           "label": "Bobine et fils de bougie",
           "phrase": "les fils de bougie",
+          "optimisation": "allumage",
           "traitements": [
             "brut",
             "peinture"
@@ -544,6 +554,7 @@
           "id": "culasse",
           "label": "Culasse",
           "phrase": "la culasse",
+          "optimisation": "culasses",
           "noeuds": {
             "culasse": [
               0.12,
@@ -568,6 +579,7 @@
           "id": "bobines",
           "label": "Bobines",
           "phrase": "les bobines",
+          "optimisation": "allumage",
           "traitements": [
             "brut",
             "peinture"
@@ -584,6 +596,7 @@
           "id": "collecteur",
           "label": "Collecteur d’échappement",
           "phrase": "le collecteur d’échappement",
+          "optimisation": "echappement",
           "noeuds": {
             "collecteur": [
               0.16,
@@ -596,6 +609,7 @@
           "id": "papillons",
           "label": "Corps de papillon",
           "phrase": "les corps de papillon",
+          "optimisation": "admission",
           "noeuds": {
             "papillons": [
               -0.14,
@@ -608,6 +622,7 @@
           "id": "filtres",
           "label": "Filtres à air",
           "phrase": "les filtres à air",
+          "optimisation": "filtre",
           "echange": {
             "label": "Admission",
             "origine": "boitier",
@@ -716,6 +731,7 @@
           "id": "culasses",
           "label": "Culasses",
           "phrase": "les culasses",
+          "optimisation": "culasses",
           "noeuds": {
             "culasses_g": [
               0,
@@ -750,6 +766,7 @@
           "id": "bobines",
           "label": "Bobines",
           "phrase": "les bobines",
+          "optimisation": "allumage",
           "traitements": [
             "brut",
             "peinture"
@@ -771,6 +788,7 @@
           "id": "collecteur",
           "label": "Collecteur d’admission",
           "phrase": "le collecteur d’admission",
+          "optimisation": "admission",
           "noeuds": {
             "collecteur": [
               0,
@@ -783,6 +801,7 @@
           "id": "filtres",
           "label": "Filtre à air",
           "phrase": "le filtre à air",
+          "optimisation": "filtre",
           "echange": {
             "label": "Admission",
             "origine": "boitier",
@@ -830,6 +849,7 @@
           "id": "echappement",
           "label": "Collecteurs d’échappement",
           "phrase": "les collecteurs d’échappement",
+          "optimisation": "echappement",
           "noeuds": {
             "echappement_g": [
               0,

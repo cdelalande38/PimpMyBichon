@@ -361,6 +361,7 @@ Le combi a un deuxième atelier : **l'intérieur**. On y entre par la porte lat�
 - Un modèle de moteur **par famille** (4 à plat partagé par la Cox et le combi, bicylindre en V, V8, 4 en ligne de moto…), déclaré dans le manifeste du véhicule.
 - **Toute pièce sur l'établi** : un appui sur une pièce montée (jante, pare-chocs, guidon, échappement, rétroviseur…) propose « sur l'établi ». La pièce s'isole, et reçoit couleur et finition propres, indépendantes de la carrosserie.
 - Ce n'est pas une simulation mécanique : pas de pannes, pas de réglages, pas de calcul de puissance.
+- **Choisir, puis agir ; optimiser** (retour du 18 novembre 2026) : l'entrée va en deux étapes qui se remplacent, la liste des pièces (vue éclatée, rappel du traitement et du niveau, total du moteur), puis les actions de la pièce choisie, en volets (finition, optimisation, échange), la caméra cadrée sur elle ; Custom · Carrosserie fait de même (élément, puis ses options). Les pièces d'admission, de culasse, d'échappement, d'allumage et de carburation ont un ou deux niveaux d'optimisation payants (noms d'atelier inventés, `src/data/optimisation.ts`) : quelques pour cent chacun, 14 à 15 % au plus par moteur, multipliés à la Préparation et lus par la conduite. Seule exception à la puce précédente : des chiffres d'atelier pour le plaisir, sans simulation ; les temps de référence restent ceux du véhicule d'origine.
 
 ### 5.12 Télé du garage (option, décidée le 14 novembre 2026)
 

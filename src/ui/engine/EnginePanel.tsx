@@ -10,6 +10,7 @@ import {
   ORIGIN_LABEL,
   chosenOption,
   computePrep,
+  gainPieces,
   resultLabelFor,
   slotsFor,
   type PrepSlot,
@@ -78,6 +79,7 @@ export function EnginePanel() {
   const vehicle = resolveVehicle(current);
   const engine = vehicle?.engine;
   const prep = vehicle ? computePrep(vehicle, builds[vehicle.id]) : null;
+  const pieces = vehicle ? gainPieces(vehicle, builds[vehicle.id]) : null;
 
   if (!vehicle || !engine || !prep) {
     return (
@@ -119,6 +121,13 @@ export function EnginePanel() {
           <dd data-testid="moteur-prepare">{hp(prep.prepared)}</dd>
         </div>
       </dl>
+
+      {/* Pièces optimisées sur l'établi (Mécanique · Moteur) : comprises dans le gain et le total. */}
+      {pieces && pieces.pourcent > 0 && (
+        <p className="engine-note engine-pieces" data-testid="moteur-pieces">
+          Dont pièces du moteur&nbsp;: <strong>{`+${NBSP}${pieces.pourcent}${NBSP}%`}</strong>, soit {`+${NBSP}${hp(pieces.chevaux)}`}, réglées dans Moteur.
+        </p>
+      )}
 
       {prep.nitro > 0 && (
         <p className="engine-nitro" data-testid="moteur-nitro">

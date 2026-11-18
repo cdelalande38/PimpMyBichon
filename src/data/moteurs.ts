@@ -6,7 +6,9 @@
 // leurs vecteurs d'éclatement, ce qui s'échange (filtres à air) et le cadre de la caméra ; le manifeste
 // d'un véhicule nomme la famille de son moteur (engine.model). Ce fichier résout, sans rien connaître
 // d'aucun véhicule ni d'aucune famille, le traitement et l'option de chaque pièce (pur, testé sans
-// navigateur). Ce n'est pas une simulation mécanique : rien ici ne change le son ni la puissance.
+// navigateur). Ce n'est pas une simulation mécanique : rien ici ne change le son ni la puissance ; les
+// niveaux d'optimisation d'une pièce (genre `optimisation` du catalogue), qui eux comptent pour la
+// puissance, sont dans src/data/optimisation.ts.
 //
 // Dans le build, sans champ nouveau : parts.moteur_<pièce> pour un échange (l'option ; l'origine n'est
 // pas écrite), partPaints.moteur_<pièce> pour un traitement. Un Paint ne sait porter qu'une finition de
@@ -117,6 +119,14 @@ export interface Echange {
   options: readonly EchangeOption[];
 }
 
+/**
+ * Genres d'optimisation d'une pièce (vague U, retour du 18 novembre 2026 : « il faudra pouvoir optimiser
+ * les pièces moteur aussi ») : le catalogue dit lequel chaque pièce reçoit (`optimisation`) ; les niveaux,
+ * leurs prix et leurs gains sont dans src/data/optimisation.ts.
+ */
+export const GENRES_OPTIMISATION = ['filtre', 'admission', 'carburation', 'culasses', 'echappement', 'allumage'] as const;
+export type GenreOptimisation = (typeof GENRES_OPTIMISATION)[number];
+
 export interface MoteurPiece {
   id: string;
   label: string;
@@ -124,6 +134,8 @@ export interface MoteurPiece {
   phrase: string;
   /** Traitements admis (brut compris) ; absents : tous. */
   traitements?: readonly TraitementId[];
+  /** Ce que la pièce optimise (src/data/optimisation.ts) ; absent : elle ne s'optimise pas. */
+  optimisation?: GenreOptimisation;
   /** Nœuds de la pièce et leur vecteur d'éclatement ; absents si la pièce s'échange (ceux de ses options). */
   noeuds?: Readonly<Record<string, Vec3>>;
   echange?: Echange;
@@ -236,6 +248,7 @@ export function validateMoteursCatalogue(raw: unknown): MoteursCatalogue {
         const list = piece.traitements;
         if (!Array.isArray(list) || !list.includes('brut') || !list.every((id) => typeof id === 'string' && traitementById(id) !== undefined)) problems.push(`${p}.traitements doit citer des traitements connus, brut compris`);
       }
+      if (piece.optimisation !== undefined && !GENRES_OPTIMISATION.some((genre) => genre === piece.optimisation)) problems.push(`${p}.optimisation doit nommer un genre connu (${GENRES_OPTIMISATION.join(', ')})`);
       const echange = piece.echange;
       if ((piece.noeuds === undefined) === (echange === undefined)) {
         problems.push(`${p} : des nœuds, ou un échange, l'un des deux`);

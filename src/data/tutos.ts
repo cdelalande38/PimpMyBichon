@@ -119,10 +119,10 @@ export const TUTOS: readonly Tuto[] = [
     titre: 'Le kit carrosserie',
     but: 'Ici, tu habilles le bas de caisse : lame avant, jupes et diffuseur.',
     etapes: [
-      { texte: 'Choisis d’abord un poste : la lame avant, les jupes ou le diffuseur. La caméra va le voir de près.', cible: 'footer.dock [data-testid="pieces-groupe"] .pieces-postes' },
+      { texte: 'Choisis d’abord un élément : la lame avant, les jupes ou le diffuseur. La caméra va le voir de près.', cible: 'footer.dock [data-testid="pieces-groupe"] .pieces-postes' },
       { texte: 'Touche une pièce, elle se pose tout de suite. Un cadenas et un prix : « Acheter » avec les dollars de tes courses.', cible: 'footer.dock [data-testid="pieces"] .chips' },
       { texte: 'La pièce prend la peinture de la caisse. « Couleur propre » lui donne sa teinte et sa finition à elle.' },
-      { texte: '« D’origine » enlève la pièce du poste. Sur une moto, pas de kit : il n’y a pas de bas de caisse.' },
+      { texte: '« D’origine » enlève la pièce, « Retour » rend la liste des éléments. Sur une moto, pas de kit : pas de bas de caisse.' },
     ],
   },
   {
@@ -190,12 +190,13 @@ export const TUTOS: readonly Tuto[] = [
     id: 'moteur',
     ecrans: ['entree:moteur'],
     titre: 'L’établi moteur',
-    but: 'Ici, le moteur sort du véhicule : tu l’ouvres en vue éclatée et tu traites chaque pièce à ta façon.',
+    but: 'Ici, le moteur sort du véhicule : tu choisis une pièce, puis tu la traites ou tu l’optimises.',
     etapes: [
       { texte: 'Le curseur « Vue éclatée » écarte les pièces. Tourne autour du moteur au doigt, pince pour zoomer.', cible: 'footer.dock .moteur-eclate' },
-      { texte: 'Touche une pièce dans la liste : elle s’allume en ambre sur l’établi.', cible: 'footer.dock .moteur-pieces' },
-      { texte: 'Choisis son traitement : brut et peinture sont offerts ; le reste s’achète une fois, pour tous tes moteurs.', cible: 'footer.dock .moteur-traitements' },
-      { texte: 'Le filtre à air s’échange. Ferme l’entrée, le moteur retourne dans le véhicule.' },
+      { texte: 'Touche une pièce dans la liste : elle s’allume en ambre et la caméra va la voir de près.', cible: 'footer.dock .moteur-pieces' },
+      { texte: 'Finition : brut et peinture sont offerts ; le reste s’achète une fois, pour tous tes moteurs. Le filtre à air s’échange.', cible: 'footer.dock .moteur-volets' },
+      { texte: 'Optimisation : chaque niveau dit ce qu’il gagne avant l’achat. Le total s’ajoute à ta Préparation.' },
+      { texte: '« Retour » rend la liste et le total du moteur. Ferme l’entrée : le moteur retourne dans le véhicule.' },
     ],
   },
   {

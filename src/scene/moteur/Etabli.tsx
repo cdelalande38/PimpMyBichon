@@ -2,14 +2,15 @@
 // véhicule (src/data/moteurs.ts), sorti et posé sur son support tournant, à la place du véhicule (une
 // coupe franche : la scène cache le véhicule et cadre l'établi). Chaque pièce reçoit son traitement
 // (brut, peinture, chrome, poli, brossé, anodisé, noir satiné) dans des matériaux à elle ; la pièce
-// choisie dans le panneau est surlignée d'une lueur ambrée légère ; la vue éclatée écarte chaque nœud
+// choisie dans le panneau est surlignée d'une lueur ambrée légère, et cadrée de près tant que le
+// panneau montre ses actions (le cadrage de zone du garage) ; la vue éclatée écarte chaque nœud
 // le long de son vecteur (catalogue) ; un échange (filtres à air) montre l'option posée. Ombre de
 // contact au pied du support, comme sous le véhicule. Le fichier ne se charge qu'à l'ouverture de
 // l'entrée. Aucun identifiant de véhicule ni de famille ici.
 
 import { useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Color, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, type Group, type Material, type Object3D } from 'three';
+import { Box3, Color, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Vector3, type Group, type Material, type Object3D } from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MATERIAL_ROLES, type MaterialRole } from '../../data/materialRoles.ts';
 import {
@@ -31,6 +32,7 @@ import type { Build } from '../../data/vehicleTypes.ts';
 import { useRenderStats } from '../../render/renderStats.ts';
 import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
 import { useBuilds } from '../../state/builds.ts';
+import { useZoneFocus, type ZoneFocus } from '../cadrageZone.ts';
 import { useEtabli } from './etabli.ts';
 
 const BASE = import.meta.env.BASE_URL;
@@ -39,9 +41,9 @@ const sources = new Map<string, Promise<GLTF>>();
 
 /** Rang de dessin des pièces opaques, comme celles du véhicule (VehicleModel.tsx). */
 const RENDER_ORDER = -2;
-/** Lueur de la pièce choisie : l'ambre de l'interface, à peine posée (sous le seuil du halo). */
+/** Lueur de la pièce choisie : l'ambre de l'interface, légère (sous le seuil du halo), mais lisible sur le moteur entier. */
 const HIGHLIGHT = new Color('#ffb224');
-const HIGHLIGHT_INTENSITY = 0.12;
+const HIGHLIGHT_INTENSITY = 0.24;
 const NO_GLOW = new Color(0, 0, 0);
 /** Attente après le dernier changement (curseur, échange) avant de refaire l'ombre de contact. */
 const SHADOW_DELAY_MS = 150;
@@ -174,6 +176,62 @@ function pose(prepared: Prepared, famille: MoteurFamille, known: Noeuds, build: 
   prepared.root.updateMatrixWorld(true);
 }
 
+/** Préfixe des cadrages de pièce demandés par l'établi (src/scene/cadrageZone.ts) : on ne relâche que les siens. */
+const CADRE_PREFIX = 'moteur-';
+
+/** Écart au centre du moteur (en part de sa demi-taille) au-delà duquel une pièce se regarde de son côté. */
+const DEPASSE = 0.4;
+
+/** Boîte des morceaux visibles des nœuds retenus, dans le repère de `inverse` (aucun nœud retenu : vide). */
+function boiteDe(prepared: Prepared, keep: (node: string) => boolean, inverse: Matrix4): Box3 {
+  const box = new Box3();
+  const part = new Box3();
+  const local = new Matrix4();
+  for (const [node, object] of prepared.nodes) {
+    if (!keep(node) || !object.visible) continue;
+    object.traverse((child) => {
+      if (!(child instanceof Mesh)) return;
+      if (!child.geometry.boundingBox) child.geometry.computeBoundingBox();
+      if (child.geometry.boundingBox) box.union(part.copy(child.geometry.boundingBox).applyMatrix4(local.multiplyMatrices(inverse, child.matrixWorld)));
+    });
+  }
+  return box;
+}
+
+/**
+ * Cadre d'une pièce pour la caméra (src/scene/useZoneFraming.ts), dans le repère `frame` (le groupe qui
+ * pose l'établi dans la pièce, celui du véhicule) : la boîte de ses morceaux à l'écart actuel, vue du
+ * côté où elle dépasse du moteur (dessus, avant, arrière, flanc) ; une pièce du milieu ou du dessous se
+ * regarde du côté où se trouve déjà la caméra. La profondeur grossit un peu le cadre (8 cm au plus),
+ * pour que l'avant de la pièce tienne aussi. `null` : rien de visible.
+ */
+function cadreDe(prepared: Prepared, known: Noeuds, piece: string, frame: Object3D, eye: Vector3): NonNullable<ZoneFocus['box']> | null {
+  frame.updateWorldMatrix(true, true);
+  const inverse = new Matrix4().copy(frame.matrixWorld).invert();
+  const box = boiteDe(prepared, (node) => known.get(node)?.piece === piece, inverse);
+  if (box.isEmpty()) return null;
+  const moteur = boiteDe(prepared, () => true, inverse);
+  const center = box.getCenter(new Vector3());
+  const size = box.getSize(new Vector3());
+  const half = moteur.getSize(new Vector3()).multiplyScalar(0.5).max(new Vector3(0.05, 0.05, 0.05));
+  const out = center.clone().sub(moteur.getCenter(new Vector3())).divide(half);
+  const view = frame.worldToLocal(eye.clone()).sub(center);
+  let face: NonNullable<ZoneFocus['box']>['face'];
+  if (out.y >= DEPASSE && out.y >= Math.abs(out.x) && out.y >= Math.abs(out.z)) face = '+y';
+  else if (Math.max(Math.abs(out.x), Math.abs(out.z)) >= DEPASSE) face = Math.abs(out.x) >= Math.abs(out.z) ? (out.x > 0 ? '+x' : '-x') : out.z > 0 ? '+z' : '-z';
+  else face = Math.abs(view.x) >= Math.abs(view.z) ? (view.x > 0 ? '+x' : '-x') : view.z > 0 ? '+z' : '-z';
+  // Taille sur la face : sa droite et son haut (src/data/stickersCalques.ts, zoneFrame), puis la profondeur.
+  const [across, high, depth] = face === '+y' ? [size.z, size.x, size.y] : face === '+x' || face === '-x' ? [size.z, size.y, size.x] : [size.x, size.y, size.z];
+  const marge = Math.min(depth * 0.25, 0.08);
+  return { face, center: [center.x, center.y, center.z], size: [across + marge, high + marge, depth] };
+}
+
+/** Relâche le cadrage de pièce de l'établi, s'il est encore le sien : la caméra revient au moteur entier. */
+function relacheCadre(): void {
+  const { focus, setFocus } = useZoneFocus.getState();
+  if (focus?.zone.startsWith(CADRE_PREFIX)) setFocus(null);
+}
+
 /**
  * Ombre de contact au pied du support (src/render/vehicleShadow.ts, comme sous le véhicule) : rendue
  * une fois à la pose, puis à chaque `stamp` ; remontée à chaque contexte WebGL rendu (clé d'époque).
@@ -250,6 +308,25 @@ export function Etabli({ famille, bodyEnv, stage }: EtabliProps) {
     invalidate();
   }, [prepared, eclate, signature, famille, known, vehicleId, reshadow, invalidate]);
 
+  // Étape des actions d'une pièce (src/ui/moteur/MoteurPanel.tsx) : la caméra la cadre de près, du côté
+  // d'où on la regarde, par le cadrage de zone du garage ; « Retour » à la liste rend le moteur entier.
+  // Un échange posé (filtres) change la forme : on recadre.
+  const frame = useRef<Group>(null);
+  const camera = useThree((state) => state.camera);
+  const cadree = useEtabli((state) => state.cadree);
+  const pieceCadree = famille.pieces.find((piece) => piece.id === cadree);
+  const optionCadree = useBuilds((state) => (pieceCadree ? (resolveEchange(pieceCadree, state.builds[vehicleId])?.id ?? '') : ''));
+  useEffect(() => {
+    const outer = frame.current?.parent;
+    if (!prepared || !pieceCadree || !outer) return;
+    const box = cadreDe(prepared, known, pieceCadree.id, outer, camera.position);
+    if (box) useZoneFocus.getState().setFocus({ vehicle: vehicleId, zone: `${CADRE_PREFIX}${pieceCadree.id}${optionCadree ? `-${optionCadree}` : ''}`, box });
+  }, [prepared, known, pieceCadree, optionCadree, eclate, vehicleId, camera]);
+  useEffect(() => {
+    if (!pieceCadree) relacheCadre();
+  }, [pieceCadree]);
+  useEffect(() => relacheCadre, []);
+
   // Ce que la scène montre, pour les parcours : la famille posée, l'écart, la pièce choisie.
   useEffect(() => {
     const element = stage.current;
@@ -265,7 +342,7 @@ export function Etabli({ famille, bodyEnv, stage }: EtabliProps) {
 
   if (!prepared) return null;
   return (
-    <group rotation-y={((famille.orientation ?? 0) * Math.PI) / 180}>
+    <group ref={frame} rotation-y={((famille.orientation ?? 0) * Math.PI) / 180}>
       <primitive object={prepared.root} />
       {/* Hors de la sonde, comme l'ombre du véhicule ; à laisser à y = 0. */}
       <group userData={{ hideInProbe: true }}>

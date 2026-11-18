@@ -15,6 +15,7 @@
 // Sortie (vague U, retour du 18 novembre 2026) : ses étapes sont des niveaux (`kind: 'sortie'`) :
 // mode → zone → circuit → départ → réglages, ou mode → carrière. Chaque étape remplace la précédente,
 // « Retour » remonte d'une étape ; chaque niveau porte le libellé du choix qui y a mené, pour le fil.
+// Moteur et Carrosserie (même retour) : la liste des éléments, puis l'élément choisi (`kind: 'element'`).
 
 import { create } from 'zustand';
 import { directEntry, DOCK_MENU, type EntryId, type SectionId } from '../data/dockMenu.ts';
@@ -56,7 +57,18 @@ export type DockLevel =
    * Sortie : une étape, avec le libellé du choix qui y a mené (« Libre », « Monaco », « Le circuit »…),
    * lu par le fil ; `lieu` : le lieu dont l'étape « circuit » montre les cartes.
    */
-  | { kind: 'sortie'; etape: EtapeSortie; libelle: string; lieu?: string };
+  | { kind: 'sortie'; etape: EtapeSortie; libelle: string; lieu?: string }
+  /**
+   * Moteur, Carrosserie : l'élément choisi dans la liste (pièce du moteur, poste du kit), dont l'entrée
+   * montre alors les actions ; `libelle` : son nom, lu par le fil (« Mécanique · Moteur · Culasses »).
+   */
+  | { kind: 'element'; element: string; libelle: string };
+
+/**
+ * Entrées en deux étapes (vague U, retour du 18 novembre 2026 : « séparer la sélection des éléments des
+ * actions à mener dessus ») : la liste des éléments, puis l'élément choisi (un niveau `element`).
+ */
+export const ENTREES_A_ELEMENT: readonly EntryId[] = ['moteur', 'carrosserie'];
 
 /** Ce qui est sauvegardé : la taille du dock. */
 export interface DockChoices {
@@ -119,6 +131,13 @@ function sanitizeLevel(raw: unknown): DockLevel | null {
  */
 export function sanitizeLevels(entry: EntryId, raw: unknown): DockLevel[] {
   if (entry === 'sortie' && Array.isArray(raw)) return sanitizeSortieLevels(raw);
+  // Moteur, Carrosserie : un seul niveau sous la liste, l'élément choisi.
+  if (ENTREES_A_ELEMENT.includes(entry)) {
+    const first: unknown = Array.isArray(raw) ? raw[0] : undefined;
+    if (typeof first !== 'object' || first === null) return [];
+    const { kind, element, libelle } = first as Record<string, unknown>;
+    return kind === 'element' && typeof element === 'string' && ZONE_ID.test(element) && typeof libelle === 'string' && libelle.length <= 120 ? [{ kind, element, libelle }] : [];
+  }
   if (entry !== 'peinture' || !Array.isArray(raw)) return [];
   const levels: DockLevel[] = [];
   for (const item of raw.slice(0, 2)) {

@@ -1,6 +1,8 @@
 // Custom · Carrosserie (vague U) : le kit carrosserie (lame avant, jupes, diffuseur) sur le système de
-// pièces montées. L'entrée montre les postes que le véhicule déclare, puis les options du poste choisi ;
-// la caméra du garage cadre le poste (data-cadrage de la scène) ; ce qui n'est pas acquis porte un cadenas
+// pièces montées. L'entrée va en deux étapes (retour du 18 novembre 2026) : la liste des postes que le
+// véhicule déclare, le véhicule entier à l'écran ; puis le poste choisi, seul, ses options à la place de
+// la liste, la caméra du garage le cadre (data-cadrage de la scène), « Retour » rend la liste et la vue
+// d'avant ; ce qui n'est pas acquis porte un cadenas
 // et son prix, un appui ouvre le bloc d'achat (solde insuffisant, puis achat confirmé), la pièce se pose
 // une fois payée, prend une couleur propre, et tout est gardé au rechargement. Une moto n'a pas de kit.
 // Les captures de revue (garage, sortie de jour, vue rapprochée de chaque poste, sur les trois voitures)
@@ -46,13 +48,33 @@ const panneau = (page: Page) => page.locator('footer.dock [data-testid="pieces"]
 const poste = (page: Page, id: string) => groupe(page).locator(`.pieces-poste[data-poste="${id}"]`);
 const option = (page: Page, id: string) => panneau(page).locator(`[data-option="${id}"]`);
 const scene = (page: Page) => page.locator('.stage');
+const ici = (page: Page) => page.locator('footer.dock .dock-crumb-here');
+
+/** Ouvre un poste de la liste : ses options remplacent la liste, le fil le nomme, la caméra le cadre. */
+async function ouvrirPoste(page: Page, id: string, nom: string): Promise<void> {
+  await poste(page, id).tap();
+  await expect(groupe(page)).toHaveAttribute('data-etape', 'element');
+  await expect(panneau(page)).toHaveAttribute('data-poste', id);
+  await expect(groupe(page).locator('.pieces-poste')).toHaveCount(0);
+  await expect(ici(page)).toHaveText(nom);
+  await expect(scene(page)).toHaveAttribute('data-cadrage', `piece-${id}`);
+}
+
+/** « Retour » : la liste des postes, le dernier ouvert marqué, la vue d'avant. */
+async function revenirALaListe(page: Page, id: string): Promise<void> {
+  await page.locator('footer.dock').getByRole('button', { name: 'Retour', exact: true }).tap();
+  await expect(groupe(page)).toHaveAttribute('data-etape', 'liste');
+  await expect(poste(page, id)).toHaveAttribute('aria-pressed', 'true');
+  await expect(panneau(page)).toHaveCount(0);
+  await expect(scene(page)).not.toHaveAttribute('data-cadrage', /piece-/);
+}
 
 /** Toute commande de l'entrée offre 48 px au doigt. */
-async function commandesA48(page: Page): Promise<void> {
+async function commandesA48(page: Page, auMoins = 6): Promise<void> {
   const largeur = page.viewportSize()?.width ?? 390;
   const commandes = page.locator('footer.dock .dock-tab').locator('button:visible, label:visible');
   const nombre = await commandes.count();
-  expect(nombre).toBeGreaterThan(5);
+  expect(nombre).toBeGreaterThanOrEqual(auMoins);
   for (let i = 0; i < nombre; i += 1) {
     const commande = commandes.nth(i);
     const boite = await commande.boundingBox();
@@ -116,28 +138,31 @@ test.describe('Custom · Carrosserie', () => {
     await expect(scene(page)).toHaveAttribute('data-vehicle', 'cox');
     await waitForBench(page);
 
-    // Les trois postes de la Cox ; la lame avant d'abord, cadrée par la caméra.
+    // Étape « Élément » : les trois postes de la Cox, et rien d'autre ; le véhicule entier, rien de cadré.
     await openEntry(page, 'Carrosserie');
+    await expect(groupe(page)).toHaveAttribute('data-etape', 'liste');
     await expect(groupe(page).locator('.pieces-poste')).toHaveText([/^Lame avant\s*Sans lame$/, /^Jupes\s*Sans jupes$/, /^Diffuseur\s*Sans diffuseur$/]);
-    await expect(poste(page, 'lame')).toHaveAttribute('aria-pressed', 'true');
-    await expect(panneau(page)).toHaveAttribute('data-poste', 'lame');
+    await expect(groupe(page).locator('.pieces-poste[aria-pressed="true"]')).toHaveCount(0);
+    await expect(panneau(page)).toHaveCount(0);
+    await expect(scene(page)).not.toHaveAttribute('data-cadrage', /piece-/);
+    await commandesA48(page, 3);
+
+    // La lame avant : ses options seules, cadrée par la caméra.
+    await ouvrirPoste(page, 'lame', 'Lame avant');
     await expect(panneau(page)).toHaveAttribute('data-option', 'aucune');
-    await expect(scene(page)).toHaveAttribute('data-cadrage', 'piece-lame');
     for (const id of ['discrete', 'sport', 'course']) await expect(option(page, id)).toHaveAttribute('data-verrou', 'ferme');
     await expect(option(page, 'course')).toHaveAccessibleName('Large de course, verrouillé : 280 dollars');
-    await commandesA48(page);
+    await commandesA48(page, 5);
 
-    // Les jupes : cadrées de profil ; les larges coûtent 260 $.
-    await poste(page, 'jupes').tap();
-    await expect(panneau(page)).toHaveAttribute('data-poste', 'jupes');
-    await expect(scene(page)).toHaveAttribute('data-cadrage', 'piece-jupes');
+    // Retour à la liste, puis les jupes : cadrées de profil ; les larges coûtent 260 $.
+    await revenirALaListe(page, 'lame');
+    await ouvrirPoste(page, 'jupes', 'Jupes');
     await option(page, 'larges').tap();
     const confirmation = panneau(page).locator('.jeu-achat[data-etat="confirmation"]');
     await expect(confirmation).toContainText('Acheter les jupes larges pour 260 $ ? Il te restera 40 $.');
     await confirmation.getByRole('button', { name: 'Acheter', exact: true }).tap();
     await expect(panneau(page).getByRole('status')).toContainText('Payé : les jupes larges t’appartiennent, et c’est posé.');
     await expect(panneau(page)).toHaveAttribute('data-option', 'larges');
-    await expect(poste(page, 'jupes')).toContainText('Larges');
     await expect(page.getByRole('button', { name: /Ton solde : 40 dollars/ })).toBeVisible();
 
     // Les jupes sport : il manque 130 $.
@@ -158,9 +183,10 @@ test.describe('Custom · Carrosserie', () => {
       .poll(async () => ((await readBuilds(page))?.builds.cox as { partPaints?: Record<string, unknown> } | undefined)?.partPaints?.jupes)
       .toEqual({ color: '#ff6a00', finish: 'mat' });
 
-    // Le diffuseur, cadré de l'arrière.
-    await poste(page, 'diffuseur').tap();
-    await expect(scene(page)).toHaveAttribute('data-cadrage', 'piece-diffuseur');
+    // La liste dit ce qui est posé ; le diffuseur, cadré de l'arrière.
+    await revenirALaListe(page, 'jupes');
+    await expect(poste(page, 'jupes')).toContainText('Larges');
+    await ouvrirPoste(page, 'diffuseur', 'Diffuseur');
     await expect(option(page, 'ailettes')).toHaveAttribute('data-verrou', 'ferme');
 
     // Rechargement : les jupes, leur couleur et l'achat sont gardés.
@@ -168,8 +194,9 @@ test.describe('Custom · Carrosserie', () => {
     await waitForScene(page);
     await waitForBench(page);
     await openEntry(page, 'Carrosserie');
+    await expect(groupe(page)).toHaveAttribute('data-etape', 'liste');
     await expect(poste(page, 'jupes')).toContainText('Larges');
-    await poste(page, 'jupes').tap();
+    await ouvrirPoste(page, 'jupes', 'Jupes');
     await expect(panneau(page)).toHaveAttribute('data-option', 'larges');
     await expect(panneau(page).getByRole('group', { name: 'Couleur des jupes' }).getByRole('button', { name: 'Couleur propre' })).toHaveAttribute('aria-pressed', 'true');
     await expect(option(page, 'larges')).not.toHaveAttribute('data-verrou', 'ferme');
@@ -189,7 +216,7 @@ test.describe('Custom · Carrosserie', () => {
 });
 
 test.describe('Custom · Carrosserie, mise en page', () => {
-  test('tient en 390 × 844 et en paysage, en texte grand et très grand', async ({ page }) => {
+  test('tient en 390 × 844, 360 × 780 et en paysage, en texte grand et très grand, aux deux étapes', async ({ page }) => {
     test.setTimeout(300_000);
     await openApp(page);
     await waitForScene(page);
@@ -202,11 +229,15 @@ test.describe('Custom · Carrosserie, mise en page', () => {
       await tailleDuTexte(page, taille);
       for (const ecran of [
         { width: 390, height: 844 },
+        { width: 360, height: 780 },
         { width: 844, height: 390 },
       ]) {
         await page.setViewportSize(ecran);
         await openEntry(page, 'Carrosserie');
-        await poste(page, 'jupes').tap();
+        expect(await debords(page), `${taille}, ${ecran.width} × ${ecran.height}, liste`).toEqual([]);
+        await commandesA48(page, 3);
+        if (taille === 'Très grand') await photo(page, `3${ecran.width > ecran.height ? 1 : 0}-van-liste-tres-grand-${ecran.width}x${ecran.height}`);
+        await ouvrirPoste(page, 'jupes', 'Jupes');
         await expect(panneau(page)).toHaveAttribute('data-option', 'larges');
         await expect(panneau(page).getByRole('group', { name: 'Couleur des jupes : teinte' })).toBeVisible();
         expect(await debords(page), `${taille}, ${ecran.width} × ${ecran.height}`).toEqual([]);
@@ -245,6 +276,31 @@ async function tourner(page: Page, dx: number, dy: number): Promise<void> {
 test.describe('Carrosserie : captures de revue', () => {
   test.skip(!CAPTURES, 'captures de revue : PMB_CAPTURES_CARROSSERIE=<dossier>');
 
+  test('les deux étapes, en portrait et en paysage', async ({ page }) => {
+    test.setTimeout(300_000);
+    await openApp(page);
+    await waitForScene(page);
+    await poserSauvegarde(page, { jeu: { solde: 150, articles: { 'piece-jupes-larges': true }, hautsFaits: {}, cumuls: {} }, builds: buildsAvec('cox') });
+    await waitForBench(page);
+    const hauteurs: string[] = [];
+    for (const ecran of [
+      { width: 390, height: 844, nom: 'portrait' },
+      { width: 844, height: 390, nom: 'paysage' },
+    ]) {
+      await page.setViewportSize(ecran);
+      await openEntry(page, 'Carrosserie');
+      await waitForStill(page);
+      hauteurs.push(`${ecran.nom} liste ${Math.round((await page.locator('footer.dock').boundingBox())?.height ?? 0)}`);
+      await photo(page, `etapes-${ecran.nom}-1-liste`);
+      await ouvrirPoste(page, 'jupes', 'Jupes');
+      await waitForStill(page);
+      hauteurs.push(`${ecran.nom} poste ${Math.round((await page.locator('footer.dock').boundingBox())?.height ?? 0)}`);
+      await photo(page, `etapes-${ecran.nom}-2-jupes`);
+      await revenirALaListe(page, 'jupes');
+    }
+    console.log(`Hauteur du menu (px) : ${hauteurs.join(' ; ')}`);
+  });
+
   test('au garage, le kit complet sur chacune des trois voitures, et chaque poste de près', async ({ page }) => {
     test.setTimeout(900_000);
     await openApp(page);
@@ -258,6 +314,7 @@ test.describe('Carrosserie : captures de revue', () => {
       // (lame et jupe) et trois quarts arrière (diffuseur et jupe).
       await openEntry(page, 'Carrosserie');
       for (const id of ['lame', 'jupes', 'diffuseur']) {
+        if (id !== 'lame') await page.locator('footer.dock').getByRole('button', { name: 'Retour', exact: true }).tap();
         await poste(page, id).tap();
         await expect(scene(page)).toHaveAttribute('data-cadrage', `piece-${id}`);
         await waitForStill(page);
