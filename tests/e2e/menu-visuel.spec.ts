@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DOCK_MENU } from '../../src/data/dockMenu.ts';
-import { backToSections, openApp, openEntry, reloadSaved, waitForBench, waitForStill } from './helpers.ts';
+import { backToSections, ENTREE_SORTIE, openApp, openEntry, reloadSaved, waitForBench, waitForStill } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
 const sections = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
@@ -168,7 +168,7 @@ test.describe('menu visuel', () => {
     await expect(ambiances.locator('svg.picto')).toHaveCount(await ambiances.getByRole('button').count());
 
     // Sortie de nuit : la miniature du tracé de chaque carte fabriquée.
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     const maps = dock(page).getByRole('group', { name: 'Carte' });
     await expect(maps.locator('svg.picto-carte')).toHaveCount(await maps.getByRole('button').count());
     await waitForStill(page);

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreSurLaRoute, auSec, capture, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, rentrerAuGarage, waitForScene } from './helpers.ts';
+import { attendreSurLaRoute, auSec, capture, ENTREE_SORTIE, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 // La sortie se roule aussi de jour (vague S, src/data/moments.ts) : le moment se choisit au menu à
 // côté de la météo et dans les réglages (groupe « Route ») ; la scène le dit (data-moment) ; les
@@ -21,7 +21,7 @@ test.describe('sortie de jour', () => {
     });
     await openApp(page);
     await waitForScene(page);
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     const dock = page.locator('footer.dock');
     // Le moment n'apparaît qu'une carte touchée, à côté de la météo ; la nuit par défaut.
     await expect(dock.getByRole('group', { name: 'Moment' })).toHaveCount(0);

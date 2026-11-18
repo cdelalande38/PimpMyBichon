@@ -8,7 +8,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, auSec, choisirCamera, openApp, openEntry, pickMap, readBuilds, reloadSaved, rentrerAuGarage, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { attendreApercu, auSec, choisirCamera, ENTREE_SORTIE, openApp, openEntry, pickMap, readBuilds, reloadSaved, rentrerAuGarage, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 const CAPTURES = process.env.PMB_CAPTURES_PHARES ?? resolve('captures', 'vague-t-phares');
 
@@ -212,7 +212,7 @@ test.describe('phares', () => {
     await waitForScene(page);
     await expect(garage(page)).toHaveAttribute('data-phares', 'violet', { timeout: 120_000 });
 
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);
     await auSec(page);
     await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();

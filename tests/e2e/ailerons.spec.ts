@@ -7,7 +7,7 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { attendreSurLaRoute, auSec, choisirCamera, openApp, openEntry, pickMap, quick, readBuilds, reloadSaved, tempsDeRoute, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { attendreSurLaRoute, auSec, choisirCamera, ENTREE_SORTIE, openApp, openEntry, pickMap, quick, readBuilds, reloadSaved, tempsDeRoute, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 const CAPTURES = process.env.PMB_CAPTURES_AILERONS;
 
@@ -288,7 +288,7 @@ test.describe('Ailerons : captures de revue', () => {
       await waitForScene(page);
       await poserSauvegarde(page, { builds: buildsAvec(pose.id) });
       await waitForBench(page);
-      await openEntry(page, 'Sortie de nuit');
+      await openEntry(page, ENTREE_SORTIE);
       await pickMap(page);
       await auSec(page);
       await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();

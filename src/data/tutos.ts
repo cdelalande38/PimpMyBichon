@@ -59,7 +59,7 @@ export const TUTOS: readonly Tuto[] = [
         texte: 'La croix range le menu ; il revient d’une touche sur « Personnaliser ». Dans une entrée, la flèche l’agrandit s’il a plus à montrer.',
         cible: 'footer.dock .dock-close',
       },
-      { texte: 'En haut à droite, les boutons ronds : atelier, photo, radio, sortie de nuit, intérieur. Les objets du garage se touchent aussi.', cible: 'nav.quick' },
+      { texte: 'En haut à droite, les boutons ronds : atelier, photo, radio, sortie, intérieur. Les objets du garage se touchent aussi.', cible: 'nav.quick' },
       { texte: 'Perdu ? Le bouton « ? » réexplique l’écran où tu es, et garde tous les tutos.', cible: '.tuto-aide' },
     ],
   },
@@ -247,10 +247,10 @@ export const TUTOS: readonly Tuto[] = [
   {
     id: 'sortie-menu',
     ecrans: ['entree:sortie'],
-    titre: 'La sortie de nuit',
-    but: 'Ici, tu prépares la balade : tu sors ton véhicule du garage pour le regarder rouler, de nuit, sur une vraie route.',
+    titre: 'La sortie',
+    but: 'Ici, tu prépares la balade : tu sors ton véhicule du garage pour le regarder rouler, de jour comme de nuit, sur une vraie route.',
     etapes: [
-      { texte: 'Touche d’abord une carte : une vraie route, redessinée de nuit. Ses départs et l’origine de ses données s’affichent ensuite.', cible: 'footer.dock [aria-label="Carte"][role="group"]' },
+      { texte: 'Touche d’abord une carte : une vraie route, redessinée pour l’atelier. Ses départs et l’origine de ses données s’affichent ensuite.', cible: 'footer.dock [aria-label="Carte"][role="group"]' },
       { texte: 'Une fois la carte choisie, dis d’où tu pars : chaque départ est un coin de la route.', cible: 'footer.dock [aria-label="Départ"][role="group"]' },
       { texte: 'Sec, pluie ou neige : sous la pluie la chaussée brille, sous la neige elle garde les traces des roues.', cible: 'footer.dock [aria-label="Météo"][role="group"]' },
       { texte: 'Touche « Sortir » : la porte se lève et c’est parti.', cible: 'footer.dock .drive-go' },

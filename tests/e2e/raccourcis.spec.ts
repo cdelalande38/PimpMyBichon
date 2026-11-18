@@ -5,7 +5,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { backToSections, openApp, openAtelier, openEntry, quick, VIEWPORT, waitForScene } from './helpers.ts';
+import { backToSections, ENTREE_SORTIE, openApp, openAtelier, openEntry, quick, VIEWPORT, waitForScene } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
 const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
@@ -71,10 +71,10 @@ test.describe('raccourcis et dock de personnalisation', () => {
     await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Custom', 'Peinture']);
     await shot(page, '01c-custom-peinture');
-    // « Garage » : deux entrées (Ambiance, Sortie de nuit) ; le fil dit « Garage · Ambiance ».
+    // « Garage » : deux entrées (Ambiance, Sortie) ; le fil dit « Garage · Ambiance ».
     await backToSections(page);
     await tabs(page).getByRole('button', { name: 'Garage', exact: true }).tap();
-    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Garage' }).getByRole('button')).toHaveText(['Ambiance', 'Sortie de nuit']);
+    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Garage' }).getByRole('button')).toHaveText(['Ambiance', ENTREE_SORTIE]);
     await dock(page).getByRole('navigation', { name: 'Entrées · Garage' }).getByRole('button', { name: 'Ambiance', exact: true }).tap();
     await expect(dock(page).getByRole('group', { name: 'Ambiance' })).toBeVisible();
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Garage', 'Ambiance']);

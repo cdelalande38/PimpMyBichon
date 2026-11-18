@@ -66,7 +66,7 @@ export default function DriveCanvas({ map, vehicle }: DriveCanvasProps) {
       data-carte={map.id}
       data-vehicule={vehicle.id}
       data-qualite={level}
-      aria-label={`Sortie de nuit : ${map.name}.`}
+      aria-label={`Sortie : ${map.name}.`}
       style={{ position: 'absolute', inset: 0 }}
     >
       <Canvas

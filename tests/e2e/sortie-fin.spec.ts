@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, DELAI_ROUTE, ouvrirReglages, openApp, openEntry, pickMap, rentrerAuGarage, waitForScene } from './helpers.ts';
+import { attendreApercu, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, ouvrirReglages, pickMap, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const DEPART = 'Vers la 41e rue';
@@ -26,7 +26,7 @@ async function shot(page: Page, name: string): Promise<void> {
 async function sortirDuMenu(page: Page): Promise<void> {
   await openApp(page);
   await waitForScene(page);
-  await openEntry(page, 'Sortie de nuit');
+  await openEntry(page, ENTREE_SORTIE);
   await pickMap(page, CARTE);
   const dock = page.locator('footer.dock');
   await dock.getByRole('group', { name: 'Départ' }).getByRole('button', { name: new RegExp(DEPART) }).tap();

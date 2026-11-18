@@ -25,7 +25,7 @@ describe('arbre du dock', () => {
     }
   });
 
-  it('les entrées prévues : Peinture, Roues, Suspension, Intérieur, Stickers, Phares et Ailerons puis une « bientôt » ; Préparation et Échappement puis Moteur « bientôt » ; Ambiance et Sortie de nuit', () => {
+  it('les entrées prévues : Peinture, Roues, Suspension, Intérieur, Stickers, Phares et Ailerons puis une « bientôt » ; Préparation et Échappement puis Moteur « bientôt » ; Ambiance et Sortie', () => {
     const custom = DOCK_MENU.find((section) => section.id === 'custom');
     const mecanique = DOCK_MENU.find((section) => section.id === 'mecanique');
     expect(custom && sectionEntries(custom).map((entry) => [entry.label, entry.available])).toEqual([
@@ -43,11 +43,11 @@ describe('arbre du dock', () => {
       ['Échappement', true],
       ['Moteur', false],
     ]);
-    // Garage : l'ambiance, puis la sortie de nuit (§ 5.5), toutes deux disponibles.
+    // Garage : l'ambiance, puis la sortie (§ 5.5), toutes deux disponibles.
     const garage = DOCK_MENU.find((section) => section.id === 'garage');
     expect(garage && sectionEntries(garage).map((entry) => [entry.label, entry.available])).toEqual([
       ['Ambiance', true],
-      ['Sortie de nuit', true],
+      ['Sortie', true],
     ]);
     // Masquées d'un coup : il ne reste que les entrées disponibles.
     expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture', 'roues', 'suspension', 'interieur', 'stickers', 'phares', 'ailerons']);

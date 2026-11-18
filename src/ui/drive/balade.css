@@ -1,0 +1,32 @@
+/* Annonce « la course devient une balade » (src/ui/drive/Balade.tsx) : un bandeau lisible au bas de la
+   route, au-dessus de l'invite « Touche l'écran pour reprendre la main ». Aucun appui ne le concerne. */
+.drive-balade-annonce {
+  position: absolute;
+  right: calc(var(--gutter) + var(--safe-r));
+  bottom: calc(4.25rem + var(--safe-b));
+  left: calc(var(--gutter) + var(--safe-l));
+  z-index: 3;
+  max-width: 22rem;
+  margin: 0 auto;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--ambre);
+  background: rgba(10, 9, 17, 0.86);
+  color: var(--chrome);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
+  text-shadow: 0 1px 3px #000;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.drive-balade-annonce[data-visible='non'] {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drive-balade-annonce {
+    transition: none;
+  }
+}

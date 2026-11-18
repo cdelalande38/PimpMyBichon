@@ -49,6 +49,13 @@ export async function backToSections(page: Page): Promise<void> {
 }
 
 /**
+ * Libellé, dans le menu du bas (Garage), de l'entrée qui mène à la sortie (src/data/dockMenu.ts, id
+ * `sortie`) : à passer à `openEntry`, jamais écrit en dur dans un parcours. Depuis la vague U (§ 5.5, mode
+ * jour) elle s'appelle « Sortie » ; son bouton rond du coin du garage porte le même nom accessible.
+ */
+export const ENTREE_SORTIE = 'Sortie';
+
+/**
  * Ouvre une entrée du dock par son libellé (« Peinture », « Préparation », « Ambiance »,
  * « Véhicule ») : on remonte aux sections, on touche la section qui la porte
  * (src/data/dockMenu.ts), puis l'entrée si la section en montre plusieurs. On arrive en haut de
@@ -246,7 +253,7 @@ export async function reloadSaved(page: Page): Promise<void> {
 }
 
 /**
- * Sortie de nuit : elle s'ouvre sur l'aperçu (pilote automatique, réalisateur, presque rien à
+ * La sortie : elle s'ouvre sur l'aperçu (pilote automatique, réalisateur, presque rien à
  * l'écran) ; un appui sur la route lance la course à la main depuis la ligne (src/ui/drive/DriveScreen.tsx) ;
  * la petite icône du coin ouvre les réglages (src/ui/drive/Reglages.tsx).
  */
@@ -373,7 +380,7 @@ export async function attendreSurLaRoute<T>(
 }
 
 /**
- * Menu « Sortie de nuit », carte touchée : met la météo au sec. Pour les parcours qui ne parlent pas de
+ * Menu « Sortie », carte touchée : met la météo au sec. Pour les parcours qui ne parlent pas de
  * météo : la pluie (réglage par défaut) allonge les accélérations à la main d'un quart et ralentit le
  * pilote automatique en courbe (src/data/adherence.ts).
  */
@@ -384,7 +391,7 @@ export async function auSec(page: Page): Promise<void> {
 }
 
 /**
- * Menu « Sortie de nuit » : touche une carte (la première par défaut). Rien n'est choisi à
+ * Menu « Sortie » : touche une carte (la première par défaut). Rien n'est choisi à
  * l'ouverture du panneau ; les départs, la météo et « Sortir » n'apparaissent qu'ensuite.
  */
 export async function pickMap(page: Page, index = 0): Promise<void> {

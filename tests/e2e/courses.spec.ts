@@ -16,7 +16,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreSurLaRoute, auSec, backToSections, commencerCourse, DELAI_ROUTE, openApp, openEntry, reglerSortie, reloadSaved, rentrerAuGarage, waitForScene } from './helpers.ts';
+import { attendreSurLaRoute, auSec, backToSections, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, reglerSortie, reloadSaved, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const dock = (page: Page) => page.locator('footer.dock');
@@ -39,7 +39,7 @@ test.describe('courses : format, tours, écran de fin', () => {
   test('le format se choisit au menu après le départ, 3 tours grisés hors circuit, choix gardé', async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     await carte(page, 'Miami Beach');
     // Route ouverte : balade par défaut, 3 tours grisés avec la phrase.
     await expect(format(page, 'Balade')).toHaveAttribute('aria-pressed', 'true');
@@ -69,7 +69,7 @@ test.describe('courses : format, tours, écran de fin', () => {
     await reloadSaved(page);
     await waitForScene(page);
     await backToSections(page);
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     await carte(page, 'Monaco, le circuit');
     await expect(format(page, 'Course 3 tours')).toHaveAttribute('aria-pressed', 'true');
   });
@@ -80,7 +80,7 @@ test.describe('courses : format, tours, écran de fin', () => {
     page.on('pageerror', (error) => errors.push(error.message));
     await openApp(page);
     await waitForScene(page);
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     await carte(page, 'Monaco, le circuit');
     await format(page, 'Course 3 tours').tap();
     await auSec(page);
@@ -115,7 +115,7 @@ test.describe('courses : format, tours, écran de fin', () => {
       });
       await openApp(page);
       await waitForScene(page);
-      await openEntry(page, 'Sortie de nuit');
+      await openEntry(page, ENTREE_SORTIE);
       await carte(page, 'Miami Beach');
       await dock(page).getByRole('group', { name: 'Départ' }).getByRole('button', { name: /Vers la 41e rue/ }).tap();
       await format(page, 'Course 1 tour').tap();

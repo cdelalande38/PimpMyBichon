@@ -1,7 +1,7 @@
 // Commandes de personnalisation, dans le dock, un niveau à la fois : les sections (Véhicule, Custom,
 // Mécanique, Garage) ; dans une section, ses entrées (Peinture, Stickers… ; « bientôt » estompées en
 // fin de rangée) ; dans une entrée, son seul contenu. Une section à une seule entrée ouvre directement
-// son contenu (Véhicule) ; Garage montre Ambiance et Sortie de nuit. L'arbre vient de
+// son contenu (Véhicule) ; Garage montre Ambiance et Sortie. L'arbre vient de
 // src/data/dockMenu.ts ; section, niveau du menu, entrée et niveaux vivent dans le store du dock
 // (src/state/dock.ts) : ils se posent de l'extérieur. « Mécanique » n'apparaît que si le véhicule à l'écran déclare un moteur. Dock agrandi : les rangées passent à la
 // ligne. La poignée et « Retour » vivent dans la ligne de repère (src/ui/Dock.tsx). Sections et entrées

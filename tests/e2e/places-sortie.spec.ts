@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { choisirCamera, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, rentrerAuGarage, waitForBench, waitForScene } from './helpers.ts';
+import { choisirCamera, ENTREE_SORTIE, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, rentrerAuGarage, waitForBench, waitForScene } from './helpers.ts';
 
 // Sortie de nuit : la caméra « embarquée » se pose à la place du conducteur du manifeste (œil posé
 // sur son siège, comme au garage), pas au-dessus du toit. Séquence de captures de revue :
@@ -21,7 +21,7 @@ test('sortie de nuit : la caméra embarquée est à la place du conducteur de la
   await page.locator('footer.dock').getByRole('group', { name: 'Véhicule' }).locator('[data-vehicle="cox"]').tap();
   await expect(page.locator('.stage')).toHaveAttribute('data-vehicle', 'cox');
   await waitForBench(page);
-  await openEntry(page, 'Sortie de nuit');
+  await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
   await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });

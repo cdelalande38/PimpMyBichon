@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { commencerCourse, openApp, openEntry, ouvrirReglages, pickMap, reglagesSortie, waitForScene } from './helpers.ts';
+import { commencerCourse, ENTREE_SORTIE, openApp, openEntry, ouvrirReglages, pickMap, reglagesSortie, waitForScene } from './helpers.ts';
 
 // « Retour » en sortie de nuit : le geste retour du téléphone, le retour du navigateur et le bouton
 // « Rentrer au garage » demandent d'abord « Rentrer au garage ? » tant que la route roule ; la sortie se
@@ -52,7 +52,7 @@ test.describe('retour en sortie de nuit', () => {
   test('depuis le menu : le retour demande, on reste ou on rentre, sans entrée fantôme', async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);
     await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
     await expect(page).toHaveURL(/#\/sortie$/);
@@ -144,7 +144,7 @@ test.describe('retour en sortie de nuit', () => {
   test('pendant le chargement : le retour quitte sans question', async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);
     await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
     await expect(page).toHaveURL(/#\/sortie$/);

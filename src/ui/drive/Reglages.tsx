@@ -13,8 +13,10 @@ import { closeSheet } from '../../app/useRoute.ts';
 import { CAMERA_IDS, type CameraId } from '../../drive/contrat.ts';
 import { basculerMoteur, useSonSortie } from '../../drive/son.ts';
 import { MOMENTS } from '../../data/moments.ts';
-import { CAMERA_LABELS, COMMANDES, DIRECTIONS, useDrive, WEATHERS } from '../../state/drive.ts';
+import { enCourse } from '../../drive/depart.ts';
+import { CAMERA_LABELS, COMMANDES, DIRECTIONS, liveDepart, useDrive, WEATHERS } from '../../state/drive.ts';
 import { useEngineSoundPrefs } from '../../state/engineSound.ts';
+import { PREVENIR_BALADE } from './baladeAnnonce.ts';
 import { DriveIcon, type DriveIconName } from './icones.tsx';
 import { entrerManette, manettePossible, quitterManette, useManette } from './manette.ts';
 import { MixageCurseurs } from './Mixage.tsx';
@@ -158,6 +160,12 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
   const moment = useDrive((state) => state.moment);
   const commande = useDrive((state) => state.commande);
   const direction = useDrive((state) => state.direction);
+  // Course lancée (pas l'aperçu, pas une balade, pas arrivée) : le pilote automatique la termine, et
+  // la commande le dit avant l'appui. L'état de départ ne bouge pas tant que les réglages sont ouverts
+  // (la course est en pause) ; la phase de la télémétrie relance ce calcul si elle change.
+  const phase = useDrive((state) => state.telemetry.depart);
+  const etatDepart = liveDepart.current;
+  const courseEnCours = !apercu && phase !== 'arrive' && etatDepart !== null && enCourse(etatDepart);
   const croix = useRef<HTMLButtonElement>(null);
   const fermerRef = useRef(fermer);
   useLayoutEffect(() => {
@@ -230,9 +238,16 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
               Prendre le volant
             </button>
           ) : (
-            <button type="button" className="btn" onClick={puis(() => drive().laisserConduire())}>
+            <button type="button" className="btn drive-auto-btn" data-course={courseEnCours || undefined} onClick={puis(() => drive().laisserConduire())}>
               <DriveIcon name="auto" />
-              Pilote automatique
+              {courseEnCours ? (
+                <span className="drive-auto-texte">
+                  <b>Pilote automatique</b>
+                  <small>{PREVENIR_BALADE}</small>
+                </span>
+              ) : (
+                'Pilote automatique'
+              )}
             </button>
           )}
           {!apercu && (

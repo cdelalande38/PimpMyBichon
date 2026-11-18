@@ -1,4 +1,4 @@
-// Entrée « Sortie de nuit » du menu (section Garage) : la carte (liste lue dans le catalogue), le
+// Entrée « Sortie » du menu (section Garage) : la carte (liste lue dans le catalogue), le
 // départ parmi ceux de la carte, les crédits des données (obligation de licence ; redits à l'écran
 // de chargement de la sortie), la météo et « Sortir », collé en bas sous le pouce.
 // Rien n'est choisi à l'ouverture : on ne voit que les cartes. Les départs, les crédits, la météo

@@ -108,7 +108,7 @@ export const DOCK_MENU: readonly DockSection[] = [
     entries: [
       { id: 'ambiance', label: 'Ambiance', icon: 'neon', available: true },
       // La sortie de nuit (§ 5.5) : la carte, le départ, la météo et « Sortir ».
-      { id: 'sortie', label: 'Sortie de nuit', icon: 'route', available: true },
+      { id: 'sortie', label: 'Sortie', icon: 'route', available: true },
     ],
   },
 ];
@@ -133,7 +133,7 @@ export function activeEntry(section: DockSection, last: EntryId | undefined): Do
 /**
  * Entrée qu'une section ouvre directement : la seule disponible, quand la section n'en annonce
  * aucune autre (« bientôt » comprises). Véhicule n'a pas d'écran intermédiaire à un seul
- * choix ; Custom, Mécanique et Garage (Ambiance, Sortie de nuit) montrent d'abord leurs entrées.
+ * choix ; Custom, Mécanique et Garage (Ambiance, Sortie) montrent d'abord leurs entrées.
  */
 export function directEntry(section: DockSection, showUpcoming = SHOW_UPCOMING): DockEntry | undefined {
   const list = sectionEntries(section, showUpcoming);

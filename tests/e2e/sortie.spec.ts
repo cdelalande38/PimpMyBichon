@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, attendreSurLaRoute, capture, choisirCamera, commencerCourse, fermerReglages, openApp, openEntry, ouvrirReglages, rentrerAuGarage, waitForScene } from './helpers.ts';
+import { attendreApercu, attendreSurLaRoute, capture, choisirCamera, commencerCourse, ENTREE_SORTIE, fermerReglages, openApp, openEntry, ouvrirReglages, rentrerAuGarage, waitForScene } from './helpers.ts';
 
-// Sortie de nuit, lot 1 (§ 5.5) : on entre par le menu (Garage · Sortie de nuit), on roule, on change
+// Sortie de nuit, lot 1 (§ 5.5) : on entre par le menu (Garage · Sortie), on roule, on change
 // de caméra, on passe à la main, on rentre au garage. Le parcours ne lit que les attributs que la
 // scène pose sur son élément racine (src/drive/contrat.ts) et l'interface de la sortie.
 // Captures : captures/jalon-1/sortie-menu.png, sortie-route.png, sortie-main.png.
@@ -21,7 +21,7 @@ test.describe('sortie de nuit', () => {
     await waitForScene(page);
 
     // Le menu : la carte (lue dans le catalogue), ses crédits, le départ, la météo, « Sortir ».
-    await openEntry(page, 'Sortie de nuit');
+    await openEntry(page, ENTREE_SORTIE);
     const dock = page.locator('footer.dock');
     // Rien n'est choisi à l'ouverture : ni départs, ni météo, ni « Sortir » tant qu'une carte n'est pas touchée.
     const maps = dock.getByRole('group', { name: 'Carte' });

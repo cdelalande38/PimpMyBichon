@@ -40,6 +40,7 @@ import { RadioButton } from '../radio/RadioButton.tsx';
 import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
 import { MiniCarte } from './MiniCarte.tsx';
+import { AnnonceBalade } from './Balade.tsx';
 import { ArriveePanneau, ChronoSortie, FeuxDepart } from './Depart.tsx';
 import { FinCourse } from './FinCourse.tsx';
 import { DriveIcon } from './icones.tsx';
@@ -94,7 +95,7 @@ function DriveTop({ apercu, reglages, ouvrirReglages }: { apercu: boolean; regla
   return (
     <header className="drive-top" data-apercu={apercu || undefined}>
       <div className="drive-where">
-        <span className="drive-map">{map?.name ?? 'Sortie de nuit'}</span>
+        <span className="drive-map">{map?.name ?? 'Sortie'}</span>
         {!apercu && (
           <span className="drive-progress" role="progressbar" aria-label="Progression" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
             <i style={{ width: `${progress}%` }} />
@@ -581,8 +582,14 @@ const ETAPES = [
   { nom: 'La carte', enCours: 'La carte se déplie' },
   { nom: 'La route et le décor', enCours: 'La route et le décor se posent' },
   { nom: 'Le véhicule', enCours: 'Le véhicule sort du garage' },
-  { nom: 'La nuit tombe', enCours: 'La nuit tombe' },
+  { nom: 'Le ciel', enCours: 'Le ciel se pose' },
 ] as const;
+
+/** Dernière étape du chargement : le ciel du moment choisi (nuit ou jour). */
+const ETAPE_CIEL = {
+  nuit: { nom: 'La nuit tombe', enCours: 'La nuit tombe' },
+  jour: { nom: 'Le jour se lève', enCours: 'Le jour se lève' },
+} as const;
 
 /**
  * Étapes faites, d'après ce que la scène publie sur son élément racine (data-sortie, data-troncons)
@@ -624,6 +631,7 @@ function DriveLoading() {
   const failed = useDrive((state) => state.telemetry.failed);
   const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const reduced = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const moment = useDrive((state) => state.moment);
   const map = mapById(mapId);
   const faites = useEtapes(ready);
   const [gone, setGone] = useState(false);
@@ -635,17 +643,18 @@ function DriveLoading() {
   }, [ready, reduced]);
 
   if (!map || failed || gone) return null;
-  const courante = ETAPES[Math.min(faites, ETAPES.length - 1)] ?? ETAPES[0];
+  const etapes: readonly { nom: string; enCours: string }[] = [...ETAPES.slice(0, ETAPES.length - 1), ETAPE_CIEL[moment] ?? ETAPE_CIEL.nuit];
+  const courante = etapes[Math.min(faites, etapes.length - 1)] ?? ETAPES[0];
   return (
     <div className="drive-veil drive-chargement" data-etat="chargement" data-fini={ready || undefined} inert={ready}>
       <div className="tuto-chargement-bas">
         <p className="tuto-marque">
-          <span>Sortie de nuit</span>
+          <span>Sortie</span>
           <b>{map.name}</b>
         </p>
         {map.hint && <p className="drive-chargement-sous">{map.hint}</p>}
         <ol className="tuto-etapes">
-          {ETAPES.map((etape, index) => (
+          {etapes.map((etape, index) => (
             <li key={etape.nom} data-etat={index < faites ? 'fait' : index === faites ? 'encours' : 'attente'}>
               {etape.nom}
             </li>
@@ -778,6 +787,7 @@ export function DriveScreen() {
       <DriveVeil />
       <SonEtat />
       <ArriveePanneau />
+      {!apercu && <AnnonceBalade />}
       <FinCourse />
       {reglages.ouvert && <ReglagesPanneau paysage={paysage} fermer={reglages.fermer} />}
       <DriveLoading key={`${mapId ?? ''}-${attempt}`} />

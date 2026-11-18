@@ -70,7 +70,7 @@ describe('pile des niveaux du dock', () => {
     dock().setSection('custom');
     dock().setEntry('peinture');
     dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
-    // Garage, deux entrées (Ambiance, Sortie de nuit) : ses entrées d'abord, puis le contenu ;
+    // Garage, deux entrées (Ambiance, Sortie) : ses entrées d'abord, puis le contenu ;
     // « Retour » remonte aux entrées, puis aux sections.
     dock().setSection('garage');
     expect(dock().menu).toBe('entrees');

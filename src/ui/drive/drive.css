@@ -1,7 +1,7 @@
 /* Sortie de nuit (§ 5.5) : l'entrée du menu et l'écran de la route. Mêmes jetons que l'atelier
    (src/app/styles.css) ; toute commande offre 48 px au doigt. */
 
-/* ───────────── Entrée « Sortie de nuit » du menu ───────────── */
+/* ───────────── Entrée « Sortie » du menu ───────────── */
 
 /* En dock compact, le contenu défile en hauteur ; « Sortir » reste collé en bas, sous le pouce. */
 .dock[data-taille='compact'] .dock-tab[data-onglet='sortie'] {

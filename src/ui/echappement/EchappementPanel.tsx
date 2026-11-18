@@ -110,7 +110,7 @@ export function EchappementPanel() {
 
   let flammes: string;
   if (!ligne.flammes) flammes = 'Pas de retour de flammes avec cette ligne.';
-  else if (sorties > 0) flammes = 'En sortie de nuit, un lever de pied après un haut régime fait cracher les sorties.';
+  else if (sorties > 0) flammes = 'En sortie, un lever de pied après un haut régime fait cracher les sorties.';
   else flammes = 'Ce véhicule n’a pas encore de sortie modelée : le claquement s’entend en sortie, sans flamme visible.';
 
   return (

@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreSurLaRoute, auSec, openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
+import { attendreSurLaRoute, auSec, ENTREE_SORTIE, openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const DIR = resolve('captures', 'vague-o-virage');
@@ -24,7 +24,7 @@ async function sortie(page: Page, vehicle: string): Promise<void> {
   await page.locator('footer.dock').getByRole('group', { name: 'Véhicule' }).locator(`[data-vehicle="${vehicle}"]`).tap();
   await expect(page.locator('.stage')).toHaveAttribute('data-vehicle', vehicle);
   await waitForBench(page);
-  await openEntry(page, 'Sortie de nuit');
+  await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
   // Au sec : le parcours ne parle pas de météo, et sous la pluie le pilote automatique prend le lacet plus lentement.
   await auSec(page);

@@ -15,6 +15,7 @@ import {
   choisirCamera,
   commencerCourse,
   DELAI_ROUTE,
+  ENTREE_SORTIE,
   openApp,
   openEntry,
   pickMap,
@@ -222,7 +223,7 @@ async function flammesEnSortie(page: Page, vehicle: string, regime: number, capt
   await waitForScene(page);
   await poserCle(page, 'pmb-builds', { current: vehicle, builds: { [vehicle]: { paints: {}, parts: { echappement: 'libre' } } }, recents: [vehicle] });
   await waitForBench(page);
-  await openEntry(page, 'Sortie de nuit');
+  await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
   await auSec(page);
   await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();

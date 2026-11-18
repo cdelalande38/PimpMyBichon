@@ -145,13 +145,13 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
           )}
           <RadioButton />
           {/* La sortie de nuit était introuvable au deuxième niveau du menu (retour du 16 novembre
-              2026) : son raccourci ouvre Garage › Sortie de nuit, où l'on choisit la carte. */}
+              2026) : son raccourci ouvre Garage › Sortie, où l'on choisit la carte. */}
           {!sceneFailed && (
             <button
               type="button"
               className="quick-btn"
-              aria-label="Sortie de nuit"
-              title="Sortie de nuit : choisir la carte et rouler"
+              aria-label="Sortie"
+              title="Sortie : choisir la carte et rouler"
               onClick={() => useDock.getState().openEntry('sortie')}
             >
               <Icon name="route" />

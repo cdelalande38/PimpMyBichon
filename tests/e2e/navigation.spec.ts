@@ -6,7 +6,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { openApp, openEntry, reloadSaved, waitForScene } from './helpers.ts';
+import { ENTREE_SORTIE, openApp, openEntry, reloadSaved, waitForScene } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
 const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
@@ -135,11 +135,11 @@ test.describe('navigation du dock', () => {
     await back(page).tap();
     await expect(tabs(page)).toBeVisible();
     await expect(back(page)).toHaveCount(0);
-    // Garage, deux entrées (Ambiance, Sortie de nuit) : ses entrées d'abord, puis le contenu ;
+    // Garage, deux entrées (Ambiance, Sortie) : ses entrées d'abord, puis le contenu ;
     // « Retour » remonte aux entrées, puis aux sections.
     await tabs(page).getByRole('button', { name: 'Garage', exact: true }).tap();
     const garageEntries = dock(page).getByRole('navigation', { name: 'Entrées · Garage' });
-    await expect(garageEntries.getByRole('button')).toHaveText(['Ambiance', 'Sortie de nuit']);
+    await expect(garageEntries.getByRole('button')).toHaveText(['Ambiance', ENTREE_SORTIE]);
     await garageEntries.getByRole('button', { name: 'Ambiance', exact: true }).tap();
     await expect(dock(page).getByRole('group', { name: 'Ambiance' })).toBeVisible();
     await expectCrumbs(page, ['Garage', 'Ambiance']);

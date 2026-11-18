@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreSurLaRoute, auSec, commencerCourse, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, reglagesSortie, reloadSaved, rentrerAuGarage } from './helpers.ts';
+import { attendreSurLaRoute, auSec, commencerCourse, ENTREE_SORTIE, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, reglagesSortie, reloadSaved, rentrerAuGarage } from './helpers.ts';
 
 // Son du moteur en sortie de nuit (§ 5.5, § 9) : au départ le moteur démarre et tourne, le régime
 // publié monte avec la vitesse et passe des rapports, le bouton « Moteur » coupe et remet (choix
@@ -70,7 +70,7 @@ async function shot(page: Page, name: string, dossier = 'vague-n-sonsortie'): Pr
 
 /** Part en sortie (première carte) ; `sec` : météo au sec, pour un parcours qui ne parle pas de météo. */
 async function goOut(page: Page, { sec = false }: { sec?: boolean } = {}): Promise<void> {
-  await openEntry(page, 'Sortie de nuit');
+  await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
   if (sec) await auSec(page);
   await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();

@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { choisirCamera, openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
+import { choisirCamera, ENTREE_SORTIE, openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
 
 // Tableau de bord vivant (demande du 16 novembre 2026 : « le compteur reste à 0, ça serait top qu'il
 // soit synchro avec le vrai compteur »). À la caméra embarquée, la vitesse affichée au tableau de
@@ -28,7 +28,7 @@ async function choisir(page: Page, vehicle: string): Promise<void> {
 }
 
 async function sortir(page: Page): Promise<void> {
-  await openEntry(page, 'Sortie de nuit');
+  await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
   await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
@@ -134,7 +134,7 @@ test.describe('vue conducteur : captures de revue', () => {
       await page.waitForTimeout(2000);
       await page.screenshot({ path: resolve(dir, `${vehicle}-garage-${PHASE}.png`) });
       // Sortie de nuit, départ au bas de la rampe, caméra embarquée.
-      await openEntry(page, 'Sortie de nuit');
+      await openEntry(page, ENTREE_SORTIE);
       await pickMap(page);
       const depart = page.locator('footer.dock').getByRole('group', { name: 'Départ' }).getByRole('button', { name: /rampe/i });
       await depart.tap();
