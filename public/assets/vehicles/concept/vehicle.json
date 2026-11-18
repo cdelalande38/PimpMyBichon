@@ -8,6 +8,7 @@
   "hint": "Coupé d’essai du garage",
   "placeholder": "placeholder_banc",
   "halfLengthHint": 2.3,
+  "lights": { "front": ["Headlight"], "rear": ["Brakelight"] },
   "zones": [
     {
       "id": "carrosserie",

@@ -17,6 +17,7 @@ import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   Box3,
+  Color,
   DoubleSide,
   Group,
   Mesh,
@@ -45,6 +46,9 @@ import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
 import { disposePrepared, paintZones, prepare, useVehicleWheels, WHEEL_NODE, type Prepared } from '../../scene/vehicle/VehicleModel.tsx';
 import { resolvePaints, useBuilds } from '../../state/builds.ts';
 import { createBeam, createGlare } from './ciel.ts';
+import { HEADLIGHT } from './materiaux.ts';
+import { routeLight } from '../../data/phares.ts';
+import { tintAdditive, useVehicleLights } from '../../scene/vehicle/phares.ts';
 import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 import { DEFAULT_SEAT, placeEye, seatMetrics, type PlacedSeat } from '../../scene/fit.ts';
 import { bodyPoint, STILL_BODY, useBodyPose } from '../../scene/vehicle/wheels.ts';
@@ -356,6 +360,8 @@ export interface DriveModel {
   headSpread: number;
   /** Ombre portée par l'astre (le jour). */
   cast: NonNullable<DriveRig['cast']>;
+  /** Couleur de la lumière des phares sur la route (linéaire), d'après le build (Custom › Phares). */
+  headColor: Color;
 }
 
 interface DriveVehicleProps {
@@ -409,6 +415,14 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   const { stamp, spins } = useVehicleWheels(drive.prepared, vehicle, invalidate, { merge: false });
   // Volant, pommeau et sièges du build, posés comme au garage (sinon l'habitacle serait vide).
   useHabitacle(drive.prepared, vehicle, invalidate);
+  // Phares du build (src/scene/vehicle/phares.ts) : lueur et glace des optiques, feux arrière fumés,
+  // posés avant que le modèle soit donné au moteur (les feux y gardent leur lueur de repos).
+  const phares = useVehicleLights(drive.prepared.root, vehicle, { cloneRear: false, stageClass: DRIVE_STAGE_CLASS, invalidate });
+  const headColor = useMemo(() => {
+    if (phares.couleur.origine) return new Color(HEADLIGHT.color);
+    const [r, g, b] = routeLight(phares.couleur.color, HEADLIGHT.color);
+    return new Color().setRGB(r, g, b);
+  }, [phares.couleur]);
   const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins, vehicle.kind), [drive, spins, vehicle.kind]);
   // Direction d'une moto : fourche, guidon et poignées tournent avec la roue avant ; remis droits au départ.
   const steering = useMemo(() => bikeSteering(drive.prepared.root, wheels, vehicle.kind), [drive, wheels, vehicle.kind]);
@@ -485,6 +499,11 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     },
     [lights],
   );
+  // Faisceaux et éblouissements de la couleur choisie.
+  useLayoutEffect(() => {
+    for (const mesh of [...lights.beamMeshes, ...lights.glares]) tintAdditive(mesh.material, phares.couleur);
+    invalidate();
+  }, [lights, phares.couleur, invalidate]);
 
   // Ombre de contact (src/render/vehicleShadow.ts), rendue une fois, au sol sous la caisse.
   const shadow = useMemo(() => new VehicleShadowRig(shadowSize({ halfLength, halfWidth, height })), [halfLength, halfWidth, height]);
@@ -531,9 +550,9 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   useLayoutEffect(() => compileHidden(cast.mesh, gl, camera, scene), [cast, gl, camera, scene]);
 
   useLayoutEffect(() => {
-    onModel({ wheels, steering, tails: drive.tails, tailLight: lights.tail, measure: { halfLength, halfWidth, height }, head: new Vector3(lights.x, lights.y, 0), headSpread: lights.spread, cast });
+    onModel({ wheels, steering, tails: drive.tails, tailLight: lights.tail, measure: { halfLength, halfWidth, height }, head: new Vector3(lights.x, lights.y, 0), headSpread: lights.spread, cast, headColor });
     return () => onModel(null);
-  }, [drive, wheels, steering, lights, halfLength, halfWidth, height, onModel, cast]);
+  }, [drive, wheels, steering, lights, halfLength, halfWidth, height, onModel, cast, headColor, phares]);
 
   return (
     <primitive object={rig.group} dispose={null}>

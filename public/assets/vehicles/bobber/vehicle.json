@@ -8,6 +8,7 @@
   "hint": "Bicylindre en V, tout noir, selle solo et guidon haut : bas et long",
   "placeholder": "placeholder_bobber",
   "halfLengthHint": 1.2,
+  "lights": { "front": ["lamp"], "rear": ["tail"] },
   "zones": [
     {
       "id": "reservoir",

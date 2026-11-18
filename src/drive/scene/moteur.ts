@@ -413,6 +413,8 @@ export class DriveEngine {
     if (model) {
       rig.headLocal.copy(model.head);
       rig.headSpread = model.headSpread;
+      // Couleur de la lumière des phares sur la route (Custom › Phares).
+      this.uniforms.pmbHeadColor.value.copy(model.headColor);
       rig.measure = withWheels(model, rig);
       this.pilot.setSize?.(rig.measure.halfWidth, rig.measure.halfLength);
     }

@@ -94,7 +94,7 @@ describe('prix et rythme', () => {
 
   it('le pack de départ est offert, les trois autres s’achètent, les trophées ne s’achètent pas', () => {
     expect(articleParId('pack-depart')).toMatchObject({ prix: 0, offert: true });
-    expect(A_VENDRE.map((a) => a.id)).toEqual(['pack-flammes', 'pack-course', 'pack-atelier']);
+    expect(A_VENDRE.filter((a) => a.famille === 'pack').map((a) => a.id)).toEqual(['pack-flammes', 'pack-course', 'pack-atelier']);
     for (const trophee of TROPHEES) {
       expect(trophee.prix).toBeNull();
       expect(trophee.famille).toBe('sticker');

@@ -75,6 +75,16 @@ export interface VehicleAdapt {
 }
 
 /**
+ * Optiques d'un modèle (Custom › Phares, src/data/phares.ts) : matériaux des optiques avant (leur lueur
+ * prend la couleur choisie, leur glace la teinte) et des feux arrière (rouges ou fumés). Absent : les
+ * rôles des conventions, `lamp` et `tail`.
+ */
+export interface VehicleLights {
+  front: readonly string[];
+  rear: readonly string[];
+}
+
+/**
  * Moteur d'origine : le point de départ de la fiche de préparation (reprogrammation, carburation,
  * nitro). Des chiffres d'atelier pour le plaisir, pas une simulation mécanique.
  */
@@ -397,6 +407,8 @@ export interface VehicleManifest {
    */
   presentSide?: 'gauche' | 'droite';
   adapt?: VehicleAdapt;
+  /** Optiques avant et feux arrière (Custom › Phares) ; absent : les rôles `lamp` et `tail`. */
+  lights?: VehicleLights;
   /** Roues (jantes, pneus, cotes) et assiette ; absent : ni l'un ni l'autre ne se règle. */
   wheels?: VehicleWheels;
   /** Volant, pommeau et sièges au choix ; absent : pas d'habitacle à garnir. */

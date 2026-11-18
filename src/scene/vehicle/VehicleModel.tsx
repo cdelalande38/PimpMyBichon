@@ -44,6 +44,7 @@ import { resolveWheels, TIRE_PAINT, WHEEL_SLOTS, wheelFiles } from '../../data/w
 import type { Build } from '../../data/vehicleTypes.ts';
 import { useHabitacle } from './habitacle.ts';
 import { applyLivery, createLiveryRig, disposeLivery, type LiveryRig } from './livree.ts';
+import { useVehicleLights } from './phares.ts';
 import { createMarkMaterial, mergeGround, mountWheels, preloadWheels, useBodyPose, useWheelMounts, useWheelSources, type WheelAnchor, type WheelMount, type WheelRig } from './wheels.ts';
 
 const BASE = import.meta.env.BASE_URL;
@@ -582,6 +583,8 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   const { stamp } = useVehicleWheels(prepared, vehicle, invalidate, { merge: true });
   // Habitacle : volant, pommeau et sièges du build sur les ancres (src/scene/vehicle/habitacle.ts).
   useHabitacle(prepared, vehicle, invalidate, { preload: true });
+  // Phares du build : lueur et glace des optiques, feux arrière (src/scene/vehicle/phares.ts).
+  useVehicleLights(prepared.root, vehicle, { cloneRear: true, stageClass: 'stage', invalidate });
 
   // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
   // vernis), et compilerait pour rien une variante de plus pendant le démarrage. Rendu à la

@@ -8,6 +8,7 @@
   "hint": "Carénée de piste, coque relevée, jantes orange : ça sent la gomme chaude",
   "placeholder": "placeholder_sportive",
   "halfLengthHint": 1.1,
+  "lights": { "front": ["lamp"], "rear": ["tail"] },
   "zones": [
     {
       "id": "carenage",

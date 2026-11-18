@@ -8,6 +8,7 @@ import { TRANSMISSIONS } from './adherence.ts';
 import { BOITES_NOMMEES } from './boites.ts';
 import { FINISHES } from './finishes.ts';
 import { INTERIOR_CATALOGUE } from './habitacle.ts';
+import { checkLights } from './phares.ts';
 import { WHEEL_CATALOGUE } from './wheels.ts';
 import type { EngineSpec, InteriorView, Paint, PlaceId, SkyMotif, VehicleId, VehicleManifest, Zone, ZoneGroup } from './vehicleTypes.ts';
 
@@ -404,6 +405,7 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
     checkZones(raw.zones, problems);
     checkEngine(raw.engine, problems);
     checkPerformance(raw.performance, problems);
+    checkLights(raw.lights, problems);
     if (raw.adapt !== undefined && !isObject(raw.adapt)) problems.push('adapt doit être un objet');
     if (raw.presentSide !== undefined && raw.presentSide !== 'gauche' && raw.presentSide !== 'droite') {
       problems.push('presentSide doit valoir « gauche » ou « droite »');

@@ -125,6 +125,18 @@ export const TUTOS: readonly Tuto[] = [
     ],
   },
   {
+    id: 'phares',
+    ecrans: ['entree:phares'],
+    titre: 'Les phares',
+    but: 'Ici, tu choisis la couleur de tes phares, la teinte des optiques et tes feux arrière.',
+    etapes: [
+      { texte: 'Trois volets : Lumière pour la couleur de l’éclairage, Optiques pour la teinte des glaces, Feux pour l’arrière.', cible: 'footer.dock .phares-volets' },
+      { texte: 'Le blanc chaud d’origine est offert. Un cadenas et un prix : touche, puis « Acheter » avec tes dollars, et c’est posé.' },
+      { texte: 'Optiques : de claires à fumées, au curseur. Feux : rouges ou fumés, ils restent rouges une fois allumés.' },
+      { texte: 'En sortie de nuit, ta couleur se voit dans les optiques, dans le faisceau et sur la route éclairée.' },
+    ],
+  },
+  {
     id: 'habitacle',
     ecrans: ['entree:interieur'],
     titre: 'L’intérieur',
