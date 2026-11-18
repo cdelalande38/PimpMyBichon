@@ -387,7 +387,9 @@
   margin-top: 0.25rem;
 }
 
-.carriere-fin-actes .btn {
+/* Plus précis que « .drive-veil .btn { flex: none } » (drive.css) : l'ordre des feuilles dans le paquet ne
+   doit pas décider si le bouton se plie à la largeur du bloc (il débordait de 32 px en portrait). */
+.carriere-fin .carriere-fin-actes .btn {
   flex: 1 1 9rem;
   min-height: var(--tap);
   gap: 0.4rem;

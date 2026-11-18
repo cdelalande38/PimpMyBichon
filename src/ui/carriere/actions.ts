@@ -1,27 +1,22 @@
-// Les deux gestes de la carrière hors de son panneau : l'ouvrir (depuis la pastille du garage ou la
-// rubrique « Jeu »), et partir sur un rendez-vous (depuis le panneau).
+// Les deux gestes de la carrière hors de son panneau : l'ouvrir (depuis le bouton rond du garage ou le
+// rappel de la rubrique « Jeu »), et partir sur un rendez-vous (depuis le panneau).
 //
-// PROVISOIRE (vague U) : tant que le menu de la sortie par étapes (lot « entree ») n'est pas fusionné,
-// le panneau de la carrière se déplie dans Atelier › Jeu (src/ui/carriere/RappelCarriere.tsx). Une fois
-// l'étape « Mode » du menu de la sortie en place, `ouvrirCarriere` devra mener à cette étape, mode
-// « Carrière » choisi : c'est le seul endroit à changer.
+// Le panneau vit dans le menu de la sortie, à l'étape « Mode », mode Carrière choisi
+// (src/ui/drive/SortieEntree.tsx) : `ouvrirCarriere` y mène, d'où qu'on vienne.
 
-import { create } from 'zustand';
 import { isSheetRoute, parseHash } from '../../app/router.ts';
-import { openSheet, switchSheet } from '../../app/useRoute.ts';
+import { closeSheet, openSheet, switchSheet } from '../../app/useRoute.ts';
 import type { RendezVous } from '../../data/carriere.ts';
+import { useDock } from '../../state/dock.ts';
 import { useDrive } from '../../state/drive.ts';
+import { niveauCarriere } from '../drive/entree/etapes.ts';
 
-/** Le panneau de la carrière déplié dans Atelier › Jeu (provisoire) : jusqu'à « Replier » ou au départ sur un rendez-vous. */
-export const useCarriereOuverte = create<{ ouverte: boolean; setOuverte: (ouverte: boolean) => void }>()((set) => ({
-  ouverte: false,
-  setOuverte: (ouverte) => set({ ouverte }),
-}));
-
-/** Ouvre le panneau de la carrière. */
+/** Ouvre le panneau de la carrière : Garage › Sortie › Carrière. Un panneau ouvert (Atelier) se ferme d'abord. */
 export function ouvrirCarriere(): void {
-  useCarriereOuverte.getState().setOuverte(true);
-  openSheet({ name: 'jeu' });
+  if (isSheetRoute(parseHash(window.location.hash))) closeSheet();
+  const dock = useDock.getState();
+  dock.openEntry('sortie');
+  dock.setLevels([niveauCarriere()]);
 }
 
 /**
@@ -31,9 +26,7 @@ export function ouvrirCarriere(): void {
 export function sortirSurRendezVous(rdv: RendezVous, numero: number, total: number): void {
   const drive = useDrive.getState();
   drive.lancerRendezVous(rdv, numero, total);
-  // Au retour, le rappel de l'atelier est replié.
-  useCarriereOuverte.getState().setOuverte(false);
-  // Depuis un panneau (Atelier › Jeu), la sortie le remplace : en rentrant, on retrouve le garage.
+  // Depuis un panneau, la sortie le remplace : en rentrant, on retrouve le garage.
   if (isSheetRoute(parseHash(window.location.hash))) switchSheet({ name: 'sortie' });
   else openSheet({ name: 'sortie' });
   if (parseHash(window.location.hash).name !== 'sortie') useDrive.getState().leave();

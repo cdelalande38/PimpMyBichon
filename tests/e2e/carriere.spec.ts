@@ -1,6 +1,6 @@
 // Le mode carrière (vague U, 18 novembre 2026 ; src/data/carriere.ts, src/ui/carriere/) :
-// - au garage, le bouton rond du prochain rendez-vous ; un appui ouvre le panneau de la carrière (PROVISOIRE :
-//   déplié dans Atelier › Jeu, en attendant l'étape « Mode » du menu de la sortie) ; la fiche du premier
+// - au garage, le bouton rond du prochain rendez-vous ; un appui ouvre le panneau de la carrière (il vit
+//   dans le menu de la sortie, à l'étape « Mode », Carrière choisie) ; la fiche du premier
 //   rendez-vous (zone, départ, météo, moment, format, objectif, prime, conseil) et « Sortir », entier,
 //   en portrait comme en paysage ;
 // - la sortie imposée : l'écran de route dit le rendez-vous et son objectif, les réglages ne laissent changer
@@ -39,6 +39,8 @@ const PORTRAIT = { width: 390, height: 844 } as const;
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const pastille = (page: Page) => page.getByRole('button', { name: /^Carrière : prochain rendez-vous/ });
 const compte = (page: Page) => page.getByRole('dialog', { name: 'Ton compte' });
+/** Le panneau de la carrière, dans le menu de la sortie (Garage › Sortie › Carrière). */
+const menuCarriere = (page: Page) => page.locator('footer.dock').getByRole('region', { name: 'Carrière', exact: true });
 
 async function photo(page: Page, nom: string): Promise<void> {
   if (!CAPTURES) return;
@@ -146,9 +148,10 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await entiere(page, pastille(page), 'bouton rond de la carrière');
     await photo(page, '01-garage-bouton-portrait');
 
-    // Un appui ouvre la carrière (provisoire : Atelier › Jeu, panneau déplié).
+    // Un appui ouvre la carrière : le menu de la sortie, à l'étape du mode, Carrière choisie.
     await pastille(page).tap();
-    const panneau = compte(page).getByRole('region', { name: 'Carrière', exact: true });
+    await expect(page.locator('footer.dock .drive-entry')).toHaveAttribute('data-etape', 'carriere');
+    const panneau = menuCarriere(page);
     await expect(panneau).toBeVisible();
     const fiche = panneau.locator(`.carriere-fiche[data-rendez-vous="${premier.id}"]`);
     await expect(fiche).toContainText(`Rendez-vous 1 sur ${SUITE.length}`);
@@ -166,19 +169,11 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await entiere(page, sortir, 'Sortir (portrait)');
     await photo(page, '02-panneau-portrait');
 
-    // Paysage : « Sortir » reste entier, dans le panneau latéral et dans une colonne aussi étroite que le menu.
+    // Paysage : le menu est une colonne étroite à droite ; « Sortir » y reste entier.
     await page.setViewportSize(PAYSAGE);
-    // En tournant le téléphone, la zone qui défile change de hauteur : le rappel revient en haut, comme à l'ouverture.
-    await compte(page).locator('.carriere-rappel').evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    await expect(panneau).toBeVisible();
     await entiere(page, sortir, 'Sortir (paysage)');
-    await entiere(page, compte(page).getByRole('button', { name: 'Replier' }), 'Replier (paysage)');
     await photo(page, '03-panneau-paysage');
-    const etroit = await page.addStyleTag({ content: 'body .sheet { width: 16rem !important; }' });
-    await compte(page).locator('.carriere-rappel').evaluate((el) => el.scrollIntoView({ block: 'start' }));
-    await entiere(page, sortir, 'Sortir (colonne de 16 rem)');
-    await entiere(page, compte(page).getByRole('button', { name: 'Replier' }), 'Replier (colonne de 16 rem)');
-    await photo(page, '03b-panneau-colonne-etroite');
-    await etroit.evaluate((el) => el.parentNode?.removeChild(el));
     await page.setViewportSize(PORTRAIT);
 
     // La sortie, tout imposé.
@@ -266,7 +261,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await poserJeu(page, { solde: 500, articles: {}, hautsFaits: {}, cumuls: {}, carriere: { resultats: reussis } });
     await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${numero} sur ${SUITE.length}`));
     await pastille(page).tap();
-    await compte(page).getByRole('region', { name: 'Carrière', exact: true }).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await menuCarriere(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     const objectif = (await page.locator('.drive-rendez-vous small').textContent()) ?? '';
     const lu = /sous (\d+):(\d\d\.\d)/.exec(objectif);

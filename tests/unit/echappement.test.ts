@@ -238,6 +238,20 @@ describe('retour de flammes : déclencheur', () => {
     expect(s.tirs).toBe(1);
   });
 
+  it('pied levé, la boîte monte plusieurs rapports d’affilée : le jet part quand même, une fois les passages finis', () => {
+    // Une sportive lâchée à haut régime passe de la 1re à la 5e en plus d'une demi-seconde : ces passages
+    // ne mangent pas la fenêtre du lever de pied (le jet partait ou non selon leur nombre).
+    const s = suiviFlammesRepos();
+    avancer(s, 1, 0.9, 1);
+    expect(avancer(s, 0, 0.5, LEVER.fenetre + 0.4, true), 'rien pendant les passages').toBe(false);
+    expect(suivreFlammes(s, 0, 0.4, false, regle, 0.1, 0)).toBe(true);
+    // Mais un passage à pleine charge n'arme rien : sous le régime voulu après lui, pas de jet.
+    const plein = suiviFlammesRepos();
+    avancer(plein, 1, 0.9, 1);
+    avancer(plein, 0.1, 0.8, 0.3, true);
+    expect(avancer(plein, 1, 0.4, 0.5), 'pleine charge à bas régime après le passage').toBe(false);
+  });
+
   it('rien à bas régime, rien au passage de rapport, rien si le pied se lève trop tard', () => {
     const bas = suiviFlammesRepos();
     avancer(bas, 1, regle.regimeMin - 0.1, 1);

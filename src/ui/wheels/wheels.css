@@ -175,6 +175,13 @@ footer.dock[data-taille='compact'] .wheels .chip:not(.wheels-cote) small:not(.wh
   display: none;
 }
 
+/* Deux lignes serrées : la puce d'un pneu ou d'une assiette garde la hauteur d'une puce à une ligne, pour
+   que le menu ne saute pas d'un volet à l'autre (tests/e2e/menu-visuel.spec.ts). */
+.wheels .chip-text:has(> .wheels-terrain),
+.wheels .chip-text:has(> .wheels-terrain) :is(b, small) {
+  line-height: 1.1;
+}
+
 /* Pneus et assiettes : le nom, et son prix à côté tant qu'il est à débloquer ; dessous, son terrain
    (« Sec : +, pluie : −, neige : − − », src/data/preparation.ts), sur une ligne. */
 .wheels-titre {

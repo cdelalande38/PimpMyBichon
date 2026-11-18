@@ -59,7 +59,10 @@ export function suivreFlammes(s: SuiviFlammes, charge: number, regime: number, p
   const pas = Number.isFinite(dt) ? Math.max(0, dt) : 0;
   s.attente = Math.max(0, s.attente - pas);
   s.vie = Math.max(0, s.vie - pas);
-  s.depuisCharge += pas;
+  // Un passage de rapport ne mange pas la fenêtre : au lever de pied, la boîte monte souvent plusieurs
+  // rapports d'affilée (une sportive : de la 1re à la 5e en une demi-seconde), et le jet partait ou non
+  // selon leur nombre.
+  if (!passage) s.depuisCharge += pas;
   if (charge >= LEVER.armee && regime >= regle.regimeMin) {
     s.depuisCharge = 0;
     return false;
