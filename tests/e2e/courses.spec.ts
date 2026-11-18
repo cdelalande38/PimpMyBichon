@@ -16,7 +16,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreSurLaRoute, auSec, backToSections, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, reglerSortie, reloadSaved, rentrerAuGarage, waitForScene } from './helpers.ts';
+import { attendreSurLaRoute, auSec, backToSections, choisirCarte, choisirDepart, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, reglerSortie, reloadSaved, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const dock = (page: Page) => page.locator('footer.dock');
@@ -29,20 +29,21 @@ async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path });
 }
 
+/** Choisit la carte par les étapes du menu (lieu, circuit, départ) : on arrive à ses réglages. */
 async function carte(page: Page, nom: string): Promise<void> {
-  const chip = dock(page).getByRole('group', { name: 'Carte' }).getByRole('button', { name: new RegExp(nom) });
-  await chip.tap();
-  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  await choisirCarte(page, nom);
 }
 
 test.describe('courses : format, tours, écran de fin', () => {
   test('le format se choisit au menu après le départ, 3 tours grisés hors circuit, choix gardé', async ({ page }) => {
+    // Le menu par étapes (vague U) : quatre étapes par carte, trois cartes et un rechargement.
+    test.setTimeout(180_000);
     await openApp(page);
     await waitForScene(page);
     await openEntry(page, ENTREE_SORTIE);
     await carte(page, 'Miami Beach');
-    // Route ouverte : balade par défaut, 3 tours grisés avec la phrase.
-    await expect(format(page, 'Balade')).toHaveAttribute('aria-pressed', 'true');
+    // Route ouverte : la course d'un tour par défaut (vague U), 3 tours grisés avec la phrase.
+    await expect(format(page, 'Course 1 tour')).toHaveAttribute('aria-pressed', 'true');
     await expect(format(page, 'Course 3 tours')).toBeDisabled();
     await expect(dock(page).getByText('Trois tours, c’est sur un circuit')).toBeVisible();
     await format(page, 'Course 1 tour').tap();
@@ -117,7 +118,7 @@ test.describe('courses : format, tours, écran de fin', () => {
       await waitForScene(page);
       await openEntry(page, ENTREE_SORTIE);
       await carte(page, 'Miami Beach');
-      await dock(page).getByRole('group', { name: 'Départ' }).getByRole('button', { name: /Vers la 41e rue/ }).tap();
+      await choisirDepart(page, /Vers la 41e rue/);
       await format(page, 'Course 1 tour').tap();
       await auSec(page);
       await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();

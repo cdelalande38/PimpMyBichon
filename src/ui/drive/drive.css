@@ -3,27 +3,95 @@
 
 /* ───────────── Entrée « Sortie » du menu ───────────── */
 
-/* En dock compact, le contenu défile en hauteur ; « Sortir » reste collé en bas, sous le pouce. */
+/* Une étape à la fois (src/ui/drive/SortieEntree.tsx). L'onglet ne défile pas d'un bloc : le corps de
+   l'étape défile dans la hauteur qui reste, et « Sortir », dessous, est toujours entier, sur toute la
+   largeur du menu, collé en bas, sous le pouce (portrait comme paysage, texte grand compris). */
+.dock[data-taille] .dock-tab[data-onglet='sortie'] {
+  overflow: hidden;
+}
+
+/* Dock compact : l'entrée garde la hauteur du tiers bas ; rien ne déborde en dessous. L'onglet va
+   d'un bord de l'écran à l'autre (comme en dock agrandi) : ses rangées y débordent sans qu'il puisse
+   défiler en largeur. */
 .dock[data-taille='compact'] .dock-tab[data-onglet='sortie'] {
   max-height: var(--dock-body);
-  justify-content: flex-start;
   margin: 0 calc(-1 * var(--pad-r)) 0 calc(-1 * var(--pad-l));
   padding: 0 var(--pad-r) 0 var(--pad-l);
+}
+
+.drive-entry {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+
+.drive-entry > * {
+  flex: none;
+}
+
+/* Corps de l'étape : il défile en hauteur, déborde jusqu'aux bords de l'écran comme ses rangées. Son
+   bas s'estompe sur une marge vide : ce qui continue dessous se devine, et la fin se lit en entier. */
+.drive-entry > .entree-corps {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--pad-r)) 0 calc(-1 * var(--pad-l));
+  padding: 0 var(--pad-r) 0.875rem var(--pad-l);
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 0.875rem), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 0.875rem), transparent);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   pointer-events: auto;
 }
 
-.drive-entry {
-  display: flex;
+.entree-corps > * {
   flex: none;
-  flex-direction: column;
-  gap: 6px;
 }
 
-/* Les rangées qui défilent en largeur ne se laissent pas écraser par la hauteur bornée du dock. */
-.drive-entry > * {
+/* Ligne de tête : ce qui est déjà choisi, en clair, puis ce qu'on attend. Elle passe à la ligne. */
+.entree-rappel {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.entree-rappel b {
+  color: var(--chrome);
+  font-weight: 700;
+}
+
+/* Aux réglages : le rappel et « Changer » sur une rangée ; le rappel passe à la ligne à côté. */
+.entree-rappel-reglages {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.entree-rappel-reglages > p {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dock .btn.entree-changer {
   flex: none;
+  padding: 0 0.625rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+/* Moment et météo, deux groupes sur une rangée qui passe à la ligne. */
+.entree-ciel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 0.75rem;
 }
 
 .drive-credits {
@@ -54,18 +122,9 @@
   line-height: 1.35;
 }
 
-.drive-go-row {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  display: flex;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
-  background: rgba(10, 9, 17, 0.97);
-}
-
 .drive-weather {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.375rem;
 }
 
@@ -83,22 +142,112 @@
   color: var(--night);
 }
 
-.drive-go {
-  flex: 1;
+/* « Sortir » : sur toute la largeur, jamais dans une rangée, jamais coupé ; le format choisi dessous. */
+.dock .btn.drive-go {
+  flex: none;
   flex-direction: column;
-  gap: 0;
+  gap: 0.125rem;
+  width: 100%;
   min-height: var(--tap-chip);
+  padding: 0.375rem 0.75rem;
   font-size: 1.25rem;
   letter-spacing: 0.12em;
   line-height: 1.1;
+  pointer-events: auto;
 }
 
-/* Le format choisi, sous « Sortir » (src/data/courses.ts). */
+/* Le format choisi et ce qu'il rapporte, sous « Sortir » (src/data/courses.ts) : il passe à la ligne. */
 .drive-go-format {
-  font-size: 0.6875rem;
-  letter-spacing: 0.04em;
+  font-family: var(--body);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
   text-transform: none;
-  opacity: 0.85;
+  white-space: normal;
+  opacity: 0.9;
+}
+
+/* Lieux, circuits, départs : une puce garde une largeur de pouce, sa petite ligne passe sur deux
+   lignes au plus ; la suivante dépasse au bord de l'écran, on voit que la rangée défile. */
+.entree-liste .chip {
+  max-width: 13.5rem;
+}
+
+.entree-liste .chip small {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Miniature et texte à gauche de la puce, même quand elle prend toute la ligne. */
+.entree-liste .chip.chip-picto {
+  justify-content: flex-start;
+}
+
+/* Le mode : deux choix côte à côte, toujours entiers. */
+.entree-liste[aria-label='Mode'] .chip {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: none;
+}
+
+/* Dock agrandi et paysage (colonne étroite à droite) : les choix passent à la ligne et leur petite
+   ligne aussi ; les formats prennent chacun la largeur, pour se lire d'un coup d'œil. */
+.dock[data-taille='agrandi'] .drive-entry .chip small,
+.dock[data-taille='agrandi'] .drive-formats .chip b {
+  white-space: normal;
+}
+
+.dock[data-taille='agrandi'] .drive-entry .entree-liste .chip {
+  flex: 1 1 12rem;
+  max-width: 100%;
+}
+
+/* Portrait : les trois formats côte à côte, leur phrase sur plusieurs lignes. */
+.dock[data-taille='agrandi'] .drive-formats .chip {
+  flex: 1 1 0;
+  min-width: 6.25rem;
+  max-width: 100%;
+}
+
+/* Paysage (même requête que src/app/paysage.css) : la colonne est étroite et basse. Le moment et la
+   météo tiennent sur une rangée (le mot passe sous l'icône) ; un format par ligne, son nom et ce qu'il
+   rapporte côte à côte quand ils tiennent : les trois se voient au-dessus de « Sortir ». */
+@media (orientation: landscape) and (max-height: 540px) {
+  .dock .drive-entry .entree-ciel {
+    column-gap: 6px;
+  }
+
+  .dock .drive-entry .drive-weather {
+    gap: 4px;
+  }
+
+  .dock .drive-entry .drive-weather-btn {
+    flex-direction: column;
+    gap: 0;
+    min-width: 48px;
+    padding: 0 0.25rem;
+    font-size: 0.625rem;
+    letter-spacing: 0.02em;
+  }
+
+  .dock .drive-entry .drive-weather-btn .drive-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  .dock[data-taille='agrandi'] .drive-formats .chip {
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: baseline;
+    align-content: center;
+    column-gap: 0.5rem;
+    min-height: var(--tap);
+    padding: 0.25rem 1rem;
+  }
 }
 
 .drive-icon {

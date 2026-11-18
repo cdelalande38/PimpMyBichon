@@ -4,6 +4,7 @@
   "hint": "De la rampe de Laffrey à La Mure, le long des lacs",
   "kind": "route",
   "order": 1,
+  "zone": { "id": "plateau-matheysin", "label": "Plateau matheysin", "circuit": "Les lacs" },
   "route": "route.json",
   "credits": [
     { "source": "IGN, BD TOPO (routes, bâtiments, plans d’eau, végétation)", "licence": "Licence Ouverte 2.0", "date": "2026-11" },

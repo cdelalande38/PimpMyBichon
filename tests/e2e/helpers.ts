@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, type Page } from '@playwright/test';
 import sharp from 'sharp';
@@ -36,12 +36,15 @@ export async function openAtelier(page: Page, rubrique: 'Réglages' | 'Sous le c
   await expect(page.getByRole('dialog', { name: rubrique })).toBeVisible();
 }
 
-/** Dock : remonte aux sections par « Retour » (un seul niveau du menu à l'écran). */
+/**
+ * Dock : remonte aux sections par « Retour » (un seul niveau du menu à l'écran). Jusqu'à dix niveaux :
+ * le menu de la sortie en empile quatre sous son contenu (lieu, circuit, départ, réglages).
+ */
 export async function backToSections(page: Page): Promise<void> {
   const dock = page.locator('footer.dock');
   const sections = dock.getByRole('navigation', { name: 'Onglets de l’atelier' });
   const back = dock.getByRole('button', { name: 'Retour', exact: true });
-  for (let i = 0; i < 5 && !(await sections.isVisible()); i += 1) {
+  for (let i = 0; i < 10 && !(await sections.isVisible()); i += 1) {
     if (!(await back.isVisible())) break;
     await back.tap();
   }
@@ -390,12 +393,110 @@ export async function auSec(page: Page): Promise<void> {
   await expect(sec).toHaveAttribute('aria-pressed', 'true');
 }
 
+/** Une carte du catalogue, lue dans son manifeste (public/assets/maps/<id>/map.json). */
+export interface CarteDuMenu {
+  id: string;
+  name: string;
+  order: number;
+  /** Lieu de la carte (champ `zone` du manifeste ; sans lui, la carte fait un lieu à elle seule). */
+  zone: string;
+  /** Nom du lieu, et nom de la carte dans son lieu (« Monaco », « Le circuit »). */
+  lieu: string;
+  circuit: string;
+}
+
+/** Les cartes du catalogue, dans l'ordre du menu (rang, puis identifiant), comme src/data/maps.ts. */
+export function cartesDuMenu(): CarteDuMenu[] {
+  const dir = resolve('public', 'assets', 'maps');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(resolve(dir, entry.name, 'map.json')))
+    .map((entry) => {
+      const raw = JSON.parse(readFileSync(resolve(dir, entry.name, 'map.json'), 'utf8')) as { id: string; name: string; order: number; zone?: { id: string; label: string; circuit?: string } };
+      return { id: raw.id, name: raw.name, order: raw.order, zone: raw.zone?.id ?? `carte-${raw.id}`, lieu: raw.zone?.label ?? raw.name, circuit: raw.zone?.circuit ?? raw.name };
+    })
+    .sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** Le menu de la sortie à l'écran (son étape dans data-etape : mode, zone, circuit, depart, reglages, carriere). */
+export function entreeSortie(page: Page) {
+  return page.locator('footer.dock .drive-entry');
+}
+
+/** Étape du menu de la sortie à l'écran. */
+export async function etapeSortie(page: Page): Promise<string> {
+  return (await entreeSortie(page).getAttribute('data-etape')) ?? '';
+}
+
+/** Menu de la sortie : « Retour » du dock, une étape plus haut. */
+export async function etapePrecedente(page: Page): Promise<void> {
+  const avant = await etapeSortie(page);
+  await page.locator('footer.dock').getByRole('button', { name: 'Retour', exact: true }).tap();
+  if (avant !== 'mode') await expect(entreeSortie(page)).not.toHaveAttribute('data-etape', avant);
+}
+
 /**
- * Menu « Sortie » : touche une carte (la première par défaut). Rien n'est choisi à
- * l'ouverture du panneau ; les départs, la météo et « Sortir » n'apparaissent qu'ensuite.
+ * Menu « Sortie » ouvert, à n'importe quelle étape : mène aux réglages de la carte donnée par les étapes
+ * (mode libre, lieu, circuit du lieu s'il en a plusieurs, départ), en touchant le départ `depart`, ou
+ * celui déjà choisi (le premier par défaut). Sans dépendre de l'ordre des étapes à l'écran.
+ */
+export async function allerALaCarte(page: Page, carte: CarteDuMenu, { depart }: { depart?: string | RegExp } = {}): Promise<void> {
+  const dock = page.locator('footer.dock');
+  const entree = entreeSortie(page);
+  await expect(entree).toBeVisible();
+  for (let i = 0; i < 6; i += 1) {
+    const etape = await etapeSortie(page);
+    if (etape === 'mode' || etape === 'zone') break;
+    await etapePrecedente(page);
+  }
+  if ((await etapeSortie(page)) === 'mode') await dock.getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
+  await expect(entree).toHaveAttribute('data-etape', 'zone');
+  await dock.getByRole('group', { name: 'Lieu' }).locator(`[data-zone="${carte.zone}"]`).tap();
+  await expect(entree).toHaveAttribute('data-etape', /^(circuit|depart|reglages)$/);
+  if ((await etapeSortie(page)) === 'circuit') await dock.getByRole('group', { name: 'Circuit' }).locator(`[data-carte="${carte.id}"]`).tap();
+  await expect(entree).toHaveAttribute('data-etape', /^(depart|reglages)$/);
+  if ((await etapeSortie(page)) === 'depart') {
+    const departs = dock.getByRole('group', { name: 'Départ' });
+    const reglages = dock.locator('.drive-entry[data-etape="reglages"]');
+    // La route se charge (départs) ; une carte à un seul départ passe d'elle-même aux réglages.
+    await expect(departs.getByRole('button').first().or(reglages)).toBeVisible({ timeout: 30_000 });
+    if (!(await reglages.isVisible())) {
+      const presse = departs.locator('[aria-pressed="true"]');
+      const bouton = depart !== undefined ? departs.getByRole('button', { name: depart }) : (await presse.count()) > 0 ? presse : departs.getByRole('button').first();
+      await bouton.tap();
+    }
+  }
+  await expect(entree).toHaveAttribute('data-etape', 'reglages');
+  await expect(dock.locator(`.drive-credits[data-credits="${carte.id}"]`)).toBeVisible();
+}
+
+/**
+ * Menu « Sortie » : choisit une carte (la première du catalogue par défaut ; `index` : son rang dans
+ * l'ordre du catalogue) par les étapes du menu, et arrive à ses réglages : moment, météo, format et
+ * « Sortir » sont à l'écran. Le départ est celui déjà choisi, le premier par défaut (voir choisirDepart).
  */
 export async function pickMap(page: Page, index = 0): Promise<void> {
-  const chip = page.locator('footer.dock').getByRole('group', { name: 'Carte' }).getByRole('button').nth(index);
-  await chip.tap();
-  await expect(chip).toHaveAttribute('aria-pressed', 'true');
+  const carte = cartesDuMenu()[index];
+  if (!carte) throw new Error(`pas de carte au rang ${index}`);
+  await allerALaCarte(page, carte);
+}
+
+/** Menu « Sortie » : choisit la carte dont le nom (« Monaco, le circuit ») répond à `nom`, jusqu'à ses réglages. */
+export async function choisirCarte(page: Page, nom: string | RegExp): Promise<void> {
+  const carte = cartesDuMenu().find((item) => (typeof nom === 'string' ? item.name.includes(nom) : nom.test(item.name)));
+  if (!carte) throw new Error(`pas de carte nommée ${String(nom)}`);
+  await allerALaCarte(page, carte);
+}
+
+/**
+ * Menu « Sortie », une carte choisie (réglages ou départs à l'écran) : touche le départ `nom` et revient
+ * aux réglages.
+ */
+export async function choisirDepart(page: Page, nom: string | RegExp): Promise<void> {
+  const dock = page.locator('footer.dock');
+  if ((await etapeSortie(page)) === 'reglages') await etapePrecedente(page);
+  await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'depart');
+  const bouton = dock.getByRole('group', { name: 'Départ' }).getByRole('button', { name: nom });
+  await bouton.tap();
+  await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'reglages');
 }

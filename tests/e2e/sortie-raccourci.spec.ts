@@ -2,7 +2,7 @@
 // bouton pour y accéder ») : un bouton rond de la colonne de droite ouvre Garage › Sortie.
 
 import { expect, test } from '@playwright/test';
-import { ENTREE_SORTIE, openApp, quick, waitForScene } from './helpers.ts';
+import { ENTREE_SORTIE, openApp, pickMap, quick, waitForScene } from './helpers.ts';
 
 test('le bouton rond « Sortie » ouvre le choix de la carte, prêt à sortir', async ({ page }) => {
   await openApp(page);
@@ -15,11 +15,11 @@ test('le bouton rond « Sortie » ouvre le choix de la carte, prêt à sortir', 
   await button.tap();
   const dock = page.locator('footer.dock');
   await expect(dock.locator('.dock-crumb-here')).toHaveText(ENTREE_SORTIE);
-  const maps = dock.getByRole('group', { name: 'Carte' });
-  await expect(maps).toBeVisible();
-  // « Sortir » n'apparaît qu'une fois la carte touchée.
+  // Le menu s'ouvre sur sa première étape, le mode (vague U : une étape à la fois).
+  await expect(dock.getByRole('group', { name: 'Mode' })).toBeVisible();
+  // « Sortir » n'apparaît qu'aux réglages, une carte choisie.
   await expect(dock.getByRole('button', { name: 'Sortir', exact: true })).toHaveCount(0);
-  await maps.getByRole('button').first().tap();
+  await pickMap(page);
   await expect(dock.getByRole('button', { name: 'Sortir', exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/sortie-raccourci.png' });
 });

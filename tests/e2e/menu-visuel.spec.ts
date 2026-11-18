@@ -167,9 +167,11 @@ test.describe('menu visuel', () => {
     const ambiances = dock(page).getByRole('group', { name: 'Ambiance' });
     await expect(ambiances.locator('svg.picto')).toHaveCount(await ambiances.getByRole('button').count());
 
-    // Sortie de nuit : la miniature du tracé de chaque carte fabriquée.
+    // Sortie : la miniature du tracé de chaque lieu (celui de sa première carte), après « Libre ».
     await openEntry(page, ENTREE_SORTIE);
-    const maps = dock(page).getByRole('group', { name: 'Carte' });
+    await dock(page).getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
+    const maps = dock(page).getByRole('group', { name: 'Lieu' });
+    await expect(maps.getByRole('button').first()).toBeVisible();
     await expect(maps.locator('svg.picto-carte')).toHaveCount(await maps.getByRole('button').count());
     await waitForStill(page);
     await shot(page, '10-sortie-cartes');

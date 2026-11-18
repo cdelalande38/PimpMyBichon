@@ -27,7 +27,7 @@ beforeEach(() => {
 
 describe('préférences', () => {
   it('lecture tolérante : une valeur inconnue retombe sur l’origine', () => {
-    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ moment: 'nuit', weather: 'sec', camera: 'orbite', commande: 'manche', direction: 'libre', format: 'balade' });
+    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ moment: 'nuit', weather: 'sec', camera: 'orbite', commande: 'manche', direction: 'libre', format: 'tour1' });
     expect(sanitizeDrivePrefs({ moment: 'jour', weather: 'neige', camera: 'orbite', commande: 'pedales', direction: 'assistee', format: 'tours3' })).toEqual({
       moment: 'jour',
       weather: 'neige',
@@ -58,7 +58,7 @@ describe('préférences', () => {
     expect(nextCameraOf('orbite')).toBe(CAMERA_IDS[0]);
   });
 
-  it('garde la météo, la caméra et la commande d’une séance à l’autre, et rien d’autre', async () => {
+  it('garde la météo, la caméra, la commande et la dernière sortie d’une séance à l’autre, et rien d’autre', async () => {
     const drive = await launch();
     expect(drive.getState().commande).toBe('manche');
     drive.getState().setWeather('sec');
@@ -71,7 +71,7 @@ describe('préférences', () => {
     drive.getState().setSlow(true);
     await vi.waitFor(async () => {
       const raw = await get<string>(DRIVE_KEY, db());
-      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ moment: 'jour', weather: 'sec', camera: 'avant', commande: 'pedales', direction: 'assistee', format: 'tour1' });
+      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ moment: 'jour', weather: 'sec', camera: 'avant', commande: 'pedales', direction: 'assistee', format: 'tour1', derniere: { map: first.id, start: null } });
     });
     const again = await launch();
     const state = again.getState();

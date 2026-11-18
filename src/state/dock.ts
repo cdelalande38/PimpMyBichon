@@ -12,6 +12,9 @@
 // toujours le même chemin (nuancier → couleurs, couleurs ou finitions d'une zone → liste des zones,
 // contenu → entrées de la section, ou sections si elle n'a qu'une entrée, entrées → sections). Un
 // prochain menu s'y branche en ajoutant une sorte de niveau ici et son libellé dans le fil.
+// Sortie (vague U, retour du 18 novembre 2026) : ses étapes sont des niveaux (`kind: 'sortie'`) :
+// mode → zone → circuit → départ → réglages, ou mode → carrière. Chaque étape remplace la précédente,
+// « Retour » remonte d'une étape ; chaque niveau porte le libellé du choix qui y a mené, pour le fil.
 
 import { create } from 'zustand';
 import { directEntry, DOCK_MENU, type EntryId, type SectionId } from '../data/dockMenu.ts';
@@ -39,12 +42,21 @@ export function opensDirectly(section: SectionId): boolean {
 }
 export type PickerTarget = 'color' | 'color2';
 
+/** Étapes de la sortie sous son mode (le mode est l'étape de départ, sans niveau). */
+export const ETAPES_SORTIE = ['carriere', 'zone', 'circuit', 'depart', 'reglages'] as const;
+export type EtapeSortie = (typeof ETAPES_SORTIE)[number];
+
 /** Un niveau sous l'onglet. */
 export type DockLevel =
   /** Peinture : une zone, sur l'étape couleur ou finition (deux vues du même niveau). */
   | { kind: 'zone'; zone: string; step: PaintStep }
   /** Peinture : le nuancier, pour la couleur ou la seconde teinte de la zone. */
-  | { kind: 'nuancier'; target: PickerTarget };
+  | { kind: 'nuancier'; target: PickerTarget }
+  /**
+   * Sortie : une étape, avec le libellé du choix qui y a mené (« Libre », « Monaco », « Le circuit »…),
+   * lu par le fil ; `lieu` : le lieu dont l'étape « circuit » montre les cartes.
+   */
+  | { kind: 'sortie'; etape: EtapeSortie; libelle: string; lieu?: string };
 
 /** Ce qui est sauvegardé : la taille du dock. */
 export interface DockChoices {
@@ -64,6 +76,32 @@ export function dockSize(choices: Pick<DockChoices, 'expanded' | 'closed'>): Doc
 }
 
 const ZONE_ID = /^[a-z0-9_-]{1,40}$/i;
+/** Lieu d'une carte (src/data/maps.ts, zoneOf : identifiant du manifeste, ou « carte-<id> »). */
+const LIEU_ID = /^[a-z0-9_-]{1,72}$/;
+
+function sanitizeSortieLevel(level: Record<string, unknown>): DockLevel | null {
+  const etape = ETAPES_SORTIE.find((item) => item === level.etape);
+  if (!etape || typeof level.libelle !== 'string' || level.libelle.length > 120) return null;
+  if (etape === 'circuit') return typeof level.lieu === 'string' && LIEU_ID.test(level.lieu) ? { kind: 'sortie', etape, libelle: level.libelle, lieu: level.lieu } : null;
+  return { kind: 'sortie', etape, libelle: level.libelle };
+}
+
+/** Une pile de la sortie n'est valable que dans l'ordre des étapes : carrière seule, ou zone, circuit, départ, réglages (sauts permis). */
+function sanitizeSortieLevels(raw: readonly unknown[]): DockLevel[] {
+  const levels: DockLevel[] = [];
+  let rank = -1;
+  for (const item of raw.slice(0, 4)) {
+    if (typeof item !== 'object' || item === null || (item as Record<string, unknown>).kind !== 'sortie') break;
+    const level = sanitizeSortieLevel(item as Record<string, unknown>);
+    if (!level || level.kind !== 'sortie') break;
+    const next = ETAPES_SORTIE.indexOf(level.etape);
+    if (levels.length === 0 ? level.etape !== 'zone' && level.etape !== 'carriere' : level.etape === 'carriere' || next <= rank) break;
+    levels.push(level);
+    rank = next;
+    if (level.etape === 'carriere') break;
+  }
+  return levels;
+}
 
 function sanitizeLevel(raw: unknown): DockLevel | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -75,8 +113,12 @@ function sanitizeLevel(raw: unknown): DockLevel | null {
   return null;
 }
 
-/** Une pile n'est valable que dans l'ordre de l'atelier : zone, puis nuancier (entrée Peinture). */
+/**
+ * Une pile n'est valable que dans l'ordre de l'atelier : zone, puis nuancier (entrée Peinture) ; les
+ * étapes de la sortie, dans leur ordre (entrée Sortie).
+ */
 export function sanitizeLevels(entry: EntryId, raw: unknown): DockLevel[] {
+  if (entry === 'sortie' && Array.isArray(raw)) return sanitizeSortieLevels(raw);
   if (entry !== 'peinture' || !Array.isArray(raw)) return [];
   const levels: DockLevel[] = [];
   for (const item of raw.slice(0, 2)) {
@@ -128,6 +170,8 @@ export interface DockState extends DockChoices {
   push: (level: DockLevel) => void;
   /** Remplace le niveau courant (couleur ↔ finition d'une même zone). */
   replace: (level: DockLevel) => void;
+  /** Remplace toute la pile sous le contenu (la sortie rouvre sur les réglages de la dernière sortie). */
+  setLevels: (levels: readonly DockLevel[]) => void;
   /** Remonte d'un niveau (contenu → entrées → sections) ; rend faux si l'on était déjà aux sections. */
   back: () => boolean;
   /** Ouvre une entrée de l'extérieur (pastille de la pièce…), sur une zone de peinture si elle est donnée. */
@@ -169,6 +213,7 @@ export const useDock = create<DockState>()(
           const levels = sanitizeLevels(entryOf(state.section, state.entries), [...state.levels.slice(0, -1), level]);
           return { levels, zone: level.kind === 'zone' ? level.zone : state.zone };
         }),
+      setLevels: (levels) => set((state) => ({ levels: sanitizeLevels(entryOf(state.section, state.entries), [...levels]) })),
       back: () => {
         const { levels, menu, section } = get();
         if (levels.length > 0) set({ levels: levels.slice(0, -1) });

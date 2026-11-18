@@ -272,12 +272,12 @@ export const TUTOS: readonly Tuto[] = [
     id: 'sortie-menu',
     ecrans: ['entree:sortie'],
     titre: 'La sortie',
-    but: 'Ici, tu prépares la balade : tu sors ton véhicule du garage pour le regarder rouler, de jour comme de nuit, sur une vraie route.',
+    but: 'Ici, tu prépares ta sortie : une course ou une balade, de jour comme de nuit, sur une vraie route.',
     etapes: [
-      { texte: 'Touche d’abord une carte : une vraie route, redessinée pour l’atelier. Ses départs et l’origine de ses données s’affichent ensuite.', cible: 'footer.dock [aria-label="Carte"][role="group"]' },
-      { texte: 'Une fois la carte choisie, dis d’où tu pars : chaque départ est un coin de la route.', cible: 'footer.dock [aria-label="Départ"][role="group"]' },
-      { texte: 'Sec, pluie ou neige : sous la pluie la chaussée brille, sous la neige elle garde les traces des roues.', cible: 'footer.dock [aria-label="Météo"][role="group"]' },
-      { texte: 'Touche « Sortir » : la porte se lève et c’est parti.', cible: 'footer.dock .drive-go' },
+      { texte: 'D’abord le mode : « Libre », tu choisis tout ; « Carrière », des épreuves l’une après l’autre.', cible: 'footer.dock [aria-label="Mode"][role="group"]' },
+      { texte: 'En libre : le lieu, puis son circuit, puis ton départ. Chaque choix remplace le précédent ; « Retour » remonte d’une étape.', cible: 'footer.dock .dock-back' },
+      { texte: 'Dernière étape : nuit ou jour, la météo, le format. La balade ne rapporte rien ; la course, des dollars et des hauts faits.' },
+      { texte: 'Touche « Sortir » : la porte se lève et c’est parti. La fois suivante, le menu se rouvre sur ces réglages.' },
     ],
   },
   {

@@ -26,6 +26,19 @@ export type MapCredit = {
   date: string;
 };
 
+/**
+ * Lieu d'une carte, pour le menu de la sortie (retour du 18 novembre 2026 : on choisit d'abord le lieu,
+ * puis le circuit du lieu) : plusieurs cartes d'un même lieu portent le même `id` et le même `label`.
+ */
+export type MapZone = {
+  /** Identifiant du lieu, partagé par ses cartes : « monaco ». */
+  id: string;
+  /** Nom du lieu affiché : « Monaco ». */
+  label: string;
+  /** Nom court de cette carte dans son lieu : « Le circuit » ; à défaut, le nom de la carte. */
+  circuit?: string;
+};
+
 /** Manifeste d'une carte : public/assets/maps/<id>/map.json. */
 export type MapManifest = {
   id: MapId;
@@ -36,6 +49,8 @@ export type MapManifest = {
   kind: MapKind;
   /** Rang dans le catalogue. */
   order: number;
+  /** Lieu de la carte ; absent, la carte fait un lieu à elle seule (son nom). */
+  zone?: MapZone;
   /** Fichier de la route, produit par tools/maps/, relatif au dossier de la carte : « route.json ». */
   route: string;
   credits: MapCredit[];

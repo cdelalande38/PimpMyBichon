@@ -10,7 +10,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreSurLaRoute, auSec, ENTREE_SORTIE, openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
+import { attendreSurLaRoute, auSec, choisirDepart, ENTREE_SORTIE, openApp, openEntry, pickMap, waitForBench, waitForScene } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const DIR = resolve('captures', 'vague-o-virage');
@@ -28,9 +28,7 @@ async function sortie(page: Page, vehicle: string): Promise<void> {
   await pickMap(page);
   // Au sec : le parcours ne parle pas de météo, et sous la pluie le pilote automatique prend le lacet plus lentement.
   await auSec(page);
-  const start = page.locator('footer.dock').getByRole('group', { name: 'Départ' }).getByRole('button', { name: /rampe/i });
-  await start.tap();
-  await expect(start).toHaveAttribute('aria-pressed', 'true');
+  await choisirDepart(page, /rampe/i);
   await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
   await page.evaluate((cls) => {

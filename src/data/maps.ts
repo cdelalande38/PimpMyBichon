@@ -6,7 +6,7 @@
 // La route (route.json) n'entre pas dans le bundle : elle se charge à la première sortie
 // (`fetchRoute`), validée par `validateRoute`.
 
-import { MAP_RAIL_STRIDE, type MapId, type MapKind, type MapManifest, type MapRoute, type MapStart, type RailGround } from './mapTypes.ts';
+import { MAP_RAIL_STRIDE, type MapId, type MapKind, type MapManifest, type MapRoute, type MapStart, type MapZone, type RailGround } from './mapTypes.ts';
 
 /** Dossier des cartes, sous le socle de l'app. */
 export const MAPS_DIR = 'assets/maps/';
@@ -46,6 +46,15 @@ export function validateMapManifest(raw: unknown, folder: string): MapManifest {
   if (raw.hint !== undefined && !text(raw.hint)) problems.push('hint doit être un texte');
   if (!KINDS.includes(raw.kind as MapKind)) problems.push(`kind doit valoir ${KINDS.join(', ')}`);
   if (!finite(raw.order)) problems.push('order doit être un nombre');
+  if (raw.zone !== undefined) {
+    const zone = raw.zone;
+    if (!isObject(zone)) problems.push('zone doit être un objet { id, label }');
+    else {
+      if (typeof zone.id !== 'string' || !ID.test(zone.id)) problems.push('zone.id invalide (minuscules, chiffres, « - » et « _ »)');
+      if (!text(zone.label)) problems.push('zone.label manquant');
+      if (zone.circuit !== undefined && !text(zone.circuit)) problems.push('zone.circuit doit être un texte');
+    }
+  }
   if (typeof raw.route !== 'string' || !FILE.test(raw.route)) problems.push('route doit être un nom de fichier relatif au dossier de la carte');
   if (!Array.isArray(raw.credits) || raw.credits.length === 0) {
     problems.push('credits : au moins une source à créditer (obligation de licence)');
@@ -78,7 +87,54 @@ function folderOf(path: string): string {
  */
 export function buildMapCatalog(entries: Record<string, unknown>): readonly MapManifest[] {
   const maps = Object.entries(entries).map(([path, raw]) => validateMapManifest(raw, folderOf(path)));
+  // Un lieu porte le même nom sur toutes ses cartes : sinon le menu ne saurait lequel afficher.
+  const labels = new Map<string, string>();
+  for (const map of maps) {
+    if (!map.zone) continue;
+    const known = labels.get(map.zone.id);
+    if (known !== undefined && known !== map.zone.label) {
+      throw new Error(`Manifeste de carte invalide, ${manifestPath(map.id)} : zone « ${map.zone.id} » nommée « ${map.zone.label} » ici et « ${known} » ailleurs.`);
+    }
+    labels.set(map.zone.id, map.zone.label);
+  }
   return Object.freeze([...maps].sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)));
+}
+
+/** Lieu d'une carte : celui du manifeste, sinon un lieu à elle seule, du nom de la carte. */
+export function zoneOf(map: MapManifest): MapZone {
+  return map.zone ?? { id: `carte-${map.id}`, label: map.name };
+}
+
+/** Nom d'une carte dans son lieu (« Le circuit ») ; à défaut, son nom entier. */
+export function circuitLabel(map: MapManifest): string {
+  return map.zone?.circuit ?? map.name;
+}
+
+/** Un lieu du menu de la sortie et ses cartes, dans l'ordre du catalogue. */
+export interface ZoneEntry {
+  id: string;
+  label: string;
+  maps: readonly MapManifest[];
+}
+
+/**
+ * Lieux du catalogue, dans l'ordre de leur première carte ; chacun avec ses cartes, dans l'ordre du
+ * catalogue. Aucun lieu n'est écrit dans le code : tout vient des manifestes.
+ */
+export function zonesOf(catalog: readonly MapManifest[] = MAPS): readonly ZoneEntry[] {
+  const zones: { id: string; label: string; maps: MapManifest[] }[] = [];
+  for (const map of catalog) {
+    const zone = zoneOf(map);
+    const found = zones.find((item) => item.id === zone.id);
+    if (found) found.maps.push(map);
+    else zones.push({ id: zone.id, label: zone.label, maps: [map] });
+  }
+  return zones;
+}
+
+/** Le lieu d'identifiant donné, ou `undefined`. */
+export function zoneById(id: string | null | undefined, catalog: readonly MapManifest[] = MAPS): ZoneEntry | undefined {
+  return id ? zonesOf(catalog).find((zone) => zone.id === id) : undefined;
 }
 
 const MANIFESTS = import.meta.glob<unknown>('../../public/assets/maps/*/map.json', { eager: true, import: 'default' });

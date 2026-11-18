@@ -4,6 +4,7 @@
 //
 // - La balade : la conduite d'avant, inchangée (feux, chrono, arrivée au bout d'une route ouverte, tours
 //   sans fin sur une boucle), sans gain.
+// - Le format par défaut est la course d'un tour (vague U) : une sortie menée au bout rapporte.
 // - La course en 1 tour : sur une boucle, un tour depuis la ligne du départ choisi ; sur une route
 //   ouverte, un passage du départ à l'arrivée (le bout de la route).
 // - La course en 3 tours : sur une boucle seulement (`MapRoute.loop`) ; ailleurs, grisée, avec une phrase.
@@ -38,17 +39,25 @@ export const FORMATS: readonly FormatSpec[] = [
   { id: 'tours3', label: 'Course 3 tours', tours: 3, boucleSeulement: true },
 ];
 
-/** Petite ligne sous chaque format, au menu. */
+/**
+ * Petite ligne sous chaque format, au menu, et sous « Sortir » : ce que le format rapporte (retour du
+ * 18 novembre 2026 : une balade menée au bout ne rapportait rien, et rien ne le disait). Les gains
+ * eux-mêmes sont dans src/data/economie.ts.
+ */
 export const AIDES_FORMAT: Readonly<Record<FormatCourse, string>> = {
-  balade: 'Sans chrono à battre',
-  tour1: 'Contre la montre',
-  tours3: 'Trois tours de circuit',
+  balade: 'Pour le plaisir, sans gain',
+  tour1: 'Chrono, dollars et hauts faits',
+  tours3: 'Chrono, plus de dollars, hauts faits',
 };
 
 /** Phrase du format grisé sur une route ouverte. */
 export const PHRASE_SANS_BOUCLE = 'Trois tours, c’est sur un circuit : cette route a un début et une fin.';
 
-export const FORMAT_PAR_DEFAUT: FormatCourse = 'balade';
+/**
+ * Format d'une sauvegarde neuve : la course d'un tour (vague U, retour du 18 novembre 2026). Une
+ * sauvegarde d'avant, restée sur la balade d'origine, y repart une fois (src/state/drive.ts, migration).
+ */
+export const FORMAT_PAR_DEFAUT: FormatCourse = 'tour1';
 
 /** Tours au plus d'une course (taille des relevés de tours, sans allocation pendant la course). */
 export const TOURS_MAX = 8;

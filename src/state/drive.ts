@@ -15,6 +15,10 @@
 // choisi au menu et gardé. À l'arrivée d'une course, la scène rend la course finie (`terminerCourse`) :
 // record d'avant et médaille ajoutés, `cloturerCourse` (src/jeu/bilan.ts) en tire le bilan que montre
 // l'écran de fin (`fin`) ; le record de la carte, du départ et du format est gardé (`meilleurs`).
+// Vague U (retour du 18 novembre 2026) : le format d'une sauvegarde neuve est la course d'un tour ; une
+// sauvegarde d'avant (version 1), restée sur la balade d'origine, y repart une fois (`migrerDrivePrefs`),
+// puis le choix du joueur est respecté. La dernière sortie (carte et départ, `derniere`) est gardée : le
+// menu de la sortie (src/ui/drive/SortieEntree.tsx) se rouvre sur ses réglages.
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -31,7 +35,7 @@ import type { MapId } from '../data/mapTypes.ts';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
 export const DRIVE_KEY = 'pmb-sortie';
-export const DRIVE_VERSION = 1;
+export const DRIVE_VERSION = 2;
 
 export const WEATHERS: readonly { id: Weather; label: string }[] = [
   { id: 'sec', label: 'Sec' },
@@ -153,6 +157,32 @@ export const IDLE_TELEMETRY: Readonly<DriveTelemetry> = Object.freeze({
   finished: false,
 });
 
+/** Dernière sortie : la carte et le départ (`null` : le premier), gardés pour rouvrir le menu sur ses réglages. */
+export interface DerniereSortie {
+  map: MapId;
+  start: string | null;
+}
+
+const ID_SORTIE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/** Lecture tolérante de la dernière sortie ; la carte peut avoir quitté le catalogue (le menu le vérifie). */
+export function sanitizeDerniere(raw: unknown): DerniereSortie | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const { map, start } = raw as Record<string, unknown>;
+  if (typeof map !== 'string' || !ID_SORTIE.test(map)) return null;
+  return { map, start: typeof start === 'string' && start.length > 0 && start.length <= 64 ? start : null };
+}
+
+/**
+ * Préférences relues d'une sauvegarde de version `version`. Avant la version 2, le format n'avait pas
+ * de vrai choix par défaut (la balade, sans gain, que rien ne signalait) : une balade relue repart une
+ * fois sur la course d'un tour. Un autre format, choisi exprès, reste.
+ */
+export function migrerDrivePrefs(raw: unknown, version: number): DrivePrefs {
+  const prefs = sanitizeDrivePrefs(raw);
+  return version < 2 && prefs.format === 'balade' ? { ...prefs, format: FORMAT_PAR_DEFAUT } : prefs;
+}
+
 /** Lecture tolérante : une valeur inconnue retombe sur celle d'origine. */
 export function sanitizeDrivePrefs(raw: unknown): DrivePrefs {
   const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
@@ -209,6 +239,8 @@ export interface DriveState extends DriveStore {
   fail: () => void;
   /** Choix du menu, avant de sortir : carte (`null` : la première du catalogue) et départ. */
   choice: { map: MapId | null; start: string | null };
+  /** Dernière sortie (gardée) : le menu de la sortie se rouvre sur ses réglages ; `null` avant la première. */
+  derniere: DerniereSortie | null;
   /** Choisit la carte du menu ; le départ revient au premier de cette carte. */
   chooseMap: (map: MapId) => void;
   chooseStart: (start: string | null) => void;
@@ -302,6 +334,7 @@ export const useDrive = create<DriveState>()(
       course: 0,
       fondu: 'non',
       choice: { map: null, start: null },
+      derniere: null,
       retry: () =>
         set((state) =>
           state.map === null
@@ -335,6 +368,7 @@ export const useDrive = create<DriveState>()(
         set({
           map: target.id,
           start: wanted,
+          derniere: { map: target.id, start: wanted },
           apercu: true,
           fondu: 'non',
           fin: null,
@@ -439,10 +473,28 @@ export const useDrive = create<DriveState>()(
       name: DRIVE_KEY,
       version: DRIVE_VERSION,
       storage: createJSONStorage(() => idbStorage),
-      // Les meilleurs temps ne sont écrits qu'une fois le premier posé.
-      partialize: ({ moment, weather, camera, commande, direction, format, meilleurs }) => ({ moment, weather, camera, commande, direction, format, ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}) }),
-      migrate: (persisted) => ({ ...sanitizeDrivePrefs(persisted), meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs) }),
-      merge: (persisted, current) => ({ ...current, ...sanitizeDrivePrefs(persisted), meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs) }),
+      // Les meilleurs temps et la dernière sortie ne sont écrits qu'une fois posés.
+      partialize: ({ moment, weather, camera, commande, direction, format, meilleurs, derniere }) => ({
+        moment,
+        weather,
+        camera,
+        commande,
+        direction,
+        format,
+        ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}),
+        ...(derniere ? { derniere } : {}),
+      }),
+      migrate: (persisted, version) => ({
+        ...migrerDrivePrefs(persisted, version),
+        meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs),
+        derniere: sanitizeDerniere((persisted as { derniere?: unknown } | null)?.derniere),
+      }),
+      merge: (persisted, current) => ({
+        ...current,
+        ...sanitizeDrivePrefs(persisted),
+        meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs),
+        derniere: sanitizeDerniere((persisted as { derniere?: unknown } | null)?.derniere),
+      }),
       onRehydrateStorage: () => () => {
         useDrive.setState({ hydrated: true });
       },

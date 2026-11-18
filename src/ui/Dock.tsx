@@ -45,6 +45,8 @@ function DockHandle() {
 
 /** Libellé d'un niveau dans le fil : la zone et son étape, ou le nuancier. */
 function levelCrumbs(level: DockLevel, vehicle: VehicleManifest): string[] {
+  // Sortie : le choix qui a mené à l'étape (« Libre », « Monaco », « Le circuit »).
+  if (level.kind === 'sortie') return [level.libelle];
   if (level.kind === 'zone') {
     const zone = vehicle.zones.find((item) => item.id === level.zone);
     return [zone?.label ?? level.zone, level.step === 'finition' ? 'Finition' : 'Couleur'];
@@ -216,12 +218,15 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
   // Agrandir montre-t-il quelque chose de plus ici ? Mesuré après chaque rendu du niveau (avant
   // l'affichage), et quand la taille de l'écran, du texte ou du contenu change.
   const [more, setMore] = useState(false);
+  // Un contenu qui se montre toujours agrandi (`data-agrandir="d-office"` : les réglages de la sortie,
+  // et « Sortir » dessous) : le dock monte de lui-même, sans poignée, et redescend quand on en sort.
+  const [doffice, setDoffice] = useState(false);
   // Resté « agrandi » là où la poignée n'a rien à montrer : affiché compact, à sa hauteur utile.
   // Paysage : le menu est une colonne sur toute la hauteur, qui présente toujours ses options en
   // pleine page (rangées à la ligne, contenu qui défile en hauteur) : « agrandi » pour les contenus,
   // sans poignée ; la scène ne recadre rien en hauteur (src/scene/GarageCanvas.tsx).
   const paysage = usePaysage();
-  const size = paysage && !closed ? 'agrandi' : dockSize({ expanded: expanded && more, closed });
+  const size = (paysage || doffice) && !closed ? 'agrandi' : dockSize({ expanded: expanded && more, closed });
 
   // Dock agrandi : son bord haut, mesuré à l'écran, sert à la scène pour recadrer le véhicule
   // au-dessus. Il bouge avec le contenu de l'onglet, la taille du texte et celle de l'écran.
@@ -231,7 +236,10 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
   useLayoutEffect(() => {
     const element = footer.current;
     if (!element || closed || sceneFailed) return;
-    const measure = () => setMore(moreWhenExpanded(element, level));
+    const measure = () => {
+      setMore(moreWhenExpanded(element, level));
+      setDoffice(level === 'contenu' && element.querySelector('.dock-tab [data-agrandir="d-office"]') !== null);
+    };
     measure();
     const resize = new ResizeObserver(measure);
     resize.observe(element);
@@ -325,7 +333,7 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
 
   return (
     <footer ref={footer} className="dock" data-taille={size} inert={settling || covered} aria-hidden={covered || undefined}>
-      <DockHeader vehicle={vehicle} handle={more && !paysage} />
+      <DockHeader vehicle={vehicle} handle={more && !paysage && !doffice} />
       {banners}
       <BenchControls />
     </footer>

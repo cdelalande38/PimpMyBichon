@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { countGeometry, imageSize, parseGlb } from '../lib/glb.mjs';
 import { DOSSIER_MATIERES, MATIERES } from './matieres.mjs';
 import { continuiteChaussee, erreursContinuite, resumerContinuite } from './continuite.mjs';
-import { chausseeCouverte, resumerCouverture } from './couverture.mjs';
+import { chausseeCouverte, resumerCouverture, resumerSolSurChaussee, solSurChaussee } from './couverture.mjs';
 import { rayons } from './trace.mjs';
 import { empreinteNom, MAP_SHOP_KINDS, normaliserNom } from './enrichissement.mjs';
 
@@ -51,6 +51,16 @@ export function validerManifeste(m, id) {
   if (m.hint !== undefined && typeof m.hint !== 'string') e.push('map.json : hint doit être un texte');
   if (!['route', 'ville', 'circuit'].includes(m.kind)) e.push(`map.json : kind « ${m.kind} » inconnu`);
   if (!nombre(m.order)) e.push('map.json : order doit être un nombre');
+  // Lieu de la carte, pour le menu de la sortie (vague U) : facultatif, { id, label, circuit? }.
+  if (m.zone !== undefined) {
+    const z = m.zone;
+    if (!z || typeof z !== 'object' || Array.isArray(z)) e.push('map.json : zone doit être un objet { id, label }');
+    else {
+      if (typeof z.id !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(z.id)) e.push(`map.json : zone.id « ${z.id} » invalide`);
+      if (typeof z.label !== 'string' || !z.label.trim()) e.push('map.json : zone.label manquant');
+      if (z.circuit !== undefined && (typeof z.circuit !== 'string' || !z.circuit.trim())) e.push('map.json : zone.circuit doit être un texte');
+    }
+  }
   if (typeof m.route !== 'string' || !m.route) e.push('map.json : route manquant');
   if (!Array.isArray(m.credits) || m.credits.length === 0) e.push('map.json : credits vide (source et licence des données obligatoires)');
   else
@@ -320,6 +330,17 @@ export function verifierCarte(id, o = {}) {
         `chaussée couverte en ${cv.couverts.length} points sur ${cv.points} (${Object.entries(z.parRole).map(([k, v]) => `${k} ${v}`).join(', ')} ; jusqu'à ${z.dyMax.toFixed(2)} m ; vers ${z.zones.slice(0, 12).join(', ')} m)`,
       );
     }
+  }
+  // Herbe sur la route : aucun point de la chaussée ni de ses bas-côtés (tunnels et ponts compris) sous
+  // le terrain, l'eau ou le relief lointain, à plus d'un centimètre (tools/maps/couverture.mjs).
+  if (Array.isArray(r.rail) && Array.isArray(r.sections) && maillages.length) {
+    const ss = solSurChaussee(r, maillages, lointain);
+    if (ss.fautes.length) {
+      const z = resumerSolSurChaussee(ss.fautes);
+      erreurs.push(
+        `herbe au-dessus de la surface roulée en ${ss.fautes.length} points sur ${ss.points} (chaussée ${z.chaussee}, bas-côtés ${z.bord} ; ${Object.entries(z.parSol).map(([k, v]) => `${k} ${v}`).join(', ')} ; jusqu'à ${z.dyMax.toFixed(2)} m ; vers ${z.zones.slice(0, 12).join(', ')} m)`,
+      );
+    } else notes.push(`${r.id ?? id} : herbe au-dessus de la surface roulée : 0 point sur ${ss.points} (chaussée et bas-côtés, tunnels et ponts compris)`);
   }
   // Chaussée continue sous les roues, assez large, rail au milieu (tools/maps/continuite.mjs) ; rail
   // sans virage plus serré que le véhicule (8 m, cercle par les points à ±4 m, 0,5 m de tolérance).
