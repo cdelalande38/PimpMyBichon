@@ -49,7 +49,7 @@
     "sound": "diesel-turbo"
   },
   "performance": { "mass": 1800, "topKmh": 170, "grip": 5, "transmission": "traction" },
-  "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -14 }, "fov": 95, "volets": ["volant", "pommeau"] },
+  "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -14 }, "fov": 95, "volets": ["volant", "pommeau"], "conduite": { "lift": 0.05, "regard": [0.05, 0.06] } },
   "interiorViews": [
     { "place": "passager", "label": "Passager", "seat": { "anchors": ["siege_avant_droit"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": -14, "pitch": -12 }, "fov": 95 },
     { "place": "arriere", "label": "Arrière", "seat": { "anchors": ["siege_avant_gauche", "siege_avant_droit"], "up": 0.75, "behind": 0.95, "side": 0.25 }, "look": { "yaw": -8, "pitch": -2 }, "fov": 100, "volets": ["sieges", "ciel"] }

@@ -219,6 +219,22 @@ function checkView(view: unknown, where: string, problems: string[]): void {
   if (view.volets !== undefined && !(Array.isArray(view.volets) && view.volets.every((item) => ['volant', 'pommeau', 'sieges', 'ciel'].includes(item as string)))) {
     problems.push(`${where}.volets doit citer des volets de l'intérieur : volant, pommeau, sieges, ciel`);
   }
+  if (view.conduite !== undefined) checkDriveEye(view.conduite, `${where}.conduite`, problems);
+}
+
+/** Œil de conduite d'une place (interiorView.conduite) : valeurs bornées, paires portrait puis paysage. */
+function checkDriveEye(raw: unknown, where: string, problems: string[]): void {
+  if (!isObject(raw)) {
+    problems.push(`${where} doit être un objet`);
+    return;
+  }
+  const within = (value: unknown, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+  const pair = (value: unknown, min: number, max: number) => Array.isArray(value) && value.length === 2 && value.every((item) => within(item, min, max));
+  if (raw.lift !== undefined && !within(raw.lift, -0.1, 0.35)) problems.push(`${where}.lift doit être un relevé de −0,1 à 0,35 m`);
+  if (raw.ahead !== undefined && !within(raw.ahead, -0.3, 0.3)) problems.push(`${where}.ahead doit être une avancée de −0,3 à 0,3 m`);
+  if (raw.regard !== undefined && !pair(raw.regard, 0, 0.2)) problems.push(`${where}.regard doit porter deux débattements (bas, haut) de 0 à 0,2 m`);
+  if (raw.horizon !== undefined && !pair(raw.horizon, 0.3, 0.6)) problems.push(`${where}.horizon doit porter deux parts de l'image (portrait, paysage) de 0,3 à 0,6`);
+  if (raw.fov !== undefined && !pair(raw.fov, 30, 100)) problems.push(`${where}.fov doit porter deux champs (portrait, paysage) de 30 à 100 degrés`);
 }
 
 /** Points de vue intérieurs, ciel étoilé et lumière d'habitacle. */

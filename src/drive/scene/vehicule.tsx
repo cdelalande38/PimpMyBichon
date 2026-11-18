@@ -54,12 +54,13 @@ import { usePieces } from '../../scene/vehicle/pieces.ts';
 import { DEFAULT_SEAT, placeEye, seatMetrics, type PlacedSeat } from '../../scene/fit.ts';
 import { bodyPoint, STILL_BODY, useBodyPose } from '../../scene/vehicle/wheels.ts';
 import { TableauVivant } from '../../scene/vehicle/tableau.ts';
-import { cockpit } from '../cameras.ts';
+import { cockpit, COCKPIT, cockpitView, type CockpitView } from '../cameras.ts';
 import { bikeSteering, follow, liftStands, rollingWheels, steeringWheelPart, steerParts, wheelSteer, type SteeringPart, type Wheel } from './roues.ts';
 import { PILOT } from '../pilote.ts';
 import { DRIVER_POSE, driverSpecOf } from '../../data/conducteur.ts';
 import { INTERIOR_CATALOGUE } from '../../data/habitacle.ts';
-import { livePilot } from '../../state/drive.ts';
+import { livePilot, useDrive } from '../../state/drive.ts';
+import { partDuRegard } from '../../data/regard.ts';
 import { DRIVE_STAGE_CLASS } from '../contrat.ts';
 import { hideForCockpit, measureSeating, mountDriver, seatDriver, unmountDriver, useDriverRig, type DriverHandle } from '../../scene/vehicle/conducteur.ts';
 import type { DriverMotion } from '../../scene/vehicle/conducteur-pose.ts';
@@ -314,6 +315,40 @@ function seatedEye(root: Object3D, view: InteriorView): { eye: [number, number, 
   return { eye: placeEye(view.seat, seats, roof) ?? (view.eye ? [view.eye[0], view.eye[1], view.eye[2]] : null), pending };
 }
 
+/**
+ * Pavillon au-dessus du point (x, z) de la caisse au repos, cherché depuis la hauteur `from` (repère du
+ * véhicule), vitres comprises, sans les pièces posées ni le conducteur ; `null` : rien au-dessus. La
+ * hauteur du regard de la caméra embarquée ne monte jamais jusqu'à lui (src/drive/cameras.ts, cockpitView).
+ */
+function roofAbove(root: Object3D, x: number, z: number, from: number): number | null {
+  const body = root.getObjectByName('caisse');
+  if (!body) return null;
+  body.updateWorldMatrix(true, true);
+  const up = new Vector3(0, 1, 0).applyQuaternion(body.getWorldQuaternion(new Quaternion()));
+  const notBody = (object: Object3D) => {
+    for (let node: Object3D | null = object; node; node = node.parent) if (node.name === POSED || node.name === 'conducteur') return true;
+    return false;
+  };
+  const d = castBoth([body], new Vector3(x, from, z).applyMatrix4(body.matrixWorld), up, notBody);
+  return d === null ? null : from + d;
+}
+
+const publishedEye: CockpitView = { eye: [0, 0, 0], pitch: 0, fov: 0 };
+
+/**
+ * Hauteur de l'œil de conduite au cran demandé (cm, repère du véhicule), publiée sur la scène
+ * (`data-oeil`) quand l'œil est posé ou que le cran change : les parcours y lisent que le regard monte.
+ */
+function publishEye(stage: HTMLElement | null, bike: boolean): void {
+  if (!stage) return;
+  if (!cockpit.eye) {
+    delete stage.dataset.oeil;
+    return;
+  }
+  const view = cockpitView(cockpit.eye, bike ? (cockpit.conduite ?? COCKPIT.bike) : cockpit.conduite, cockpit.aspect, cockpit.regard, bike ? Number.NaN : cockpit.ceiling, publishedEye);
+  stage.dataset.oeil = String(Math.round(view.eye[1] * 100));
+}
+
 /** Ce que le modèle posé donne au moteur de la scène (src/drive/scene/moteur.ts, setModel). */
 export interface DriveModel {
   wheels: Wheel[];
@@ -405,11 +440,40 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   useLayoutEffect(() => {
     seated.current = false;
     cockpit.eye = null;
+    cockpit.ceiling = Number.NaN;
+    cockpit.conduite = null;
     return () => {
       cockpit.eye = null;
+      cockpit.ceiling = Number.NaN;
+      cockpit.conduite = null;
     };
   }, [drive, vehicle]);
-  useFrame(() => {
+  // Hauteur du regard du joueur (vague U, réglages de la sortie) : la caméra la rejoint en douceur ; la
+  // scène porte le cran appliqué (`data-regard`).
+  useEffect(() => {
+    const stage = gl.domElement.closest<HTMLElement>(`.${DRIVE_STAGE_CLASS}`);
+    const apply = (id: ReturnType<typeof useDrive.getState>['regard']) => {
+      cockpit.regard = partDuRegard(id);
+      if (stage) stage.dataset.regard = id;
+      publishEye(stage, vehicle.kind === 'bike');
+      invalidate();
+    };
+    apply(useDrive.getState().regard);
+    const unsubscribe = useDrive.subscribe((state, before) => {
+      if (state.regard !== before.regard) apply(state.regard);
+    });
+    return () => {
+      unsubscribe();
+      cockpit.regard = 0;
+      if (stage) {
+        delete stage.dataset.regard;
+        delete stage.dataset.oeil;
+      }
+    };
+  }, [gl, invalidate, vehicle.kind]);
+  useFrame((state) => {
+    // Format de l'image : la caméra embarquée en tire son champ et son horizon (portrait, paysage).
+    cockpit.aspect = state.size.width / Math.max(1, state.size.height);
     if (seated.current) return;
     const driver = vehicle.kind === 'bike' ? null : placeOf(vehicle, 'conducteur');
     if (!driver) {
@@ -421,7 +485,14 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     const waiting = anchors.some((anchor) => anchor && !anchor.children.some((child) => child.name === POSED));
     if (waiting && cockpit.eye) return;
     const { eye, pending } = seatedEye(drive.prepared.root, driver.view);
-    cockpit.eye = eye ? bodyPoint(eye, useBodyPose.getState().poses[vehicle.id] ?? STILL_BODY) : null;
+    const bodyPose = useBodyPose.getState().poses[vehicle.id] ?? STILL_BODY;
+    cockpit.eye = eye ? bodyPoint(eye, bodyPose) : null;
+    // Œil de conduite (manifeste) et pavillon au-dessus de lui : la hauteur du regard s'arrête dessous.
+    cockpit.conduite = driver.view.conduite ?? null;
+    const ahead = driver.view.conduite?.ahead ?? 0;
+    const roof = eye ? roofAbove(drive.prepared.root, eye[0] + ahead, eye[2], eye[1]) : null;
+    cockpit.ceiling = eye && roof !== null ? bodyPoint([eye[0] + ahead, roof, eye[2]], bodyPose)[1] : Number.NaN;
+    publishEye(gl.domElement.closest<HTMLElement>(`.${DRIVE_STAGE_CLASS}`), false);
     seated.current = !pending;
   });
 
@@ -549,8 +620,12 @@ function useTableau(vehicle: VehicleManifest): Group | null {
   return tableau?.group ?? null;
 }
 
-/** Distance de la caméra à l'œil du conducteur sous laquelle on est « dans sa tête ». */
-const IN_HEAD = 0.32;
+/**
+ * Distance de la caméra à l'œil du conducteur sous laquelle on est « dans sa tête ». L'œil de conduite
+ * de l'embarquée (vague U) monte et avance de l'œil de la place jusqu'à 0,35 m environ (relevé, avancée
+ * et hauteur du regard) : sa tête doit rester cachée. Les autres caméras restent à plus d'un mètre.
+ */
+const IN_HEAD = 0.5;
 
 /** Démultiplication de la direction : rotation du volant pour le braquage montré des roues (`wheelSteer`). */
 const STEERING_RATIO = DRIVER_POSE.motion.steerPerCurvature / PILOT.steer.wheelbase.car;
@@ -596,6 +671,7 @@ function useDriver(prepared: Prepared, vehicle: VehicleManifest): void {
       const current = state.current;
       if (current?.wheel) current.wheel.anchor.quaternion.copy(current.wheel.base);
       if (current) steerParts(current.column, 0);
+      if (current?.handle?.seating.kind === 'bike') cockpit.eye = null;
       unmountDriver(rig);
       if (current?.stage) delete current.stage.dataset.conducteur;
       state.current = null;
@@ -622,6 +698,12 @@ function useDriver(prepared: Prepared, vehicle: VehicleManifest): void {
       if (!seating) return;
       current.handle = seatDriver(rig, seating);
       mountDriver(rig, body, Math.round(performance.now() - started));
+      // Moto (vague U) : la caméra embarquée se pose à l'œil du motard au repos (src/drive/cameras.ts, cockpit).
+      if (seating.kind === 'bike') {
+        const e = current.handle.pose.eye;
+        cockpit.eye = bodyPoint([e.x, Math.min(e.y, prepared.height + COCKPIT.bikeAbove), e.z], useBodyPose.getState().poses[vehicle.id] ?? STILL_BODY);
+        publishEye(current.stage, true);
+      }
       if (current.stage) current.stage.dataset.conducteur = 'assis';
       return;
     }

@@ -64,7 +64,7 @@
     ]
   },
   "performance": { "mass": 1250, "topKmh": 300, "grip": 9.5, "gearbox": "sequentielle-course", "transmission": "propulsion" },
-  "interiorView": { "place": "conducteur", "label": "Conducteur", "eye": [0.12, 0.93, 0], "look": { "yaw": 0, "pitch": -10 } },
+  "interiorView": { "place": "conducteur", "label": "Conducteur", "eye": [0.12, 0.93, 0], "look": { "yaw": 0, "pitch": -10 }, "conduite": { "lift": 0.06, "ahead": 0.1, "regard": [0.03, 0.05], "horizon": [0.48, 0.44] } },
   "interiorViews": [{ "place": "passager", "label": "Passager", "eye": [-0.54, 0.99, 0.5], "look": { "yaw": -12, "pitch": -8 } }],
   "interior": { "fixed": true, "steeringNode": "InteriorSteeringCylinder" },
   "cabin": {

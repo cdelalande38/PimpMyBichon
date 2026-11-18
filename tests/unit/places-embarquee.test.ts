@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MapRoute } from '../../src/data/mapTypes.ts';
 import type { DriveMotion, VehicleFrame } from '../../src/drive/contrat.ts';
-import { cameraShot, CHASE, cockpit, createShot, DEFAULT_ORBIT } from '../../src/drive/cameras.ts';
+import { cameraShot, CHASE, cockpit, COCKPIT, createShot, DEFAULT_ORBIT } from '../../src/drive/cameras.ts';
 import { createRail } from '../../src/drive/rail.ts';
 
 /** Route droite et plate de 200 m vers +X. */
@@ -34,21 +34,32 @@ describe('caméra embarquée à la place du conducteur', () => {
     expect(shot.position[1]).toBeCloseTo(1.22, 9);
     expect(shot.position[2]).toBeCloseTo(-0.3, 9);
     expect(shot.position[1]).toBeLessThan(1.4); // sous le toit
-    expect(shot.target[0]).toBeGreaterThan(shot.position[0] + 10);
-    // Point visé au-dessus de la chaussée (garde de la ligne de visée), un peu sous l'œil.
+    // Vague U : le regard plonge vers la route (COCKPIT.horizon) ; le point visé, à COCKPIT.aim m devant,
+    // reste au-dessus de la chaussée (garde de la ligne de visée), un peu sous l'œil.
+    expect(shot.target[0]).toBeGreaterThan(shot.position[0] + COCKPIT.aim * 0.9);
     expect(shot.target[1]).toBeGreaterThan(0.3);
     expect(shot.target[1]).toBeLessThan(shot.position[1]);
     expect(shot.fov).toBeLessThan(80);
   });
 
-  it('suit la caisse en pente comme le groupe du véhicule ; une moto garde son poste', () => {
+  it('suit la caisse en pente comme le groupe du véhicule ; une moto sans motard posé garde son poste', () => {
     cockpit.eye = [0, 1.2, -0.3];
     const up = cameraShot('embarquee', frame('car', 0.1), MOTION, createRail(ROUTE), 0, DEFAULT_ORBIT, createShot());
     // Rotation autour du côté (+Z), comme rig.group.rotation.z : l'œil au-dessus du centre recule en montée.
     expect(up.position[0]).toBeCloseTo(50 - 1.2 * Math.sin(0.1), 9);
     expect(up.position[1]).toBeCloseTo(1.2 * Math.cos(0.1), 9);
+    cockpit.eye = null;
     const bike = cameraShot('embarquee', frame('bike'), MOTION, createRail(ROUTE), 0, DEFAULT_ORBIT, createShot());
     // Au-dessus du casque du motard (CHASE.bikeEyeLift), droit en ligne droite.
     expect(bike.position[1]).toBeCloseTo(1.4 + 0.3 + CHASE.bikeEyeLift, 9);
+  });
+
+  it('vague U : une moto dont le motard est posé prend son œil (un peu en arrière, COCKPIT.bike)', () => {
+    cockpit.eye = [-0.2, 1.3, 0];
+    const bike = cameraShot('embarquee', frame('bike'), MOTION, createRail(ROUTE), 0, DEFAULT_ORBIT, createShot());
+    expect(bike.position[0]).toBeCloseTo(50 - 0.2 + (COCKPIT.bike.ahead ?? 0), 9);
+    expect(bike.position[1]).toBeCloseTo(1.3 + (COCKPIT.bike.lift ?? 0), 9);
+    expect(COCKPIT.bikeAbove).toBeGreaterThan(0);
+    expect(bike.position[2]).toBeCloseTo(0, 9);
   });
 });

@@ -13,6 +13,7 @@ import { closeSheet } from '../../app/useRoute.ts';
 import { CAMERA_IDS, type CameraId } from '../../drive/contrat.ts';
 import { basculerMoteur, useSonSortie } from '../../drive/son.ts';
 import { MOMENTS } from '../../data/moments.ts';
+import { REGARDS } from '../../data/regard.ts';
 import { enCourse } from '../../drive/depart.ts';
 import { CAMERA_LABELS, COMMANDES, DIRECTIONS, liveDepart, useDrive, WEATHERS } from '../../state/drive.ts';
 import { useEngineSoundPrefs } from '../../state/engineSound.ts';
@@ -163,6 +164,7 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
   const direction = useDrive((state) => state.direction);
   // Rendez-vous de carrière : le moment et la météo sont imposés (src/ui/carriere/EnSortie.tsx).
   const impose = useDrive((state) => state.rendezVous !== null);
+  const regard = useDrive((state) => state.regard);
   // Course lancée (pas l'aperçu, pas une balade, pas arrivée) : le pilote automatique la termine, et
   // la commande le dit avant l'appui. L'état de départ ne bouge pas tant que les réglages sont ouverts
   // (la course est en pause) ; la phase de la télémétrie relance ce calcul si elle change.
@@ -211,6 +213,8 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
         <div className="drive-reglages-corps">
           <Rubrique titre="Vue">
             <Choix nom="Caméra" options={cameras} valeur={director ? null : camera} onChoix={(id) => drive().setCamera(id)} />
+            {/* Vague U : à la caméra embarquée, l'œil monte ou descend (gardé ; appliqué en douceur par la scène). */}
+            {!director && camera === 'embarquee' && <Choix nom="Hauteur du regard" options={REGARDS} valeur={regard} onChoix={(id) => drive().setRegard(id)} />}
             <Bascule nom="Réalisateur" aide="Les plans changent tout seuls" icone="realisateur" actif={director} onBascule={() => drive().setDirector(!director)} />
             <Bascule nom="Ralenti" aide="Tout passe au ralenti" icone="ralenti" actif={slow} onBascule={() => drive().setSlow(!slow)} />
           </Rubrique>

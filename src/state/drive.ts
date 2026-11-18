@@ -40,6 +40,7 @@ import { mapById, MAPS } from '../data/maps.ts';
 import { MOMENT_PAR_DEFAUT, momentOf, type Moment } from '../data/moments.ts';
 import type { MapId } from '../data/mapTypes.ts';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
+import { estRegard, REGARD_PAR_DEFAUT, type RegardId } from '../data/regard.ts';
 
 export const DRIVE_KEY = 'pmb-sortie';
 export const DRIVE_VERSION = 2;
@@ -201,6 +202,12 @@ export function sanitizeDrivePrefs(raw: unknown): DrivePrefs {
   return { moment: momentOf(source.moment), weather, camera, commande, direction, format };
 }
 
+/** Hauteur du regard relue du stockage (vague U) : un cran inconnu retombe sur « normal ». */
+export function sanitizeRegard(raw: unknown): RegardId {
+  const value = typeof raw === 'object' && raw !== null ? (raw as { regard?: unknown }).regard : undefined;
+  return estRegard(value) ? value : REGARD_PAR_DEFAUT;
+}
+
 /** Caméra suivante dans l'ordre du contrat (après l'orbite, on revient à la poursuite). */
 export function nextCameraOf(camera: CameraId): CameraId {
   const index = CAMERA_IDS.indexOf(camera);
@@ -221,6 +228,9 @@ export interface DriveState extends DriveStore {
   direction: DriveDirection;
   /** Format préféré (gardé) : balade, course en 1 tour, en 3 tours. */
   format: FormatCourse;
+  /** Hauteur du regard à la caméra embarquée (gardée, src/data/regard.ts). */
+  regard: RegardId;
+  setRegard: (regard: RegardId) => void;
   /** Essai de la sortie en cours : « Réessayer » et « Repartir » remontent la scène (clé de montage). */
   attempt: number;
   /** Remonte la scène sur la même carte et le même départ, en aperçu : après une erreur. */
@@ -346,6 +356,7 @@ export const useDrive = create<DriveState>()(
   persist(
     (set, get) => ({
       ...DEFAULT_DRIVE_PREFS,
+      regard: REGARD_PAR_DEFAUT,
       map: null,
       start: null,
       director: true,
@@ -456,6 +467,7 @@ export const useDrive = create<DriveState>()(
           return { input: next };
         }),
       setCommande: (commande) => set((state) => (state.commande === commande ? state : { commande })),
+      setRegard: (regard) => set((state) => (!estRegard(regard) || state.regard === regard ? state : { regard })),
       fireNos: () => set((state) => (state.input.auto ? state : { input: { ...state.input, nos: (state.input.nos ?? 0) + 1 } })),
       setOrbit: (orbit) => set((state) => ({ orbit: clampOrbit({ ...state.orbit, ...orbit }) })),
       setSlow: (slow) => set((state) => (state.slow === slow ? state : { slow })),
@@ -517,7 +529,7 @@ export const useDrive = create<DriveState>()(
       // Les meilleurs temps et la dernière sortie ne sont écrits qu'une fois posés.
       partialize: (state) => {
         // Pendant un rendez-vous, ce sont les choix libres mis de côté qui se gardent, pas l'imposé.
-        const { moment, weather, camera, commande, direction, format, meilleurs, derniere } = { ...state, ...state.rendezVous?.libre };
+        const { moment, weather, camera, commande, direction, format, regard, meilleurs, derniere } = { ...state, ...state.rendezVous?.libre };
         return {
           moment,
           weather,
@@ -525,12 +537,14 @@ export const useDrive = create<DriveState>()(
           commande,
           direction,
           format,
+          regard,
           ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}),
           ...(derniere ? { derniere } : {}),
         };
       },
       migrate: (persisted, version) => ({
         ...migrerDrivePrefs(persisted, version),
+        regard: sanitizeRegard(persisted),
         meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs),
         derniere: sanitizeDerniere((persisted as { derniere?: unknown } | null)?.derniere),
       }),
@@ -538,6 +552,7 @@ export const useDrive = create<DriveState>()(
         garderImpose(current, {
           ...current,
           ...sanitizeDrivePrefs(persisted),
+          regard: sanitizeRegard(persisted),
           meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs),
           derniere: sanitizeDerniere((persisted as { derniere?: unknown } | null)?.derniere),
         }),

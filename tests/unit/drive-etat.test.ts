@@ -67,21 +67,23 @@ describe('préférences', () => {
     drive.getState().setDirection('assistee');
     drive.getState().setFormat('tour1');
     drive.getState().setMoment('jour');
+    drive.getState().setRegard('haut');
     drive.getState().enter(first.id, null);
     drive.getState().setSlow(true);
     await vi.waitFor(async () => {
       const raw = await get<string>(DRIVE_KEY, db());
-      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ moment: 'jour', weather: 'sec', camera: 'avant', commande: 'pedales', direction: 'assistee', format: 'tour1', derniere: { map: first.id, start: null } });
+      expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ moment: 'jour', weather: 'sec', camera: 'avant', commande: 'pedales', direction: 'assistee', format: 'tour1', regard: 'haut', derniere: { map: first.id, start: null } });
     });
     const again = await launch();
     const state = again.getState();
-    expect({ moment: state.moment, weather: state.weather, camera: state.camera, commande: state.commande, direction: state.direction, format: state.format, map: state.map, slow: state.slow }).toEqual({
+    expect({ moment: state.moment, weather: state.weather, camera: state.camera, commande: state.commande, direction: state.direction, format: state.format, regard: state.regard, map: state.map, slow: state.slow }).toEqual({
       moment: 'jour',
       weather: 'sec',
       camera: 'avant',
       commande: 'pedales',
       direction: 'assistee',
       format: 'tour1',
+      regard: 'haut',
       map: null,
       slow: false,
     });

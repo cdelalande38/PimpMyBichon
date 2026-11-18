@@ -18,8 +18,9 @@
 // - rasante : au ras du sol (0,35 m), le long du flanc gauche (côté axe de la chaussée), regarde vers
 //   l'arrière du véhicule.
 // - avant : devant, sur le rail, regarde le véhicule arriver.
-// - embarquee : à la place du conducteur du manifeste (œil posé sur son siège par la scène, `cockpit`),
-//   sinon au-dessus du toit (du casque du motard) ; regarde la route plus loin.
+// - embarquee : à la place du conducteur du manifeste (œil posé sur son siège par la scène, `cockpit`,
+//   puis œil de conduite : COCKPIT, `cockpitView`), sinon au-dessus du toit (du casque du motard) ;
+//   regarde la route plus loin. Le réglage « Hauteur du regard » du joueur monte ou descend l'œil.
 // - travelling : un poste fixe sur le bas-côté, tous les TRAVELLING.spacing m, côté droit puis côté
 //   gauche ; le véhicule arrive de loin, passe devant, s'éloigne, puis on coupe au poste suivant. Le
 //   champ se resserre quand il est loin (téléobjectif) et s'ouvre quand il passe.
@@ -33,6 +34,7 @@
 // passages de rapport) ; un léger tremblement à haute vitesse, fonction du temps (déterministe), coupé
 // si le téléphone demande moins de mouvement.
 
+import type { DriveEyeSpec } from '../data/vehicleTypes.ts';
 import type { CameraId, CameraShot, DriveMotion, OrbitView, Rail, RailPose, Vec3, VehicleFrame } from './contrat.ts';
 import { createPose, lateralPoint } from './rail.ts';
 
@@ -202,6 +204,7 @@ export function clampOrbit(view: OrbitView): OrbitView {
 const scratch: RailPose = createPose();
 const station: RailPose = createPose();
 const point: Vec3 = [0, 0, 0];
+const sight: CockpitView = { eye: [0, 0, 0], pitch: 0, fov: 74 };
 
 /** Pose du rail à `s`, prolongée en ligne droite au-delà des bouts d'un parcours ouvert. */
 function extendedPose(rail: Rail, s: number, out: RailPose): RailPose {
@@ -238,10 +241,128 @@ export function travellingAt(rail: Rail, index: number): number {
 /**
  * Œil du conducteur du véhicule de la sortie, dans son repère (avant +X, haut +Y, droite +Z, en
  * mètres, caisse posée) : la place « conducteur » de son manifeste, résolue sur le siège du modèle
- * chargé par la scène (src/drive/scene/vehicule.tsx), comme au garage. `null` : poste générique
- * au-dessus du toit (moto, véhicule sans place, modèle pas encore posé).
+ * chargé par la scène (src/drive/scene/vehicule.tsx), comme au garage ; sur une moto, l'œil du motard
+ * posé sur sa selle (vague U : « ce que voit le pilote », le réservoir en bas de l'image). `null` : poste
+ * générique au-dessus du toit (véhicule sans place, modèle ou motard pas encore posé).
  */
-export const cockpit: { eye: Vec3 | null } = { eye: null };
+export const cockpit: {
+  eye: Vec3 | null;
+  /** Pavillon au-dessus de l'œil de conduite (hauteur dans le repère du véhicule, m), mesuré par la scène ; NaN : inconnu. */
+  ceiling: number;
+  /** Œil et cadrage de conduite du manifeste (interiorView.conduite), ou `null` : ceux de COCKPIT (COCKPIT.bike pour une moto). */
+  conduite: DriveEyeSpec | null;
+  /** Format de l'image (largeur / hauteur), posé par la scène. */
+  aspect: number;
+  /** Hauteur du regard demandée par le joueur : part du débattement, de −1 à 1 (src/data/regard.ts). */
+  regard: number;
+} = { eye: null, ceiling: Number.NaN, conduite: null, aspect: 390 / 844, regard: 0 };
+
+/**
+ * Embarquée (vague U, demande du 18 novembre 2026, téléphone en paysage : « on voit pas assez la route,
+ * il faudrait qu'on puisse prendre un peu plus de hauteur ») : réglages par défaut de l'œil de conduite,
+ * que le manifeste précise place par place (interiorView.conduite). Avant, le regard visait un point de la
+ * route à 28 m, presque à l'horizontale, avec le même champ vertical (74°) dans tous les formats : en
+ * paysage, l'horizon tombait au milieu de l'image, la planche juste dessous, et le champ ouvrait 117° en
+ * largeur (la route n'était qu'une bande mince). Maintenant le regard part de l'axe de la route et plonge
+ * de l'angle qui met l'horizon à `horizon` de la hauteur de l'image ; champ et horizon dépendent du
+ * format (portrait, paysage, mélangés entre les deux) ; l'œil monte et avance au-dessus de la planche.
+ */
+export const COCKPIT = {
+  /** Champ vertical (degrés) : portrait, paysage (≈ 93° de large en 844 × 390). */
+  fov: [74, 52] as readonly [number, number],
+  /**
+   * Horizon, part de la hauteur de l'image depuis le haut : portrait, paysage. En portrait, l'image est
+   * haute : plus bas (47 %), l'habitacle n'y prend pas plus de place qu'avant.
+   */
+  horizon: [0.47, 0.42] as readonly [number, number],
+  /** Formats (largeur / hauteur) : portrait jusqu'au premier, paysage dès le second ; mélange entre les deux. */
+  formats: [0.8, 1.4] as readonly [number, number],
+  /** Débattement de la hauteur du regard (m) : vers le bas, vers le haut. */
+  regard: [0.05, 0.08] as readonly [number, number],
+  /** Garde sous le pavillon mesuré au-dessus de l'œil (m) : l'œil le plus haut ne le traverse pas. */
+  ceilingGap: 0.05,
+  /** Distance du point visé (m) : court, la ligne de visée plonge sans passer sous la route (guardShot). */
+  aim: 3,
+  /** Passage d'un cran de regard à l'autre (s). */
+  regardTau: 0.25,
+  /**
+   * Moto, à l'œil du motard (tête et buste cachés, src/drive/scene/vehicule.tsx), jamais plus de
+   * `bikeAbove` m au-dessus du haut de la moto (le motard d'une sportive, couché, a l'œil bien au-dessus
+   * de sa bulle : de là, la moto sortait de l'image) ; un peu en arrière, champ plus ouvert : le guidon,
+   * les mains, le compteur ou le haut du carénage restent en bas de l'image. La hauteur du regard monte
+   * l'œil au-dessus du réservoir ; pas de pavillon.
+   */
+  bike: { ahead: -0.15, regard: [0.08, 0.25], fov: [74, 62], horizon: [0.45, 0.4] } as DriveEyeSpec,
+  bikeAbove: 0.15,
+  /** Poste générique au-dessus du toit (ou du casque), en attendant l'œil : champ, horizon. */
+  outside: { fov: [66, 52], horizon: [0.47, 0.42] } as DriveEyeSpec,
+} as const;
+
+/** Œil et cadrage de conduite : œil (repère du véhicule), plongée du regard (rad, négative vers le bas), champ vertical (degrés). */
+export interface CockpitView {
+  eye: [number, number, number];
+  pitch: number;
+  fov: number;
+}
+
+/** Part du paysage dans le cadrage (0 : portrait, 1 : paysage), selon le format largeur / hauteur ; fondu entre les deux. */
+export function landscapeShare(aspect: number): number {
+  const [a, b] = COCKPIT.formats;
+  if (!(aspect > 0) || !Number.isFinite(aspect)) return 0;
+  const t = Math.min(1, Math.max(0, Math.log(aspect / a) / Math.log(b / a)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Œil et cadrage de conduite d'une place : depuis `eye` (œil de la place, repère du véhicule), relevé et
+ * avancé du manifeste (`spec`), plus la hauteur du regard (`part`, de −1 à 1, sur le débattement), jamais
+ * à moins de COCKPIT.ceilingGap du pavillon (`ceiling` : sa hauteur au-dessus de l'œil de conduite, NaN :
+ * inconnue) ; champ et horizon selon le format `aspect`, d'où la plongée. Sans allocation : remplit `out`.
+ */
+export function cockpitView(eye: Readonly<Vec3>, spec: DriveEyeSpec | null | undefined, aspect: number, part: number, ceiling: number, out: CockpitView): CockpitView {
+  const C = COCKPIT;
+  framing(spec, aspect, out);
+  let y = eye[1] + (spec?.lift ?? 0) + regardLift(spec, part);
+  if (Number.isFinite(ceiling)) y = Math.min(y, Math.max(eye[1], ceiling - C.ceilingGap));
+  out.eye[0] = eye[0] + (spec?.ahead ?? 0);
+  out.eye[1] = y;
+  out.eye[2] = eye[2];
+  return out;
+}
+
+/** Champ (degrés) et plongée (rad) d'un cadrage `spec` au format `aspect` : l'horizon tombe à sa part de l'image. */
+export function framing(spec: DriveEyeSpec | null | undefined, aspect: number, out: { fov: number; pitch: number }): void {
+  const k = landscapeShare(aspect);
+  const fovs = spec?.fov ?? COCKPIT.fov;
+  const horizons = spec?.horizon ?? COCKPIT.horizon;
+  out.fov = fovs[0] + (fovs[1] - fovs[0]) * k;
+  const horizon = horizons[0] + (horizons[1] - horizons[0]) * k;
+  out.pitch = -Math.atan((1 - 2 * horizon) * Math.tan((out.fov * Math.PI) / 360));
+}
+
+/** Relevé de la hauteur du regard (m) : `part` (−1 à 1) du débattement de `spec` (COCKPIT.regard par défaut). */
+function regardLift(spec: DriveEyeSpec | null | undefined, part: number): number {
+  const regard = spec?.regard ?? COCKPIT.regard;
+  const p = Number.isFinite(part) ? Math.max(-1, Math.min(1, part)) : 0;
+  return p >= 0 ? p * regard[1] : p * regard[0];
+}
+
+/** Mémoire de la hauteur du regard appliquée (une seule scène à la fois) : part et temps du dernier plan. */
+export const regardNow = { time: Number.NaN, part: 0 };
+
+/**
+ * Hauteur du regard au temps `time` : rejoint `cockpit.regard` en COCKPIT.regardTau s (sans à-coup), d'un
+ * coup au premier plan ou après un saut de temps ; un même temps (pause, plusieurs plans d'une image) ne
+ * change rien. Aucune allocation.
+ */
+export function followRegard(time: number): number {
+  const target = Number.isFinite(cockpit.regard) ? Math.max(-1, Math.min(1, cockpit.regard)) : 0;
+  const dt = time - regardNow.time;
+  if (!(dt >= 0) || dt > CHASE.gap) regardNow.part = target;
+  else if (dt > 0) regardNow.part += (target - regardNow.part) * (1 - Math.exp(-dt / COCKPIT.regardTau));
+  regardNow.time = time;
+  return regardNow.part;
+}
 
 export function cameraShot(
   id: CameraId,
@@ -315,11 +436,16 @@ export function cameraShot(
     }
     case 'embarquee': {
       const bike = frame.kind === 'bike';
-      const eye = bike ? null : cockpit.eye;
+      const part = followRegard(time);
+      // Œil de conduite : celui de la place (ou du motard), relevé, avancé et cadré selon le format (COCKPIT).
+      const view = cockpit.eye ? cockpitView(cockpit.eye, bike ? (cockpit.conduite ?? COCKPIT.bike) : cockpit.conduite, cockpit.aspect, part, bike ? Number.NaN : cockpit.ceiling, sight) : null;
+      const eye = view ? view.eye : null;
       // L'œil suit la caisse qui roule (la moto qui se couche) : rotation autour de l'axe avant, au sol.
       const roll = Number.isFinite(frame.roll) ? frame.roll : 0;
       const rc = Math.cos(roll);
       const rs = Math.sin(roll);
+      // Hauteur de l'œil au-dessus de la route, au repos : d'elle part l'axe de la route (plus bas).
+      let eyeHeight: number;
       if (eye) {
         // À la place du conducteur : l'œil suit la caisse en pente et en plongée (rotation autour du
         // côté, comme le groupe du véhicule), à droite du véhicule pour un +Z positif.
@@ -330,19 +456,21 @@ export function cameraShot(
         const ahead = eye[0] * c - rolledUp * s;
         const up = eye[0] * s + rolledUp * c;
         set(out.position, px + fx * ahead - lx * right, py + up, pz + fz * ahead - lz * right);
+        eyeHeight = eye[1];
       } else {
         const back = bike ? frame.halfLength * 0.9 : frame.halfLength * 0.15;
         // Moto : au-dessus du casque du motard (monté depuis), sinon il bouche la vue.
-        const height = frame.height + (bike ? 0.3 + CHASE.bikeEyeLift : 0.32);
+        const height = frame.height + (bike ? 0.3 + CHASE.bikeEyeLift + regardLift(COCKPIT.bike, part) : 0.32);
         set(out.position, px - fx * back - lx * height * rs, py + height * rc, pz - fz * back - lz * height * rs);
+        framing(COCKPIT.outside, cockpit.aspect, sight);
+        eyeHeight = height;
       }
       // L'image penche avec la caisse, d'une part bornée de son roulis (positif : vers la gauche).
       const R = CHASE;
       out.roll = Math.max(-R.rollMax, Math.min(R.rollMax, -roll * R.rollShare[frame.kind]));
-      // Point visé gardé loin et au-dessus de la chaussée : la garde de la ligne de visée (guardShot)
-      // relèverait la caméra hors de l'habitacle pour un point visé au ras de la route. Plus près dans
-      // une courbe serrée (dans un lacet, 28 m plus loin sur la route, c'est sur le côté ou derrière),
-      // et un peu vers l'intérieur de la courbe qui vient.
+      // Point loin devant, à hauteur d'œil au-dessus de la route : l'axe de la route. Plus près dans une
+      // courbe serrée (dans un lacet, 28 m plus loin sur la route, c'est sur le côté ou derrière), et un
+      // peu vers l'intérieur de la courbe qui vient.
       let bend = 0;
       for (let k = 0; k < 3; k += 1) {
         extendedPose(rail, motion.s + R.lookAt * (k / 2), scratch);
@@ -350,13 +478,13 @@ export function cameraShot(
       }
       extendedPose(rail, motion.s + R.lookAt / (1 + R.lookAt * bend * R.lookBend), scratch);
       const inside = Math.max(-R.insideMax, Math.min(R.insideMax, scratch.curvature * R.inside));
-      lateralPoint(scratch, motion.offset + inside, frame.height * 0.6, point);
+      lateralPoint(scratch, motion.offset + inside, eyeHeight, point);
       set(out.target, point[0], point[1], point[2]);
       // Là où pointe le véhicule : le point visé tourne autour de lui de son cap relatif.
       turnAround(out.target, px, pz, relativeYaw(motion));
-      // À la place du conducteur, le regard ne s'écarte pas de l'axe du véhicule de plus de CHASE.cockpitYawMax :
-      // la planche, donc la vitesse, reste dans l'image en virage.
-      if (eye) {
+      // À la place du conducteur d'une voiture, le regard ne s'écarte pas de l'axe du véhicule de plus de
+      // CHASE.cockpitYawMax : la planche, donc la vitesse, reste dans l'image en virage.
+      if (eye && !bike) {
         const vx = out.target[0] - out.position[0];
         const vz = out.target[2] - out.position[2];
         const ahead = vx * fx + vz * fz;
@@ -369,9 +497,20 @@ export function cameraShot(
           out.target[2] = out.position[2] + (Math.cos(clamped) * fz + Math.sin(clamped) * lz) * reach;
         }
       }
-      // Dans l'habitacle, un champ plus ouvert : le volant, la planche et la route.
+      // Plongée : depuis l'axe de la route, le regard descend de l'angle qui met l'horizon à sa place dans
+      // l'image (COCKPIT.horizon). Le point visé, à COCKPIT.aim m, reste au-dessus de la chaussée : la garde
+      // de la ligne de visée (guardShot) ne relève pas la caméra hors de l'habitacle.
+      const vx = out.target[0] - out.position[0];
+      const vz = out.target[2] - out.position[2];
+      const flat = Math.hypot(vx, vz) || 1;
+      const angle = Math.atan2(out.target[1] - out.position[1], flat) + sight.pitch;
+      const across = (Math.cos(angle) * COCKPIT.aim) / flat;
+      out.target[0] = out.position[0] + vx * across;
+      out.target[1] = out.position[1] + Math.sin(angle) * COCKPIT.aim;
+      out.target[2] = out.position[2] + vz * across;
+      // Le champ du format (COCKPIT) : le volant, la planche et la route.
       out.position[1] += shakeY * 0.5;
-      out.fov = (eye ? 74 : 66) + extraFov * 0.6;
+      out.fov = sight.fov + extraFov * 0.6;
       return out;
     }
     case 'travelling': {

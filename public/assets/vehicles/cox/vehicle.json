@@ -77,7 +77,7 @@
     "model": "quatre-a-plat"
   },
   "performance": { "mass": 840, "topKmh": 140, "grip": 5.5, "transmission": "propulsion" },
-  "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -12 }, "fov": 94, "volets": ["volant", "pommeau"] },
+  "interiorView": { "place": "conducteur", "label": "Conducteur", "seat": { "anchors": ["siege_avant_gauche"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": 0, "pitch": -12 }, "fov": 94, "volets": ["volant", "pommeau"], "conduite": { "lift": -0.01, "ahead": 0.15, "regard": [0.04, 0.02] } },
   "interiorViews": [
     { "place": "passager", "label": "Passager", "seat": { "anchors": ["siege_avant_droit"], "up": 0.85, "ahead": 0.15 }, "look": { "yaw": -14, "pitch": -10 }, "fov": 94 },
     { "place": "arriere", "label": "Arrière", "seat": { "anchors": ["siege_avant_gauche", "siege_avant_droit"], "up": 0.85, "behind": 0.32 }, "look": { "yaw": 0, "pitch": -6 }, "fov": 94, "volets": ["sieges", "ciel"] }

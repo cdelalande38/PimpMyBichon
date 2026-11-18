@@ -188,6 +188,30 @@ export interface InteriorView {
    * l'entrée s'y place quand on ouvre l'un d'eux. Absent : le premier point de vue.
    */
   volets?: readonly string[];
+  /**
+   * Œil et cadrage de la CONDUITE (caméra embarquée de la sortie), pour la place du conducteur : ils
+   * s'écartent de ceux de la vue intérieure du garage, où l'on regarde l'habitacle et non la route.
+   * Absent : les réglages par défaut de la caméra (src/drive/cameras.ts, COCKPIT).
+   */
+  conduite?: DriveEyeSpec;
+}
+
+/**
+ * Œil de conduite d'une place (vague U : « on voit pas assez la route »), dans le repère du véhicule, en
+ * mètres, depuis l'œil de la place (posé sur son siège ou repris du manifeste). Tableaux à deux valeurs :
+ * écran en portrait, puis en paysage (entre les deux, la caméra mélange selon le format).
+ */
+export interface DriveEyeSpec {
+  /** Relevé de l'œil (m, −0,1 à 0,35) ; jamais plus haut que le pavillon mesuré, moins une garde. */
+  lift?: number;
+  /** Avancée de l'œil vers l'avant (m, −0,3 à 0,3). */
+  ahead?: number;
+  /** Débattement du réglage « Hauteur du regard » : vers le bas puis vers le haut (m, 0 à 0,2). */
+  regard?: readonly [number, number];
+  /** Horizon : part de la hauteur de l'image depuis le haut (0,3 à 0,6). */
+  horizon?: readonly [number, number];
+  /** Champ vertical, en degrés (30 à 100). */
+  fov?: readonly [number, number];
 }
 
 /** Motifs du médaillon du ciel étoilé : des dessins à nous, jamais un emblème de constructeur. */
