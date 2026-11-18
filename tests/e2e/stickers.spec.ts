@@ -101,16 +101,22 @@ const images = (page: Page) => page.evaluate(() => (globalThis as { __pmbImagesG
 
 /** Attend que le garage ne dessine plus rien (rendu à la demande au repos). */
 async function quiet(page: Page): Promise<void> {
+  // Deux fenêtres de suite sans image ni déplacement de caméra : sur une machine chargée, en rendu
+  // logiciel, une seule image peut prendre plusieurs secondes, et une fenêtre vide ne prouve rien.
+  let calmes = 0;
   await expect
     .poll(
       async () => {
         const a = await images(page);
-        await page.waitForTimeout(1200);
-        return (await images(page)) - a;
+        const camera = await stage(page).getAttribute('data-camera');
+        await page.waitForTimeout(3000);
+        const calme = (await images(page)) - a === 0 && (await stage(page).getAttribute('data-camera')) === camera;
+        calmes = calme ? calmes + 1 : 0;
+        return calmes;
       },
-      { message: 'rendu au repos', timeout: 45_000, intervals: [200] },
+      { message: 'rendu au repos', timeout: 120_000, intervals: [200] },
     )
-    .toBe(0);
+    .toBeGreaterThanOrEqual(2);
 }
 
 /** Les véhicules du catalogue qui ont leur modèle (substituts produits par npm run vehicles:build). */
