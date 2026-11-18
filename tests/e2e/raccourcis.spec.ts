@@ -59,8 +59,9 @@ test.describe('raccourcis et dock de personnalisation', () => {
     await expect(entries.nth(3)).toBeEnabled();
     await expect(entries.nth(4)).toBeEnabled();
     await expect(entries.nth(5)).toBeEnabled();
-    await expect(entries.nth(6)).toBeDisabled();
-    await expect(entries.nth(6)).toHaveAccessibleName('Carrosserie, bientôt');
+    await expect(entries.nth(6)).toBeEnabled();
+    await expect(entries.nth(7)).toBeDisabled();
+    await expect(entries.nth(7)).toHaveAccessibleName('Carrosserie, bientôt');
     await expect(tabs(page)).toHaveCount(0);
     await expect(dock(page).getByRole('group', { name: 'Zones' })).toHaveCount(0);
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Custom']);
