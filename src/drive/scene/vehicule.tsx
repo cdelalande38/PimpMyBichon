@@ -47,7 +47,7 @@ import { resolvePaints, useBuilds } from '../../state/builds.ts';
 import { createBeam, createGlare } from './ciel.ts';
 import { HEADLIGHT } from './materiaux.ts';
 import { routeLight } from '../../data/phares.ts';
-import { tintAdditive, useVehicleLights } from '../../scene/vehicle/phares.ts';
+import { isVoyant, tintAdditive, useVehicleLights } from '../../scene/vehicle/phares.ts';
 import { useEchappementSortie } from './flammes.ts';
 import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 import { usePieces } from '../../scene/vehicle/pieces.ts';
@@ -128,6 +128,8 @@ export const TAIL_LIGHT = { back: 0.35, height: 0.7, heightShare: 0.4, aim: 1.5,
  */
 export function isTailMaterial(m: Material): m is MeshStandardMaterial {
   if (!(m instanceof MeshStandardMaterial)) return false;
+  // Voyant de l'habitacle dans la matière des feux (src/scene/vehicle/phares.ts) : ni freinage, ni feu.
+  if (isVoyant(m)) return false;
   if (m.name === 'tail') return true;
   const e = m.emissive;
   return m.emissiveIntensity > 0 && e.r > 0.3 && e.g < e.r * 0.15 && e.b < e.r * 0.15;

@@ -5,7 +5,8 @@
 // (`RIDE_RISE`). Les roues restent au sol, la caisse descend ou monte : chaque cran le montre en petit
 // (src/ui/pictos/), tiré de sa valeur, et dit son terrain (« Sec : + +, pluie : =, neige : − − »,
 // src/data/preparation.ts). L'assiette rehaussée se débloque avec des dollars, sur place : cadenas et
-// prix, puis le bloc d'achat partagé ; acquise, le curseur descend aussi sous l'origine.
+// prix, puis le bloc d'achat partagé ; acquise, le curseur descend aussi sous l'origine. Posée sans être
+// acquise, elle reste en place et le panneau le dit (src/ui/nonAcquis.tsx).
 
 import { useState } from 'react';
 import { articleParId } from '../../data/boutique.ts';
@@ -18,6 +19,7 @@ import { useDock } from '../../state/dock.ts';
 import { useJeu } from '../../state/jeu.ts';
 import { Achat } from '../jeu/Achat.tsx';
 import { dollars } from '../jeu/libelles.ts';
+import { nomNonAcquis, NoteNonAcquise } from '../nonAcquis.tsx';
 import { Padlock } from '../paint/Padlock.tsx';
 import { PictoAssiette } from '../pictos/Pictos.tsx';
 import './wheels.css';
@@ -53,6 +55,8 @@ export function SuspensionPanel() {
   const monte = possedeDans({ articles: acquis }, ARTICLE_REHAUSSE);
   const hauteur = wheels.drop > 0 ? `${cm(wheels.drop)} plus bas` : wheels.drop < 0 ? `${cm(-wheels.drop)} plus haut` : 'Origine';
   const ouvert = achat !== null && !possedeDans({ articles: acquis }, achat) ? articleParId(achat) : undefined;
+  // Rehaussée sans être acquise (la règle commune) : elle reste en place, le panneau le dit.
+  const sansAchat = !monte && wheels.ride < -0.005 ? articleParId(ARTICLE_REHAUSSE) : undefined;
 
   return (
     <div className="wheels" data-testid="suspension">
@@ -68,7 +72,7 @@ export function SuspensionPanel() {
               type="button"
               className="chip chip-picto"
               aria-pressed={Math.abs(wheels.ride - preset.value) < 0.005}
-              aria-label={`${preset.label}${locked ? `, à débloquer pour ${dollars(article.prix ?? 0)}` : ''}. ${terrain}`}
+              aria-label={`${locked && Math.abs(wheels.ride - preset.value) < 0.005 ? nomNonAcquis(preset.label, article.prix) : `${preset.label}${locked ? `, à débloquer pour ${dollars(article.prix ?? 0)}` : ''}`}. ${terrain}`}
               title={preset.hint}
               data-assiette={preset.id}
               data-verrou={locked ? 'ferme' : undefined}
@@ -114,6 +118,7 @@ export function SuspensionPanel() {
           }}
         />
       )}
+      {sansAchat && <NoteNonAcquise label={sansAchat.label} prix={sansAchat.prix} />}
       {message && (
         <p className="wheels-message" role="status">
           {message}

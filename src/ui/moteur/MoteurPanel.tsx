@@ -4,7 +4,8 @@
 // pièce choisie (sa couleur s'il en a une) et, pour une pièce qui s'échange, ses options. L'origine
 // (brut de fonderie) et la peinture haute température sont libres ; un traitement ou une option qui
 // n'est pas acquis porte un cadenas et son prix, un appui ouvre le bloc d'achat partagé
-// (src/ui/jeu/Achat.tsx), et il s'applique une fois payé. Un véhicule dont le moteur n'a pas encore de
+// (src/ui/jeu/Achat.tsx), et il s'applique une fois payé ; posé sans être acquis, il reste en place et
+// le panneau le dit (src/ui/nonAcquis.tsx). Un véhicule dont le moteur n'a pas encore de
 // modèle le dit en une phrase. Ajouter une famille, une pièce ou une option ne touche pas à ce fichier.
 
 import { useLayoutEffect, useRef, useState } from 'react';
@@ -35,6 +36,7 @@ import { useJeu } from '../../state/jeu.ts';
 import { Icon } from '../icons.tsx';
 import { Achat } from '../jeu/Achat.tsx';
 import { dollars } from '../jeu/libelles.ts';
+import { nomNonAcquis, NoteNonAcquise } from '../nonAcquis.tsx';
 import { Padlock } from '../paint/Padlock.tsx';
 import { useRevealPressed } from '../scroll.ts';
 import './moteur.css';
@@ -184,7 +186,7 @@ export function MoteurPanel() {
               className="chip moteur-traitement"
               aria-pressed={resolved.traitement.id === traitement.id}
               aria-expanded={shut ? achatTraitement?.id === traitement.id : undefined}
-              aria-label={shut ? `${traitement.label}, verrouillé : ${price} dollars` : traitement.label}
+              aria-label={shut ? (resolved.traitement.id === traitement.id ? nomNonAcquis(traitement.label, price) : `${traitement.label}, verrouillé : ${price} dollars`) : traitement.label}
               data-traitement={traitement.id}
               data-verrou={shut ? 'ferme' : undefined}
               onClick={() => pickTraitement(traitement)}
@@ -221,6 +223,8 @@ export function MoteurPanel() {
         />
       )}
 
+      {traitementLocked(resolved.traitement) && <NoteNonAcquise label={resolved.traitement.label} prix={traitementArticle(resolved.traitement)?.prix} />}
+
       {resolved.traitement.teinte && (
         <div className="moteur-swatches" role="group" aria-label={`${resolved.traitement.label} : teinte`}>
           {PAINT_COLORS.map((swatch) => (
@@ -245,7 +249,7 @@ export function MoteurPanel() {
                 className="chip moteur-option"
                 aria-pressed={posee.id === option.id}
                 aria-expanded={shut ? achatOption?.id === option.id : undefined}
-                aria-label={shut ? `${option.label}, verrouillé : ${price} dollars` : option.label}
+                aria-label={shut ? (posee.id === option.id ? nomNonAcquis(option.label, price) : `${option.label}, verrouillé : ${price} dollars`) : option.label}
                 data-option={option.id}
                 data-verrou={shut ? 'ferme' : undefined}
                 onClick={() => pickOption(option)}
@@ -264,6 +268,8 @@ export function MoteurPanel() {
           })}
         </div>
       )}
+
+      {piece.echange && posee && echangeLocked(posee) && <NoteNonAcquise label={posee.label} prix={echangeArticle(posee)?.prix} />}
 
       {achatOption && achatOptionArticle && (
         <Achat

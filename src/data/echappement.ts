@@ -63,7 +63,30 @@ export interface RetourFlammes {
   /** Longueur et largeur de la flamme la plus forte, en mètres. */
   longueur: number;
   largeur: number;
+  /**
+   * Rayon de la gerbe vue dans l'axe du jet (de la poursuite, le jet vient vers la caméra), en part de
+   * sa longueur : vue de face, une flamme se lit plus large que de côté.
+   */
+  disque: number;
+  /** Éclat du corps de la flamme et de son cœur (lumière ajoutée, sans unité) : plus fort, il sature en blanc. */
+  eclat: number;
+  coeur: number;
+  /** Voile : part du fond que le corps de la flamme cache (lisible de jour sur la route claire). */
+  voile: number;
+  /** Au garage : un coup de gaz tenu au moins ce temps (s), puis lâché, fait cracher. */
+  tenueGarage: number;
 }
+
+/** Bornes des réglages de la flamme (vérifiées par les tests) : lisible, sans exagération. */
+export const FLAMMES_LIMITES = Object.freeze({
+  longueur: { min: 0.2, max: 0.9 },
+  largeur: { min: 0.04, max: 0.2 },
+  disque: { min: 0, max: 0.4 },
+  eclat: { min: 0.3, max: 2 },
+  coeur: { min: 0, max: 1 },
+  voile: { min: 0, max: 2 },
+  tenueGarage: { min: 0.2, max: 2 },
+});
 
 export interface LigneEchappement {
   id: LigneId;
@@ -110,7 +133,8 @@ export const LIGNES_ECHAPPEMENT: readonly LigneEchappement[] = [
     hint: 'Rauque, crache des flammes',
     description: 'Sans silencieux : rauque, plus fort, et ça crache au lever de pied.',
     son: { graves: { frequence: 90, gain: 3 }, medium: { frequence: 1400, q: 0.8, gain: 4.5 }, aigus: { frequence: 4500, gain: 1.5 }, saturation: 1.6, niveau: 2.5 },
-    flammes: { regimeMin: 0.6, chance: 1, attente: 1.2, duree: 0.45, salves: 2, longueur: 0.5, largeur: 0.1 },
+    // Vue de la poursuite, la gerbe fait jusqu'à 40 cm de large (son cœur, 25 cm) ; orangée, jaune au cœur, sans blanc brûlé.
+    flammes: { regimeMin: 0.6, chance: 1, attente: 1.2, duree: 0.45, salves: 2, longueur: 0.7, largeur: 0.14, disque: 0.35, eclat: 1.15, coeur: 0.3, voile: 1.6, tenueGarage: 0.6 },
   },
 ];
 

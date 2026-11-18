@@ -158,7 +158,13 @@ export function checkLights(raw: unknown, problems: string[]): void {
   const names = (value: unknown) => Array.isArray(value) && value.every((item) => typeof item === 'string' && item.trim() !== '');
   if (!names(lights.front) || (lights.front as unknown[]).length === 0) problems.push('lights.front doit nommer au moins un matériau d’optique avant');
   if (!names(lights.rear)) problems.push('lights.rear doit être une liste de noms de matériaux de feux arrière');
-  for (const key of Object.keys(lights)) if (key !== 'front' && key !== 'rear') problems.push(`lights.${key} : clé inconnue (front, rear)`);
+  if (lights.interior !== undefined && !names(lights.interior)) problems.push('lights.interior doit être une liste de noms de nœuds de l’habitacle');
+  for (const key of Object.keys(lights)) if (key !== 'front' && key !== 'rear' && key !== 'interior') problems.push(`lights.${key} : clé inconnue (front, rear, interior)`);
+}
+
+/** Nœuds de l'habitacle dont les pièces aux matières d'optique sont des voyants (section `lights.interior`). */
+export function interiorLightNodes(vehicle: Pick<VehicleManifest, 'lights'>): readonly string[] {
+  return vehicle.lights?.interior ?? [];
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -207,4 +213,21 @@ export function beamTint(color: Hex, base: Rgb = BEAM_BASE): Rgb {
   const k: Rgb = [rgb[0] / base[0], rgb[1] / base[1], rgb[2] / base[2]];
   const top = Math.max(k[0], k[1], k[2]);
   return top > 0 ? [k[0] / top, k[1] / top, k[2] / top] : [1, 1, 1];
+}
+
+/**
+ * Pluie, neige et poussière éclairées par les phares (src/drive/scene/ciel.ts, même calcul dans son
+ * nuanceur) : la lumière de la route rapportée à celle de l'origine, ramenée à 1 sur sa composante la
+ * plus forte, puis relevée pour garder au moins `share` de la luminance du blanc, sans dépasser `gain`.
+ * L'origine donne le blanc (rien ne change) ; une teinte franche colore les gouttes sans les éteindre.
+ */
+export const RAIN_TINT = { share: 0.55, gain: 3 } as const;
+
+export function rainTint(head: Rgb, origin: Hex = ORIGINE_COULEUR.color): Rgb {
+  const base = linearOf(origin);
+  const k: Rgb = [head[0] / base[0], head[1] / base[1], head[2] / base[2]];
+  const top = Math.max(k[0], k[1], k[2], 1e-4);
+  const n: Rgb = [k[0] / top, k[1] / top, k[2] / top];
+  const lift = Math.min(RAIN_TINT.gain, Math.max(1, RAIN_TINT.share / Math.max(luminance(n), 1e-4)));
+  return [n[0] * lift, n[1] * lift, n[2] * lift];
 }

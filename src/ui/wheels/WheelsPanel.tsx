@@ -5,7 +5,8 @@
 // et la finition des jantes restent dans Peinture (zone des jantes) : un bouton y mène. Chaque volet
 // porte son icône, chaque jante et chaque pneu son petit dessin, tiré de ses paramètres (src/ui/pictos/).
 // Chaque pneu dit son terrain (« Sec : +, pluie : −, neige : − − », src/data/preparation.ts) ; un pneu
-// nouveau se débloque avec des dollars, sur place : cadenas et prix, puis le bloc d'achat partagé.
+// nouveau se débloque avec des dollars, sur place : cadenas et prix, puis le bloc d'achat partagé ;
+// posé sans être acquis, il reste en place et le panneau le dit (src/ui/nonAcquis.tsx).
 
 import { useState } from 'react';
 import { articleParId, type ArticleBoutique } from '../../data/boutique.ts';
@@ -31,6 +32,7 @@ import { useJeu } from '../../state/jeu.ts';
 import { Icon, type IconName } from '../icons.tsx';
 import { Achat } from '../jeu/Achat.tsx';
 import { dollars } from '../jeu/libelles.ts';
+import { nomNonAcquis, NoteNonAcquise } from '../nonAcquis.tsx';
 import { Padlock } from '../paint/Padlock.tsx';
 import { PictoJante, PictoPneu } from '../pictos/Pictos.tsx';
 import { useRevealPressed } from '../scroll.ts';
@@ -110,6 +112,9 @@ function TireChoices({ vehicle, wheels }: { vehicle: VehicleManifest; wheels: Re
   const current = wheels.tire?.id;
   const row = useRevealPressed<HTMLDivElement>(current ?? '');
   const color = wheels.tireColor;
+  // Posé sans être acquis (la règle commune) : il reste en place, le panneau le dit.
+  const articlePose = wheels.tire && wheels.tire.id !== vehicle.wheels?.fit?.tire ? articleParId(articlePneu(wheels.tire.id)) : undefined;
+  const sansAchat = articlePose && !possedeDans({ articles: acquis }, articlePose.id) ? articlePose : undefined;
   const poser = (id: string) => setPart(vehicle.id, WHEEL_SLOTS.tire, id === vehicle.wheels?.fit?.tire ? null : id);
   const pick = (hex: string) => {
     const value = normalizeHex(hex);
@@ -131,7 +136,7 @@ function TireChoices({ vehicle, wheels }: { vehicle: VehicleManifest; wheels: Re
               type="button"
               className="chip chip-picto"
               aria-pressed={current === tire.id}
-              aria-label={`${tire.label}${locked ? `, à débloquer pour ${dollars(article.prix ?? 0)}` : ''}. ${terrain}`}
+              aria-label={`${locked && current === tire.id ? nomNonAcquis(tire.label, article.prix) : `${tire.label}${locked ? `, à débloquer pour ${dollars(article.prix ?? 0)}` : ''}`}. ${terrain}`}
               title={tire.hint}
               data-pneu={tire.id}
               data-verrou={locked ? 'ferme' : undefined}
@@ -177,6 +182,7 @@ function TireChoices({ vehicle, wheels }: { vehicle: VehicleManifest; wheels: Re
           }}
         />
       )}
+      {sansAchat && wheels.tire && <NoteNonAcquise label={wheels.tire.label} prix={sansAchat.prix} />}
       {message && (
         <p className="wheels-message" role="status">
           {message}

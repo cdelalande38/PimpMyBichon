@@ -8,7 +8,7 @@
   "hint": "Fourgon blanc rabaissé, jantes tôle : prêt pour la route des vacances",
   "placeholder": "placeholder_van",
   "halfLengthHint": 2.45,
-  "lights": { "front": ["lamp"], "rear": ["tail"] },
+  "lights": { "front": ["lamp"], "rear": ["tail"], "interior": ["habitacle"] },
   "zones": [
     {
       "id": "carrosserie",

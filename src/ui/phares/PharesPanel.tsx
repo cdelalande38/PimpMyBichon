@@ -4,9 +4,13 @@
 // (src/data/phares.ts, articles dans src/data/articles/phares.ts). L'origine est libre ; le reste se
 // débloque avec des dollars, sur place : une option verrouillée montre son cadenas et son prix, un
 // appui ouvre le bloc d'achat partagé (src/ui/jeu/Achat.tsx), et l'option est posée une fois achetée.
+// Une option posée sans être acquise reste en place, et le panneau le dit (src/ui/nonAcquis.tsx).
+// Tant que le panneau est ouvert, la caméra du garage cadre l'avant du véhicule (Lumière, Optiques) ou
+// son arrière (Feux), au-dessus du menu (src/ui/useCadreBout.ts) ; l'orbite au doigt reste libre.
 
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { articleParId, type ArticleBoutique } from '../../data/boutique.ts';
+import type { CoteVehicule } from '../../data/framings.ts';
 import {
   ARTICLE_TEINTE,
   articleCouleur,
@@ -26,8 +30,10 @@ import { useJeu } from '../../state/jeu.ts';
 import { Icon } from '../icons.tsx';
 import { Achat } from '../jeu/Achat.tsx';
 import { dollars } from '../jeu/libelles.ts';
+import { nomNonAcquis, NoteNonAcquise } from '../nonAcquis.tsx';
 import { Padlock } from '../paint/Padlock.tsx';
 import { useRevealPressed } from '../scroll.ts';
+import { useCadreBout } from '../useCadreBout.ts';
 import './phares.css';
 
 /** Espace fine insécable, entre un nombre et son unité. */
@@ -35,10 +41,11 @@ const NNBSP = '\u202f';
 
 type Volet = 'eclairage' | 'optiques' | 'feux';
 
-const VOLETS: ReadonlyArray<{ id: Volet; label: string }> = [
-  { id: 'eclairage', label: 'Lumière' },
-  { id: 'optiques', label: 'Optiques' },
-  { id: 'feux', label: 'Feux' },
+/** Les volets, et le côté du véhicule que la caméra cadre pendant chacun. */
+const VOLETS: ReadonlyArray<{ id: Volet; label: string; cote: CoteVehicule }> = [
+  { id: 'eclairage', label: 'Lumière', cote: 'avant' },
+  { id: 'optiques', label: 'Optiques', cote: 'avant' },
+  { id: 'feux', label: 'Feux', cote: 'arriere' },
 ];
 
 /** Une puce de choix : libre, posée, ou verrouillée (cadenas et prix ; un appui ouvre l'achat). */
@@ -69,7 +76,7 @@ function Choix({
       type="button"
       className={`chip phares-choix${swatch ? ' chip-swatch' : ''}`}
       aria-pressed={pressed}
-      aria-label={locked ? `${label}, à débloquer pour ${dollars(article.prix ?? 0)}` : label}
+      aria-label={locked ? (pressed ? nomNonAcquis(label, article.prix) : `${label}, à débloquer pour ${dollars(article.prix ?? 0)}`) : label}
       data-verrou={locked ? 'ferme' : undefined}
       {...data}
       onClick={() => (locked ? onLocked(article) : onPick())}
@@ -120,6 +127,11 @@ export function PharesPanel() {
   const teinteLibre = owns(ARTICLE_TEINTE);
   const percent = Math.round(choisis.teinte * 100);
 
+  // Cadrage : l'avant ou l'arrière du véhicule, au-dessus du menu, tant que le panneau est ouvert.
+  const root = useRef<HTMLDivElement>(null);
+  const cote = VOLETS.find((item) => item.id === volet)?.cote ?? 'avant';
+  useCadreBout(root, vehicle.id, cote, `phares-${cote}`);
+
   /** Bloc d'achat de l'article ouvert, s'il appartient à ce volet ; `poser` : l'option, une fois achetée. */
   const bloc = (ids: readonly string[], poser: (id: string) => void, fait: (article: ArticleBoutique) => string) => {
     if (achat === null || !ids.includes(achat) || owns(achat)) return null;
@@ -142,9 +154,14 @@ export function PharesPanel() {
   const couleurs = COULEURS_PHARES.map((item) => ({ item, article: item.origine ? undefined : articleParId(articleCouleur(item.id)) }));
   const optionsFeux = OPTIONS_FEUX.map((item) => ({ item, article: item.origine ? undefined : articleParId(articleFeux(item.id)) }));
   const articleTeinte = articleParId(ARTICLE_TEINTE);
+  // Posé sans être acquis (la règle commune, src/ui/nonAcquis.tsx) : l'article de ce qui est posé, s'il manque.
+  const sansAchat = (article: ArticleBoutique | undefined) => (article && !owns(article.id) ? article : undefined);
+  const couleurSansAchat = sansAchat(couleurs.find(({ item }) => item.id === choisis.couleur.id)?.article);
+  const teinteSansAchat = percent > 0 ? sansAchat(articleTeinte) : undefined;
+  const feuxSansAchat = sansAchat(optionsFeux.find(({ item }) => item.id === choisis.feux.id)?.article);
 
   return (
-    <div className="phares" data-testid="phares">
+    <div ref={root} className="phares" data-testid="phares" data-cote={cote}>
       <div className="phares-head">
         <div className="phares-volets" role="group" aria-label="Volets des phares">
           {VOLETS.map((item) => (
@@ -205,6 +222,7 @@ export function PharesPanel() {
             },
             (article) => `${article.label} débloqués : c’est posé.`,
           )}
+          {couleurSansAchat && <NoteNonAcquise label={choisis.couleur.label} prix={couleurSansAchat.prix} />}
         </>
       )}
 
@@ -237,6 +255,7 @@ export function PharesPanel() {
             () => teinte(TEINTE_OPTIQUES.fume),
             () => 'Optiques fumées débloquées : règle la teinte au curseur.',
           )}
+          {teinteSansAchat && <NoteNonAcquise label="Fumées" prix={teinteSansAchat.prix} />}
           <label className="phares-slider">
             <span>Teinte</span>
             <input
@@ -281,6 +300,7 @@ export function PharesPanel() {
             },
             (article) => `${article.label} débloqués : c’est posé.`,
           )}
+          {feuxSansAchat && <NoteNonAcquise label={choisis.feux.label} prix={feuxSansAchat.prix} />}
         </>
       )}
     </div>

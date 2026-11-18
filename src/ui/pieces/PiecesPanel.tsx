@@ -4,6 +4,7 @@
 // un cadenas et son prix : un appui ouvre le bloc d'achat partagé (src/ui/jeu/Achat.tsx), et l'option se
 // pose une fois payée. L'origine et l'absence de pièce sont toujours libres. La pièce prend la peinture
 // de la caisse, ou sa couleur propre (teintes de la palette ou nuancier, mêmes finitions que Peinture).
+// Une option posée sans être acquise reste en place, et le panneau le dit (src/ui/nonAcquis.tsx).
 // Un véhicule sans ce poste (une moto) le dit. Ajouter une option ou un poste ne touche pas à ce fichier.
 
 import { useState } from 'react';
@@ -18,6 +19,7 @@ import { useJeu } from '../../state/jeu.ts';
 import { Icon } from '../icons.tsx';
 import { Achat } from '../jeu/Achat.tsx';
 import { dollars } from '../jeu/libelles.ts';
+import { nomNonAcquis, NoteNonAcquise } from '../nonAcquis.tsx';
 import { Padlock } from '../paint/Padlock.tsx';
 import { useRevealPressed } from '../scroll.ts';
 import './pieces.css';
@@ -75,6 +77,8 @@ export function PiecesPanel({ poste: posteId }: { poste: string }) {
   };
   const buying = achat?.vehicle === vehicle.id ? options.find((item) => item.id === achat.option) : undefined;
   const buyingArticle = buying ? article(buying) : undefined;
+  // Posée sans être acquise (la règle commune) : elle reste en place, le panneau le dit.
+  const sansAchat = resolved.option && locked(resolved.option) ? article(resolved.option) : undefined;
 
   const master = masterZone(vehicle);
   const body = master ? resolvePaint(vehicle, build, master.id) : undefined;
@@ -100,7 +104,7 @@ export function PiecesPanel({ poste: posteId }: { poste: string }) {
               className="chip chip-picto pieces-option"
               aria-pressed={resolved.id === item.id}
               aria-expanded={shut ? buying?.id === item.id : undefined}
-              aria-label={shut ? `${item.label}, verrouillé : ${price ?? 0} dollars` : item.label}
+              aria-label={shut ? (resolved.id === item.id ? nomNonAcquis(item.label, price) : `${item.label}, verrouillé : ${price ?? 0} dollars`) : item.label}
               data-option={item.id}
               data-verrou={shut ? 'ferme' : undefined}
               onClick={() => pick(item.id)}
@@ -135,6 +139,7 @@ export function PiecesPanel({ poste: posteId }: { poste: string }) {
           }}
         />
       )}
+      {sansAchat && resolved.option && <NoteNonAcquise label={resolved.option.label} prix={sansAchat.prix} />}
       {message?.vehicle === vehicle.id && (
         <p className="pieces-message" role="status">
           {message.text}

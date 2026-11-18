@@ -2,9 +2,13 @@
 // des sorties. Tout vient de src/data/echappement.ts ; les choix vont dans le build (`parts.echappement`,
 // `partPaints.echappement`). L'origine et le chrome sont libres ; le reste se débloque avec des dollars,
 // sur place : une puce verrouillée montre son cadenas et son prix, un appui ouvre le bloc d'achat partagé
-// (src/ui/jeu/Achat.tsx) sous la rangée, et l'option se monte une fois achetée.
+// (src/ui/jeu/Achat.tsx) sous la rangée, et l'option se monte une fois achetée. Une option montée sans
+// être acquise reste en place, et le panneau le dit (src/ui/nonAcquis.tsx). À l'écoute, ligne libre : un
+// coup de gaz tenu puis lâché fait cracher les sorties au garage, avec le claquement enregistré du moteur
+// s'il en a un (./flammesGarage.ts, ./claquement.ts) ; rien n'est fabriqué. Sur un véhicule aux sorties
+// déclarées, la caméra du garage cadre son arrière tant que le panneau est ouvert (src/ui/useCadreBout.ts).
 
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useId, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { articleParId, type ArticleBoutique } from '../../data/boutique.ts';
 import {
   articleFinition,
@@ -21,11 +25,16 @@ import {
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { possedeDans } from '../../jeu/achats.ts';
 import { useBuilds } from '../../state/builds.ts';
+import { useEngineSound } from '../../state/engineSound.ts';
 import { useJeu } from '../../state/jeu.ts';
 import { EngineSoundControls } from '../engine/EngineSoundControls.tsx';
 import { Achat } from '../jeu/Achat.tsx';
 import { dollars } from '../jeu/libelles.ts';
+import { nomNonAcquis, NoteNonAcquise } from '../nonAcquis.tsx';
 import { Padlock } from '../paint/Padlock.tsx';
+import { useCadreBout } from '../useCadreBout.ts';
+import { claquer } from './claquement.ts';
+import { crache, useFlammesGarage } from './flammesGarage.ts';
 import '../engine/engine.css';
 import './echappement.css';
 import './suivi.ts';
@@ -66,6 +75,44 @@ export function EchappementPanel() {
   const finition = finitionDe(build);
   const sorties = vehicle.exhaust?.outlets.length ?? 0;
   const finitionPossible = (vehicle.exhaust?.nodes?.length ?? 0) > 0;
+  // Posé sans être acquis (la règle commune) : l'article de ce qui est monté, s'il manque.
+  const sansAchat = (id: string | undefined) => {
+    const article = id ? articleParId(id) : undefined;
+    return article && !possede(article.id) ? article : undefined;
+  };
+  const ligneSansAchat = sansAchat(ligne.id === LIGNE_ORIGINE.id ? undefined : articleLigne(ligne.id));
+  const finitionSansAchat = finitionPossible ? sansAchat(finition.id === 'chrome' ? undefined : articleFinition(finition.id)) : undefined;
+
+  // Les sorties se voient : l'arrière du véhicule, cadré au-dessus du menu.
+  const root = useRef<HTMLDivElement>(null);
+  useCadreBout(root, vehicle.id, vehicle.exhaust ? 'arriere' : null, 'echappement-arriere');
+
+  // Écoute : le lâcher d'un coup de gaz tenu (bouton « Coup de gaz », au doigt ou au clavier) peut faire
+  // cracher la ligne libre au garage. Lu au passage des évènements, sans toucher aux commandes du moteur.
+  const appui = useRef<number | null>(null);
+  const tourne = () => {
+    const etat = useEngineSound.getState().state;
+    return etat === 'ralenti' || etat === 'charge';
+  };
+  const surGaz = (target: EventTarget, on: boolean, maintenant: number) => {
+    if (!(target instanceof Element) || !target.closest('.engine-throttle')) return;
+    if (on) {
+      if (appui.current === null && tourne()) appui.current = maintenant;
+      return;
+    }
+    const depuis = appui.current;
+    appui.current = null;
+    if (depuis === null || !tourne()) return;
+    const tirs = useFlammesGarage.getState();
+    if (!crache(ligne.flammes, sorties, (maintenant - depuis) / 1000, (maintenant - tirs.dernier) / 1000)) return;
+    tirs.tirer(maintenant);
+    claquer();
+  };
+  // L'heure de l'évènement (même origine que performance.now) : la tenue du coup de gaz.
+  const touche = (event: KeyboardEvent<HTMLDivElement>, on: boolean) => {
+    if (event.key === ' ' || event.key === 'Enter') surGaz(event.target, on, event.timeStamp);
+  };
+  const doigt = (event: PointerEvent<HTMLDivElement>, on: boolean) => surGaz(event.target, on, event.timeStamp);
 
   const monterLigne = (choix: LigneEchappement) => setPart(vehicle.id, POSTE_ECHAPPEMENT, choix.id === LIGNE_ORIGINE.id ? null : choix.id);
   const monterFinition = (choix: FinitionEchappement) => setPartPaint(vehicle.id, POSTE_ECHAPPEMENT, choix.id === 'chrome' ? null : { ...choix.peinture });
@@ -114,7 +161,7 @@ export function EchappementPanel() {
   else flammes = 'Ce véhicule n’a pas encore de sortie modelée : le claquement s’entend en sortie, sans flamme visible.';
 
   return (
-    <div className="echappement" data-ligne={ligne.id} data-finition={finition.id}>
+    <div ref={root} className="echappement" data-ligne={ligne.id} data-finition={finition.id}>
       <section className="ech-bloc" aria-labelledby={ligneId}>
         <h3 id={ligneId}>Ligne</h3>
         <div className="chips ech-chips" role="group" aria-label="Ligne d’échappement">
@@ -130,7 +177,7 @@ export function EchappementPanel() {
                 data-verrou={ferme ? 'ferme' : undefined}
                 aria-pressed={ligne.id === choix.id}
                 aria-expanded={ferme ? achat?.article.id === article?.id : undefined}
-                aria-label={ferme && article ? `${choix.label}, verrouillée, ${article.prix} dollars` : undefined}
+                aria-label={ferme && article ? (ligne.id === choix.id ? nomNonAcquis(choix.label, article.prix) : `${choix.label}, verrouillée, ${article.prix} dollars`) : undefined}
                 onClick={() => choisirLigne(choix)}
               >
                 <b>{choix.label}</b>
@@ -140,6 +187,7 @@ export function EchappementPanel() {
           })}
         </div>
         {blocAchat('ligne')}
+        {ligneSansAchat && <NoteNonAcquise label={ligne.label} prix={ligneSansAchat.prix} />}
         <p className="ech-note">{ligne.description}</p>
         <p className="ech-note" data-flammes={ligne.flammes ? (sorties > 0 ? 'oui' : 'sans-sortie') : 'non'}>
           {flammes}
@@ -148,8 +196,23 @@ export function EchappementPanel() {
 
       <section className="ech-bloc" aria-labelledby={ecouteId}>
         <h3 id={ecouteId}>Écouter</h3>
-        <p className="ech-note">Démarre et donne des coups de gaz : le moteur joue ici avec la ligne choisie, comme en sortie.</p>
-        <EngineSoundControls />
+        <p className="ech-note">
+          {ligne.flammes && sorties > 0
+            ? 'Démarre, tiens le gaz un instant puis lâche d’un coup : les sorties crachent, comme sur la route.'
+            : 'Démarre et donne des coups de gaz : le moteur joue ici avec la ligne choisie, comme en sortie.'}
+        </p>
+        <div
+          className="ech-ecoute"
+          onPointerDownCapture={(event) => doigt(event, true)}
+          onPointerUpCapture={(event) => doigt(event, false)}
+          onPointerCancelCapture={() => {
+            appui.current = null;
+          }}
+          onKeyDownCapture={(event) => touche(event, true)}
+          onKeyUpCapture={(event) => touche(event, false)}
+        >
+          <EngineSoundControls />
+        </div>
       </section>
 
       <section className="ech-bloc" aria-labelledby={finitionId}>
@@ -168,7 +231,7 @@ export function EchappementPanel() {
                   data-verrou={ferme ? 'ferme' : undefined}
                   aria-pressed={finition.id === choix.id}
                   aria-expanded={ferme ? achat?.article.id === article?.id : undefined}
-                  aria-label={ferme && article ? `${choix.label}, verrouillée, ${article.prix} dollars` : undefined}
+                  aria-label={ferme && article ? (finition.id === choix.id ? nomNonAcquis(choix.label, article.prix) : `${choix.label}, verrouillée, ${article.prix} dollars`) : undefined}
                   onClick={() => choisirFinition(choix)}
                 >
                   <span className="swatch" style={{ background: choix.rendu.color }} aria-hidden="true" />
@@ -186,6 +249,7 @@ export function EchappementPanel() {
           </p>
         )}
         {blocAchat('finition')}
+        {finitionSansAchat && <NoteNonAcquise label={finition.label} prix={finitionSansAchat.prix} />}
       </section>
 
       <p className="ech-message" role="status" aria-live="polite">

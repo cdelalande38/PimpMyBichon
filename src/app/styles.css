@@ -1232,6 +1232,40 @@ button {
   font-weight: 700;
 }
 
+/* Fil serré, mesuré pour toute entrée (src/ui/Dock.tsx, useFilSerre) : un nom qui ne tient pas (très
+   grand texte, paysage) ne se coupe plus. D'abord « Retour » se réduit à sa flèche, 48 px au doigt, son
+   nom lu par les lecteurs d'écran ; s'il le faut encore, l'étape passe sur deux lignes et le chemin se tait. */
+.dock .dock-head[data-fil] .btn.dock-back {
+  justify-content: center;
+  width: 48px;
+  padding: 0;
+}
+
+.dock-head[data-fil] .dock-back-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.dock-head[data-fil='deux-lignes'] .dock-crumbs-path {
+  display: none;
+}
+
+.dock-head[data-fil='deux-lignes'] .dock-crumb.dock-crumb-here {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  line-height: 1.2;
+}
+
 .dock-head .dock-handle {
   width: 48px;
   min-height: 48px;

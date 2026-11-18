@@ -104,6 +104,71 @@ function BoutonJouer({ className }: { className: string }) {
   );
 }
 
+/**
+ * L'étape déborde-t-elle de sa boîte ? Mesure fine : la largeur du texte posé (même coupé par l'ellipse,
+ * il garde sa place) contre celle de la boîte. scrollWidth et clientWidth sont arrondis au pixel : un
+ * débord de quelques dixièmes leur échappait, et l'ellipse mangeait pourtant deux lettres.
+ */
+function filDeborde(element: HTMLElement): boolean {
+  if (element.scrollWidth > element.clientWidth + 1) return true;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  const texte = range.getBoundingClientRect().width;
+  range.detach();
+  return texte > element.getBoundingClientRect().width + 0.25;
+}
+
+/**
+ * Le fil tient-il sur sa ligne ? Mesuré pour toute entrée, quel que soit son nom : 0, tout tient ; 1,
+ * « Retour » se réduit à sa flèche (son nom reste lu) ; 2, l'étape passe sur deux lignes, sans le
+ * chemin. Remesuré quand le texte du fil, la poignée, la largeur de la ligne, la taille du texte ou la police changent ;
+ * jamais sur ce que le resserrement lui-même déplace (pas d'aller-retour).
+ */
+function useFilSerre(head: RefObject<HTMLDivElement | null>, here: RefObject<HTMLSpanElement | null>, texte: string): number {
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    const element = head.current;
+    if (!element) return undefined;
+    let width = element.clientWidth;
+    const bump = () => setVersion((value) => value + 1);
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth === width) return;
+      width = element.clientWidth;
+      bump();
+    });
+    observer.observe(element);
+    // Taille du texte (Atelier › Réglages › Texte) : posée sur la racine.
+    const racine = new MutationObserver(bump);
+    racine.observe(document.documentElement, { attributes: true, attributeFilter: ['data-text', 'style'] });
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (live) bump();
+    });
+    return () => {
+      live = false;
+      observer.disconnect();
+      racine.disconnect();
+    };
+  }, [head]);
+  const cle = `${texte}|${version}`;
+  const [etat, setEtat] = useState({ cle: '', niveau: 0 });
+  const niveau = etat.cle === cle ? etat.niveau : 0;
+  // Mesuré avant l'affichage : un cran de plus tant que l'étape déborde (deux au plus).
+  useLayoutEffect(() => {
+    const mesurer = () => {
+      if (niveau >= 2) return;
+      const element = here.current;
+      const deborde = element !== null && filDeborde(element);
+      if (etat.cle !== cle) setEtat({ cle, niveau: deborde ? 1 : 0 });
+      else if (deborde) setEtat({ cle, niveau: niveau + 1 });
+    };
+    mesurer();
+  }, [cle, etat, niveau, here]);
+  return niveau;
+}
+
+const FIL_SERRE = [undefined, 'serre', 'deux-lignes'] as const;
+
 function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boolean }) {
   const chosen = useDock((state) => state.section);
   const menu = useDock((state) => state.menu);
@@ -129,15 +194,19 @@ function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boo
   const parts = crumbs.filter((crumb): crumb is string => crumb !== undefined);
   // Les sections, ou le choix du véhicule : le véhicule à l'écran reste lisible.
   const top = level === 'sections' || (section?.id === 'vehicule' && levels.length === 0);
+  // Un nom long (« Échappement » en très grand texte, en paysage) : le fil se resserre plutôt que de le couper.
+  const headRef = useRef<HTMLDivElement>(null);
+  const hereRef = useRef<HTMLSpanElement>(null);
+  const serre = useFilSerre(headRef, hereRef, top ? '' : `${level}|${handle ? 'poignée' : ''}|${parts.join('·')}`);
 
   return (
-    <div className="dock-head">
+    <div ref={headRef} className="dock-head" data-fil={top ? undefined : FIL_SERRE[serre]}>
       {level !== 'sections' && (
         <button type="button" className="btn dock-back" onClick={() => back()}>
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M15 6l-6 6 6 6" />
           </svg>
-          Retour
+          <span className="dock-back-label">Retour</span>
         </button>
       )}
       <p className="dock-crumbs" aria-live="polite">
@@ -157,7 +226,9 @@ function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boo
                 ))}
               </span>
             )}
-            <span className="dock-crumb dock-crumb-here">{parts.at(-1)}</span>
+            <span ref={hereRef} className="dock-crumb dock-crumb-here">
+              {parts.at(-1)}
+            </span>
           </>
         )}
       </p>

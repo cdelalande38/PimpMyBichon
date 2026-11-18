@@ -8,7 +8,7 @@
   "hint": "Ronde, posée bas, jantes 8 branches : la reine de l'atelier",
   "placeholder": "placeholder_cox",
   "halfLengthHint": 1.92,
-  "lights": { "front": ["lamp"], "rear": ["tail"] },
+  "lights": { "front": ["lamp"], "rear": ["tail"], "interior": ["habitacle"] },
   "zones": [
     {
       "id": "carrosserie",

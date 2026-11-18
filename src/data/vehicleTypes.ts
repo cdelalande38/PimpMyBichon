@@ -82,6 +82,11 @@ export interface VehicleAdapt {
 export interface VehicleLights {
   front: readonly string[];
   rear: readonly string[];
+  /**
+   * Nœuds de l'habitacle dont les pièces portent la matière d'une optique sans en être une (voyants,
+   * accents rouges de la planche de bord) : elles gardent leur lueur, quels que soient les réglages.
+   */
+  interior?: readonly string[];
 }
 
 /**

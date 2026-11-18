@@ -45,8 +45,10 @@ import type { Build } from '../../data/vehicleTypes.ts';
 import { useHabitacle } from './habitacle.ts';
 import { usePieces } from './pieces.ts';
 import { separerEchappement, useFinitionEchappement } from './echappement.ts';
+import { useFlammesGarage } from './flammes.ts';
+import { useGabarit } from './gabarit.ts';
 import { applyLivery, createLiveryRig, disposeLivery, type LiveryRig } from './livree.ts';
-import { useVehicleLights } from './phares.ts';
+import { separerVoyants, useVehicleLights } from './phares.ts';
 import { createMarkMaterial, mergeGround, mountWheels, preloadWheels, useBodyPose, useWheelMounts, useWheelSources, type WheelAnchor, type WheelMount, type WheelRig } from './wheels.ts';
 
 const BASE = import.meta.env.BASE_URL;
@@ -304,6 +306,8 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
 
   // 4 bis. Sorties d'échappement du manifeste : leur métal à part, pour la finition (./echappement.ts).
   separerEchappement(scene, vehicle, owned);
+  // 4 ter. Voyants de l'habitacle dans la matière d'une optique : à part, hors des réglages des phares (./phares.ts).
+  separerVoyants(scene, vehicle, owned);
 
   // 5. Budget de draw calls (§ 8) : le modèle est immobile, ses pièces sont fusionnées par
   //    matériau. Seules les géométries aux attributs identiques se fusionnent.
@@ -543,6 +547,9 @@ function VehicleShadow({ caster, halfLength, halfWidth, height, stamp, pieces }:
     if (!pending.current) return;
     pending.current = false;
     rig.render(gl, caster, scene);
+    // Pour les parcours : combien de fois l'ombre a été refaite, et avec quelles pièces posées.
+    const trace = globalThis as { __pmbOmbreContact?: { rendus: number; pieces: string } };
+    trace.__pmbOmbreContact = { rendus: (trace.__pmbOmbreContact?.rendus ?? 0) + 1, pieces };
   });
   return <primitive object={rig.root} />;
 }
@@ -595,6 +602,8 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   const pieces = usePieces(prepared, vehicle, invalidate, bodyEnv, { preload: true });
   // Finition des sorties d'échappement du build (./echappement.ts).
   useFinitionEchappement(prepared.root, vehicle, invalidate);
+  // Retour de flammes au garage, au lâcher d'un coup de gaz (Mécanique · Échappement, ligne libre).
+  useFlammesGarage(prepared.root, vehicle, invalidate);
 
   // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
   // vernis), et compilerait pour rien une variante de plus pendant le démarrage. Rendu à la
@@ -671,6 +680,8 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   const { halfLength, halfWidth, height } = prepared;
   useEffect(() => {
     onMeasured(vehicle.id, { halfLength, halfWidth, height });
+    // Gabarit publié pour les panneaux qui cadrent une partie du véhicule (Custom › Phares).
+    useGabarit.getState().poser(vehicle.id, { halfLength, halfWidth, height });
     setStatus('pret');
   }, [vehicle.id, halfLength, halfWidth, height, onMeasured, setStatus]);
 

@@ -23,7 +23,8 @@ import {
   Vector3,
   Vector4,
 } from 'three';
-import { MOON, type NightUniforms } from './materiaux.ts';
+import { linearOf, RAIN_TINT } from '../../data/phares.ts';
+import { HEADLIGHT, MOON, type NightUniforms } from './materiaux.ts';
 
 /** Palette du ciel (sRGB) : la brume prend la couleur de l'horizon. */
 export const SKY = {
@@ -149,7 +150,12 @@ export function createSky(): Mesh<SphereGeometry, ShaderMaterial> {
 // Pluie : traits qui tombent et filent avec la vitesse ; neige : flocons ronds, lents, qui dérivent ;
 // poussière (au sec, en roulant vite) : grains fins qui ne se voient que dans les phares. Sous un
 // tunnel (portée uSpan autour du rail local uShelterP, uShelterT), rien ne tombe : on voit le rideau
-// aux têtes. uDensity éclaircit la nuée en fondu (garde de cadence).
+// aux têtes. uDensity éclaircit la nuée en fondu (garde de cadence). Ce que les phares éclairent prend
+// la couleur de leur lumière (Custom › Phares : pmbHeadColor, l'uniforme de la route), au même calcul
+// que rainTint (src/data/phares.ts) : l'origine ne change rien, une teinte franche colore les gouttes.
+const HEAD_ORIGIN = linearOf(HEADLIGHT.color)
+  .map((value) => value.toFixed(6))
+  .join(', ');
 const RAIN_VERTEX = /* glsl */ `
 attribute vec4 aSeed;
 attribute vec2 aCorner;
@@ -166,10 +172,21 @@ uniform vec2 uSpan;
 uniform vec3 pmbHeadPos;
 uniform vec3 pmbHeadDir;
 uniform float pmbHeadOn;
+uniform vec3 pmbHeadColor;
 varying float vAlpha;
 varying vec2 vCorner;
 varying float vRound;
+varying vec3 vTint;
 const vec3 BOX = vec3( 26.0, 14.0, 26.0 );
+const vec3 HEAD_ORIGIN = vec3( ${HEAD_ORIGIN} );
+const vec3 LUMA = vec3( 0.2126, 0.7152, 0.0722 );
+// Teinte de la lumière des phares rapportée à l'origine (1 pour l'origine), relevée pour garder une
+// part de la luminance du blanc (une teinte franche ne doit pas éteindre la pluie).
+vec3 headTint() {
+  vec3 k = pmbHeadColor / HEAD_ORIGIN;
+  k /= max( max( k.r, k.g ), max( k.b, 1e-4 ) );
+  return k * clamp( ${RAIN_TINT.share.toFixed(3)} / max( dot( k, LUMA ), 1e-4 ), 1.0, ${RAIN_TINT.gain.toFixed(3)} );
+}
 void main() {
   bool snow = uSnow > uRain;
   float amount = max( max( uRain, uSnow ), uDust );
@@ -203,7 +220,9 @@ void main() {
   float lat = abs( d.x * uShelterT.y - d.z * uShelterT.x );
   float under = step( uSpan.x + 0.5, along ) * step( along, uSpan.y - 0.5 ) * step( lat, uShelterT.z + 2.5 ) * step( d.y, 7.5 );
   float keep = smoothstep( aSeed.w - 0.05, aSeed.w + 0.05, uDensity );
-  float base = snow ? 0.55 + 2.2 * lit : ( dust ? 2.4 * lit : 0.10 + 1.4 * lit );
+  float glow = snow ? 2.2 * lit : ( dust ? 2.4 * lit : 1.4 * lit );
+  float base = ( snow ? 0.55 : ( dust ? 0.0 : 0.10 ) ) + glow;
+  vTint = mix( vec3( 1.0 ), headTint(), glow / max( base, 1e-4 ) );
   // Les plus proches (moins de 1,2 m) ne se dessinent pas : de grands traits flous qui coûtaient cher.
   vAlpha = amount * keep * ( 1.0 - under ) * base * smoothstep( 1.2, 2.8, dc ) * ( 1.0 - smoothstep( 9.0, 13.0, dc ) ) * ( snow ? 1.0 : 1.0 - aCorner.y * 0.6 );
   vCorner = vec2( aCorner.x, aCorner.y * 2.0 - 1.0 );
@@ -216,10 +235,11 @@ const RAIN_FRAGMENT = /* glsl */ `
 varying float vAlpha;
 varying vec2 vCorner;
 varying float vRound;
+varying vec3 vTint;
 void main() {
   float a = vAlpha;
   if ( vRound > 0.5 ) a *= max( 0.0, 1.0 - dot( vCorner, vCorner ) );
-  gl_FragColor = vec4( mix( vec3( 0.62, 0.7, 0.85 ), vec3( 0.85, 0.88, 0.95 ), vRound ) * a, 1.0 );
+  gl_FragColor = vec4( mix( vec3( 0.62, 0.7, 0.85 ), vec3( 0.85, 0.88, 0.95 ), vRound ) * vTint * a, 1.0 );
 }`;
 
 export function createRain(count: number, uniforms: NightUniforms): Mesh<BufferGeometry, ShaderMaterial> {
@@ -264,6 +284,7 @@ export function createRain(count: number, uniforms: NightUniforms): Mesh<BufferG
       pmbHeadPos: uniforms.pmbHeadPos,
       pmbHeadDir: uniforms.pmbHeadDir,
       pmbHeadOn: uniforms.pmbHeadOn,
+      pmbHeadColor: uniforms.pmbHeadColor,
     },
     transparent: true,
     depthWrite: false,

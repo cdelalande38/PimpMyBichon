@@ -15,6 +15,11 @@
   min-width: 0;
 }
 
+/* Écoute : l'enveloppe ne lit que les évènements du coup de gaz, elle ne change rien à la mise en page. */
+.echappement .ech-ecoute {
+  display: contents;
+}
+
 .ech-bloc h3 {
   margin: 0;
   font-family: var(--display);

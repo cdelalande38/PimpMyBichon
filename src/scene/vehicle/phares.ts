@@ -1,7 +1,9 @@
 // Phares du véhicule (Custom › Phares, src/data/phares.ts), au garage comme en sortie : la lueur des
 // optiques avant prend la couleur choisie, leur glace la teinte (clair à fumé), les feux arrière
 // passent au fumé. Les optiques sont reconnues par le nom de leurs matériaux (section `lights` du
-// manifeste, sinon les rôles `lamp` et `tail`) ; aucun nom de véhicule ici.
+// manifeste, sinon les rôles `lamp` et `tail`) ; aucun nom de véhicule ici. Les voyants de l'habitacle
+// faits de la même matière (nœuds `lights.interior`) en reçoivent une copie à la préparation et restent
+// hors des réglages.
 //
 // Les matériaux des rôles sont partagés par le cache de chargement (src/scene/vehicle/VehicleModel.tsx) :
 // on travaille sur des copies, à nous, posées à leur place sur le modèle préparé, et libérées avec lui.
@@ -14,11 +16,55 @@
 import { useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo } from 'react';
 import { AddEquation, Color, ConstantColorFactor, CustomBlending, Mesh, MeshStandardMaterial, OneFactor, type Material, type Object3D } from 'three';
-import { beamTint, COULEURS_PHARES, couleurPhares, lightNamed, lightsOf, optionFeux, OPTIONS_FEUX, resolvePhares, TEINTE_OPTIQUES, type CouleurPhares, type PharesChoisis } from '../../data/phares.ts';
+import { beamTint, COULEURS_PHARES, couleurPhares, interiorLightNodes, lightNamed, lightsOf, optionFeux, OPTIONS_FEUX, resolvePhares, TEINTE_OPTIQUES, type CouleurPhares, type PharesChoisis } from '../../data/phares.ts';
 import type { VehicleLights, VehicleManifest } from '../../data/vehicleTypes.ts';
 import { useBuilds } from '../../state/builds.ts';
 
 const ORIGINE = 'pmbPhares';
+/** Marque (dans `userData`, copiée avec la matière) d'une matière d'optique posée sur un voyant de l'habitacle. */
+export const VOYANT = 'pmbVoyant';
+
+/** Une matière d'optique portée par un voyant de l'habitacle (./separerVoyants) : hors des réglages. */
+export function isVoyant(material: Material): boolean {
+  return material.userData[VOYANT] === true;
+}
+
+/**
+ * À la préparation (src/scene/vehicle/VehicleModel.tsx, `prepare`, avant la fusion par matière) : les
+ * pièces des nœuds `lights.interior` du manifeste (l'habitacle) qui portent la matière d'une optique
+ * avant ou d'un feu arrière (voyants, accents rouges de la planche de bord) en reçoivent une copie, à
+ * elles, marquée `VOYANT` et rangée dans `owned` : fusionnées à part (un appel de dessin de plus), elles
+ * gardent leur lueur quand les feux passent au fumé ou que l'éclairage change de couleur. Le nom ne
+ * change pas : en sortie, le rôle reste celui des feux (src/drive/scene/vehicule.tsx). Rend le nombre
+ * de pièces touchées.
+ */
+export function separerVoyants(scene: Object3D, vehicle: Pick<VehicleManifest, 'lights'>, owned: Material[]): number {
+  const nodes = interiorLightNodes(vehicle);
+  if (nodes.length === 0) return 0;
+  const names = lightsOf(vehicle);
+  const copies = new Map<Material, MeshStandardMaterial>();
+  let count = 0;
+  const swap = (material: Material): Material => {
+    if (!(material instanceof MeshStandardMaterial) || isVoyant(material)) return material;
+    if (!lightNamed(material.name, names.front) && !lightNamed(material.name, names.rear)) return material;
+    let copy = copies.get(material);
+    if (!copy) {
+      copy = material.clone();
+      copy.userData[VOYANT] = true;
+      copies.set(material, copy);
+      owned.push(copy);
+    }
+    count += 1;
+    return copy;
+  };
+  for (const name of nodes) {
+    scene.getObjectByName(name)?.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      object.material = Array.isArray(object.material) ? (object.material as Material[]).map(swap) : swap(object.material as Material);
+    });
+  }
+  return count;
+}
 
 /** Réglage d'origine d'une optique, gardé dans `userData` (copié tel quel avec le matériau). */
 interface Origine {
@@ -63,7 +109,7 @@ export function createLightsRig(root: Object3D, names: VehicleLights, clone: { f
   const rig: LightsRig = { front: [], rear: [], owned: [] };
   const done = new Map<Material, MeshStandardMaterial>();
   const take = (material: Material): Material => {
-    if (!(material instanceof MeshStandardMaterial)) return material;
+    if (!(material instanceof MeshStandardMaterial) || isVoyant(material)) return material;
     const side = lightNamed(material.name, names.front) ? 'front' : lightNamed(material.name, names.rear) ? 'rear' : null;
     if (!side) return material;
     const known = done.get(material);

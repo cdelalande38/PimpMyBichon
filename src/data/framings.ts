@@ -171,3 +171,47 @@ export function zoneFramingFor(face: ZoneFraming['faces'][number]): ZoneFraming 
   if (!found) throw new RangeError(`Aucun cadrage pour la face ${face}`);
   return found;
 }
+
+// ————————————————————————————————————————————————————————————————————————————————————————
+// Cadrages d'un bout du véhicule (Custom › Phares, Mécanique › Échappement) : tant que le panneau est
+// ouvert, la caméra du garage montre l'avant du véhicule (lumière, optiques) ou son arrière (feux,
+// sorties d'échappement), de face, au-dessus du menu, par le cadrage de pose d'une zone (`ZONE_FRAMINGS` :
+// faces « +x » et « -x », le cadrage « face »). Le cadre se déduit du gabarit du véhicule posé
+// (src/scene/vehicle/gabarit.ts : repère du modèle préparé, avant vers +X, sol à y = 0) : aucun cas par
+// véhicule. L'orbite au doigt reste libre autour de lui.
+
+export type CoteVehicule = 'avant' | 'arriere';
+
+export interface CadreBout {
+  /** Face regardée : l'avant (+X) ou l'arrière (−X). */
+  face: '+x' | '-x';
+  /** Recul du plan cadré depuis le bout du véhicule, en part de sa demi-longueur (0 : le bout). */
+  recul: number;
+  /** Part de la largeur et de la hauteur du véhicule que le cadre couvre (1 : tout). */
+  largeur: number;
+  hauteur: number;
+}
+
+/** Bornes des cadres d'un bout (vérifiées par les tests). */
+export const CADRE_BOUT_LIMITS = Object.freeze({ recul: { min: 0, max: 0.5 }, part: { min: 0.5, max: 1 } });
+
+export const CADRES_BOUT: Readonly<Record<CoteVehicule, CadreBout>> = Object.freeze({
+  avant: { face: '+x', recul: 0.2, largeur: 1, hauteur: 1 },
+  arriere: { face: '-x', recul: 0.2, largeur: 1, hauteur: 1 },
+});
+
+/** Cadre de pose (comme une zone de livrée : face, centre, taille) d'un bout du véhicule, d'après son gabarit. */
+export function cadreBout(
+  cote: CoteVehicule,
+  gabarit: { halfLength: number; halfWidth: number; height: number },
+): { face: '+x' | '-x'; center: [number, number, number]; size: [number, number, number] } {
+  const cadre = CADRES_BOUT[cote];
+  const sign = cadre.face === '+x' ? 1 : -1;
+  const recul = cadre.recul * gabarit.halfLength;
+  const hauteur = gabarit.height * cadre.hauteur;
+  return {
+    face: cadre.face,
+    center: [sign * (gabarit.halfLength - recul), hauteur / 2, 0],
+    size: [2 * gabarit.halfWidth * cadre.largeur, hauteur, Math.max(0.05, 2 * recul)],
+  };
+}
