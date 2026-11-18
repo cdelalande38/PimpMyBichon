@@ -78,7 +78,7 @@ export const FAMILLES = Object.freeze([
     nom: 'Interface (courts et discrets)',
     genre: 'bruitage',
     dossier: 'sfx/interface',
-    emplacements: bruitages([], ['clic', 'valide', 'retour', 'erreur', 'photo'], -26),
+    emplacements: bruitages([], ['clic', 'valide', 'retour', 'erreur', 'photo', 'gain', 'dollars'], -26),
   },
 ]);
 

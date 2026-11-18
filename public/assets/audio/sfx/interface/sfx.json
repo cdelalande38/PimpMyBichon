@@ -1,0 +1,102 @@
+{
+  "format": "pmb-sfx-sons",
+  "version": 1,
+  "famille": "interface",
+  "nom": "Interface (courts et discrets)",
+  "provisoire": true,
+  "boucles": [],
+  "ponctuels": [
+    {
+      "emplacement": "gain",
+      "fichier": "gain-1.ogg",
+      "empreinte": "3b073ebe14",
+      "duree": 1.5,
+      "gain": 0,
+      "gainFabrication": -4.1,
+      "credit": 0
+    },
+    {
+      "emplacement": "gain",
+      "fichier": "gain-2.ogg",
+      "empreinte": "f05049e91c",
+      "duree": 1.5,
+      "gain": 0,
+      "gainFabrication": -6.2,
+      "credit": 1
+    },
+    {
+      "emplacement": "gain",
+      "fichier": "gain-3.ogg",
+      "empreinte": "ef8f2d9dd5",
+      "duree": 1.5,
+      "gain": 0,
+      "gainFabrication": -12.6,
+      "credit": 2
+    },
+    {
+      "emplacement": "dollars",
+      "fichier": "dollars-1.ogg",
+      "empreinte": "01a5b90c4b",
+      "duree": 1,
+      "gain": 0,
+      "gainFabrication": -6.1,
+      "credit": 3
+    },
+    {
+      "emplacement": "dollars",
+      "fichier": "dollars-2.ogg",
+      "empreinte": "31e79beff9",
+      "duree": 1,
+      "gain": 0,
+      "gainFabrication": -10.4,
+      "credit": 4
+    },
+    {
+      "emplacement": "dollars",
+      "fichier": "dollars-3.ogg",
+      "empreinte": "ec3a7bf360",
+      "duree": 1,
+      "gain": 0,
+      "gainFabrication": -12.9,
+      "credit": 5
+    }
+  ],
+  "credits": [
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    },
+    {
+      "auteur": "le commanditaire",
+      "licence": "son généré par le commanditaire",
+      "source": "son généré par le commanditaire",
+      "citer": false
+    }
+  ]
+}

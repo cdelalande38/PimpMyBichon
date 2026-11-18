@@ -45,6 +45,13 @@
       "provisoire": true,
       "boucles": 7,
       "ponctuels": 14
+    },
+    "interface": {
+      "nom": "Interface (courts et discrets)",
+      "genre": "bruitage",
+      "provisoire": true,
+      "boucles": 0,
+      "ponctuels": 6
     }
   },
   "attributions": [

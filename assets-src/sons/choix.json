@@ -935,6 +935,68 @@
           }
         ]
       }
+    },
+    "interface": {
+      "emplacements": {
+        "gain": [
+          {
+            "prise": "prise-aab0d681f5",
+            "debut": 0,
+            "fin": 1.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-09d3a28bad",
+            "debut": 0,
+            "fin": 1.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          },
+          {
+            "prise": "prise-ef47cb1589",
+            "debut": 0,
+            "fin": 1.5,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 3"
+          }
+        ],
+        "dollars": [
+          {
+            "prise": "prise-586c6968b3",
+            "debut": 0,
+            "fin": 1.0,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 1"
+          },
+          {
+            "prise": "prise-2c82d865ee",
+            "debut": 0,
+            "fin": 1.0,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 2"
+          },
+          {
+            "prise": "prise-dffb972866",
+            "debut": 0,
+            "fin": 1.0,
+            "regime": null,
+            "gain": 0,
+            "provisoire": true,
+            "pourquoi": "son généré par le commanditaire, prise 3"
+          }
+        ]
+      }
     }
   },
   "note": "Choix provisoire du 16 novembre 2026, fait sans écoute (descriptions de decoupes.csv et analyse du signal : durée, stabilité du niveau, écrêtage). Le commanditaire le corrige à l'oreille avec npm run sons:ecoute."
