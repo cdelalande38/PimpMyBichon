@@ -1,0 +1,96 @@
+{
+  "format": "pmb-courses",
+  "version": 1,
+  "meteo": "sec",
+  "outil": "npm run courses:temps",
+  "ecartsMeteo": {
+    "pluie": 1.2,
+    "neige": 1.6
+  },
+  "departs": {
+    "ocean-drive": {
+      "tour1": {
+        "auto": 403.4,
+        "main": 154.8,
+        "vehicules": {
+          "bobber": {
+            "auto": 403.4,
+            "main": 154.8
+          },
+          "concept": {
+            "auto": 403.1,
+            "main": 124.9
+          },
+          "cox": {
+            "auto": 405.3,
+            "main": 199.8
+          },
+          "sportive": {
+            "auto": 403.4,
+            "main": 123.5
+          },
+          "van": {
+            "auto": 404,
+            "main": 186.9
+          }
+        }
+      }
+    },
+    "collins": {
+      "tour1": {
+        "auto": 258.3,
+        "main": 112.8,
+        "vehicules": {
+          "bobber": {
+            "auto": 258.3,
+            "main": 112.8
+          },
+          "concept": {
+            "auto": 258.2,
+            "main": 90.5
+          },
+          "cox": {
+            "auto": 260.1,
+            "main": 144.6
+          },
+          "sportive": {
+            "auto": 258.3,
+            "main": 89.2
+          },
+          "van": {
+            "auto": 259.1,
+            "main": 136.8
+          }
+        }
+      }
+    },
+    "nord": {
+      "tour1": {
+        "auto": 90.8,
+        "main": 43.4,
+        "vehicules": {
+          "bobber": {
+            "auto": 90.8,
+            "main": 43.4
+          },
+          "concept": {
+            "auto": 90.7,
+            "main": 36.2
+          },
+          "cox": {
+            "auto": 93.2,
+            "main": 55.9
+          },
+          "sportive": {
+            "auto": 90.8,
+            "main": 35.8
+          },
+          "van": {
+            "auto": 91.8,
+            "main": 51.8
+          }
+        }
+      }
+    }
+  }
+}

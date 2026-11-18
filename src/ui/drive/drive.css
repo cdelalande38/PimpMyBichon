@@ -41,6 +41,19 @@
   font-size: 0.8125rem;
 }
 
+/* Format de la sortie (src/data/courses.ts) : le format qui ne se court pas ici reste visible, grisé,
+   avec sa phrase dessous. */
+.drive-formats .chip:disabled {
+  border-style: dashed;
+  opacity: 0.45;
+}
+
+.drive-format-phrase {
+  align-self: stretch;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .drive-go-row {
   position: sticky;
   bottom: 0;
@@ -72,9 +85,20 @@
 
 .drive-go {
   flex: 1;
+  flex-direction: column;
+  gap: 0;
   min-height: var(--tap-chip);
   font-size: 1.25rem;
   letter-spacing: 0.12em;
+  line-height: 1.1;
+}
+
+/* Le format choisi, sous « Sortir » (src/data/courses.ts). */
+.drive-go-format {
+  font-size: 0.6875rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  opacity: 0.85;
 }
 
 .drive-icon {

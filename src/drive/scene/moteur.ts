@@ -37,7 +37,9 @@ import { useBuilds } from '../../state/builds.ts';
 import { etapeFondu, liveDepart, livePilot, useDrive } from '../../state/drive.ts';
 import { cameraShot, guardShot } from '../cameras.ts';
 import type { CameraId, CameraShot, Director, DriveTelemetry, Pilot, Rail, RailPose, VehicleFrame } from '../contrat.ts';
-import { armerDepart, cleTemps, createDepart, lancerDepart, pasDepart, tenuSurLaLigne } from '../depart.ts';
+import { armerDepart, cleTemps, createDepart, enCourse, lancerDepart, pasDepart, tenuSurLaLigne } from '../depart.ts';
+import { courseFinie, SuiviCourse } from '../course.ts';
+import { formatCouru, toursDuFormat } from '../../data/courses.ts';
 import { createPilot, performanceDe } from '../pilote.ts';
 import { createPose, createRail } from '../rail.ts';
 import { createDirector } from '../realisateur.ts';
@@ -170,6 +172,8 @@ export class DriveEngine {
   private readonly director: Director;
   /** Départ arrêté, chrono, tours et arrivée (src/drive/depart.ts) ; lignes en damier sur la chaussée. */
   readonly depart = createDepart();
+  /** Mesures de la course en cours (src/drive/course.ts). */
+  private readonly suivi = new SuiviCourse();
   private readonly lignes: LignesDepart;
   /** Balises à chevrons des virages (src/drive/scene/chevrons.ts) ; publie les virages pour la mini-carte. */
   private readonly chevrons: Chevrons;
@@ -319,7 +323,10 @@ export class DriveEngine {
     this.pilot.reset(start.at);
     this.director.reset();
     // Aperçu (src/state/drive.ts) : départ lancé, sans feux ; la course, elle, part arrêtée aux feux.
-    armerDepart(this.depart, this.pilot.motion.s, this.rail.loop, useDrive.getState().apercu);
+    // Course (src/data/courses.ts) : les tours du format choisi ; la balade et l'aperçu n'en ont pas.
+    const drive = useDrive.getState();
+    armerDepart(this.depart, this.pilot.motion.s, this.rail.loop, drive.apercu, toursDuFormat(formatCouru(drive.format, this.rail.loop)));
+    this.suivi.remettre();
     this.pilot.setHold?.(true);
     this.lignes.poser(this.rail, this.pilot.motion.s, this.rig.measure?.halfLength ?? this.halfLengthHint);
     useDrive.getState().effacerArrivee();
@@ -406,8 +413,14 @@ export class DriveEngine {
     this.pilot.setWeather?.(drive.weather);
     const motion = this.pilot.step(dt, drive.input, this.kind);
     const arrived = depart.phase === 'arrive';
+    this.suivi.pas(depart, dt, drive.input, motion, (this.pilot as { contact?: number }).contact ?? 0, this.pilot.train?.nos === true);
     pasDepart(depart, dt, this.vehicleReady && !this.vehicleFailed && decor.status.loaded > 0 && this.frames > 2, motion.s, this.rail, motion.finished);
-    if (!arrived && depart.phase === 'arrive' && drive.map && !depart.lance) drive.noterArrivee(cleTemps(drive.map, this.startId, this.vehicleId), depart.arrivee);
+    if (!arrived && depart.phase === 'arrive' && drive.map && !depart.lance) {
+      const format = formatCouru(drive.format, this.rail.loop);
+      const finie = enCourse(depart) ? courseFinie(depart, this.suivi.mesures, { carte: drive.map, depart: this.startId, vehicule: this.vehicleId, format, meteo: drive.weather, moment: 'nuit' }) : null;
+      if (finie) drive.terminerCourse(finie);
+      else drive.noterArrivee(cleTemps(drive.map, this.startId, this.vehicleId), depart.arrivee);
+    }
     feuxSon.rouges = depart.rouges;
     feuxSon.vert = depart.vert;
     // Le pilote publié est celui qui roule (en mode strict de React, une scène écartée a pu le publier).

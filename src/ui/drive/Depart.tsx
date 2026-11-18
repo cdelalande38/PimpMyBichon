@@ -3,13 +3,15 @@
 //   une seconde après le départ ;
 // - le chrono : minutes, secondes, dixièmes, à la même place sous le compte-tours, une fois les feux
 //   effacés (le cadre du nom de la carte ne grandit pas) ; sur une boucle, le tour et le meilleur tour ;
+//   en course (src/data/courses.ts), le temps total, « Tour 2/3 », et le temps du tour bouclé, montré
+//   `TOUR_MONTRE` s au passage de la ligne ;
 // - l'arrivée (parcours ouvert) : le temps, le meilleur temps gardé pour ce parcours, ce départ et ce
 //   véhicule, « Repartir » et « Rentrer au garage ».
 // Les lampes et le chrono sont écrits à chaque image par une boucle (aucun rendu React par image).
 
 import { useRef } from 'react';
 import { closeSheet } from '../../app/useRoute.ts';
-import { chronoDuTour, DEPART, feuxVisibles, formatChrono, type EtatDepart } from '../../drive/depart.ts';
+import { chronoDuTour, DEPART, enCourse, feuxVisibles, formatChrono, texteTour, type EtatDepart } from '../../drive/depart.ts';
 import { liveDepart, useDrive } from '../../state/drive.ts';
 import { useBoucleImage } from './CompteTours.tsx';
 import { DriveIcon } from './icones.tsx';
@@ -56,28 +58,45 @@ export function FeuxDepart() {
   );
 }
 
+/** Temps du tour bouclé, montré au passage de la ligne, en secondes de temps de sortie. */
+export const TOUR_MONTRE = 3;
+
 /** Le chrono, sous le compte-tours une fois les feux effacés : discret, mis à jour au dixième. */
 export function ChronoSortie() {
   const phase = useDrive((state) => state.telemetry.depart ?? 'attente');
   const root = useRef<HTMLSpanElement>(null);
   const main = useRef<HTMLElement>(null);
   const sub = useRef<HTMLElement>(null);
-  const shown = useRef({ main: -1, tours: -1, meilleur: -2 });
+  const flash = useRef<HTMLElement>(null);
+  const shown = useRef({ main: -1, tours: -1, meilleur: -2, course: -1, flash: false });
 
   useBoucleImage(() => {
     const etat = liveDepart.current;
     if (!etat || !main.current) return;
     putData(root.current, 'visible', etat.phase !== 'attente' && etat.phase !== 'feux' && !feuxVisibles(etat) ? 'oui' : 'non');
-    const tour = Math.floor((etat.boucle ? chronoDuTour(etat) : etat.chrono) / 100);
+    const course = enCourse(etat);
+    // Course : le temps total ; balade sur une boucle : le tour en cours.
+    const tour = Math.floor((etat.boucle && !course ? chronoDuTour(etat) : etat.chrono) / 100);
     const seen = shown.current;
     if (tour !== seen.main) {
       seen.main = tour;
       main.current.textContent = formatChrono(tour * 100);
     }
-    if (etat.boucle && sub.current && (etat.tours !== seen.tours || etat.meilleurTour !== seen.meilleur)) {
+    const toursCourse = course ? etat.toursCourse : 0;
+    if (sub.current && (etat.tours !== seen.tours || etat.meilleurTour !== seen.meilleur || toursCourse !== seen.course)) {
       seen.tours = etat.tours;
       seen.meilleur = etat.meilleurTour;
-      sub.current.textContent = `Tour ${etat.tours + 1}${etat.meilleurTour >= 0 ? ` · meilleur ${formatChrono(etat.meilleurTour)}` : ''}`;
+      seen.course = toursCourse;
+      const texte = course ? texteTour(etat) : etat.boucle ? `Tour ${etat.tours + 1}${etat.meilleurTour >= 0 ? ` · meilleur ${formatChrono(etat.meilleurTour)}` : ''}` : '';
+      sub.current.textContent = texte;
+      putData(root.current, 'tour', course ? texte : '');
+      // Le temps du tour qui vient d'être bouclé (posé une fois, au passage).
+      if (flash.current && course && etat.tours > 0) flash.current.textContent = `Tour ${etat.tours} : ${formatChrono(etat.dernierTour)}`;
+    }
+    const montrer = course && etat.phase === 'parti' && etat.tours > 0 && etat.depuisTour < TOUR_MONTRE;
+    if (montrer !== seen.flash) {
+      seen.flash = montrer;
+      putData(flash.current, 'visible', montrer ? 'oui' : 'non');
     }
   });
 
@@ -87,6 +106,7 @@ export function ChronoSortie() {
       <span ref={root} className="drive-chrono" aria-label="Chrono" data-visible="non">
         <b ref={main}>0:00.0</b>
         <small ref={sub} />
+        <em ref={flash} className="drive-chrono-tour" role="status" data-visible="non" />
       </span>
     </div>
   );
@@ -98,7 +118,8 @@ export function ArriveePanneau() {
   const arrivee = useDrive((state) => state.arrivee);
   // « Repartir » : de nouveau sur la ligne, les feux, à la main.
   const commencer = useDrive((state) => state.commencer);
-  if (phase !== 'arrive' || !arrivee) return null;
+  const fin = useDrive((state) => state.fin !== null);
+  if (phase !== 'arrive' || !arrivee || fin) return null;
   const { temps, meilleur, precedent } = arrivee;
   const record = precedent > 0 && temps < precedent;
   const ligne =

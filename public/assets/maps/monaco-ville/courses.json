@@ -1,0 +1,124 @@
+{
+  "format": "pmb-courses",
+  "version": 1,
+  "meteo": "sec",
+  "outil": "npm run courses:temps",
+  "ecartsMeteo": {
+    "pluie": 1.25,
+    "neige": 1.7
+  },
+  "departs": {
+    "fontvieille": {
+      "tour1": {
+        "auto": 364.4,
+        "main": 194.4,
+        "vehicules": {
+          "bobber": {
+            "auto": 364.2,
+            "main": 194.4
+          },
+          "concept": {
+            "auto": 364.4,
+            "main": 161.8
+          },
+          "cox": {
+            "auto": 370.6,
+            "main": 241.3
+          },
+          "sportive": {
+            "auto": 364.2,
+            "main": 162.5
+          },
+          "van": {
+            "auto": 367.2,
+            "main": 236.7
+          }
+        }
+      }
+    },
+    "port": {
+      "tour1": {
+        "auto": 292.2,
+        "main": 148.9,
+        "vehicules": {
+          "bobber": {
+            "auto": 292.2,
+            "main": 148.9
+          },
+          "concept": {
+            "auto": 291.9,
+            "main": 123.2
+          },
+          "cox": {
+            "auto": 296.7,
+            "main": 183.8
+          },
+          "sportive": {
+            "auto": 292.2,
+            "main": 124.1
+          },
+          "van": {
+            "auto": 293.9,
+            "main": 179.1
+          }
+        }
+      }
+    },
+    "casino": {
+      "tour1": {
+        "auto": 205.8,
+        "main": 105.4,
+        "vehicules": {
+          "bobber": {
+            "auto": 205.8,
+            "main": 105.4
+          },
+          "concept": {
+            "auto": 205.4,
+            "main": 86.9
+          },
+          "cox": {
+            "auto": 209.1,
+            "main": 130
+          },
+          "sportive": {
+            "auto": 205.8,
+            "main": 87.5
+          },
+          "van": {
+            "auto": 207,
+            "main": 128
+          }
+        }
+      }
+    },
+    "bord-de-mer": {
+      "tour1": {
+        "auto": 129.3,
+        "main": 63.4,
+        "vehicules": {
+          "bobber": {
+            "auto": 129.2,
+            "main": 63.4
+          },
+          "concept": {
+            "auto": 129.3,
+            "main": 51.9
+          },
+          "cox": {
+            "auto": 130.3,
+            "main": 77.4
+          },
+          "sportive": {
+            "auto": 129.2,
+            "main": 51.3
+          },
+          "van": {
+            "auto": 129.6,
+            "main": 76.3
+          }
+        }
+      }
+    }
+  }
+}

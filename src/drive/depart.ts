@@ -11,8 +11,14 @@
 // Départ lancé (aperçu du début de sortie : la vitrine en pilote automatique) : tenu tant que la
 // route n'est pas prête, puis « parti » sans feux ni vert (aucun bip), et aucun temps gardé.
 //
-// Ni classement, ni adversaire, ni récompense ici : un mode de jeu (contre la montre, par exemple)
-// pourra lire cet état et y brancher les siens.
+// Course (src/data/courses.ts, demande du 17 novembre 2026) : `toursCourse` tours à courir. Sur une
+// boucle, l'arrivée est le passage de la ligne qui boucle le dernier tour ; sur une route ouverte, le bout
+// du parcours (un tour). Chaque tour est relevé (`tempsTours`, sans allocation) ; `depuisTour` dit depuis
+// combien de temps la ligne a été passée (le temps du tour s'affiche un instant). Balade : 0, rien ne
+// change (tours sans fin sur une boucle).
+//
+// Ni classement, ni adversaire, ni récompense ici : l'écran de fin (src/ui/drive/FinCourse.tsx) lit le
+// résultat, l'économie (src/jeu/bilan.ts) en tire le bilan.
 
 export type PhaseDepart = 'attente' | 'feux' | 'parti' | 'arrive';
 
@@ -69,7 +75,16 @@ export interface EtatDepart {
   meilleurTour: number;
   /** Temps de l'arrivée, en ms ; -1 tant qu'elle n'est pas passée. */
   arrivee: number;
+  /** Course : tours à courir (0 : balade, pas de fin de course sur une boucle). */
+  toursCourse: number;
+  /** Temps de chaque tour bouclé, en ms (les `tours` premiers comptent). */
+  tempsTours: Float64Array;
+  /** Temps de sortie depuis le dernier passage de la ligne, en s (Infinity avant le premier). */
+  depuisTour: number;
 }
+
+/** Tours relevés au plus (src/data/courses.ts, TOURS_MAX). */
+export const TOURS_RELEVES = 8;
 
 export function createDepart(): EtatDepart {
   return {
@@ -89,14 +104,18 @@ export function createDepart(): EtatDepart {
     dernierTour: -1,
     meilleurTour: -1,
     arrivee: -1,
+    toursCourse: 0,
+    tempsTours: new Float64Array(TOURS_RELEVES),
+    depuisTour: Infinity,
   };
 }
 
 /**
  * Nouveau départ depuis l'abscisse `s` : arrêté (les feux reprendront dès que la route sera prête),
- * ou `lance` (aperçu : parti sans feux dès que la route est prête).
+ * ou `lance` (aperçu : parti sans feux dès que la route est prête). `toursCourse` : tours d'une course
+ * (0 : balade ; jamais en départ lancé).
  */
-export function armerDepart(etat: EtatDepart, s: number, boucle = false, lance = false): EtatDepart {
+export function armerDepart(etat: EtatDepart, s: number, boucle = false, lance = false, toursCourse = 0): EtatDepart {
   etat.phase = 'attente';
   etat.lance = lance;
   etat.boucle = boucle;
@@ -113,6 +132,9 @@ export function armerDepart(etat: EtatDepart, s: number, boucle = false, lance =
   etat.dernierTour = -1;
   etat.meilleurTour = -1;
   etat.arrivee = -1;
+  etat.toursCourse = lance || !(toursCourse > 0) ? 0 : Math.min(TOURS_RELEVES, Math.floor(toursCourse));
+  etat.tempsTours.fill(0);
+  etat.depuisTour = Infinity;
   return etat;
 }
 
@@ -174,10 +196,12 @@ export function pasDepart(etat: EtatDepart, dt: number, pret: boolean, s: number
   }
   if (etat.phase === 'arrive') {
     etat.depuisVert += pas;
+    etat.depuisTour += pas;
     return etat;
   }
   // Parti : le chrono tourne, la distance se déroule (une boucle se referme sur elle-même).
   etat.depuisVert += pas;
+  etat.depuisTour += pas;
   const avant = etat.chrono;
   etat.chrono += pas * 1000;
   const ici = Number.isFinite(s) ? s : etat.sPrec;
@@ -196,10 +220,19 @@ export function pasDepart(etat: EtatDepart, dt: number, pret: boolean, s: number
         const cible = (etat.tours + 1) * parcours.length;
         const passage = avant + ((cible - parcouruAvant) / ds) * (etat.chrono - avant);
         const tour = passage - etat.debutTour;
+        if (etat.tours < etat.tempsTours.length) etat.tempsTours[etat.tours] = tour;
         etat.tours += 1;
         etat.dernierTour = tour;
         if (etat.meilleurTour < 0 || tour < etat.meilleurTour) etat.meilleurTour = tour;
         etat.debutTour = passage;
+        etat.depuisTour = (etat.chrono - passage) / 1000;
+        if (etat.toursCourse > 0 && etat.tours >= etat.toursCourse) {
+          // Dernier tour bouclé : arrivée sur la ligne, chrono arrêté à l'instant du passage.
+          etat.chrono = passage;
+          etat.arrivee = passage;
+          etat.phase = 'arrive';
+          break;
+        }
       }
     }
     return etat;
@@ -212,8 +245,24 @@ export function pasDepart(etat: EtatDepart, dt: number, pret: boolean, s: number
     etat.chrono = avant + part * (etat.chrono - avant);
     etat.arrivee = etat.chrono;
     etat.phase = 'arrive';
+    // Un passage du départ à l'arrivée : un tour.
+    etat.tempsTours[0] = etat.chrono;
+    etat.tours = 1;
+    etat.dernierTour = etat.chrono;
+    etat.meilleurTour = etat.chrono;
+    etat.depuisTour = 0;
   }
   return etat;
+}
+
+/** « Tour 2/3 » : le tour en cours d'une course (le dernier une fois arrivé). */
+export function texteTour(etat: Pick<EtatDepart, 'tours' | 'toursCourse'>): string {
+  return `Tour ${Math.min(etat.tours + 1, etat.toursCourse)}/${etat.toursCourse}`;
+}
+
+/** Course (pas balade, pas aperçu) ? */
+export function enCourse(etat: EtatDepart): boolean {
+  return etat.toursCourse > 0 && !etat.lance;
 }
 
 /** Chrono du tour en cours, en ms (boucle), ou chrono total (parcours ouvert). */

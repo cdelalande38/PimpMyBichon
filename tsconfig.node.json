@@ -7,6 +7,7 @@
     "moduleResolution": "bundler",
     "moduleDetection": "force",
     "types": ["node"],
+    "jsx": "react-jsx",
     "allowJs": true,
     "checkJs": true,
     "allowImportingTsExtensions": true,

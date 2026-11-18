@@ -11,12 +11,20 @@
 // remet le véhicule sur la ligne du départ choisi, feux, à la main ; « Repartir » fait de même.
 // « Pilote automatique » des réglages (`laisserConduire`) rend le volant au pilote sans rien perdre
 // du parcours (position, chrono) ; un appui sur la route le reprend.
+// Format (src/data/courses.ts, demande du 17 novembre 2026) : balade, course en 1 tour ou en 3 tours,
+// choisi au menu et gardé. À l'arrivée d'une course, la scène rend la course finie (`terminerCourse`) :
+// record d'avant et médaille ajoutés, `cloturerCourse` (src/jeu/bilan.ts) en tire le bilan que montre
+// l'écran de fin (`fin`) ; le record de la carte, du départ et du format est gardé (`meilleurs`).
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { CAMERA_IDS, type CameraId, type DriveInput, type DriveStore, type DriveTelemetry, type OrbitView, type Pilot, type Weather } from '../drive/contrat.ts';
 import { clampOrbit, DEFAULT_ORBIT } from '../drive/cameras.ts';
 import type { EtatDepart } from '../drive/depart.ts';
+import type { CourseFinie } from '../drive/course.ts';
+import { cleRecord, estFormat, FORMAT_PAR_DEFAUT, indulgence, medailleDe, seuilsMedailles, tempsReference } from '../data/courses.ts';
+import type { Bilan, FormatCourse, MomentCourse, ResultatCourse } from '../jeu/contrat.ts';
+import { cloturerCourse } from '../jeu/bilan.ts';
 import { mapById, MAPS } from '../data/maps.ts';
 import type { MapId } from '../data/mapTypes.ts';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
@@ -62,15 +70,16 @@ export const DIRECTIONS: readonly { id: DriveDirection; label: string }[] = [
   { id: 'assistee', label: 'Assistée' },
 ];
 
-/** Ce qui est sauvegardé : la météo, la caméra, la commande et la direction préférées. */
+/** Ce qui est sauvegardé : la météo, la caméra, la commande, la direction et le format préférés. */
 export interface DrivePrefs {
   weather: Weather;
   camera: CameraId;
   commande: DriveCommande;
   direction: DriveDirection;
+  format: FormatCourse;
 }
 
-export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ weather: 'pluie', camera: 'poursuite', commande: 'manche', direction: 'libre' });
+export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ weather: 'pluie', camera: 'poursuite', commande: 'manche', direction: 'libre', format: FORMAT_PAR_DEFAUT });
 
 /** Caméra mise en passant « À la main ». */
 export const CAMERA_A_LA_MAIN: CameraId = 'poursuite';
@@ -149,7 +158,8 @@ export function sanitizeDrivePrefs(raw: unknown): DrivePrefs {
   const camera = CAMERA_IDS.includes(source.camera as CameraId) ? (source.camera as CameraId) : DEFAULT_DRIVE_PREFS.camera;
   const commande = COMMANDES.some((item) => item.id === source.commande) ? (source.commande as DriveCommande) : DEFAULT_DRIVE_PREFS.commande;
   const direction = DIRECTIONS.some((item) => item.id === source.direction) ? (source.direction as DriveDirection) : DEFAULT_DRIVE_PREFS.direction;
-  return { weather, camera, commande, direction };
+  const format = estFormat(source.format) ? source.format : DEFAULT_DRIVE_PREFS.format;
+  return { weather, camera, commande, direction, format };
 }
 
 /** Caméra suivante dans l'ordre du contrat (après l'orbite, on revient à la poursuite). */
@@ -168,6 +178,8 @@ export interface DriveState extends DriveStore {
   commande: DriveCommande;
   /** Direction préférée à la main : libre ou assistée. */
   direction: DriveDirection;
+  /** Format préféré (gardé) : balade, course en 1 tour, en 3 tours. */
+  format: FormatCourse;
   /** Essai de la sortie en cours : « Réessayer » et « Repartir » remontent la scène (clé de montage). */
   attempt: number;
   /** Remonte la scène sur la même carte et le même départ, en aperçu : après une erreur. */
@@ -238,6 +250,29 @@ export interface DriveState extends DriveStore {
   noterArrivee: (cle: string, temps: number) => void;
   /** Nouveau départ : l'arrivée précédente s'efface. */
   effacerArrivee: () => void;
+  /** Format choisi au menu (gardé) : balade, course en 1 tour, en 3 tours. */
+  setFormat: (format: FormatCourse) => void;
+  /** Bilan de la course arrivée, montré par l'écran de fin ; `null` sinon (effacé à chaque départ). */
+  fin: Bilan | null;
+  /**
+   * Arrivée d'une course : record d'avant et médaille ajoutés, bilan de `cloturerCourse`, record gardé,
+   * le pilote automatique reprend le volant derrière l'écran de fin (tour d'honneur).
+   */
+  terminerCourse: (course: CourseFinie) => void;
+}
+
+/** Bilan sans rien (économie absente ou en erreur) : l'écran de fin montre quand même le résultat. */
+export function bilanVide(resultat: ResultatCourse): Bilan {
+  return { resultat, gains: { dollars: 0, detail: [] }, solde: 0, hautsFaits: [], deblocages: [] };
+}
+
+/** Résultat complet d'une course finie : le record d'avant (s, depuis `meilleurs` en ms) et la médaille. */
+export function resultatDe(course: CourseFinie, meilleurs: Readonly<Record<string, number>>): ResultatCourse {
+  const old = meilleurs[cleRecord(course.carte, course.depart, course.format)];
+  const ancienRecord = typeof old === 'number' && old > 0 ? old / 1000 : null;
+  const reference = tempsReference(course.carte, course.depart, course.format, course.vehicule);
+  const medaille = reference === null ? null : medailleDe(course.temps, seuilsMedailles(reference, indulgence(course.carte, course.meteo)));
+  return { ...course, ancienRecord, medaille };
 }
 
 const unit = (value: number) => (Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0);
@@ -265,14 +300,14 @@ export const useDrive = create<DriveState>()(
         set((state) =>
           state.map === null
             ? state
-            : { attempt: state.attempt + 1, apercu: true, fondu: 'non', input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            : { attempt: state.attempt + 1, apercu: true, fondu: 'non', fin: null, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
         ),
       commencer: () =>
         set((state) => {
           if (state.map === null) return state;
           const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
           const input: DriveInput = { auto: false, throttle: 0, brake: 0, lane: 0, ...(state.direction === 'assistee' ? { assist: true } : {}), ...nos };
-          return { apercu: false, fondu: 'non', course: state.course + 1, input, camera: CAMERA_A_LA_MAIN, director: false, slow: false, paused: false };
+          return { apercu: false, fondu: 'non', fin: null, course: state.course + 1, input, camera: CAMERA_A_LA_MAIN, director: false, slow: false, paused: false };
         }),
       laisserConduire: () =>
         set((state) => {
@@ -296,6 +331,7 @@ export const useDrive = create<DriveState>()(
           start: wanted,
           apercu: true,
           fondu: 'non',
+          fin: null,
           director: true,
           input: { ...AUTO_INPUT },
           orbit: { ...DEFAULT_ORBIT },
@@ -308,7 +344,7 @@ export const useDrive = create<DriveState>()(
         set((state) =>
           state.map === null
             ? state
-            : { map: null, start: null, apercu: true, fondu: 'non', input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            : { map: null, start: null, apercu: true, fondu: 'non', fin: null, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
         ),
       setCamera: (camera) => set({ camera, director: false }),
       nextCamera: () => set((state) => ({ camera: nextCameraOf(state.camera), director: false })),
@@ -367,13 +403,37 @@ export const useDrive = create<DriveState>()(
           return { meilleurs: sanitizeMeilleurs(meilleurs), arrivee: { temps, meilleur, precedent } };
         }),
       effacerArrivee: () => set((state) => (state.arrivee === null ? state : { arrivee: null })),
+      setFormat: (format) => set((state) => (!estFormat(format) || state.format === format ? state : { format })),
+      fin: null,
+      terminerCourse: (course) => {
+        // Une seule clôture par course finie (src/jeu/bilan.ts paie et enregistre) : hors de la mise à jour du store.
+        const state = get();
+        const moment: MomentCourse = (state as Partial<{ moment: MomentCourse }>).moment === 'jour' ? 'jour' : 'nuit';
+        const resultat = resultatDe({ ...course, moment }, state.meilleurs);
+        let fin: Bilan;
+        try {
+          fin = cloturerCourse(resultat);
+        } catch {
+          fin = bilanVide(resultat);
+        }
+        const cle = cleRecord(course.carte, course.depart, course.format);
+        const temps = Math.round(course.temps * 1000);
+        set((now) => {
+          const meilleurs = { ...now.meilleurs };
+          const old = meilleurs[cle];
+          delete meilleurs[cle];
+          meilleurs[cle] = typeof old === 'number' && old > 0 ? Math.min(old, temps) : temps;
+          const nos = now.input.nos === undefined ? {} : { nos: now.input.nos };
+          return { fin, meilleurs: sanitizeMeilleurs(meilleurs), input: { ...AUTO_INPUT, ...nos }, director: true };
+        });
+      },
     }),
     {
       name: DRIVE_KEY,
       version: DRIVE_VERSION,
       storage: createJSONStorage(() => idbStorage),
       // Les meilleurs temps ne sont écrits qu'une fois le premier posé.
-      partialize: ({ weather, camera, commande, direction, meilleurs }) => ({ weather, camera, commande, direction, ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}) }),
+      partialize: ({ weather, camera, commande, direction, format, meilleurs }) => ({ weather, camera, commande, direction, format, ...(Object.keys(meilleurs).length > 0 ? { meilleurs } : {}) }),
       migrate: (persisted) => ({ ...sanitizeDrivePrefs(persisted), meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs) }),
       merge: (persisted, current) => ({ ...current, ...sanitizeDrivePrefs(persisted), meilleurs: sanitizeMeilleurs((persisted as { meilleurs?: unknown } | null)?.meilleurs) }),
       onRehydrateStorage: () => () => {

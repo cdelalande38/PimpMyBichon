@@ -1,0 +1,278 @@
+/* Écran de fin d'une course (src/ui/drive/FinCourseVue.tsx) : par-dessus la scène, un panneau qui défile
+   si le texte est grand, les deux boutons collés en bas sous le pouce. En paysage : le résultat à gauche,
+   gains et déblocages à droite. */
+
+/* Le « ? » de l'aide (fixe, au-dessus de la sortie) ne passe pas sur le titre de l'écran de fin. */
+body:has(.fin-course) .tuto-aide {
+  visibility: hidden;
+}
+
+.fin-course-voile {
+  z-index: 4;
+  justify-content: flex-end;
+  padding: calc(0.75rem + var(--safe-t)) calc(0.75rem + var(--safe-r)) calc(0.75rem + var(--safe-b)) calc(0.75rem + var(--safe-l));
+  background: linear-gradient(to top, rgba(10, 9, 17, 0.92) 40%, rgba(10, 9, 17, 0.55));
+  pointer-events: auto;
+}
+
+.fin-course {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 28rem;
+  max-height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  border-left: 3px solid var(--ambre);
+  background: var(--panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+.fin-course-defile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  min-height: 0;
+  padding: 1rem 1rem 0.75rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.fin-course-bloc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.fin-course-bloc + .fin-course-bloc {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+
+.fin-course-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+
+.fin-course h2 {
+  margin: 0;
+  color: var(--ambre);
+  font-size: 1.125rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.fin-course h3 {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.8125rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.fin-course p {
+  margin: 0;
+}
+
+.fin-course-format {
+  color: var(--mute);
+  font-size: 0.875rem;
+}
+
+.fin-course-medaille {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.fin-course-medaille i {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: #2a2833;
+  box-shadow: inset 0 0 0 2px rgba(233, 230, 242, 0.18);
+}
+
+.fin-course-medaille[data-medaille='or'] {
+  color: #ffd25a;
+}
+
+.fin-course-medaille[data-medaille='or'] i {
+  background: radial-gradient(circle at 35% 30%, #fff3b0, #f5b301 55%, #9a6a00);
+  box-shadow: 0 0 12px rgba(255, 196, 0, 0.55);
+}
+
+.fin-course-medaille[data-medaille='argent'] {
+  color: #dfe3ee;
+}
+
+.fin-course-medaille[data-medaille='argent'] i {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #b9c0cf 55%, #6c7385);
+  box-shadow: 0 0 10px rgba(210, 220, 240, 0.4);
+}
+
+.fin-course-medaille[data-medaille='bronze'] {
+  color: #e9a46a;
+}
+
+.fin-course-medaille[data-medaille='bronze'] i {
+  background: radial-gradient(circle at 35% 30%, #ffd2a8, #c46f2c 55%, #6e3a12);
+  box-shadow: 0 0 10px rgba(220, 120, 50, 0.4);
+}
+
+.fin-course-medaille[data-medaille='aucune'] {
+  color: var(--mute);
+}
+
+.fin-course-temps {
+  color: var(--chrome);
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.05;
+}
+
+.fin-course-note,
+.fin-course-stats,
+.fin-course-vide {
+  color: var(--mute);
+  font-size: 0.875rem;
+}
+
+.fin-course-tours,
+.fin-course-lignes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fin-course-tours li,
+.fin-course-lignes li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.fin-course-tours li[data-meilleur] b {
+  color: var(--ok);
+}
+
+.fin-course-tours li[data-meilleur] b::after {
+  content: ' · meilleur';
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.fin-course-record {
+  font-size: 0.9375rem;
+}
+
+.fin-course-record[data-record] {
+  color: var(--ok);
+}
+
+.fin-course-lignes li > span {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fin-course-lignes small {
+  color: var(--mute);
+  font-size: 0.8125rem;
+}
+
+.fin-course-lignes li > b {
+  flex: none;
+  white-space: nowrap;
+}
+
+.fin-course-gains .fin-course-lignes b {
+  color: var(--ambre);
+}
+
+.fin-course-lignes em {
+  flex: none;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ambre);
+  font-size: 0.75rem;
+  font-style: normal;
+}
+
+.fin-course-total {
+  padding-top: 0.25rem;
+  border-top: 1px dashed var(--line);
+  font-weight: 700;
+}
+
+.fin-course-solde b {
+  color: var(--chrome);
+}
+
+.fin-course-actes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.fin-course-actes .btn {
+  flex: 1 1 9rem;
+  min-height: var(--tap);
+  gap: 0.4rem;
+}
+
+/* Paysage, peu de hauteur : deux colonnes, le résultat à gauche ; les boutons à droite, en bas. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .fin-course-voile {
+    justify-content: center;
+  }
+
+  .fin-course {
+    max-width: 52rem;
+  }
+
+  .fin-course-defile {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    column-gap: 1.25rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .fin-course-resultat {
+    grid-row: 1 / span 2;
+  }
+
+  .fin-course-bloc + .fin-course-bloc {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .fin-course-debloque {
+    padding-top: 0.75rem !important;
+    border-top: 1px solid var(--line) !important;
+  }
+
+  .fin-course-temps {
+    font-size: 2rem;
+  }
+
+  .fin-course-actes {
+    padding: 0.5rem 1rem 0.75rem;
+  }
+}

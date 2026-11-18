@@ -82,6 +82,27 @@
   display: none;
 }
 
+/* Course : le temps du tour bouclé, un instant sous le chrono, au passage de la ligne. */
+.drive-chrono-tour {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 50%;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(10, 9, 17, 0.78);
+  color: var(--ambre);
+  font-size: 0.875rem;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: opacity 0.25s ease;
+}
+
+.drive-chrono-tour[data-visible='non'] {
+  opacity: 0;
+}
+
 /* Arrivée : par-dessus la scène, au milieu. */
 .drive-arrivee-voile {
   z-index: 3;

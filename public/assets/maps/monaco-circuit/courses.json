@@ -1,0 +1,228 @@
+{
+  "format": "pmb-courses",
+  "version": 1,
+  "meteo": "sec",
+  "outil": "npm run courses:temps",
+  "ecartsMeteo": {
+    "pluie": 1.25,
+    "neige": 1.7
+  },
+  "departs": {
+    "ligne-droite": {
+      "tour1": {
+        "auto": 281,
+        "main": 161.3,
+        "vehicules": {
+          "bobber": {
+            "auto": 281,
+            "main": 161.3
+          },
+          "concept": {
+            "auto": 280.4,
+            "main": 134.2
+          },
+          "cox": {
+            "auto": 287.1,
+            "main": 200.1
+          },
+          "sportive": {
+            "auto": 280.9,
+            "main": 136.5
+          },
+          "van": {
+            "auto": 283.6,
+            "main": 196.7
+          }
+        }
+      },
+      "tours3": {
+        "auto": 838.5,
+        "main": 479.1,
+        "vehicules": {
+          "bobber": {
+            "auto": 838.5,
+            "main": 479.1
+          },
+          "concept": {
+            "auto": 836.7,
+            "main": 397.5
+          },
+          "cox": {
+            "auto": 854.3,
+            "main": 591.6
+          },
+          "sportive": {
+            "auto": 838.5,
+            "main": 405.7
+          },
+          "van": {
+            "auto": 845.5,
+            "main": 582.6
+          }
+        }
+      }
+    },
+    "casino": {
+      "tour1": {
+        "auto": 280.3,
+        "main": 159.7,
+        "vehicules": {
+          "bobber": {
+            "auto": 280.3,
+            "main": 159.7
+          },
+          "concept": {
+            "auto": 279.7,
+            "main": 132.8
+          },
+          "cox": {
+            "auto": 285.4,
+            "main": 197.4
+          },
+          "sportive": {
+            "auto": 280.3,
+            "main": 135.3
+          },
+          "van": {
+            "auto": 282.5,
+            "main": 193.6
+          }
+        }
+      },
+      "tours3": {
+        "auto": 837.8,
+        "main": 476.9,
+        "vehicules": {
+          "bobber": {
+            "auto": 837.8,
+            "main": 476.9
+          },
+          "concept": {
+            "auto": 836.1,
+            "main": 396.2
+          },
+          "cox": {
+            "auto": 852.6,
+            "main": 589.4
+          },
+          "sportive": {
+            "auto": 837.8,
+            "main": 403.1
+          },
+          "van": {
+            "auto": 844.3,
+            "main": 578.9
+          }
+        }
+      }
+    },
+    "tunnel": {
+      "tour1": {
+        "auto": 280.1,
+        "main": 159,
+        "vehicules": {
+          "bobber": {
+            "auto": 280.1,
+            "main": 159
+          },
+          "concept": {
+            "auto": 279.6,
+            "main": 132
+          },
+          "cox": {
+            "auto": 285.3,
+            "main": 197
+          },
+          "sportive": {
+            "auto": 280.1,
+            "main": 134.8
+          },
+          "van": {
+            "auto": 282.4,
+            "main": 193.2
+          }
+        }
+      },
+      "tours3": {
+        "auto": 837.6,
+        "main": 477.2,
+        "vehicules": {
+          "bobber": {
+            "auto": 837.6,
+            "main": 477.2
+          },
+          "concept": {
+            "auto": 835.9,
+            "main": 395.9
+          },
+          "cox": {
+            "auto": 852.5,
+            "main": 589.4
+          },
+          "sportive": {
+            "auto": 837.6,
+            "main": 403.6
+          },
+          "van": {
+            "auto": 844.2,
+            "main": 578.6
+          }
+        }
+      }
+    },
+    "port": {
+      "tour1": {
+        "auto": 281,
+        "main": 160,
+        "vehicules": {
+          "bobber": {
+            "auto": 281,
+            "main": 160
+          },
+          "concept": {
+            "auto": 280.3,
+            "main": 132.5
+          },
+          "cox": {
+            "auto": 287,
+            "main": 195.7
+          },
+          "sportive": {
+            "auto": 280.9,
+            "main": 134.3
+          },
+          "van": {
+            "auto": 283.6,
+            "main": 193.9
+          }
+        }
+      },
+      "tours3": {
+        "auto": 838.5,
+        "main": 477.9,
+        "vehicules": {
+          "bobber": {
+            "auto": 838.5,
+            "main": 477.9
+          },
+          "concept": {
+            "auto": 836.7,
+            "main": 396.1
+          },
+          "cox": {
+            "auto": 854.2,
+            "main": 587
+          },
+          "sportive": {
+            "auto": 838.5,
+            "main": 403
+          },
+          "van": {
+            "auto": 845.4,
+            "main": 579.2
+          }
+        }
+      }
+    }
+  }
+}

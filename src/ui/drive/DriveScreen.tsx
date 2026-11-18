@@ -41,6 +41,7 @@ import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
 import { MiniCarte } from './MiniCarte.tsx';
 import { ArriveePanneau, ChronoSortie, FeuxDepart } from './Depart.tsx';
+import { FinCourse } from './FinCourse.tsx';
 import { DriveIcon } from './icones.tsx';
 import { SonEtat } from './Mixage.tsx';
 import {
@@ -522,7 +523,9 @@ function DriveBas({ apercu, paysage }: { apercu: boolean; paysage: boolean }) {
   const manette = useManette();
   const padBranche = useManetteBranchee();
   const [refus, setRefus] = useState(false);
-  if (!ready || failed) return null;
+  // Fin de course : l'écran de fin prend tout le bas (src/ui/drive/FinCourse.tsx).
+  const fin = useDrive((state) => state.fin !== null);
+  if (!ready || failed || fin) return null;
   if (finished && phase !== 'arrive' && !apercu) {
     return (
       <div className="drive-bas">
@@ -775,6 +778,7 @@ export function DriveScreen() {
       <DriveVeil />
       <SonEtat />
       <ArriveePanneau />
+      <FinCourse />
       {reglages.ouvert && <ReglagesPanneau paysage={paysage} fermer={reglages.fermer} />}
       <DriveLoading key={`${mapId ?? ''}-${attempt}`} />
     </>

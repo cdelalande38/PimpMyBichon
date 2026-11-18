@@ -26,6 +26,7 @@
     "maps:fetch": "node tools/maps/fetch.mjs",
     "maps:build": "node tools/maps/build.mjs",
     "maps:check": "node tools/maps/check.mjs",
+    "courses:temps": "node tools/courses/temps-reference.mjs",
     "radio:pack": "node tools/radio/pack.mjs",
     "radio:accueil": "node tools/radio/accueil.mjs",
     "sons:ecoute": "node tools/sons/ecoute.mjs",
