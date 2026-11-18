@@ -22,6 +22,7 @@ import { aire, boite, dansPolygone, hasard, indexPolyligne, simplifier } from '.
 import { Assembleur, ecrireGlb } from './maillage.mjs';
 import { DOSSIER_MATIERES as SOL_DIR, ecrireMatieres } from './matieres.mjs';
 import { Grille, jalonner, vitessesLeLong } from './enrichissement.mjs';
+import { GENRES, genreBatiment, piedCode } from './genres.mjs';
 import { continuiteChaussee, LARGEUR_MIN, LARGEUR_MIN_DEUX_VOIES, resumerContinuite } from './continuite.mjs';
 import { adoucirVirages, decouper, dentsDeScie, densifier, largeurAdoucie, lisserSerie, pentes, rayonCercle, rayons, reechantillonnerCorde, sections as faireSections } from './trace.mjs';
 
@@ -932,7 +933,8 @@ export function buildMap(id, o = {}) {
     }
   }
   // Murs et murets d'OpenStreetMap à moins de 30 m du parcours, hors de son emprise : 0,3 m d'épaisseur,
-  // 1,2 m de haut faute de hauteur connue (matière « mur »).
+  // 1,2 m de haut faute de hauteur connue (matière « mur », genre « muret » porté par la hauteur de
+  // chaque sommet : tools/maps/genres.mjs ; pas de fenêtres dessinées sur un muret).
   let longueurMurs = 0;
   if (osm)
     for (const b of osm.barrieres) {
@@ -956,7 +958,7 @@ export function buildMap(id, o = {}) {
           // o : normale (uz, −ux) de la marche, côté « extérieur » des anneaux de bâtiments.
           const ox = ((q.z - prev.z) / L) * 0.15;
           const oz = (-(q.x - prev.x) / L) * 0.15;
-          const S = (/** @type {{ x: number, z: number }} */ a, /** @type {number} */ k, /** @type {number} */ yy) => mu.sommet(a.x + ox * k, yy, a.z + oz * k);
+          const S = (/** @type {{ x: number, z: number }} */ a, /** @type {number} */ k, /** @type {number} */ yy) => mu.sommet(a.x + ox * k, piedCode(yy, GENRES.muret), a.z + oz * k);
           const [pb, pt, qt, qb] = [S(prev, 1, prev.y - 0.3), S(prev, 1, prev.y + h), S(q, 1, y + h), S(q, 1, y - 0.3)];
           mu.quad(pb, pt, qt, qb);
           const [pb2, pt2, qt2, qb2] = [S(prev, -1, prev.y - 0.3), S(prev, -1, prev.y + h), S(q, -1, y + h), S(q, -1, y - 0.3)];
@@ -1136,6 +1138,8 @@ export function buildMap(id, o = {}) {
   if (osm) for (let k = 0; k < osm.batiments.length; k += 4) attrOsm.set(osm.batiments[k], { e: osm.batiments[k + 1], toit: osm.batiments[k + 2] });
   let etagesOsm = 0;
   let toitsEnPente = 0;
+  /** Bâtiments par genre de façade (ordinaire, annexe, hangar, muret, édifice). @type {number[]} */
+  const genres = [0, 0, 0, 0, 0];
   for (const [ib, bt] of /** @type {Array<[number, any]>} */ ([...d.batiments.entries()])) {
     const ao = attrOsm.get(ib);
     /** @type {number[][]} */
@@ -1173,6 +1177,10 @@ export function buildMap(id, o = {}) {
     if (etOsm) etagesOsm += 1;
     const h = Math.max(2.5, Math.min(fab.hauteurMax ?? 40, bt.h ?? (bt.e ? bt.e * 3 : etOsm ? etOsm * 3.2 : 6)));
     const sommet = haut0 + h;
+    // Genre du bâtiment (usage et nature de la donnée, sinon sa taille), porté par le pied des murs.
+    const genre = genreBatiment(bt, h, Math.abs(aire(an)));
+    genres[genre] = (genres[genre] ?? 0) + 1;
+    const pied = piedCode(bas, genre);
     const mu = asm(c, 'mur');
     const fe = asm(c, 'fenetre');
     const vitre = !/annexe|agricole|industriel|silo|serre/i.test(`${bt.u} ${bt.n}`) && h >= 3.5;
@@ -1180,7 +1188,7 @@ export function buildMap(id, o = {}) {
     for (let i = 0; i < an.length; i += 1) {
       const p = /** @type {number[]} */ (an[i]);
       const q = /** @type {number[]} */ (an[(i + 1) % an.length]);
-      const v = [mu.sommet(p[0] ?? 0, bas, p[1] ?? 0), mu.sommet(q[0] ?? 0, bas, q[1] ?? 0), mu.sommet(q[0] ?? 0, sommet, q[1] ?? 0), mu.sommet(p[0] ?? 0, sommet, p[1] ?? 0)];
+      const v = [mu.sommet(p[0] ?? 0, pied, p[1] ?? 0), mu.sommet(q[0] ?? 0, pied, q[1] ?? 0), mu.sommet(q[0] ?? 0, sommet, q[1] ?? 0), mu.sommet(p[0] ?? 0, sommet, p[1] ?? 0)];
       // Anneau dans le sens trigonométrique du plan (X, Z) : extérieur à gauche de p → q vu d'en haut.
       mu.quad(/** @type {number} */ (v[0]), /** @type {number} */ (v[3]), /** @type {number} */ (v[2]), /** @type {number} */ (v[1]));
       const L = Math.hypot((q[0] ?? 0) - (p[0] ?? 0), (q[1] ?? 0) - (p[1] ?? 0));
@@ -1643,6 +1651,7 @@ export function buildMap(id, o = {}) {
     batiments: nbBatiments,
     batimentsRognes,
     batimentsEcartes,
+    genres,
     zonesRognees: [...zonesRognees].sort((x, y) => x - y),
     arbres: instances.reduce((s, x) => s + x.arbre.length / 5, 0),
     lampadaires: instances.reduce((s, x) => s + x.lampadaire.length / 5, 0),
@@ -1735,7 +1744,7 @@ async function main() {
           `largeur dessinée ${lz.largeurMin.toFixed(1)} m au moins (à ${lz.largeurMinAt} m), ${lz.sous5} m sous 5 m, ${lz.sous6DeuxVoies} m sous 6 m à deux voies · ` +
           `rail-milieu ${lz.ecartMax.toFixed(2)} m au plus · section plus large que le dessin : ${lz.surDeclaree} m · virages adoucis en ${m.virages.passes} passes (rayon ${m.virages.rayonAvant.toFixed(1)} → ${m.virages.rayonApres.toFixed(1)} m, le plus serré vers ${m.virages.ou} m du début de l’axe ; rail déplacé de ${m.virages.deplacement.toFixed(1)} m au plus)`,
       );
-      console.log(`  ${m.batiments} bâtiments (${m.batimentsRognes} rognés hors de l'emprise, ${m.batimentsEcartes} écartés) · ${m.arbres} arbres · ${m.palmiers} palmiers · ${m.lampadaires} lampadaires · ${m.feux} feux · ${m.balises} balises · ${Math.round(m.glissieres)} m de glissières · ${m.ponts} ponts · ${m.tunnels} tunnels`);
+      console.log(`  ${m.batiments} bâtiments (${m.batimentsRognes} rognés hors de l'emprise, ${m.batimentsEcartes} écartés ; façades : ${m.genres[1]} annexes, ${m.genres[2]} hangars, ${m.genres[4]} édifices) · ${m.arbres} arbres · ${m.palmiers} palmiers · ${m.lampadaires} lampadaires · ${m.feux} feux · ${m.balises} balises · ${Math.round(m.glissieres)} m de glissières · ${m.ponts} ponts · ${m.tunnels} tunnels`);
       if (m.osm) console.log(`  OpenStreetMap : ${Object.entries(m.osm).map(([k, v]) => `${k} ${v}`).join(' · ')}`);
       console.log(`  → ${relative(ROOT, out)}/`);
     } catch (error) {

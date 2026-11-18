@@ -206,7 +206,10 @@ export const SOL_SURFACE = /* glsl */ `
     {
       // Rapiéçages : un rectangle d'enrobé plus récent (plus sombre, plus lisse) sur une voie, tous
       // les 30 m environ au hasard, bordé d'un joint de bitume brillant ; fissure pontée qui serpente
-      // près de l'axe (bitume noir et lisse), par endroits.
+      // près de l'axe (bitume noir et lisse), par endroits. De jour, au soleil, un joint noir et net
+      // de 6 cm tout autour dessinait un cadre sur la route (vu derrière le véhicule au départ du
+      // plateau) : le jour, le joint est plus fin (3,5 cm), gris de bitume vieilli et usé par
+      // endroits, ses bords suivent une reprise faite à la main, et l'enrobé neuf tranche moins.
       float s = vPmbRoad.x;
       float lat = vPmbRoad.y;
       float hw = max( abs( vPmbRoad.w ), 1.5 );
@@ -218,12 +221,15 @@ export const SOL_SURFACE = /* glsl */ `
         float len = 2.0 + 9.0 * fract( h * 13.1 );
         float a = fract( h * 3.7 ) > 0.5 ? 0.25 + 0.6 * fract( h * 5.1 ) : -hw + 0.3 + 0.4 * fract( h * 5.1 );
         float b = a + 1.0 + ( hw * 0.55 ) * fract( h * 9.7 );
-        float inP = pmbBox( s, s0, s0 + len, w ) * pmbBox( lat, a, b, w );
-        float ring = clamp( pmbBox( s, s0 - 0.06, s0 + len + 0.06, w ) * pmbBox( lat, a - 0.06, b + 0.06, w ) - inP, 0.0, 1.0 );
+        float wob = ( pmbNoise( vec2( s, lat ) * 1.9 + h * 40.0 ) - 0.5 ) * 0.07 * pmbJour;
+        float jw = mix( 0.06, 0.035, pmbJour );
+        float inP = pmbBox( s + wob, s0, s0 + len, w ) * pmbBox( lat - wob, a, b, w );
+        float ring = clamp( pmbBox( s + wob, s0 - jw, s0 + len + jw, w ) * pmbBox( lat - wob, a - jw, b + jw, w ) - inP, 0.0, 1.0 );
+        ring *= mix( 1.0, 0.25 + 0.75 * smoothstep( 0.3, 0.62, pmbNoise( vec2( s + lat, h * 31.0 ) * 2.3 ) ), pmbJour );
         float age = fract( h * 21.7 );
-        diffuseColor.rgb *= mix( 1.0, age > 0.5 ? 0.68 : 1.18, inP );
+        diffuseColor.rgb *= mix( 1.0, age > 0.5 ? mix( 0.68, 0.86, pmbJour ) : mix( 1.18, 1.07, pmbJour ), inP );
         roughnessFactor = mix( roughnessFactor, roughnessFactor * ( age > 0.5 ? 0.82 : 1.05 ), inP );
-        diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * 0.35, ring );
+        diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * mix( 0.35, 0.62, pmbJour ), ring );
         roughnessFactor = mix( roughnessFactor, 0.3, ring );
       }
       float path = 0.45 * sin( s * 0.043 + 1.7 ) + 0.25 * sin( s * 0.117 ) + 0.4;

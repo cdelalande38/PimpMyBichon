@@ -11,32 +11,44 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry as Geometry,
+  Camera,
   CircleGeometry,
   Color,
   ConeGeometry,
   CylinderGeometry,
+  DepthTexture,
+  DoubleSide,
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
+  LessEqualCompare,
+  LinearFilter,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  NearestFilter,
   PlaneGeometry,
   Quaternion,
+  RedFormat,
   ShaderMaterial,
+  UnsignedByteType,
+  UnsignedIntType,
   Vector3,
+  WebGLRenderTarget,
   type BufferGeometry,
   type Material,
   type Object3D,
+  type Scene,
   type Texture,
   type WebGLProgramParametersWithUniforms,
+  type WebGLRenderer,
 } from 'three';
 import type { Rail } from '../contrat.ts';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MAP_INSTANCE_STRIDE, MAP_SHOP_KINDS, MAP_SHOP_STRIDE, type MapChunk, type MapRoute } from '../../data/mapTypes.ts';
-import { NO_MIRROR_LAYER } from '../../render/layers.ts';
+import { ATMOSPHERE_LAYER, NO_MIRROR_LAYER } from '../../render/layers.ts';
 import { createPose } from '../rail.ts';
 import { SKY } from './ciel.ts';
 import { DECOR_SIGN_CELLS, placeSigns, shopSignCell, SIGN_ATLAS, SIGN_SIZE, type PlacedSigns, type SignSpot } from './enseignes.ts';
@@ -48,11 +60,20 @@ import { addRoleMesh, createChunkRelief, Relief } from './relief.ts';
 /** Hauteur de la tête d'un lampadaire et longueur de sa crosse (vers +Z de l'instance, côté chaussée). */
 export const LAMP_HEAD = { height: 7.9, reach: 1.45 } as const;
 
-function treeGeometry(): BufferGeometry {
-  // Deux cônes ouverts empilés (résineux du plateau) : 12 triangles, une silhouette sur le ciel.
-  const low = new ConeGeometry(2.3, 6.2, 6, 1, true).translate(0, 4.3, 0);
-  const high = new ConeGeometry(1.5, 4.6, 6, 1, true).translate(0, 7.9, 0);
-  const g = mergeGeometries([low, high]) as BufferGeometry;
+/** Attribut `pmbTrunk` : 1 pour les sommets du tronc ou du stipe (écorce), 0 pour le feuillage. */
+function trunkAttribute(g: BufferGeometry, trunk: boolean): BufferGeometry {
+  g.setAttribute('pmbTrunk', new BufferAttribute(new Float32Array(g.getAttribute('position').count).fill(trunk ? 1 : 0), 1));
+  return g;
+}
+
+export function treeGeometry(): BufferGeometry {
+  // Deux cônes ouverts empilés (résineux du plateau) et un fût court à trois pans sous la jupe des
+  // branches : 18 triangles, une silhouette sur le ciel, posée au sol (le cône du bas commence à 1,2 m).
+  const trunk = trunkAttribute(new CylinderGeometry(0.12, 0.2, 1.6, 3, 1, true).translate(0, 0.75, 0), true);
+  const low = trunkAttribute(new ConeGeometry(2.3, 6.2, 6, 1, true).translate(0, 4.3, 0), false);
+  const high = trunkAttribute(new ConeGeometry(1.5, 4.6, 6, 1, true).translate(0, 7.9, 0), false);
+  const g = mergeGeometries([trunk, low, high]) as BufferGeometry;
+  trunk.dispose();
   low.dispose();
   high.dispose();
   return g;
@@ -120,8 +141,9 @@ export function palmGeometry(): BufferGeometry {
   const crown = new Geometry();
   crown.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
   crown.computeVertexNormals();
-  // Mêmes attributs des deux côtés : position et normale (le stipe perd ses coordonnées de texture).
-  const stipe = trunk.toNonIndexed();
+  trunkAttribute(crown, false);
+  // Mêmes attributs des deux côtés : position, normale, écorce (le stipe perd ses coordonnées de texture).
+  const stipe = trunkAttribute(trunk.toNonIndexed(), true);
   stipe.deleteAttribute('uv');
   const g = mergeGeometries([stipe, crown]) as BufferGeometry;
   stipe.dispose();
@@ -270,6 +292,164 @@ function signDayMaterial(atlas: { value: Texture | null }): MeshStandardMaterial
   return material;
 }
 
+/**
+ * Calque des objets du décor qui portent ombre au soleil (bâti, ouvrages, glissières, arbres,
+ * palmiers, mâts) : vus en plus par la seule caméra de l'ombre du décor (aucune autre caméra ne
+ * l'active).
+ */
+export const SUN_CASTER_LAYER = 6;
+
+/** Rôles des tronçons qui portent ombre (le sol la reçoit, il n'en porte pas : pas d'acné sur les talus). */
+export const SUN_CASTER_ROLES: ReadonlySet<string> = new Set(['mur', 'toit', 'ouvrage', 'glissiere']);
+
+/**
+ * Ombre du décor au soleil (de jour seulement). Le soleil est fixe pendant une sortie : la hauteur du
+ * plus haut obstacle (bâti, arbres, mâts) est rendue, vue du soleil, dans une carte de profondeur
+ * qui couvre un carré autour du véhicule, poussé devant lui le long de la route ; elle n'est refaite
+ * que quand un tronçon arrive ou part, quand le véhicule a roulé `move` mètres, ou quand le soleil
+ * tourne (passage de la nuit au jour) : jamais à chaque image. Les matières du décor la lisent
+ * (materiaux.ts, pmbSunLight) et n'éteignent que la part du soleil : le ciel éclaire toujours l'ombre.
+ * La nuit, elle n'est ni rendue ni lue (la nuit ne change pas).
+ *
+ * Projection oblique le long du rayon du soleil : (x − kx·(y − yc), z − kz·(y − yc)) avec
+ * k = soleil.xz / soleil.y, profondeur = hauteur. Un point est à l'ombre si un obstacle passe
+ * au-dessus de lui sur son rayon vers le soleil.
+ */
+export const OMBRE_DECOR = {
+  /** Texels de la carte (côté) ; économie : la moitié. */
+  size: 2048,
+  /** Demi-côté couvert au sol (m). */
+  half: 170,
+  /** Centre de la carte poussé devant le véhicule, le long de la route (m). */
+  ahead: 75,
+  /** Écart du centre voulu au-delà duquel la carte est refaite (m). */
+  move: 45,
+  /** Demi-hauteur couverte autour du centre (m). */
+  depth: 300,
+  /** Biais (m) : un point est éclairé tant qu'aucun obstacle ne passe à plus de `bias` au-dessus de son rayon. */
+  bias: 0.05,
+} as const;
+
+/** La passe d'ombre du décor : sa cible, sa caméra oblique et le déclencheur posé dans la scène. */
+class OmbreDecor {
+  readonly target: WebGLRenderTarget;
+  /** Projection oblique (repère de la carte vers l'espace de découpe) et sa version de lecture ([0, 1]³). */
+  private readonly camera = new Camera();
+  private readonly lecture: Matrix4;
+  private readonly material = new MeshBasicMaterial({ colorWrite: false, side: DoubleSide, fog: false });
+  /**
+   * Maillage vide (un appel de dessin sans sommet), premier de la passe principale : rend la carte
+   * quand elle est à refaire, avant tout le décor de l'image.
+   */
+  readonly trigger: Mesh;
+  private readonly uniforms: NightUniforms;
+  private readonly center = new Vector3(Number.NaN, 0, 0);
+  private readonly wanted = new Vector3();
+  private readonly sun = new Vector3();
+  private dirty = true;
+  /** Rendus de la carte depuis le début de la sortie (diagnostic). */
+  renders = 0;
+
+  constructor(uniforms: NightUniforms, size: number) {
+    this.uniforms = uniforms;
+    const depth = new DepthTexture(size, size, UnsignedIntType);
+    depth.compareFunction = LessEqualCompare;
+    depth.minFilter = LinearFilter;
+    depth.magFilter = LinearFilter;
+    this.target = new WebGLRenderTarget(size, size, { depthBuffer: true, depthTexture: depth, format: RedFormat, type: UnsignedByteType, minFilter: NearestFilter, magFilter: NearestFilter, generateMipmaps: false });
+    this.target.texture.name = 'ombre_decor';
+    this.camera.layers.set(SUN_CASTER_LAYER);
+    this.camera.matrixAutoUpdate = false;
+    this.camera.matrixWorldAutoUpdate = false;
+    this.lecture = uniforms.pmbSunMatrix.value;
+    this.material.name = 'ombre_decor';
+    const g = new Geometry();
+    g.setAttribute('position', new BufferAttribute(new Float32Array(9), 3));
+    g.setDrawRange(0, 0);
+    const m = new MeshBasicMaterial({ colorWrite: false, depthWrite: false, depthTest: false });
+    m.name = 'ombre_decor_declencheur';
+    this.trigger = new Mesh(g, m);
+    this.trigger.name = 'ombre_decor';
+    this.trigger.frustumCulled = false;
+    this.trigger.renderOrder = -1000;
+    // Vu de la seule caméra principale (ni sonde, ni reflet) : un appel vide par image, pas plus.
+    this.trigger.layers.set(ATMOSPHERE_LAYER);
+    this.trigger.onBeforeRender = (renderer, scene, camera) => this.render(renderer, scene as Scene, camera);
+    // Diagnostic (page d'aperçu de la sortie) : refaire la carte à la prochaine image.
+    this.trigger.userData.refaire = () => this.invalidate();
+    uniforms.pmbSunTexel.value = 1 / size;
+    uniforms.pmbSunBias.value = OMBRE_DECOR.bias / (2 * OMBRE_DECOR.depth);
+  }
+
+  /** La carte est à refaire (tronçon arrivé ou parti). */
+  invalidate(): void {
+    this.dirty = true;
+  }
+
+  /**
+   * Centre voulu (devant le véhicule en x, y, z, le long de sa marche tx, tz) : la carte est marquée à
+   * refaire quand il s'est écarté du centre rendu, ou quand le soleil a tourné. Rien ne se fait la nuit.
+   */
+  follow(x: number, y: number, z: number, tx: number, tz: number): void {
+    const u = this.uniforms;
+    const sun = u.pmbMoonDir.value;
+    if (u.pmbJour.value <= 0 || sun.y < 0.12) {
+      u.pmbSunOn.value = 0;
+      return;
+    }
+    this.wanted.set(x + tx * OMBRE_DECOR.ahead, y, z + tz * OMBRE_DECOR.ahead);
+    const dx = this.wanted.x - this.center.x;
+    const dz = this.wanted.z - this.center.z;
+    if (!(dx * dx + dz * dz < OMBRE_DECOR.move * OMBRE_DECOR.move) || Math.abs(this.wanted.y - this.center.y) > OMBRE_DECOR.depth * 0.3) this.dirty = true;
+    if (this.sun.distanceToSquared(sun) > 1e-5) this.dirty = true;
+  }
+
+  private render(renderer: WebGLRenderer, scene: Scene, camera: Camera): void {
+    // Seulement pendant la passe de la caméra principale (ni la sonde, ni le reflet), et à la demande.
+    if (!this.dirty || !camera.layers.isEnabled(ATMOSPHERE_LAYER)) return;
+    const u = this.uniforms;
+    const sun = u.pmbMoonDir.value;
+    if (u.pmbJour.value <= 0 || sun.y < 0.12 || this.wanted.x !== this.wanted.x) return;
+    this.dirty = false;
+    this.renders += 1;
+    this.center.copy(this.wanted);
+    this.sun.copy(sun);
+    const kx = sun.x / sun.y;
+    const kz = sun.z / sun.y;
+    const { half, depth } = OMBRE_DECOR;
+    const { x: cx, y: cy, z: cz } = this.center;
+    // Découpe : x' = (x − kx·(y − cy) − cx) / half, y' = (z − kz·(y − cy) − cz) / half, z' = −(y − cy) / depth.
+    const p = this.camera.projectionMatrix;
+    p.set(1 / half, -kx / half, 0, (kx * cy - cx) / half, 0, -kz / half, 1 / half, (kz * cy - cz) / half, 0, -1 / depth, 0, cy / depth, 0, 0, 0, 1);
+    this.camera.projectionMatrixInverse.copy(p).invert();
+    // Lecture : la même, ramenée dans [0, 1]³ (texture et profondeur).
+    this.lecture.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1).multiply(p);
+    const previous = renderer.getRenderTarget();
+    const face = renderer.getActiveCubeFace();
+    const mip = renderer.getActiveMipmapLevel();
+    const override = scene.overrideMaterial;
+    const background = scene.background;
+    scene.overrideMaterial = this.material;
+    scene.background = null;
+    renderer.setRenderTarget(this.target);
+    renderer.render(scene, this.camera);
+    renderer.setRenderTarget(previous, face, mip);
+    scene.overrideMaterial = override;
+    scene.background = background;
+    u.pmbSunMap.value = this.target.depthTexture;
+    u.pmbSunOn.value = 1;
+  }
+
+  dispose(): void {
+    this.uniforms.pmbSunOn.value = 0;
+    this.uniforms.pmbSunMap.value = null;
+    this.target.dispose();
+    this.material.dispose();
+    this.trigger.geometry.dispose();
+    (this.trigger.material as Material).dispose();
+  }
+}
+
 /** Matières et géométries partagées par tous les tronçons. */
 export class DecorKit {
   readonly tree = treeGeometry();
@@ -297,10 +477,13 @@ export class DecorKit {
   /** Voile d'horizon du relief lointain et sa part minimale (0 la nuit ; de jour, il est loin et voilé) : src/data/moments.ts. */
   readonly farHaze: Color;
   readonly farHazeMin = { value: 0 };
+  /** Uniformes de la sortie (l'ombre du décor les lit et les pose). */
+  readonly uniforms: NightUniforms;
 
   constructor(uniforms: NightUniforms, fogFar: number) {
+    this.uniforms = uniforms;
     this.pole.setAttribute('pmbEmit', emitAttribute(this.pole.getAttribute('position').count, Infinity));
-    this.treeMaterial = patchNight(new MeshStandardMaterial({ color: '#16241a', roughness: 1, envMapIntensity: 0 }), uniforms, { snow: 0.05 });
+    this.treeMaterial = patchNight(new MeshStandardMaterial({ color: '#16241a', roughness: 1, envMapIntensity: 0 }), uniforms, { snow: 0.05, foliage: true });
     this.treeMaterial.name = 'nuit_arbre';
     this.lampMaterial = patchNight(new MeshStandardMaterial({ color: '#4a4d52', roughness: 0.5, metalness: 0.6, envMapIntensity: 0 }), uniforms, { emit: true, sky: { gain: 0.35, metal: 1 }, snow: 0.7 });
     this.lampMaterial.name = 'nuit_lampadaire';
@@ -456,6 +639,8 @@ export class Decor {
   private readonly roles: ReadonlyMap<string, Material>;
   private readonly kit: DecorKit;
   private readonly profile: DriveProfile;
+  /** Ombre du décor au soleil (de jour). */
+  private readonly ombre: OmbreDecor;
 
   constructor(base: string, route: MapRoute, roles: ReadonlyMap<string, Material>, kit: DecorKit, profile: DriveProfile) {
     this.base = base;
@@ -465,6 +650,14 @@ export class Decor {
     this.profile = profile;
     this.spans = tunnelSpans(route.sections);
     this.root.name = 'sortie_decor';
+    // Économie (brume plus proche) : carte d'ombre deux fois moins fine.
+    this.ombre = new OmbreDecor(kit.uniforms, profile.fogFar < 600 ? OMBRE_DECOR.size / 2 : OMBRE_DECOR.size);
+    this.root.add(this.ombre.trigger);
+  }
+
+  /** Rendus de la carte d'ombre du décor depuis le début de la sortie (diagnostic). */
+  get ombreRendus(): number {
+    return this.ombre.renders;
   }
 
   /** Relief lointain, une fois pour toute la sortie. */
@@ -489,6 +682,7 @@ export class Decor {
    * (lacets) : aucun tronçon n'apparaît ni ne disparaît dans le champ.
    */
   update(s: number, now: number, cx = Number.NaN, cz = Number.NaN): void {
+    this.followSun(s);
     const at = chunkAt(this.route.chunks, s);
     if (at === this.lastAt && now < this.nextCheck && (this.status.complete || now < this.retryAt)) return;
     this.lastAt = at;
@@ -512,6 +706,19 @@ export class Decor {
     this.status.loaded = this.loaded.size;
     if (this.loaded.size !== before) this.collectLamps();
     if (cx === cx) this.hideFogged(cx, cz, p.fogFar + 30, p.fogFar * 0.7);
+  }
+
+  /** Carte d'ombre du décor : centrée devant le véhicule (abscisse `s`), le long de sa marche. */
+  private followSun(s: number): void {
+    const { rail, step } = this.route;
+    const count = Math.floor(rail.length / 3);
+    if (count < 2) return;
+    const i = Math.max(0, Math.min(count - 2, Math.round(s / step)));
+    const x = rail[i * 3] ?? 0;
+    const tx = (rail[(i + 1) * 3] ?? 0) - x;
+    const tz = (rail[(i + 1) * 3 + 2] ?? 0) - (rail[i * 3 + 2] ?? 0);
+    const tl = Math.hypot(tx, tz) || 1;
+    this.ombre.follow(x, rail[i * 3 + 1] ?? 0, rail[i * 3 + 2] ?? 0, tx / tl, tz / tl);
   }
 
   /**
@@ -589,28 +796,30 @@ export class Decor {
       }
       o.material = material;
       if (isNoMirror(role)) o.layers.set(NO_MIRROR_LAYER);
+      if (SUN_CASTER_ROLES.has(role)) o.layers.enable(SUN_CASTER_LAYER);
     }
     group.add(scene);
     this.relief.set(index, relief);
     const owned: BufferGeometry[] = [];
     const instancedMeshes: InstancedMesh[] = [];
-    const put = (mesh: InstancedMesh | null) => {
+    const put = (mesh: InstancedMesh | null, caster = false) => {
       if (!mesh) return;
       instancedMeshes.push(mesh);
       group.add(mesh);
+      if (caster) mesh.layers.enable(SUN_CASTER_LAYER);
     };
     const { arbre, lampadaire, balise, feu, palmier } = chunk.instances;
-    if (arbre) put(instanced(arbre, this.profile.treeEvery, this.kit.tree, this.kit.treeMaterial));
-    if (palmier) put(instanced(palmier, this.profile.treeEvery, this.kit.palm, this.kit.treeMaterial));
+    if (arbre) put(instanced(arbre, this.profile.treeEvery, this.kit.tree, this.kit.treeMaterial), true);
+    if (palmier) put(instanced(palmier, this.profile.treeEvery, this.kit.palm, this.kit.treeMaterial), true);
     let feuxLights: number[] = [];
     if (feu) {
-      put(instanced(feu, 1, this.kit.feu, this.kit.lampMaterial));
+      put(instanced(feu, 1, this.kit.feu, this.kit.lampMaterial), true);
       const lenses = feuLenses(feu, chunk.origin, this.kit.lens, this.kit.lensMaterial);
       put(lenses.mesh);
       feuxLights = lenses.lights;
     }
     if (lampadaire) {
-      put(instanced(lampadaire, 1, this.kit.lamp, this.kit.lampMaterial));
+      put(instanced(lampadaire, 1, this.kit.lamp, this.kit.lampMaterial), true);
       const halo = instanced(lampadaire, 1, this.kit.halo, this.kit.haloMaterial, true);
       if (halo) {
         // Les halos ne bloquent rien et passent après l'opaque ; ils se reflètent sur la chaussée.
@@ -662,6 +871,7 @@ export class Decor {
     this.status.loaded = this.loaded.size;
     this.status.complete = this.wanted.every((i) => this.loaded.has(i));
     this.collectLamps();
+    this.ombre.invalidate();
   }
 
   /**
@@ -837,6 +1047,7 @@ export class Decor {
     this.loaded.delete(chunk.index);
     this.relief.delete(chunk.index);
     this.collectLamps();
+    this.ombre.invalidate();
   }
 
   private collectNeons(): void {
@@ -882,6 +1093,7 @@ export class Decor {
     this.root.traverse((o) => {
       if (o instanceof Mesh && o.material === this.kit.farMaterial) o.geometry.dispose();
     });
+    this.ombre.dispose();
     this.root.clear();
   }
 }

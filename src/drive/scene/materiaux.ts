@@ -109,6 +109,16 @@ export interface NightUniforms {
    * reste exactement celle d'avant.
    */
   pmbJour: { value: number };
+  /**
+   * Ombre du décor au soleil (decor.ts, OmbreDecor) : carte de profondeur vue du soleil, matrice du
+   * repère de la carte vers la lecture ([0, 1]³), 1 quand elle est prête (0 la nuit), taille d'un
+   * texel (lecture) et biais (profondeur).
+   */
+  pmbSunMap: { value: Texture | null };
+  pmbSunMatrix: { value: Matrix4 };
+  pmbSunOn: { value: number };
+  pmbSunTexel: { value: number };
+  pmbSunBias: { value: number };
 }
 
 /**
@@ -168,6 +178,11 @@ export function createNightUniforms(): NightUniforms {
     pmbGlow: { value: 1 },
     pmbLampOn: { value: 1 },
     pmbJour: { value: 0 },
+    pmbSunMap: { value: null },
+    pmbSunMatrix: { value: new Matrix4() },
+    pmbSunOn: { value: 0 },
+    pmbSunTexel: { value: 1 / 2048 },
+    pmbSunBias: { value: 0 },
   };
 }
 
@@ -185,6 +200,11 @@ varying vec3 vPmbFacade;
 #ifdef PMB_EMIT
 attribute float pmbEmit;
 varying float vPmbEmit;
+#endif
+#ifdef PMB_FOLIAGE
+attribute float pmbTrunk;
+varying float vPmbTrunk;
+varying vec3 vPmbTree;
 #endif
 `;
 
@@ -208,6 +228,18 @@ const VERTEX_BODY = /* glsl */ `
   #endif
   #ifdef PMB_FACADE
   vPmbFacade = pmbFacade;
+  #endif
+  #ifdef PMB_FOLIAGE
+  {
+    // Arbre : écorce ou feuillage, pied de l'arbre (graine de sa teinte) et hauteur dans l'arbre.
+    vec4 pmbFoot = vec4( 0.0, 0.0, 0.0, 1.0 );
+    #ifdef USE_INSTANCING
+    pmbFoot = instanceMatrix * pmbFoot;
+    #endif
+    pmbFoot = modelMatrix * pmbFoot;
+    vPmbTrunk = pmbTrunk;
+    vPmbTree = vec3( pmbFoot.xz, position.y );
+  }
   #endif
 }
 `;
@@ -279,6 +311,10 @@ varying vec3 vPmbFacade;
 #ifdef PMB_EMIT
 varying float vPmbEmit;
 #endif
+#ifdef PMB_FOLIAGE
+varying float vPmbTrunk;
+varying vec3 vPmbTree;
+#endif
 uniform float pmbTime;
 uniform float pmbWet;
 uniform float pmbRain;
@@ -313,6 +349,11 @@ uniform float pmbReflectionStrength;
 uniform float pmbGlow;
 uniform float pmbLampOn;
 uniform float pmbJour;
+uniform sampler2DShadow pmbSunMap;
+uniform mat4 pmbSunMatrix;
+uniform float pmbSunOn;
+uniform float pmbSunTexel;
+uniform float pmbSunBias;
 // Hachage sans sinus (le sinus d'un grand nombre se dégrade en aplats sur le processeur graphique),
 // périodique sur 1024 cases : sans couture, sans motif visible à l'échelle de la carte.
 float pmbHash( vec2 p ) {
@@ -333,6 +374,24 @@ float pmbBox( float x, float a, float b, float w ) {
 }
 ${HEAD_BEAM}
 ${SOL_HEAD}
+// Ombre du décor au soleil (de jour) : part du soleil qui arrive au point (1 : plein soleil). Le point
+// est lu un peu en avant de sa face (une face ne s'ombre pas elle-même) ; quatre lectures comparées
+// (bords adoucis sur un texel, environ 17 cm) ; l'ombre s'efface au bord de la carte. La nuit, rien.
+float pmbSunLight() {
+  if ( pmbSunOn * pmbJour <= 0.0 ) return 1.0;
+  vec3 n = normalize( vPmbNormal );
+  vec4 c = pmbSunMatrix * vec4( vPmbWorld + n * 0.14, 1.0 );
+  vec2 e = min( c.xy, 1.0 - c.xy );
+  float edge = smoothstep( 0.0, 0.08, min( e.x, e.y ) );
+  if ( edge <= 0.0 ) return 1.0;
+  float r = c.z - pmbSunBias;
+  float t = pmbSunTexel;
+  float v = texture( pmbSunMap, vec3( c.xy + vec2( -0.7, -0.3 ) * t, r ) );
+  v += texture( pmbSunMap, vec3( c.xy + vec2( 0.3, -0.7 ) * t, r ) );
+  v += texture( pmbSunMap, vec3( c.xy + vec2( 0.7, 0.3 ) * t, r ) );
+  v += texture( pmbSunMap, vec3( c.xy + vec2( -0.3, 0.7 ) * t, r ) );
+  return mix( 1.0, v * 0.25, edge * pmbJour );
+}
 `;
 
 // Après l'éclairage direct : le reflet direct des vraies lumières (lune, lampadaires proches, feux
@@ -464,6 +523,25 @@ float pmbGrain = 0.5;
   diffuseColor.rgb *= 0.85 + 0.3 * tuft;
 }
 #endif
+#ifdef PMB_FOLIAGE
+if ( pmbJour > 0.0 ) {
+  // Plein jour : chaque arbre a sa teinte (vert sombre, vert jaune, vert bleuté) ; le feuillage se
+  // groupe en touffes, le bas et le cœur du houppier sont plus sombres ; le fût est d'écorce brune,
+  // le stipe des palmiers gris beige, cerclé. La nuit, rien ne change.
+  float hs = pmbHash( floor( vPmbTree.xy * 2.0 ) + 0.5 );
+  float hs2 = fract( hs * 13.7 );
+  vec3 day;
+  if ( vPmbTrunk > 0.5 ) {
+    day = mix( vec3( 0.07, 0.045, 0.026 ), vec3( 0.23, 0.2, 0.15 ), hs2 ) * ( 0.82 + 0.18 * step( 0.5, fract( vPmbTree.z * 2.5 ) ) );
+  } else {
+    vec3 wp = vPmbWorld;
+    float tuft = pmbNoise( vec2( wp.x + wp.y * 0.7, wp.z - wp.y * 0.6 ) * 1.6 ) * 0.6 + pmbNoise( vec2( wp.x - wp.y, wp.z + wp.y * 0.8 ) * 4.1 ) * 0.4;
+    vec3 tint = mix( vec3( 0.78, 1.0, 1.08 ), vec3( 1.28, 1.12, 0.66 ), hs ) * ( 0.72 + 0.56 * hs2 );
+    day = diffuseColor.rgb * tint * ( 0.62 + 0.76 * tuft ) * ( 0.55 + 0.45 * smoothstep( 1.0, 9.5, vPmbTree.z ) );
+  }
+  diffuseColor.rgb = mix( diffuseColor.rgb, day, pmbJour );
+}
+#endif
 float pmbSnowCover = 0.0;
 #ifdef PMB_SNOW
 if ( pmbSnowL > 0.001 ) {
@@ -482,11 +560,14 @@ float pmbGlassR0 = 0.0;
 float pmbGlassFar = 0.0;
 #ifdef PMB_FACADE
 {
-  // Façade dessinée par la matière : vPmbFacade = (pied, sommet, graine) du bâtiment.
+  // Façade dessinée par la matière : vPmbFacade = (pied, sommet, genre + graine) du bâtiment. Genre
+  // (abri.ts, genreDuPied, relu au pied des murs) : 0 ordinaire, 1 annexe, 2 hangar, 3 muret,
+  // 4 édifice (église, chapelle, château).
   vec3 nW = normalize( vPmbNormal );
   float base = vPmbFacade.x;
   float hgt = max( vPmbFacade.y - base, 2.5 );
-  float seed = vPmbFacade.z;
+  float genre = floor( vPmbFacade.z );
+  float seed = fract( vPmbFacade.z );
   float y = vPmbWorld.y - base;
   vec3 wallTint;
   float hs = fract( seed * 7.31 );
@@ -495,7 +576,15 @@ float pmbGlassFar = 0.0;
   if ( fam < 0.5 ) wallTint = hs < 0.4 ? vec3( 0.62, 0.58, 0.52 ) : ( hs < 0.75 ? vec3( 0.72, 0.68, 0.6 ) : vec3( 0.55, 0.5, 0.46 ) );
   else if ( fam < 1.5 ) wallTint = hs < 0.3 ? vec3( 0.78, 0.66, 0.5 ) : ( hs < 0.55 ? vec3( 0.8, 0.77, 0.7 ) : ( hs < 0.8 ? vec3( 0.66, 0.64, 0.62 ) : vec3( 0.78, 0.6, 0.55 ) ) );
   else wallTint = hs < 0.5 ? vec3( 0.55, 0.58, 0.62 ) : vec3( 0.66, 0.66, 0.64 );
-  if ( pmbJour > 0.0 ) {
+  // Hangars : bardage (gris clair, beige, vert, bleu-gris, blanc, rouge oxyde) ; annexes : bois ou
+  // enduit brut ; murets : pierre ou béton ; édifices : pierre de taille.
+  vec3 genreTint = vec3( 0.0 );
+  if ( genre > 1.5 && genre < 2.5 ) genreTint = hs < 0.22 ? vec3( 0.78, 0.79, 0.78 ) : ( hs < 0.4 ? vec3( 0.8, 0.74, 0.6 ) : ( hs < 0.55 ? vec3( 0.5, 0.6, 0.52 ) : ( hs < 0.72 ? vec3( 0.48, 0.56, 0.66 ) : ( hs < 0.88 ? vec3( 0.88, 0.88, 0.86 ) : vec3( 0.62, 0.38, 0.3 ) ) ) ) );
+  else if ( genre > 0.5 && genre < 1.5 ) genreTint = hs < 0.45 ? vec3( 0.56, 0.42, 0.3 ) : ( hs < 0.75 ? vec3( 0.74, 0.71, 0.65 ) : vec3( 0.62, 0.6, 0.56 ) );
+  else if ( genre > 2.5 && genre < 3.5 ) genreTint = hs < 0.5 ? vec3( 0.68, 0.64, 0.58 ) : vec3( 0.7, 0.7, 0.68 );
+  else if ( genre > 3.5 ) genreTint = mix( vec3( 0.8, 0.75, 0.64 ), vec3( 0.66, 0.64, 0.6 ), hs );
+  if ( genre > 0.5 ) wallTint = genreTint;
+  if ( pmbJour > 0.0 && genre < 0.5 ) {
     // Plein jour : chaque bâtiment a son enduit (blanc cassé, crème, ocre, saumon, jaune pâle, pierre,
     // terre cuite, béton) ; les tours, béton clair, pierre ou bardage sombre.
     float hd = fract( seed * 13.37 );
@@ -513,12 +602,58 @@ float pmbGlassFar = 0.0;
   }
   diffuseColor.rgb *= wallTint * 1.6;
   ${SOL_FACADE}
-  if ( abs( nW.y ) < 0.6 ) {
+  if ( abs( nW.y ) < 0.6 && genre > 0.5 && genre < 3.5 ) {
+    // Annexes, hangars, murets : ni volets ni balcons. Bardage à nervures verticales (hangars) ou
+    // planches (annexes en bois), effacés au loin ; portes de garage ou portes sectionnelles ; bande
+    // vitrée haute sur certains hangars, petite fenêtre sur certaines annexes ; chaperon des murets.
+    vec2 tdG = normalize( vec2( -nW.z, nW.x ) + vec2( 1e-4 ) );
+    float uG = dot( vPmbWorld.xz, tdG );
+    float hangar = step( 1.5, genre ) * step( genre, 2.5 );
+    float muret = step( 2.5, genre );
+    float wyG = max( length( vec2( dFdx( y ), dFdy( y ) ) ), 1e-4 );
+    float wuG = max( length( vec2( dFdx( uG ), dFdy( uG ) ) ), 1e-4 );
+    float pitchG = hangar > 0.5 ? 0.25 : 0.18;
+    float ribOn = hangar > 0.5 || ( muret < 0.5 && hs < 0.45 ) ? 1.0 : 0.0;
+    float rib = smoothstep( 0.32, 0.5, abs( fract( uG / pitchG ) - 0.5 ) ) * ( 1.0 - smoothstep( 0.2, 0.5, wuG / pitchG ) );
+    vec3 wallG = diffuseColor.rgb * ( 1.0 - 0.22 * rib * ribOn );
+    // Chaperon du muret (8 cm plus clair) ; ligne de faîtage du bardage.
+    wallG = mix( wallG, wallG * 1.25, muret * smoothstep( hgt - 0.1, hgt - 0.06, y ) );
+    float bayD = hangar > 0.5 ? 10.0 + 5.0 * fract( seed * 3.3 ) : 4.0 + 3.0 * fract( seed * 3.3 );
+    float cuD = uG / bayD;
+    float hD = pmbHash( vec2( floor( cuD ) + seed * 17.0, 3.0 ) );
+    float dw = hangar > 0.5 ? 0.34 : ( hD > 0.5 ? 0.55 : 0.2 );
+    float dh = hangar > 0.5 ? min( 4.6, hgt - 1.2 ) : ( hD > 0.5 ? min( 2.3, hgt - 0.35 ) : min( 2.05, hgt - 0.35 ) );
+    float door = ( 1.0 - muret ) * step( hD, hangar > 0.5 ? 0.6 : 0.65 ) * pmbBox( fract( cuD ), 0.5 - dw * 0.5, 0.5 + dw * 0.5, wuG / bayD ) * pmbBox( y, -2.0, dh, wyG );
+    float panels = 0.86 + 0.14 * mix( step( 0.5, fract( y / 0.55 ) ), 0.5, smoothstep( 0.1, 0.3, wyG / 0.55 ) );
+    vec3 doorC = wallG * mix( vec3( 0.5 ), vec3( 0.9, 0.92, 0.95 ), fract( hD * 7.1 ) ) * panels;
+    float ribbon = hangar * step( 0.45, fract( seed * 7.7 ) ) * pmbBox( y, hgt - 1.9, hgt - 1.0, wyG ) * pmbBox( fract( uG / 1.6 ), 0.05, 0.95, wuG / 1.6 );
+    float small = ( 1.0 - hangar ) * ( 1.0 - muret ) * step( 0.78, hD ) * pmbBox( fract( cuD ), 0.06, 0.2, wuG / bayD ) * pmbBox( y, 1.1, 1.85, wyG );
+    float winG = clamp( ribbon + small, 0.0, 1.0 ) * ( 1.0 - door );
+    float farG = smoothstep( 0.12, 0.45, max( wuG / 1.6, wyG / 0.9 ) );
+    vec3 insideG = vec3( 0.012 );
+    if ( pmbJour > 0.0 ) {
+      insideG = mix( insideG, vec3( 0.035, 0.035, 0.034 ), pmbJour );
+      pmbGlassR0 = 0.08;
+    }
+    float winAvgG = hangar > 0.5 ? 0.05 : 0.01;
+    vec3 nearG = mix( mix( wallG, doorC, door ), insideG, winG );
+    diffuseColor.rgb = mix( nearG, wallG * ( 1.0 - winAvgG * 0.8 ), farG );
+    // La nuit : une bande vitrée sur trois allumée (lumière froide d'atelier), les annexes rarement.
+    float litG = step( hangar > 0.5 ? 0.66 : 0.85, pmbHash( vec2( floor( uG / 1.6 ) + seed * 9.0, 5.0 ) ) );
+    vec3 tintG = vec3( 0.82, 0.9, 1.0 );
+    pmbFacadeEmit = mix( winG * tintG * litG * 1.3, tintG * winAvgG * 0.3, farG );
+    pmbGlass = winG * ( 1.0 - farG );
+    pmbGlassFar = winAvgG * farG;
+    roughnessFactor = mix( roughnessFactor, 0.1, pmbGlass );
+    roughnessFactor = mix( roughnessFactor, 0.5, hangar * ( 1.0 - pmbGlass ) * ( 1.0 - door ) );
+  } else if ( abs( nW.y ) < 0.6 ) {
     vec2 td = normalize( vec2( -nW.z, nW.x ) + vec2( 1e-4 ) );
     float u = dot( vPmbWorld.xz, td );
-    float storey = fam < 0.5 ? 2.8 : ( fam < 1.5 ? 3.0 : 3.4 );
-    float ground = fam < 0.5 ? 2.8 : ( fam < 1.5 ? 4.0 : 4.6 );
-    float bay = ( fam < 0.5 ? 3.3 : ( fam < 1.5 ? 2.8 : 1.9 ) ) * ( 0.9 + 0.25 * fract( seed * 3.17 ) );
+    // Édifice : hautes baies étroites (vitraux), pierre, ni volets ni balcons.
+    float edifice = step( 3.5, genre );
+    float storey = edifice > 0.5 ? 6.0 : ( fam < 0.5 ? 2.8 : ( fam < 1.5 ? 3.0 : 3.4 ) );
+    float ground = edifice > 0.5 ? 6.0 : ( fam < 0.5 ? 2.8 : ( fam < 1.5 ? 4.0 : 4.6 ) );
+    float bay = ( edifice > 0.5 ? 3.6 : ( fam < 0.5 ? 3.3 : ( fam < 1.5 ? 2.8 : 1.9 ) ) ) * ( 0.9 + 0.25 * fract( seed * 3.17 ) );
     float isGround = step( y, ground );
     float lvl = isGround > 0.5 ? 0.0 : 1.0 + floor( ( y - ground ) / storey );
     float fy = isGround > 0.5 ? y / ground : fract( ( y - ground ) / storey );
@@ -531,11 +666,13 @@ float pmbGlassFar = 0.0;
     float far = smoothstep( 0.12, 0.45, max( wu, wv ) );
     float h1 = pmbHash( vec2( cx + seed * 31.0, lvl * 7.0 + seed * 13.0 ) );
     float h2 = pmbHash( vec2( cx * 1.7 + 3.1 + seed, lvl * 2.3 + seed * 5.0 ) );
-    float x0 = fam < 0.5 ? 0.33 : ( fam < 1.5 ? 0.26 : 0.06 );
-    float y0 = fam < 0.5 ? 0.3 : ( fam < 1.5 ? 0.24 : 0.1 );
-    float y1 = fam < 0.5 ? 0.78 : ( fam < 1.5 ? 0.8 : 0.92 );
+    float x0 = edifice > 0.5 ? 0.4 : ( fam < 0.5 ? 0.33 : ( fam < 1.5 ? 0.26 : 0.06 ) );
+    float y0 = edifice > 0.5 ? 0.25 : ( fam < 0.5 ? 0.3 : ( fam < 1.5 ? 0.24 : 0.1 ) );
+    float y1 = edifice > 0.5 ? 0.85 : ( fam < 0.5 ? 0.78 : ( fam < 1.5 ? 0.8 : 0.92 ) );
     float shop = 0.0;
-    if ( isGround > 0.5 && fam > 0.5 ) {
+    if ( edifice > 0.5 ) {
+      // Pas de vitrine ni de porte dessinée : des baies hautes à tous les niveaux.
+    } else if ( isGround > 0.5 && fam > 0.5 ) {
       // Rez-de-chaussée de ville : vitrines larges, une porte de temps en temps.
       bool door = h1 < 0.22;
       x0 = door ? 0.36 : 0.08;
@@ -558,7 +695,7 @@ float pmbGlassFar = 0.0;
     // Volets des maisons, de chaque côté de la fenêtre ; certains fermés.
     float shutter = 0.0;
     vec3 shutterTint = h2 < 0.33 ? vec3( 0.25, 0.4, 0.3 ) : ( h2 < 0.66 ? vec3( 0.45, 0.3, 0.2 ) : vec3( 0.5, 0.52, 0.55 ) );
-    if ( fam < 0.5 && isGround < 0.5 || fam < 0.5 && h1 >= 0.18 ) {
+    if ( edifice < 0.5 && ( fam < 0.5 && isGround < 0.5 || fam < 0.5 && h1 >= 0.18 ) ) {
       shutter = ( pmbBox( fx, x0 - 0.17, x0, wu ) + pmbBox( fx, 1.0 - x0, 1.0 - x0 + 0.17, wu ) ) * inY;
       if ( h2 > 0.8 ) {
         shutter = max( shutter, win );
@@ -567,7 +704,7 @@ float pmbGlassFar = 0.0;
     }
     // Balcons des immeubles : une dalle sombre et un garde-corps sous la baie, un étage sur deux.
     float balcony = 0.0;
-    if ( fam > 0.5 && fam < 1.5 && isGround < 0.5 && fract( seed * 5.7 ) > 0.4 && mod( lvl, 2.0 ) < 1.0 )
+    if ( edifice < 0.5 && fam > 0.5 && fam < 1.5 && isGround < 0.5 && fract( seed * 5.7 ) > 0.4 && mod( lvl, 2.0 ) < 1.0 )
       balcony = pmbBox( fy, 0.0, 0.07, wv ) + 0.6 * pmbBox( fy, 0.07, 0.3, wv ) * mix( step( 0.5, fract( fx * 14.0 ) ), 0.5, smoothstep( 0.025, 0.06, wu ) ) * inX;
     vec3 wall = diffuseColor.rgb;
     wall = mix( wall, wall * 1.35, clamp( frame + cornice * 0.8, 0.0, 1.0 ) );
@@ -832,13 +969,32 @@ export interface NightPatch {
   sky?: { gain: number; metal: number };
   /** Textures du sol et du bâti (sol.ts) : enrobé, marquage, bas-côté, terrain, façade. */
   sol?: SolUse;
+  /** Arbres et palmiers (attribut `pmbTrunk`) : teinte par arbre, touffes et écorce, de jour. */
+  foliage?: boolean;
 }
+
+/**
+ * Feuillage de jour : la normale bouge par touffes (la lumière du soleil s'y casse au lieu de peindre
+ * chaque facette du cône d'un seul ton) ; ajouté à la normale de three (repère de la vue).
+ */
+const FOLIAGE_NORMAL = /* glsl */ `
+#ifdef PMB_FOLIAGE
+if ( pmbJour > 0.0 && vPmbTrunk < 0.5 ) {
+  vec3 pmbFw = vPmbWorld * 1.7;
+  vec3 pmbFd = vec3( pmbNoise( pmbFw.xy ) - 0.5, pmbNoise( pmbFw.yz + 3.1 ) - 0.5, pmbNoise( pmbFw.zx + 7.3 ) - 0.5 );
+  normal = normalize( normal + ( viewMatrix * vec4( pmbFd, 0.0 ) ).xyz * 1.3 * pmbJour );
+}
+#endif
+`;
 
 const fixed = (value: number) => value.toFixed(4);
 
-/** Début de l'éclairage de three, la lune et le ciel masqués sous les tunnels (pmbMoonKeep). */
-const LIGHTS_BEGIN = ShaderChunk.lights_fragment_begin
-  .replace('getDirectionalLightInfo( directionalLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= pmbMoonKeep;')
+/**
+ * Début de l'éclairage de three, la lune et le ciel masqués sous les tunnels (pmbMoonKeep) ; de jour, le
+ * soleil masqué par l'ombre du décor (pmbSunLight : la seule lumière directionnelle est l'astre).
+ */
+const LIGHTS_BEGIN = `float pmbSunVis = pmbSunLight();\n${ShaderChunk.lights_fragment_begin}`
+  .replace('getDirectionalLightInfo( directionalLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight );\n\t\tdirectLight.color *= pmbMoonKeep * pmbSunVis;')
   .replace('irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal );', 'irradiance += getHemisphereLightIrradiance( hemisphereLights[ i ], geometryNormal ) * pmbMoonKeep;');
 
 /** Pose les ajouts de nuit sur une matière standard (une clé de programme par combinaison). */
@@ -867,6 +1023,7 @@ export function patchNight<T extends MeshStandardMaterial>(material: T, uniforms
   if (patch.facade) defines.PMB_FACADE = '';
   if (patch.roof) defines.PMB_ROOF = '';
   if (patch.grass) defines.PMB_GRASS = '';
+  if (patch.foliage) defines.PMB_FOLIAGE = '';
   if (patch.snow !== undefined) defines.PMB_SNOW = fixed(patch.snow);
   if (patch.mark !== undefined) defines.PMB_MARK = fixed(patch.mark);
   if (patch.sky) {
@@ -888,7 +1045,7 @@ export function patchNight<T extends MeshStandardMaterial>(material: T, uniforms
       FRAGMENT_HEAD +
       shader.fragmentShader
         .replace('#include <roughnessmap_fragment>', ROUGHNESS_PATCH)
-        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${SOL_NORMAL}`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${SOL_NORMAL}\n${FOLIAGE_NORMAL}`)
         .replace('#include <lights_fragment_begin>', LIGHTS_BEGIN)
         .replace('#include <emissivemap_fragment>', EMISSIVE_PATCH)
         .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + HEADLIGHT_PATCH)

@@ -160,9 +160,21 @@ export function roadAttribute(
 }
 
 /**
+ * Genre d'un bâtiment (0 ordinaire, 1 annexe, 2 hangar, 3 muret, 4 édifice), porté par la hauteur du
+ * pied de ses murs sans un octet de plus dans la carte : tools/maps/build.mjs (piedCode) pose le pied
+ * sur une grille de 10 cm, le relève de 10 cm, puis l'abaisse d'autant de centimètres que le genre
+ * (le pied est sous le sol : rien ne se voit). Hors de 0 à 4 (carte d'avant ce codage), ordinaire.
+ */
+export function genreDuPied(y: number): number {
+  const g = ((Math.round(-y * 100) % 10) + 10) % 10;
+  return g <= 4 ? g : 0;
+}
+
+/**
  * Attribut `pmbFacade` d'un maillage de murs sans index (trois sommets par triangle) : pour chaque
- * triangle, pied (y le plus bas), sommet (y le plus haut) et une graine tirée de ces deux hauteurs et
- * de la position (la même pour les murs d'un bâtiment, à peu près).
+ * triangle, pied (y le plus bas), sommet (y le plus haut) et, dans le troisième nombre, le genre du
+ * bâtiment (partie entière, genreDuPied) plus une graine tirée de ces deux hauteurs (la même pour
+ * les murs d'un bâtiment, à peu près).
  */
 export function facadeAttribute(positions: ArrayLike<number>, origin: readonly number[]): Float32Array {
   const n = Math.floor(positions.length / 9);
@@ -177,7 +189,8 @@ export function facadeAttribute(positions: ArrayLike<number>, origin: readonly n
       hi = Math.max(hi, y);
     }
     const v = Math.sin(lo * 12.9898 + hi * 78.233) * 43758.5453;
-    const seed = v - Math.floor(v);
+    // Graine bornée sous 0,999 : la partie entière (le genre) ne déborde jamais en 32 bits.
+    const seed = Math.min(0.999, v - Math.floor(v)) + genreDuPied(lo);
     for (let k = 0; k < 3; k += 1) {
       out[t * 9 + k * 3] = lo;
       out[t * 9 + k * 3 + 1] = hi;
