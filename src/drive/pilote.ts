@@ -71,12 +71,18 @@
 // l'arrière, sans tête-à-queue. Jamais de frein posé par l'app : la caisse en travers frotte et perd de
 // la vitesse, comme au bord. Le pilote automatique règle sa vitesse sur la météo et ne glisse jamais.
 //
+// Préparation (src/data/preparation.ts, demande du 18 novembre 2026) : les pneus, leur largeur et
+// l'assiette du build changent l'adhérence et la motricité selon la météo (`PreparationRoute`, portée par
+// `PerformanceRoute.preparation`), et le roulis d'une voiture. Le véhicule d'origine n'y change rien. Le
+// pilote automatique lève le pied sur de mauvais pneus, jamais plus vite sur de bons.
+//
 // Tout est déterministe : l'intégration se fait en sous-pas d'au plus 1/120 s, quel que soit `dt`.
 // `step` n'alloue rien.
 
-import { adherenceMeteo, FREINAGE, MOTRICITE, PRUDENCE_AUTO, SURVIRAGE, TRANSMISSION_PAR_DEFAUT, type Transmission } from '../data/adherence.ts';
+import { adherenceMeteo, FREINAGE, MOTRICITE, PREPARATION_ORIGINE, PRUDENCE_AUTO, SURVIRAGE, TRANSMISSION_PAR_DEFAUT, type PreparationRoute, type Transmission } from '../data/adherence.ts';
 import { boiteDuVehicule, vitesseMaxBoite } from '../data/boites.ts';
 import { computePrep } from '../data/enginePrep.ts';
+import { preparationDe } from '../data/preparation.ts';
 import type { Build, VehicleManifest } from '../data/vehicleTypes.ts';
 import { etatInitial, pasBoite, zonesCadran, type SortieBoite } from './boite.ts';
 import type { DriveInput, DriveMotion, DrivePerformance, DriveTrain, Pilot, Rail, RailPose, Weather } from './contrat.ts';
@@ -210,13 +216,23 @@ const DEFAULT_BODY = { car: { mass: 1200, power: 100 }, bike: { mass: 280, power
 /** Un cheval-vapeur, en watts. */
 const HP = 735.5;
 
+/** Performances et préparation pour la route (pneus, largeur, assiette : src/data/preparation.ts). */
+export interface PerformanceRoute extends DrivePerformance {
+  /** Absente : le véhicule d'origine. */
+  preparation?: PreparationRoute;
+}
+
 /**
  * Performances d'un véhicule pour la route, tirées de son manifeste : puissance (`engine.power`,
  * préparation du build comprise : reprogrammation, carburation), masse, vitesse de pointe,
  * adhérence, boîte ; un kit nitro monté grossit la poussée du NOS. Ce qui manque prend la valeur
- * d'un véhicule moyen de son genre. La vitesse de pointe est bornée par la boîte.
+ * d'un véhicule moyen de son genre. La vitesse de pointe est bornée par la boîte. Les pneus, leur
+ * largeur et l'assiette du build (`preparation`) jouent selon la météo.
  */
-export function performanceDe(vehicle: Pick<VehicleManifest, 'kind' | 'engine' | 'performance'>, build?: Pick<Build, 'parts'>): DrivePerformance {
+export function performanceDe(
+  vehicle: Pick<VehicleManifest, 'kind' | 'engine' | 'performance'> & Partial<Pick<VehicleManifest, 'wheels'>>,
+  build?: Partial<Build>,
+): PerformanceRoute {
   const kind = vehicle.kind;
   const spec = vehicle.performance;
   const gearbox = boiteDuVehicule(vehicle);
@@ -235,7 +251,13 @@ export function performanceDe(vehicle: Pick<VehicleManifest, 'kind' | 'engine' |
     nosBoost: prep && prep.nitro > 0 ? Math.min(1, Math.max(PILOT.nos.boost, prep.nitro / Math.max(1, hp))) : PILOT.nos.boost,
     // Une moto pousse toujours par l'arrière.
     transmission: kind === 'bike' ? 'propulsion' : (spec?.transmission ?? TRANSMISSION_PAR_DEFAUT[kind]),
+    preparation: preparationDe({ kind, wheels: vehicle.wheels }, build),
   };
+}
+
+/** Préparation d'un véhicule pour la route (absente : celle d'origine, rien ne change). */
+function preparationRoute(performance: Pick<PerformanceRoute, 'preparation'>): PreparationRoute {
+  return performance.preparation ?? PREPARATION_ORIGINE;
 }
 
 /** Roues motrices d'un véhicule (celles du manifeste, sinon celles de son genre). */
@@ -243,9 +265,29 @@ export function transmissionDe(performance: Pick<DrivePerformance, 'kind' | 'tra
   return performance.kind === 'bike' ? 'propulsion' : (performance.transmission ?? TRANSMISSION_PAR_DEFAUT[performance.kind]);
 }
 
-/** Motricité (m/s²) : accélération la plus forte que les roues motrices transmettent, sous une météo, en ligne droite. */
-export function motriciteDe(performance: Pick<DrivePerformance, 'kind' | 'transmission'>, weather?: Weather): number {
-  return MOTRICITE.reference[performance.kind] * MOTRICITE.transmission[transmissionDe(performance)] * adherenceMeteo(weather).adherence;
+/**
+ * Motricité (m/s²) : accélération la plus forte que les roues motrices transmettent, sous une météo, en
+ * ligne droite (pneus, largeur et assiette du build comprises).
+ */
+export function motriciteDe(performance: Pick<PerformanceRoute, 'kind' | 'transmission' | 'preparation'>, weather?: Weather): number {
+  const meteo = weather === 'pluie' || weather === 'neige' ? weather : 'sec';
+  return MOTRICITE.reference[performance.kind] * MOTRICITE.transmission[transmissionDe(performance)] * adherenceMeteo(weather).adherence * preparationRoute(performance).motricite[meteo];
+}
+
+/** Part de l'adhérence du sec que gardent les pneus du véhicule sous une météo (préparation comprise). */
+export function adherenceDe(performance: Pick<PerformanceRoute, 'preparation'>, weather?: Weather): number {
+  const meteo = weather === 'pluie' || weather === 'neige' ? weather : 'sec';
+  return adherenceMeteo(weather).adherence * preparationRoute(performance).tenue[meteo];
+}
+
+/**
+ * Poussée (m/s²) que le couple du moteur peut donner en première, à plein gaz : c'est elle qui fait
+ * patiner les roues quand elle dépasse la motricité (`MOTRICITE.couple`).
+ */
+export function pousseeDepart(performance: Pick<DrivePerformance, 'power' | 'mass' | 'gearbox'>): number {
+  const box = performance.gearbox;
+  const firstGear = kmh((box.kmhPar1000[0] ?? 10) * (box.passagePleinGaz / 1000));
+  return (performance.power * HP * PILOT.engine.efficiency * MOTRICITE.couple) / (Math.max(50, performance.mass) * Math.max(3, firstGear));
 }
 
 /** Décélération du frein plein à la main (m/s²), sous une météo. */
@@ -261,6 +303,12 @@ export function patinageDe(poussee: number, tenue: number): number {
   if (!(poussee > 0) || !Number.isFinite(tenue)) return 0;
   const t = Math.max(0.1, tenue);
   return Math.min(1, Math.max(0, (poussee - t) / (MOTRICITE.plein * t)));
+}
+
+/** Excès de la poussée du moteur (m/s²) sur la motricité `tenue` (m/s²), en part de celle-ci (0 : rien ne patine). */
+export function excesDe(poussee: number, tenue: number): number {
+  if (!(poussee > 0) || !Number.isFinite(tenue)) return 0;
+  return Math.max(0, poussee / Math.max(0.1, tenue) - 1);
 }
 
 /**
@@ -525,14 +573,16 @@ export function sampleProfile(values: Float64Array, step: number, rail: Rail, s:
  * Calcule une fois le profil du pilote automatique pour un véhicule : courbure et croisière, puis
  * freinage anticipé à rebours. À la main, aucun profil : le joueur freine lui-même.
  */
-export function createSpeedProfile(rail: Rail, performance: DrivePerformance = DEFAULT_PERFORMANCE, line?: RacingLine, weather?: Weather): SpeedProfile {
+export function createSpeedProfile(rail: Rail, performance: PerformanceRoute = DEFAULT_PERFORMANCE, line?: RacingLine, weather?: Weather): SpeedProfile {
   const step = PILOT.profileStep;
   const n = Math.max(2, Math.ceil(rail.length / step) + 1);
   const auto = new Float64Array(n);
   const pose = createPose();
   const meteo = adherenceMeteo(weather);
+  // Pneus moins bons que ceux d'origine sous cette météo : il lève le pied d'autant ; meilleurs : rien de plus.
+  const prudence = Math.min(1, adherenceDe(performance, weather) / meteo.adherence);
   // Au sec, le plafond d'avant (PILOT.lateral) ; sous la pluie et sur la neige, une part de celui-ci.
-  const autoLateral = Math.min(PILOT.lateral, performance.grip) * meteo.lateraleAuto;
+  const autoLateral = Math.min(PILOT.lateral, performance.grip) * meteo.lateraleAuto * prudence;
   for (let i = 0; i < n; i += 1) {
     rail.poseAt(Math.min(rail.length, i * step), pose);
     // Courbure de la trajectoire suivie quand on la connaît (plus douce que celle de la route).
@@ -551,7 +601,7 @@ export function createSpeedProfile(rail: Rail, performance: DrivePerformance = D
       if (rail.loop) values[n - 1] = values[0]!;
     }
   };
-  backward(auto, Math.min(PILOT.plannedBrake, freinDe(weather) * PRUDENCE_AUTO.freinPrevu));
+  backward(auto, Math.min(PILOT.plannedBrake, freinDe(weather) * prudence * PRUDENCE_AUTO.freinPrevu));
   return { step, auto };
 }
 
@@ -559,7 +609,7 @@ export interface PilotWithProfile extends Pilot {
   readonly profile: SpeedProfile;
   readonly line: RacingLine;
   readonly rail: Rail;
-  readonly performance: DrivePerformance;
+  readonly performance: PerformanceRoute;
   readonly train: DriveTrain;
   /** À la main : bord touché (−1 à droite, 1 à gauche, 0 libre) pendant le dernier pas. */
   readonly contact: number;
@@ -570,6 +620,8 @@ export interface PilotWithProfile extends Pilot {
   setWeather(weather: Weather): void;
   /** Météo prise en compte. */
   readonly weather: Weather;
+  /** Part de l'adhérence du sec que gardent les pneus sous cette météo (préparation comprise). */
+  readonly adherence: number;
 }
 
 function newMotion(): DriveMotion {
@@ -800,7 +852,7 @@ export function courbureAssistee(err: number, psi: number, kRoad: number, offset
   return clampTo(keep + (wanted - psi) / (A.headingTime * v), courbureBraquage(kind));
 }
 
-export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_PERFORMANCE): PilotWithProfile {
+export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_PERFORMANCE): PilotWithProfile {
   let line = createRacingLine(rail, performance.kind, performance.halfWidth, performance.halfLength);
   let profile = createSpeedProfile(rail, performance, line);
   const engine = engineModel(performance);
@@ -854,17 +906,19 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
   // Adhérence (src/data/adherence.ts) : météo, adhérence qu'elle laisse, motricité ; à la main, dérive de
   // la caisse et sa vitesse (rad, rad/s), patinage, accélération longitudinale lissée (report de charge).
   let weather: Weather = 'sec';
-  let wetGrip = 1;
+  let wetGrip = adherenceDe(performance, weather);
   let traction = motriciteDe(performance, weather);
+  // Roulis de caisse d'une voiture : l'assiette le change (posée au sol, plus à plat).
+  const rollShare = preparationRoute(performance).roulis;
   const transmission = transmissionDe(performance);
   const driveFront = transmission !== 'propulsion';
   // Poussée que le couple du moteur peut donner en première, pour juger le patinage (m/s²).
-  const firstGear = kmh((box.kmhPar1000[0] ?? 10) * (box.passagePleinGaz / 1000));
-  const torquePush = (performance.power * HP * PILOT.engine.efficiency * MOTRICITE.couple) / (Math.max(50, performance.mass) * Math.max(3, firstGear));
+  const torquePush = pousseeDepart(performance);
   const driveRear = transmission !== 'traction';
   let drift = 0;
   let driftRate = 0;
   let spin = 0;
+  let exces = 0;
   let axLisse = 0;
 
   function reset(s: number): void {
@@ -885,6 +939,7 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     drift = 0;
     driftRate = 0;
     spin = 0;
+    exces = 0;
     axLisse = 0;
     free.offset = motion.offset;
     free.psi = 0;
@@ -1051,11 +1106,18 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
       const mu = Math.max(0.5, performance.grip * wetGrip);
       const latUse = Math.min(0.95, Math.abs(lateralNow) / mu);
       const tenue = traction * Math.sqrt(1 - latUse * latUse);
-      spin += (patinageDe(Math.min(push, throttle * torquePush * (nos ? 1 + (performance.nosBoost ?? PILOT.nos.boost) : 1)), tenue) - spin) * Math.min(1, h / MOTRICITE.tau);
+      // Excès de poussée sur la motricité (part, lissé) : il fait le patinage (plein à `MOTRICITE.plein`) et
+      // la poussée perdue, qui croît avec lui sans plafond avant `perteMax` (plus de puissance sur la neige :
+      // plus de roues qui patinent, moins de poussée transmise).
+      const pousse = Math.min(push, throttle * torquePush * (nos ? 1 + (performance.nosBoost ?? PILOT.nos.boost) : 1));
+      const lisse = Math.min(1, h / MOTRICITE.tau);
+      spin += (patinageDe(pousse, tenue) - spin) * lisse;
       if (spin < 1e-4) spin = 0;
+      exces += (excesDe(pousse, tenue) - exces) * lisse;
+      if (exces < 1e-4) exces = 0;
       driveUse = push / traction;
       brakeUse = brake;
-      wanted = Math.min(push, tenue * (1 - MOTRICITE.perte * spin)) - engine.resist(v) - brake * PILOT.manual.brake * wetGrip;
+      wanted = Math.min(push, tenue * (1 - Math.min(MOTRICITE.perteMax, (MOTRICITE.perte * exces) / MOTRICITE.plein))) - engine.resist(v) - brake * PILOT.manual.brake * wetGrip;
       if (throttle === 0 && brake === 0) wanted -= PILOT.manual.coast;
       // Aucun frein posé par l'app : seuls le bord et la caisse en travers ralentissent, plus bas.
       wanted = Math.max(-PILOT.manual.brake, wanted);
@@ -1183,7 +1245,7 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
         rollRate = 0;
       } else {
         const w = PILOT.roll.omega;
-        rollRate += (w * w * (carRollOf(lateralNow, performance.grip) - motion.roll) - 2 * PILOT.roll.damping * w * rollRate) * h;
+        rollRate += (w * w * (carRollOf(lateralNow, performance.grip) * rollShare - motion.roll) - 2 * PILOT.roll.damping * w * rollRate) * h;
         motion.roll += rollRate * h;
       }
     } else {
@@ -1227,7 +1289,7 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
       lateralNow = lateral;
       motion.slip = (motion.slip ?? 0) * Math.max(0, 1 - h / PILOT.free.slip.tau);
       // Le pilote automatique ne glisse ni ne patine jamais.
-      drift = driftRate = spin = 0;
+      drift = driftRate = spin = exces = 0;
       motion.drift = 0;
       motion.spin = 0;
       if (kind === 'bike') {
@@ -1237,7 +1299,7 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
         motion.roll += (lean - motion.roll) * Math.min(1, h / PILOT.lean.tau);
         rollRate = 0;
       } else {
-        const roll = carRollOf(lateral, performance.grip);
+        const roll = carRollOf(lateral, performance.grip) * rollShare;
         const w = PILOT.roll.omega;
         rollRate += (w * w * (roll - motion.roll) - 2 * PILOT.roll.damping * w * rollRate) * h;
         motion.roll += rollRate * h;
@@ -1267,6 +1329,7 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
       motion.pull = (motion.pull ?? 0) * Math.max(0, 1 - span * 4);
       motion.slip = (motion.slip ?? 0) * Math.max(0, 1 - span * 8);
       spin *= Math.max(0, 1 - span * 8);
+      exces *= Math.max(0, 1 - span * 8);
       drift *= Math.max(0, 1 - span * 4);
       driftRate = 0;
       motion.spin = spin;
@@ -1304,7 +1367,7 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
   function setWeather(next: Weather): void {
     if (next === weather || !(next === 'sec' || next === 'pluie' || next === 'neige')) return;
     weather = next;
-    wetGrip = adherenceMeteo(weather).adherence;
+    wetGrip = adherenceDe(performance, weather);
     traction = motriciteDe(performance, weather);
     profile = createSpeedProfile(rail, performance, line, weather);
   }
@@ -1335,6 +1398,9 @@ export function createPilot(rail: Rail, performance: DrivePerformance = DEFAULT_
     },
     get weather() {
       return weather;
+    },
+    get adherence() {
+      return wetGrip;
     },
     reset,
     step,

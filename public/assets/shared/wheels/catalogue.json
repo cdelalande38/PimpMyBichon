@@ -1,5 +1,5 @@
 {
-  "about": "Roues partagées entre véhicules (§ 5.4, § 8). Une jante ou un pneu = une ligne ici ; npm run vehicles:build fabrique ses fichiers (tools/vehicles/roues.mjs), l'app les pose sur les ancres roue_* des véhicules compatibles. Substituts déclarés : placeholder_jantes, placeholder_pneus (TODO_ASSETS.md).",
+  "about": "Roues partagées entre véhicules (§ 5.4, § 8). Une jante ou un pneu = une ligne ici ; npm run vehicles:build fabrique ses fichiers (tools/vehicles/roues.mjs), l'app les pose sur les ancres roue_* des véhicules compatibles. Substituts déclarés : placeholder_jantes, placeholder_pneus (TODO_ASSETS.md). Chaque pneu porte son comportement sur la route (src/data/adherence.ts, ComportementPneu) : tenue par météo, part de l'adhérence d'un pneu idéal, et motricité, facteur (1 : pneu de route) ; chiffres de jeu, pas relevés. « nom » : le pneu dans une phrase (« tes pneus de route »).",
   "reference": {
     "car": { "rim": 0.2, "outer": 0.3, "width": 0.2 },
     "bike": { "rim": 0.2, "outer": 0.32, "width": 0.15 }
@@ -16,9 +16,10 @@
     { "id": "moto_pleine", "kind": "bike", "style": "pleine", "label": "Pleine", "hint": "Flasque plein, des deux côtés" }
   ],
   "tires": [
-    { "id": "route", "label": "Route", "hint": "Pneu de tous les jours, un liseré fin", "mark": "lisere", "color": "#2e2e32", "colorLabel": "Couleur du liseré" },
-    { "id": "flanc_blanc", "label": "Flanc blanc", "hint": "Le flanc large des années cinquante", "mark": "flanc", "color": "#efece2", "colorLabel": "Couleur du flanc" },
-    { "id": "lettrage", "label": "Lettrage blanc", "hint": "Lettres en relief sur le flanc", "mark": "lettres", "color": "#efece2", "colorLabel": "Couleur des lettres" },
-    { "id": "tout_terrain", "label": "Tout-terrain", "hint": "Gros pavés, pour la terre et la boue", "mark": "lisere", "tread": "pavés", "color": "#2e2e32", "colorLabel": "Couleur du liseré" }
+    { "id": "route", "nom": "pneus de route", "label": "Route", "hint": "Pneu de tous les jours, un liseré fin", "mark": "lisere", "color": "#2e2e32", "colorLabel": "Couleur du liseré", "tenue": { "sec": 0.92, "pluie": 0.88, "neige": 0.8 }, "motricite": 1 },
+    { "id": "flanc_blanc", "nom": "flancs blancs", "label": "Flanc blanc", "hint": "Le flanc large des années cinquante", "mark": "flanc", "color": "#efece2", "colorLabel": "Couleur du flanc", "tenue": { "sec": 0.89, "pluie": 0.85, "neige": 0.78 }, "motricite": 0.97 },
+    { "id": "lettrage", "nom": "pneus à lettrage", "label": "Lettrage blanc", "hint": "Lettres en relief sur le flanc", "mark": "lettres", "color": "#efece2", "colorLabel": "Couleur des lettres", "tenue": { "sec": 0.95, "pluie": 0.85, "neige": 0.76 }, "motricite": 1.03 },
+    { "id": "tout_terrain", "nom": "pneus tout-terrain", "label": "Tout-terrain", "hint": "Gros pavés, pour la terre et la boue", "mark": "lisere", "tread": "pavés", "color": "#2e2e32", "colorLabel": "Couleur du liseré", "tenue": { "sec": 0.84, "pluie": 0.95, "neige": 0.9 }, "motricite": 0.96 },
+    { "id": "piste", "nom": "slicks", "label": "Slick", "hint": "Gomme lisse de piste, pour le sec", "mark": "lisere", "color": "#ffb224", "colorLabel": "Couleur du liseré", "tenue": { "sec": 1, "pluie": 0.77, "neige": 0.7 }, "motricite": 1.06 }
   ]
 }

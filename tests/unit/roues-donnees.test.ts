@@ -30,7 +30,7 @@ describe('catalogue des roues partagées', () => {
     const bike = WHEEL_CATALOGUE.rims.filter((rim) => rim.kind === 'bike').map((rim) => rim.id);
     expect(car).toEqual(expect.arrayContaining(['tole', 'huit_branches', 'flasque', 'cinq_batons', 'rayons_fils', 'deport_profond']));
     expect(bike).toEqual(expect.arrayContaining(['moto_rayons', 'moto_batons', 'moto_pleine']));
-    expect(WHEEL_CATALOGUE.tires.map((tire) => tire.id)).toEqual(['route', 'flanc_blanc', 'lettrage', 'tout_terrain']);
+    expect(WHEEL_CATALOGUE.tires.map((tire) => tire.id)).toEqual(['route', 'flanc_blanc', 'lettrage', 'tout_terrain', 'piste']);
     for (const item of [...WHEEL_CATALOGUE.rims, ...WHEEL_CATALOGUE.tires]) {
       expect(item.label.trim()).not.toBe('');
       // Aucun nom de marque : des libellés d'atelier en français.

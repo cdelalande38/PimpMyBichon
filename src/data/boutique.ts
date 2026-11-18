@@ -13,6 +13,7 @@ import { ARTICLES_CARROSSERIE } from './articles/carrosserie.ts';
 import { ARTICLES_ECHAPPEMENT } from './articles/echappement.ts';
 import { ARTICLES_MOTEUR } from './articles/moteur.ts';
 import { ARTICLES_PHARES } from './articles/phares.ts';
+import { ARTICLES_PREPARATION } from './articles/preparation.ts';
 
 export interface ArticleBoutique extends Article {
   /** Une phrase tutoyée : ce que ça apporte. */
@@ -55,7 +56,7 @@ export const TROPHEES: readonly ArticleBoutique[] = [
  * dont l'article n'est pas acquis se voit, avec son cadenas et son prix ; elle se débloque sur place
  * par le bloc d'achat partagé (src/ui/jeu/Achat.tsx), et `usePossede` (src/state/jeu.ts) dit si elle l'est.
  */
-export const PIECES: readonly ArticleBoutique[] = [...ARTICLES_AILERONS, ...ARTICLES_PHARES, ...ARTICLES_ECHAPPEMENT, ...ARTICLES_MOTEUR, ...ARTICLES_CARROSSERIE];
+export const PIECES: readonly ArticleBoutique[] = [...ARTICLES_AILERONS, ...ARTICLES_PHARES, ...ARTICLES_ECHAPPEMENT, ...ARTICLES_MOTEUR, ...ARTICLES_CARROSSERIE, ...ARTICLES_PREPARATION];
 
 /** Tout ce que le jeu sait posséder. */
 export const ARTICLES: readonly ArticleBoutique[] = [...PACKS, ...TROPHEES, ...PIECES];

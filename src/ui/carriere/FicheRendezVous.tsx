@@ -5,11 +5,17 @@
 // véhicule à l'écran) et la prime ; une ligne de conseil de préparation tirée des données
 // (src/data/carriere.ts). Rien ne s'y touche.
 
-import { conseilDe, METEO_LABEL, MOMENT_LABEL, OBJECTIF_LABEL, type RendezVous } from '../../data/carriere.ts';
+import { useMemo } from 'react';
+import { conseilDe, CONSEILS, METEO_LABEL, MOMENT_LABEL, OBJECTIF_LABEL, type RendezVous } from '../../data/carriere.ts';
 import { formatSpec } from '../../data/courses.ts';
 import { mapById } from '../../data/maps.ts';
+import { resolveVehicle } from '../../data/vehicles.ts';
 import { formatChrono } from '../../drive/depart.ts';
+import { possedeDans } from '../../jeu/achats.ts';
 import { seuilBronze } from '../../jeu/carriereCloture.ts';
+import { conseilPreparation } from '../../jeu/preparation.ts';
+import { useBuilds } from '../../state/builds.ts';
+import { useJeu } from '../../state/jeu.ts';
 import { DriveIcon, type DriveIconName } from '../drive/icones.tsx';
 import { dollars } from '../jeu/libelles.ts';
 import { PictoCarte } from '../pictos/Pictos.tsx';
@@ -26,7 +32,27 @@ export function resumeRendezVous(rdv: RendezVous): string {
   return [zoneDe(map) ?? map?.name ?? rdv.carte, METEO_LABEL[rdv.meteo].toLowerCase(), MOMENT_LABEL[rdv.moment].toLowerCase()].join(' · ');
 }
 
+/**
+ * La ligne « À préparer » : ce que la conduite dit du véhicule à l'écran sous la météo imposée (pneus,
+ * assiette, puissance : src/jeu/preparation.ts), puis la nuit et les trois tours. Sans phrase : le conseil
+ * général de la météo (src/data/carriere.ts).
+ */
+function useConseil(rdv: RendezVous): string {
+  const current = useBuilds((state) => state.current);
+  const builds = useBuilds((state) => state.builds);
+  const articles = useJeu((state) => state.articles);
+  return useMemo(() => {
+    const vehicule = resolveVehicle(current);
+    const phrases = conseilPreparation(builds[vehicule.id], vehicule, rdv.meteo, { possede: (id) => possedeDans({ articles }, id) });
+    if (phrases.length === 0) return conseilDe(rdv);
+    if (rdv.moment === 'nuit') phrases.push(CONSEILS.nuit);
+    if (rdv.format === 'tours3') phrases.push(CONSEILS.tours3);
+    return phrases.join(' ');
+  }, [current, builds, articles, rdv]);
+}
+
 export function FicheRendezVous({ rdv, numero, total }: { rdv: RendezVous; numero: number; total: number }) {
+  const conseil = useConseil(rdv);
   const map = mapById(rdv.carte);
   const zone = zoneDe(map);
   const depart = useLibelleDepart(rdv.carte, rdv.depart);
@@ -68,7 +94,7 @@ export function FicheRendezVous({ rdv, numero, total }: { rdv: RendezVous; numer
         </div>
       </dl>
       <p className="carriere-fiche-conseil">
-        <b>À préparer</b> {conseilDe(rdv)}
+        <b>À préparer</b> {conseil}
       </p>
     </div>
   );

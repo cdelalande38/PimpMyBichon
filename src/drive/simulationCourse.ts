@@ -10,7 +10,6 @@
 //   tient le prochain virage (92 % de l'adhérence du véhicule, 80 % de son freinage le plus fort), sans
 //   NOS. Un joueur appliqué fait aussi bien ; un joueur qui use du NOS, mieux.
 
-import { adherenceMeteo } from '../data/adherence.ts';
 import type { MapRoute } from '../data/mapTypes.ts';
 import type { DriveInput, DrivePerformance, Weather } from './contrat.ts';
 import { armerDepart, createDepart, pasDepart } from './depart.ts';
@@ -88,7 +87,9 @@ export function simulerCourse(pilot: PilotWithProfile, options: OptionsSimulatio
   const max = options.max ?? 3600;
   const auto: DriveInput = { auto: true, throttle: 0, brake: 0, lane: 0 };
   const main: DriveInput = { auto: false, throttle: 1, brake: 0, lane: 0, assist: true };
-  const adherence = adherenceMeteo(options.meteo).adherence;
+  // Ce que les pneus tiennent sous cette météo, préparation comprise (pneus, largeur, assiette) : le
+  // joueur appliqué freine pour ses pneus à lui.
+  const adherence = pilot.adherence;
   const grip = pilot.performance.grip * adherence * SIMULATION.marge;
   const frein = PILOT.manual.brake * adherence * SIMULATION.frein;
   const pose = createPose();

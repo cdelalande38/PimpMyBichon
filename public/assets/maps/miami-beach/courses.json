@@ -5,17 +5,17 @@
   "outil": "npm run courses:temps",
   "ecartsMeteo": {
     "pluie": 1.2,
-    "neige": 1.6
+    "neige": 1.7
   },
   "departs": {
     "ocean-drive": {
       "tour1": {
         "auto": 403.4,
-        "main": 154.8,
+        "main": 155.6,
         "vehicules": {
           "bobber": {
             "auto": 403.4,
-            "main": 154.8
+            "main": 155.6
           },
           "concept": {
             "auto": 403.1,
@@ -31,7 +31,7 @@
           },
           "van": {
             "auto": 404,
-            "main": 186.9
+            "main": 187.6
           }
         }
       }
@@ -75,7 +75,7 @@
           },
           "concept": {
             "auto": 90.7,
-            "main": 36.2
+            "main": 36.1
           },
           "cox": {
             "auto": 93.2,

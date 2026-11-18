@@ -10,10 +10,10 @@
 // n'est pas une fonction lisse du temps.
 import { existsSync, readFileSync } from 'node:fs';
 import type { MapRoute } from '../../src/data/mapTypes.ts';
-import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
+import type { Build, VehicleManifest } from '../../src/data/vehicleTypes.ts';
 import * as cameras from '../../src/drive/cameras.ts';
 import { cameraFeel, cameraShot, chase, createShot, guardShot, type GroundSampler } from '../../src/drive/cameras.ts';
-import type { CameraId, DriveInput, Rail, RailPose, VehicleFrame } from '../../src/drive/contrat.ts';
+import type { CameraId, DriveInput, Rail, RailPose, VehicleFrame, Weather } from '../../src/drive/contrat.ts';
 import { courbureBraquage, createPilot, performanceDe, PILOT, sampleLine, type PilotWithProfile } from '../../src/drive/pilote.ts';
 import { createPose, createRail } from '../../src/drive/rail.ts';
 import { addRoleMesh, createChunkRelief, Relief } from '../../src/drive/scene/relief.ts';
@@ -111,7 +111,7 @@ export function coupures(seconds: number, seed: number): Array<[number, number]>
 
 export interface Scenario {
   rail: Rail;
-  vehicle: Pick<VehicleManifest, 'kind' | 'engine' | 'performance' | 'halfLengthHint'>;
+  vehicle: Pick<VehicleManifest, 'kind' | 'engine' | 'performance' | 'halfLengthHint'> & Partial<Pick<VehicleManifest, 'wheels'>>;
   camera: CameraId;
   cadence: Cadence;
   joueur: Joueur;
@@ -125,6 +125,9 @@ export interface Scenario {
   seed?: number;
   /** Coupures du manche imposées (s), au lieu du tirage de `coupures` (joueur « coupure »). */
   cuts?: Array<[number, number]>;
+  /** Préparation (pneus, assiette : src/data/preparation.ts) et météo ; absentes : l'origine, au sec. */
+  build?: Partial<Build>;
+  meteo?: Weather;
   /** Appelé avec le plan avant sa garde au sol (diagnostic). */
   espion?: (shot: { position: number[]; target: number[] }, frame: VehicleFrame, s: number) => void;
 }
@@ -217,7 +220,8 @@ function jouer(joueur: Joueur, pilot: PilotWithProfile, pose: RailPose, input: D
  */
 export function rejouer(sc: Scenario): Trace {
   const kind = sc.vehicle.kind;
-  const pilot = createPilot(sc.rail, performanceDe(sc.vehicle));
+  const pilot = createPilot(sc.rail, performanceDe(sc.vehicle, sc.build));
+  if (sc.meteo) pilot.setWeather(sc.meteo);
   const halfWidth = kind === 'bike' ? 0.45 : 0.95;
   const height = kind === 'bike' ? 1.2 : 1.4;
   pilot.setSize(halfWidth, sc.vehicle.halfLengthHint);

@@ -169,9 +169,55 @@
   padding: 0.375rem 0.75rem;
 }
 
-/* Dock compact : les indices des puces se taisent (la valeur des cotes reste). */
-footer.dock[data-taille='compact'] .wheels .chip:not(.wheels-cote) small {
+/* Dock compact : les indices des puces se taisent (la valeur des cotes, le terrain d'un pneu ou d'une
+   assiette et le prix d'une nouveauté restent). */
+footer.dock[data-taille='compact'] .wheels .chip:not(.wheels-cote) small:not(.wheels-terrain, .wheels-prix) {
   display: none;
+}
+
+/* Pneus et assiettes : le nom, et son prix à côté tant qu'il est à débloquer ; dessous, son terrain
+   (« Sec : +, pluie : −, neige : − − », src/data/preparation.ts), sur une ligne. */
+.wheels-titre {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.wheels-prix {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  font-weight: 700;
+}
+
+.wheels-cadenas {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wheels-terrain {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip[data-verrou='ferme'] .picto {
+  opacity: 0.6;
+}
+
+.wheels-message {
+  margin: 0;
+  padding: 0.375rem 0.625rem;
+  border-left: 3px solid var(--ok);
+  background: var(--panel);
+  font-size: 0.8125rem;
 }
 
 .wheels-slider {

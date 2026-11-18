@@ -235,7 +235,8 @@ export function dessinSiege(style: string): Trait[] | null {
  * passages de roue suivent la caisse : le jour entre le pneu et l'aile se referme.
  */
 export function dessinAssiette(part: number): Trait[] {
-  const yb = 15.8 + 3.2 * clamp(part, 0, 1);
+  // De −1 (rehaussée : la caisse monte de 2 unités) à 1 (posée au sol).
+  const yb = 15.8 + (part < 0 ? 2 : 3.2) * clamp(part, -1, 1);
   const y = f1(yb);
   return [
     { d: 'M1.2 21.6h21.6', w: 0.8, o: 0.6 },

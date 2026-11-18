@@ -5,7 +5,7 @@
   "outil": "npm run courses:temps",
   "ecartsMeteo": {
     "pluie": 1.2,
-    "neige": 1.65
+    "neige": 1.7
   },
   "departs": {
     "laffrey": {
@@ -19,7 +19,7 @@
           },
           "concept": {
             "auto": 854.6,
-            "main": 366.3
+            "main": 366.4
           },
           "cox": {
             "auto": 870.9,
@@ -27,7 +27,7 @@
           },
           "sportive": {
             "auto": 853.3,
-            "main": 365.8
+            "main": 366.1
           },
           "van": {
             "auto": 862.7,
@@ -39,15 +39,15 @@
     "rampe": {
       "tour1": {
         "auto": 1150,
-        "main": 659.1,
+        "main": 659.5,
         "vehicules": {
           "bobber": {
             "auto": 1150,
-            "main": 659.1
+            "main": 659.5
           },
           "concept": {
             "auto": 1149.4,
-            "main": 528.2
+            "main": 528.8
           },
           "cox": {
             "auto": 1188.2,
@@ -55,7 +55,7 @@
           },
           "sportive": {
             "auto": 1147.1,
-            "main": 527.2
+            "main": 528.5
           },
           "van": {
             "auto": 1169.2,
@@ -75,7 +75,7 @@
           },
           "concept": {
             "auto": 526.9,
-            "main": 236.8
+            "main": 236.5
           },
           "cox": {
             "auto": 539.2,
@@ -83,7 +83,7 @@
           },
           "sportive": {
             "auto": 525.6,
-            "main": 235.2
+            "main": 235.4
           },
           "van": {
             "auto": 532.9,
@@ -131,7 +131,7 @@
           },
           "concept": {
             "auto": 114.1,
-            "main": 42.1
+            "main": 42.2
           },
           "cox": {
             "auto": 118.1,

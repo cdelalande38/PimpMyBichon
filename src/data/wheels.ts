@@ -6,6 +6,7 @@
 // connaître d'aucun véhicule, ce que l'atelier pose : dessin, pneu, cotes par essieu, descente de
 // caisse. Une valeur inconnue ou hors limites retombe sur l'origine ou sur la borne.
 
+import { METEOS, PREPARATION, type ComportementPneu } from './adherence.ts';
 import type { Build, Hex, VehicleManifest, VehicleWheels, WheelSize } from './vehicleTypes.ts';
 
 export type WheelKind = 'car' | 'bike';
@@ -19,9 +20,11 @@ export interface RimDesign {
   hint?: string;
 }
 
-export interface TireType {
+export interface TireType extends ComportementPneu {
   id: string;
   label: string;
+  /** Le pneu dans une phrase, au pluriel, sans article : « pneus de route », « slicks ». */
+  nom?: string;
   hint?: string;
   /** Ce que la couleur libre du pneu colore : un liseré, le flanc blanc, ou les lettres. */
   mark: 'lisere' | 'flanc' | 'lettres';
@@ -31,6 +34,8 @@ export interface TireType {
   color: Hex;
   /** « Couleur du liseré », « Couleur du flanc »… */
   colorLabel: string;
+  // Comportement sur la route (src/data/adherence.ts, `ComportementPneu`) : `tenue` par météo (part de
+  // l'adhérence d'un pneu idéal) et `motricite` (facteur, 1 : un pneu de route).
 }
 
 /** Cote de référence d'un genre : la jante et le pneu y sont modelés, l'app les recale. */
@@ -61,12 +66,20 @@ export const WHEEL_TUNE = Object.freeze({
 /** Pièce peinte du pneu (partPaints) : la couleur du liseré, du flanc ou des lettres. */
 export const TIRE_PAINT = 'pneus';
 
-/** Préréglages d'assiette : part de la descente possible. */
+/**
+ * Préréglages d'assiette : part de la descente possible (0 à 1), ou, en dessous de 0, part de la montée
+ * possible (`RIDE_RISE`). L'assiette rehaussée est une nouveauté qui se débloque (src/data/preparation.ts,
+ * `ARTICLE_REHAUSSE`) ; les trois autres sont libres.
+ */
 export const RIDE_PRESETS: ReadonlyArray<{ id: string; label: string; hint: string; value: number }> = [
+  { id: 'rehaussee', label: 'Rehaussée', hint: 'Plus de garde au sol', value: -1 },
   { id: 'origine', label: 'Origine', hint: 'Comme sortie d’usine', value: 0 },
   { id: 'rabaissee', label: 'Rabaissée', hint: 'La moitié de la place', value: 0.5 },
   { id: 'au_sol', label: 'Posée au sol', hint: 'Le plus bas possible', value: 1 },
 ];
+
+/** Montée de caisse la plus forte d'une assiette rehaussée, en mètres, par genre (ressorts plus longs). */
+export const RIDE_RISE: Readonly<Record<WheelKind, number>> = Object.freeze({ car: 0.04, bike: 0.025 });
 
 /** Marge gardée entre le pneu et la voûte du passage de roue, et sous la caisse, en mètres. */
 const ARCH_MARGIN = 0.004;
@@ -77,6 +90,14 @@ const HEX = /^#[0-9a-f]{6}$/;
 
 type Raw = Record<string, unknown>;
 const isObject = (value: unknown): value is Raw => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** Comportement d'un pneu sur la route, dans ses bornes. */
+function comportementValide(tire: Raw): boolean {
+  const tenue = tire.tenue;
+  if (!isObject(tenue)) return false;
+  const ok = (value: unknown, min: number, max: number) => typeof value === 'number' && value >= min && value <= max;
+  return METEOS.every((meteo) => ok(tenue[meteo], 0.5, 1)) && ok(tire.motricite, 0.8, 1.2);
+}
 
 /** Valide le catalogue (erreur claire) et le rend typé. */
 export function validateCatalogue(raw: unknown): WheelCatalogue {
@@ -113,8 +134,19 @@ export function validateCatalogue(raw: unknown): WheelCatalogue {
       typeof tire.colorLabel !== 'string'
     ) {
       problems.push(`tires[${i}] doit porter id, label, mark (lisere, flanc ou lettres), color (#rrggbb) et colorLabel`);
+    } else if (!comportementValide(tire)) {
+      problems.push(`tires[${i}] (${tire.id}) doit porter tenue (sec, pluie, neige : de 0,5 à 1) et motricite (de 0,8 à 1,2)`);
     }
   });
+  // Écarts francs mais jouables : d'un pneu à l'autre, pas plus de PREPARATION.ecartPneu sur l'adhérence
+  // d'une météo (le pire d'un pneu face au meilleur d'un autre peut aller au double).
+  const valides = tires.filter((tire: unknown): tire is ComportementPneu & { id: string } => isObject(tire) && typeof tire.id === 'string' && comportementValide(tire));
+  for (const meteo of METEOS) {
+    const values = valides.map((tire) => tire.tenue[meteo]);
+    if (values.length > 1 && Math.max(...values) / Math.min(...values) > (1 + PREPARATION.ecartPneu) ** 2) {
+      problems.push(`tires : l'écart de tenue ${meteo === 'sec' ? 'au sec' : meteo === 'pluie' ? 'sous la pluie' : 'sur la neige'} dépasse ce qu'un joueur peut rattraper`);
+    }
+  }
   if (problems.length > 0) throw new Error(`Catalogue des roues invalide, ${where} : ${problems.join(' ; ')}.`);
   return raw as unknown as WheelCatalogue;
 }
@@ -182,7 +214,10 @@ export interface ResolvedWheels {
   width: number;
   rearWidth: number;
   aspect: number;
-  /** Part de la descente demandée (0 à 1), descente possible et descente posée, en mètres. */
+  /**
+   * Part de la descente demandée (0 à 1 ; en dessous de 0, part de la montée `RIDE_RISE`), descente
+   * possible et descente posée, en mètres (négative : la caisse monte).
+   */
   ride: number;
   maxDrop: number;
   drop: number;
@@ -192,7 +227,7 @@ export interface ResolvedWheels {
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-function tuned(build: Build | undefined, id: string): number | undefined {
+function tuned(build: Partial<Build> | undefined, id: string): number | undefined {
   const value = build?.tune?.[id];
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
@@ -210,14 +245,19 @@ export function maxDropFor(wheels: Pick<VehicleWheels, 'gap' | 'floor'>, grow: {
  * le manifeste et par le passage de roue), descente de caisse. `null` : le véhicule ne déclare pas
  * de roues.
  */
-export function resolveWheels(vehicle: Pick<VehicleManifest, 'kind' | 'wheels'>, build: Build | undefined, catalogue: WheelCatalogue = WHEEL_CATALOGUE): ResolvedWheels | null {
+export function resolveWheels(
+  vehicle: Pick<VehicleManifest, 'kind' | 'wheels'>,
+  build: Partial<Build> | undefined,
+  catalogue: WheelCatalogue = WHEEL_CATALOGUE,
+): ResolvedWheels | null {
   const wheels = vehicle.wheels;
   if (!wheels) return null;
-  const ride = clamp(tuned(build, WHEEL_TUNE.ride) ?? 0, 0, 1);
+  const ride = clamp(tuned(build, WHEEL_TUNE.ride) ?? 0, -1, 1);
+  const rise = RIDE_RISE[wheelKind(vehicle)];
   const fit = wheels.fit;
   if (!fit) {
     const maxDrop = maxDropFor(wheels, { front: 0, rear: 0 });
-    const drop = ride * maxDrop;
+    const drop = ride >= 0 ? ride * maxDrop : ride * rise;
     return {
       swap: false,
       rim: null,
@@ -268,7 +308,7 @@ export function resolveWheels(vehicle: Pick<VehicleManifest, 'kind' | 'wheels'>,
   const rear: AxleWheel = { ...rearSize, rim: rimRadius(rearSize.diameter), outer: outerRadius(rearSize), origin: originRear };
   const grow = { front: front.outer - originFront, rear: rear.outer - originRear };
   const maxDrop = maxDropFor(wheels, grow);
-  const drop = ride * maxDrop;
+  const drop = ride >= 0 ? ride * maxDrop : ride * rise;
   return {
     swap: true,
     rim,

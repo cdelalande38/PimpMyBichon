@@ -5,21 +5,21 @@
   "outil": "npm run courses:temps",
   "ecartsMeteo": {
     "pluie": 1.25,
-    "neige": 1.7
+    "neige": 1.75
   },
   "departs": {
     "fontvieille": {
       "tour1": {
         "auto": 364.4,
-        "main": 194.4,
+        "main": 194.5,
         "vehicules": {
           "bobber": {
             "auto": 364.2,
-            "main": 194.4
+            "main": 194.5
           },
           "concept": {
             "auto": 364.4,
-            "main": 161.8
+            "main": 160.9
           },
           "cox": {
             "auto": 370.6,
@@ -27,7 +27,7 @@
           },
           "sportive": {
             "auto": 364.2,
-            "main": 162.5
+            "main": 162.2
           },
           "van": {
             "auto": 367.2,
@@ -39,15 +39,15 @@
     "port": {
       "tour1": {
         "auto": 292.2,
-        "main": 148.9,
+        "main": 149.2,
         "vehicules": {
           "bobber": {
             "auto": 292.2,
-            "main": 148.9
+            "main": 149.2
           },
           "concept": {
             "auto": 291.9,
-            "main": 123.2
+            "main": 122.8
           },
           "cox": {
             "auto": 296.7,
@@ -55,11 +55,11 @@
           },
           "sportive": {
             "auto": 292.2,
-            "main": 124.1
+            "main": 124.2
           },
           "van": {
             "auto": 293.9,
-            "main": 179.1
+            "main": 178.5
           }
         }
       }
@@ -67,15 +67,15 @@
     "casino": {
       "tour1": {
         "auto": 205.8,
-        "main": 105.4,
+        "main": 105.1,
         "vehicules": {
           "bobber": {
             "auto": 205.8,
-            "main": 105.4
+            "main": 105.1
           },
           "concept": {
             "auto": 205.4,
-            "main": 86.9
+            "main": 86.8
           },
           "cox": {
             "auto": 209.1,
@@ -83,11 +83,11 @@
           },
           "sportive": {
             "auto": 205.8,
-            "main": 87.5
+            "main": 87.4
           },
           "van": {
             "auto": 207,
-            "main": 128
+            "main": 127.7
           }
         }
       }
@@ -111,7 +111,7 @@
           },
           "sportive": {
             "auto": 129.2,
-            "main": 51.3
+            "main": 51.1
           },
           "van": {
             "auto": 129.6,

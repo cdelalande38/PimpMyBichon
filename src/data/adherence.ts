@@ -49,7 +49,9 @@ export const PRUDENCE_AUTO = { frein: 0.9, freinPrevu: 0.6, reprise: 0.8 } as co
  * genre), multipliée par l'adhérence de la météo et le facteur de la transmission (une propulsion
  * gagne de la charge en accélérant, une traction en perd). Au-delà, les roues patinent : le patinage
  * (de 0 à 1) est plein quand la poussée du moteur dépasse la motricité de `plein` (part), et la
- * poussée transmise baisse alors de `perte` (part). Lissage du patinage (s). Le patinage se juge sur la
+ * poussée transmise baisse de `perte` (part) à chaque `plein` d'excès, sans plafond avant `perteMax`
+ * (vague U : avant, la perte s'arrêtait à `perte` ; des chevaux en plus sur la neige ne coûtaient
+ * rien, « adapter la puissance » n'avait pas de sens). Lissage du patinage (s). Le patinage se juge sur la
  * poussée que le couple du moteur peut donner en première (`couple` fois la puissance divisée par la
  * vitesse de première au régime de passage) : une petite voiture ne patine pas parce que la poussée du
  * pilote est bornée haut au départ. Le pilote borne déjà la
@@ -61,6 +63,7 @@ export const MOTRICITE = {
   transmission: { propulsion: 0.95, traction: 0.85, integrale: 1.1 } satisfies Record<Transmission, number>,
   plein: 0.6,
   perte: 0.15,
+  perteMax: 0.6,
   tau: 0.12,
   couple: 1.2,
 } as const;
@@ -120,4 +123,89 @@ export const SURVIRAGE = {
 /** Adhérence d'une météo (1 au sec) ; une météo inconnue compte comme le sec. */
 export function adherenceMeteo(weather: string | undefined): AdherenceMeteo {
   return (weather !== undefined && (ADHERENCE_METEO as Record<string, AdherenceMeteo>)[weather]) || ADHERENCE_METEO.sec;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Préparation (demande du 18 novembre 2026 : « il adaptera la puissance les suspensions et les pneu en
+// conséquence avant le début de la course ») : les pneus, leur largeur et l'assiette changent ce que le
+// véhicule tient, selon la météo. Tout est relatif au véhicule d'origine : `ADHERENCE_METEO` et
+// l'adhérence du manifeste (`performance.grip`) sont celles du véhicule sur ses pneus d'origine, à son
+// assiette d'origine ; le véhicule d'origine garde donc exactement sa conduite et ses temps de référence.
+// Chiffres plausibles pour un jeu, pas relevés : des écarts francs (5 à 15 %) mais jouables.
+
+/** Les trois météos, dans l'ordre où on les dit. */
+export const METEOS: readonly Weather[] = ['sec', 'pluie', 'neige'];
+
+/** Une valeur par météo. */
+export type ParMeteo = Readonly<Record<Weather, number>>;
+
+/**
+ * Comportement d'un pneu (catalogue des roues, `tires[].tenue` et `tires[].motricite`) : par météo, la
+ * part de l'adhérence d'un pneu idéal qu'il tient (de 0,5 à 1) ; motricité : facteur sur ce que les
+ * roues motrices transmettent (1 : un pneu de route).
+ */
+export interface ComportementPneu {
+  tenue: ParMeteo;
+  motricite: number;
+}
+
+/**
+ * Effets de la préparation sur la route.
+ * - `ecartPneu` : écart le plus fort, d'un pneu à celui d'origine, sur l'adhérence d'une météo (part) ;
+ *   la validation du catalogue le fait tenir.
+ * - `largeur` : par part d'écart de la largeur du pneu à celle d'origine (+0,2 : 20 % plus large), ce
+ *   que gagne l'adhérence (au sec, la gomme posée ; sous la pluie, l'aquaplanage ; sur la neige, un pneu
+ *   étroit coupe la couche) et la motricité au sec ; chaque effet borné à `max` (part).
+ * - `assiette` : effet à l'assiette posée au sol (`basse`, réglage 1) et rehaussée au plus (`haute`,
+ *   réglage −1), proportionnel entre les deux : adhérence par météo (au sol, plus vive au sec ; elle
+ *   racle la neige), roulis de caisse (facteur).
+ */
+export const PREPARATION = {
+  ecartPneu: 0.15,
+  largeur: { sec: 0.12, pluie: -0.12, neige: -0.12, motriciteSec: 0.15, max: 0.03 },
+  assiette: {
+    basse: { tenue: { sec: 0.06, pluie: 0, neige: -0.1 }, roulis: 0.6 },
+    haute: { tenue: { sec: -0.05, pluie: 0, neige: 0.06 }, roulis: 1.35 },
+  },
+} as const;
+
+/** Ce que la préparation change à la conduite, par rapport au véhicule d'origine (1 : rien). */
+export interface PreparationRoute {
+  /** Facteur sur l'adhérence (en courbe, au freinage), par météo. */
+  tenue: ParMeteo;
+  /** Facteur sur la motricité (ce que les roues motrices transmettent), par météo. */
+  motricite: ParMeteo;
+  /** Facteur sur le roulis de caisse d'une voiture. */
+  roulis: number;
+}
+
+const UN: ParMeteo = Object.freeze({ sec: 1, pluie: 1, neige: 1 });
+
+/** Le véhicule d'origine : rien ne change. */
+export const PREPARATION_ORIGINE: PreparationRoute = Object.freeze({ tenue: UN, motricite: UN, roulis: 1 });
+
+const borne = (value: number, max: number) => Math.max(-max, Math.min(max, Number.isFinite(value) ? value : 0));
+
+/**
+ * Facteurs de la préparation, fonction pure : le pneu posé et celui d'origine (absents : le véhicule
+ * garde ses roues, rien ne change), l'écart de largeur à l'origine (part), l'assiette (de −1, rehaussée
+ * au plus, à 1, posée au sol ; 0 : origine).
+ */
+export function facteursPreparation(pneu: ComportementPneu | null | undefined, origine: ComportementPneu | null | undefined, largeur: number, assiette: number): PreparationRoute {
+  const L = PREPARATION.largeur;
+  const a = Math.max(-1, Math.min(1, Number.isFinite(assiette) ? assiette : 0));
+  const cote = a >= 0 ? PREPARATION.assiette.basse : PREPARATION.assiette.haute;
+  const part = Math.abs(a);
+  const tenue = { sec: 1, pluie: 1, neige: 1 };
+  const motricite = { sec: 1, pluie: 1, neige: 1 };
+  const w = Number.isFinite(largeur) ? largeur : 0;
+  for (const meteo of METEOS) {
+    const pneuIci = pneu && origine ? pneu.tenue[meteo] / Math.max(0.1, origine.tenue[meteo]) : 1;
+    const largeurIci = 1 + borne(L[meteo] * w, L.max);
+    const assietteIci = 1 + cote.tenue[meteo] * part;
+    tenue[meteo] = pneuIci * largeurIci * assietteIci;
+    const gomme = pneu && origine ? pneu.motricite / Math.max(0.1, origine.motricite) : 1;
+    motricite[meteo] = tenue[meteo] * gomme * (meteo === 'sec' ? 1 + borne(L.motriciteSec * w, L.max) : 1);
+  }
+  return { tenue, motricite, roulis: 1 + (cote.roulis - 1) * part };
 }

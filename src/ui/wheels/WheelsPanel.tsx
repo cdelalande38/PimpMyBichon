@@ -4,8 +4,12 @@
 // données (src/data/wheels.ts, manifeste) : ajouter une jante ne touche pas à ce fichier. La couleur
 // et la finition des jantes restent dans Peinture (zone des jantes) : un bouton y mène. Chaque volet
 // porte son icône, chaque jante et chaque pneu son petit dessin, tiré de ses paramètres (src/ui/pictos/).
+// Chaque pneu dit son terrain (« Sec : +, pluie : −, neige : − − », src/data/preparation.ts) ; un pneu
+// nouveau se débloque avec des dollars, sur place : cadenas et prix, puis le bloc d'achat partagé.
 
 import { useState } from 'react';
+import { articleParId, type ArticleBoutique } from '../../data/boutique.ts';
+import { articlePneu, lignePneu } from '../../data/preparation.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import type { VehicleManifest } from '../../data/vehicleTypes.ts';
 import {
@@ -20,9 +24,14 @@ import {
   wheelsTouched,
   type ResolvedWheels,
 } from '../../data/wheels.ts';
+import { possedeDans } from '../../jeu/achats.ts';
 import { normalizeHex, useBuilds } from '../../state/builds.ts';
 import { useDock } from '../../state/dock.ts';
+import { useJeu } from '../../state/jeu.ts';
 import { Icon, type IconName } from '../icons.tsx';
+import { Achat } from '../jeu/Achat.tsx';
+import { dollars } from '../jeu/libelles.ts';
+import { Padlock } from '../paint/Padlock.tsx';
 import { PictoJante, PictoPneu } from '../pictos/Pictos.tsx';
 import { useRevealPressed } from '../scroll.ts';
 import './wheels.css';
@@ -94,10 +103,14 @@ function TireChoices({ vehicle, wheels }: { vehicle: VehicleManifest; wheels: Re
   const setPart = useBuilds((state) => state.setPart);
   const setPartPaint = useBuilds((state) => state.setPartPaint);
   const rememberColor = useBuilds((state) => state.rememberColor);
+  const acquis = useJeu((state) => state.articles);
+  const [achat, setAchat] = useState<ArticleBoutique | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const tires = tiresFor(vehicle);
   const current = wheels.tire?.id;
   const row = useRevealPressed<HTMLDivElement>(current ?? '');
   const color = wheels.tireColor;
+  const poser = (id: string) => setPart(vehicle.id, WHEEL_SLOTS.tire, id === vehicle.wheels?.fit?.tire ? null : id);
   const pick = (hex: string) => {
     const value = normalizeHex(hex);
     if (!value) return;
@@ -107,23 +120,68 @@ function TireChoices({ vehicle, wheels }: { vehicle: VehicleManifest; wheels: Re
   return (
     <>
       <div ref={row} className="chips" role="group" aria-label="Type de pneu">
-        {tires.map((tire) => (
-          <button
-            key={tire.id}
-            type="button"
-            className="chip chip-picto"
-            aria-pressed={current === tire.id}
-            data-pneu={tire.id}
-            onClick={() => setPart(vehicle.id, WHEEL_SLOTS.tire, tire.id === vehicle.wheels?.fit?.tire ? null : tire.id)}
-          >
-            <PictoPneu tire={tire} />
-            <span className="chip-text">
-              <b>{tire.label}</b>
-              {tire.hint && <small>{tire.hint}</small>}
-            </span>
-          </button>
-        ))}
+        {tires.map((tire) => {
+          // Le pneu d'origine n'est jamais une marchandise ; les autres, s'ils ont un article.
+          const article = tire.id === vehicle.wheels?.fit?.tire ? undefined : articleParId(articlePneu(tire.id));
+          const locked = article !== undefined && !possedeDans({ articles: acquis }, article.id);
+          const terrain = lignePneu(tire.id);
+          return (
+            <button
+              key={tire.id}
+              type="button"
+              className="chip chip-picto"
+              aria-pressed={current === tire.id}
+              aria-label={`${tire.label}${locked ? `, à débloquer pour ${dollars(article.prix ?? 0)}` : ''}. ${terrain}`}
+              title={tire.hint}
+              data-pneu={tire.id}
+              data-verrou={locked ? 'ferme' : undefined}
+              onClick={() => {
+                setMessage(null);
+                if (locked) setAchat(achat?.id === article.id ? null : article);
+                else {
+                  setAchat(null);
+                  poser(tire.id);
+                }
+              }}
+            >
+              <PictoPneu tire={tire} />
+              <span className="chip-text">
+                <span className="wheels-titre">
+                  <b>{tire.label}</b>
+                  {locked && (
+                    <small className="wheels-prix">
+                      <Padlock open={false} className="wheels-cadenas" />
+                      {dollars(article.prix ?? 0)}
+                    </small>
+                  )}
+                </span>
+                <small className="wheels-terrain" data-terrain={tire.id}>
+                  {terrain}
+                </small>
+              </span>
+            </button>
+          );
+        })}
       </div>
+      {achat && (
+        <Achat
+          article={achat}
+          nom={`les ${achat.label.toLowerCase()}`}
+          fait={`${achat.label} débloqués : ils sont posés.`}
+          onClose={() => setAchat(null)}
+          onDone={(texte) => {
+            const id = tires.find((tire) => articlePneu(tire.id) === achat.id)?.id;
+            setAchat(null);
+            if (id) poser(id);
+            setMessage(texte);
+          }}
+        />
+      )}
+      {message && (
+        <p className="wheels-message" role="status">
+          {message}
+        </p>
+      )}
       <div className="wheels-swatches" role="group" aria-label={wheels.tire?.colorLabel ?? 'Couleur du pneu'}>
         <span className="wheels-swatch-label">{wheels.tire?.colorLabel ?? 'Couleur'}</span>
         {MARK_SWATCHES.map((swatch) => (
