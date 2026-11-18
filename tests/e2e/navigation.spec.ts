@@ -284,7 +284,8 @@ test.describe('navigation du dock', () => {
         // Fermé : la seule pastille, au pouce.
         await close(page).click();
         await expect(reopen(page)).toBeVisible();
-        expect(await expectDockUnderThumb(page, viewport.height, `${label}, fermé`)).toBe(1);
+        // Menu replié : les deux gestes de l'app, « Personnaliser » et « Jouer » (retour du 18 novembre 2026).
+        expect(await expectDockUnderThumb(page, viewport.height, `${label}, fermé`)).toBe(2);
       }
     }
     await shot(page, '05-ferme-360-texte-tres-grand');

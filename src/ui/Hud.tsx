@@ -7,7 +7,6 @@ import { placeOf, resolveVehicle } from '../data/vehicles.ts';
 import { precachePercent, setInstallLater, usePwa } from '../pwa/pwaStore.ts';
 import { applyUpdate, promptInstall } from '../pwa/register.ts';
 import { useBuilds } from '../state/builds.ts';
-import { useDock } from '../state/dock.ts';
 import { useView } from '../state/view.ts';
 import { openAtelier } from './AtelierSwitcher.tsx';
 import { Icon } from './icons.tsx';
@@ -145,19 +144,8 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
             </button>
           )}
           <RadioButton />
-          {/* La sortie de nuit était introuvable au deuxième niveau du menu (retour du 16 novembre
-              2026) : son raccourci ouvre Garage › Sortie, où l'on choisit la carte. */}
-          {!sceneFailed && (
-            <button
-              type="button"
-              className="quick-btn"
-              aria-label="Sortie"
-              title="Sortie : choisir la carte et rouler"
-              onClick={() => useDock.getState().openEntry('sortie')}
-            >
-              <Icon name="route" />
-            </button>
-          )}
+          {/* Le raccourci rond « Sortie » est devenu le bouton « Jouer » du bas de l'écran, à côté de
+              « Personnaliser » (src/ui/Dock.tsx, retour du 18 novembre 2026). */}
           {/* La carrière : la météo et le numéro du prochain rendez-vous, tant qu'elle n'est pas bouclée ; un appui l'ouvre. */}
           {!sceneFailed && <PastilleCarriere />}
           {!sceneFailed && <InteriorButton />}

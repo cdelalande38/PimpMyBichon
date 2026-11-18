@@ -88,6 +88,22 @@ function moreWhenExpanded(footer: HTMLElement, level: MenuLevel): boolean {
 }
 
 /** Ligne de repère : Retour, le fil (section · entrée · niveaux), la poignée (si utile), Fermer le menu. */
+/**
+ * « Jouer » : ouvre le menu de la sortie (Garage › Sortie : Libre ou Carrière, src/ui/drive/SortieEntree.tsx).
+ * Il a pris la place du raccourci rond « Sortie » de la colonne de droite (retour du 18 novembre 2026 :
+ * « au même niveau que le bouton configuration. Désormais c'est [un] élément important de l'application »).
+ */
+function BoutonJouer({ className }: { className: string }) {
+  return (
+    <button type="button" className={className} title="Jouer : choisir une sortie ou la carrière" onClick={() => useDock.getState().openEntry('sortie')}>
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path className="dock-jouer-picto" d="M8 5.5v13l10.5-6.5z" />
+      </svg>
+      Jouer
+    </button>
+  );
+}
+
 function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boolean }) {
   const chosen = useDock((state) => state.section);
   const menu = useDock((state) => state.menu);
@@ -145,6 +161,8 @@ function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boo
           </>
         )}
       </p>
+      {/* Aux sections, « Jouer » reste à une touche (menu de la sortie : Libre ou Carrière). */}
+      {level === 'sections' && <BoutonJouer className="btn cta dock-jouer-tete" />}
       {handle && <DockHandle />}
       <button type="button" className="dock-close" aria-label="Fermer le menu" title="Fermer le menu" onClick={() => setClosed(true)}>
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -321,12 +339,16 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
     return (
       <footer ref={footer} className="dock" data-taille="ferme" inert={settling || covered} aria-hidden={covered || undefined}>
         {banners}
-        <button type="button" className="dock-open" onClick={() => setClosed(false)}>
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M4 17.5h6M14 17.5h6M4 6.5h10M18 6.5h2M10 15v5M14 4v5" />
-          </svg>
-          Personnaliser
-        </button>
+        {/* Les deux gestes de l'app, au même rang (retour du 18 novembre 2026) : personnaliser, et jouer. */}
+        <div className="dock-actions">
+          <button type="button" className="dock-open" onClick={() => setClosed(false)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 17.5h6M14 17.5h6M4 6.5h10M18 6.5h2M10 15v5M14 4v5" />
+            </svg>
+            Personnaliser
+          </button>
+          <BoutonJouer className="dock-open dock-jouer" />
+        </div>
       </footer>
     );
   }

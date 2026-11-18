@@ -1276,6 +1276,47 @@ button {
   pointer-events: auto;
 }
 
+/* « Personnaliser » et « Jouer » côte à côte ; sur un écran étroit ou en grand texte, l'un sous l'autre. */
+.dock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.625rem;
+  pointer-events: none;
+}
+
+.dock-jouer-tete svg {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* « Jouer » : le geste principal, plein rouge comme « Sortir ». */
+.dock-open.dock-jouer {
+  background: var(--rouge);
+  color: var(--night);
+}
+
+.dock-jouer-picto {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.dock .dock-head .btn.dock-jouer-tete {
+  flex: none;
+  gap: 0.375rem;
+  min-height: 48px;
+  padding: 0 1rem 0 0.75rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
 @media (hover: hover) {
   .dock-close:hover,
   .dock-open:hover {
