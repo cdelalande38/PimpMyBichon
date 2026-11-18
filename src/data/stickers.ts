@@ -6,13 +6,14 @@
 // Rangement en packs, aux identifiants convenus avec l'économie (src/jeu/) : un motif se pose si
 // `possede('pack-<son pack>')` ou `possede('sticker-<son id>')` ; le pack « depart » est offert.
 // Les stickers de trophée n'ont pas de pack : ils se gagnent un par un (hauts faits).
+// La bibliothèque compte 82 motifs (cahier des charges, § 5.3 : au moins 80) : 45 de la vague S, 37 de la vague U.
 //
 // Ce fichier ne contient que des données et des fonctions pures (les adresses des dessins sont dans
 // src/data/stickersFichiers.ts, qui passe par Vite) : la scène (src/scene/vehicle/
 // livree.ts), le panneau (src/ui/stickers/) et les parcours s'en servent.
 
 /** Packs de la bibliothèque ; `null` : sticker de trophée, hors pack. */
-export type StickerPack = 'depart' | 'flammes' | 'course' | 'atelier';
+export type StickerPack = 'depart' | 'flammes' | 'course' | 'atelier' | 'rue' | 'tapis';
 
 export interface StickerPackSpec {
   id: StickerPack;
@@ -26,6 +27,8 @@ export const STICKER_PACKS: readonly StickerPackSpec[] = Object.freeze([
   { id: 'flammes', label: 'Flammes', gratuit: false },
   { id: 'course', label: 'Course', gratuit: false },
   { id: 'atelier', label: 'Atelier', gratuit: false },
+  { id: 'rue', label: 'Rue', gratuit: false },
+  { id: 'tapis', label: 'Tapis vert', gratuit: false },
 ]);
 
 export interface StickerMotif {
@@ -57,6 +60,12 @@ export const STICKER_MOTIFS: readonly StickerMotif[] = Object.freeze([
     { id: 'eclair-simple', label: 'Éclair', ratio: 1, taille: 0.3 },
     { id: 'etoile-cinq-branches', label: 'Étoile', ratio: 1, symetrique: true, taille: 0.26 },
     { id: 'etoile-filante', label: 'Étoile filante', ratio: 2, taille: 0.22 },
+    // Vague U : de quoi varier sans rien payer.
+    { id: 'vagues-bandeau', label: 'Bandeau de vagues', ratio: 4, taille: 0.14 },
+    { id: 'soleil-retro', label: 'Soleil rétro', ratio: 1, symetrique: true, taille: 0.3 },
+    { id: 'soleil-rayons', label: 'Soleil à rayons', ratio: 1, symetrique: true, taille: 0.3 },
+    { id: 'tribal-soleil', label: 'Soleil tribal', ratio: 1, taille: 0.28 },
+    { id: 'tribal-ornement', label: 'Ornement tribal', ratio: 1, symetrique: true, taille: 0.3 },
   ]),
   ...pack('flammes', [
     { id: 'flammes-classiques-long', label: 'Flammes longues', ratio: 2, taille: 0.4 },
@@ -76,6 +85,12 @@ export const STICKER_MOTIFS: readonly StickerMotif[] = Object.freeze([
     { id: 'sponsor-turbo-mamie', label: 'Turbo Mamie', ratio: 2, texte: true, taille: 0.16 },
     { id: 'sponsor-patin-fumant', label: 'Patin Fumant', ratio: 2, texte: true, taille: 0.16 },
     { id: 'sponsor-pot-perce', label: 'Pot Percé', ratio: 2, texte: true, taille: 0.16 },
+    // Vague U : bandes et numéros de plus.
+    { id: 'bande-fleche-rallye', label: 'Bande flèche', ratio: 4, taille: 0.14 },
+    { id: 'bande-diagonales', label: 'Lames inclinées', ratio: 2, taille: 0.22 },
+    { id: 'damier-onde', label: 'Damier ondulé', ratio: 4, taille: 0.14 },
+    { id: 'numero-hexagone-36', label: 'Hexagone n° 36', ratio: 1, texte: true, taille: 0.3 },
+    { id: 'numero-carre-5', label: 'Carré n° 5', ratio: 1, texte: true, taille: 0.3 },
   ]),
   ...pack('atelier', [
     { id: 'cle-molette-boulon', label: 'Clé à molette', ratio: 1, taille: 0.26 },
@@ -90,6 +105,33 @@ export const STICKER_MOTIFS: readonly StickerMotif[] = Object.freeze([
     { id: 'sponsor-bougie-noyee', label: 'Bougie Noyée', ratio: 1, texte: true, taille: 0.24 },
     { id: 'piston-aile', label: 'Piston ailé', ratio: 2, symetrique: true, taille: 0.24 },
     { id: 'tete-de-mort-face', label: 'Crâne de face', ratio: 1, taille: 0.3 },
+    // Vague U : l'outillage et cinq enseignes inventées de plus.
+    { id: 'engrenage', label: 'Engrenage', ratio: 1, symetrique: true, taille: 0.26 },
+    { id: 'volant', label: 'Volant', ratio: 1, symetrique: true, taille: 0.26 },
+    { id: 'tournevis-croises', label: 'Tournevis croisés', ratio: 1, taille: 0.26 },
+    { id: 'sponsor-joint-claque', label: 'Joint Claqué', ratio: 2, texte: true, taille: 0.16 },
+    { id: 'sponsor-courroie-cassee', label: 'Courroie Cassée', ratio: 2, texte: true, taille: 0.16 },
+    { id: 'sponsor-ecrou-fou', label: 'Écrou Fou', ratio: 2, texte: true, taille: 0.16 },
+    { id: 'sponsor-moteur-mou', label: 'Moteur Mou', ratio: 2, texte: true, taille: 0.16 },
+    { id: 'sponsor-cle-perdue', label: 'Clé Perdue', ratio: 2, texte: true, taille: 0.16 },
+  ]),
+  // Vague U : le pack de la rue (graffitis, peinture, griffes) et celui du tapis vert (dés et cartes).
+  ...pack('rue', [
+    { id: 'graffiti-vroum', label: 'Graffiti Vroum', ratio: 2, texte: true, taille: 0.2 },
+    { id: 'graffiti-rat', label: 'Graffiti Rat', ratio: 1, texte: true, taille: 0.3 },
+    { id: 'eclaboussure-coulures', label: 'Coulures de peinture', ratio: 1, taille: 0.3 },
+    { id: 'eclaboussure-impact', label: 'Impact de peinture', ratio: 1, taille: 0.3 },
+    { id: 'griffure-dechirure', label: 'Déchirure', ratio: 1, taille: 0.3 },
+    { id: 'toile-araignee', label: 'Araignée et sa toile', ratio: 1, symetrique: true, taille: 0.28 },
+    { id: 'tete-de-mort-pistons', label: 'Crâne et pistons', ratio: 1, symetrique: true, taille: 0.3 },
+    { id: 'aile-chauve-souris', label: 'Ailes de chauve-souris', ratio: 2, symetrique: true, taille: 0.2 },
+  ]),
+  ...pack('tapis', [
+    { id: 'de-cinq', label: 'Dé, face cinq', ratio: 1, taille: 0.26 },
+    { id: 'des-paire', label: 'Paire de dés', ratio: 2, taille: 0.22 },
+    { id: 'carte-as-pique', label: 'As de pique', ratio: 1, taille: 0.3 },
+    { id: 'carte-as-coeur', label: 'As de cœur', ratio: 1, taille: 0.3 },
+    { id: 'cartes-enseignes', label: 'Les quatre enseignes', ratio: 4, taille: 0.14 },
   ]),
   // Trophées : un par article de haut fait (src/data/hautsFaits.ts, l'économie : `sticker-trophee-…`),
   // aucun pack. Dessins repris de la bibliothèque (assets-src/stickers/), renommés d'après leur haut fait.
@@ -104,12 +146,25 @@ export const STICKER_MOTIFS: readonly StickerMotif[] = Object.freeze([
     { id: 'trophee-vitesse', label: 'Pointe de vitesse', ratio: 1, symetrique: true, taille: 0.3 },
     // Longue glisse : quatre traces de griffes, comme des pneus en travers (griffure-quatre-longues).
     { id: 'trophee-glisse', label: 'Longue glisse', ratio: 2, taille: 0.24 },
-    // Neige : étoile à huit branches, en attendant un vrai flocon dessiné (etoile-nautique).
-    { id: 'trophee-neige', label: 'Neige', ratio: 1, taille: 0.26 },
+    // Neige : un flocon à six branches, dessiné pour le projet (vague U).
+    { id: 'trophee-neige', label: 'Neige', ratio: 1, symetrique: true, taille: 0.26 },
     // Kilomètres parcourus : ailes d'aigle (aile-aigle-paire).
     { id: 'trophee-route', label: 'Grande route', ratio: 2, symetrique: true, taille: 0.24 },
     // Toutes les cartes : le crâne baroudeur à bandana (tete-de-mort-bandana).
     { id: 'trophee-cartes', label: 'Toutes les cartes', ratio: 1, taille: 0.3 },
+    // Vague U : six récompenses de plus, d'après des hauts faits qui ne rapportaient que des dollars.
+    // Pied au plancher (160 km/h) : l'éclair en médaillon.
+    { id: 'eclair-triangle', label: 'Éclair en triangle', ratio: 1, taille: 0.28 },
+    // Il pleut, on roule : la pluie d'éclairs.
+    { id: 'eclair-pluie', label: 'Pluie d’éclairs', ratio: 1, taille: 0.28 },
+    // Dix bornes : la grande aile.
+    { id: 'aile-seule', label: 'Grande aile', ratio: 1, taille: 0.28 },
+    // Vingt poussées de NOS : la lame tribale.
+    { id: 'tribal-lame', label: 'Lame tribale', ratio: 2, taille: 0.2 },
+    // Carrière bouclée : les drapeaux croisés à l'arrivée.
+    { id: 'drapeaux-croises', label: 'Drapeaux croisés', ratio: 1, symetrique: true, taille: 0.3 },
+    // Jamais content (cinq records battus) : les étincelles.
+    { id: 'etincelles', label: 'Étincelles', ratio: 1, taille: 0.26 },
   ]),
 ]);
 

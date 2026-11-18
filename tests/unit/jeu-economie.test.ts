@@ -92,9 +92,9 @@ describe('prix et rythme', () => {
     expect(Math.ceil((articleParId('pack-flammes')?.prix ?? 0) / ECONOMIE.tour1.base)).toBeLessThanOrEqual(4);
   });
 
-  it('le pack de départ est offert, les trois autres s’achètent, les trophées ne s’achètent pas', () => {
+  it('le pack de départ est offert, les cinq autres s’achètent, les trophées ne s’achètent pas', () => {
     expect(articleParId('pack-depart')).toMatchObject({ prix: 0, offert: true });
-    expect(A_VENDRE.filter((a) => a.famille === 'pack').map((a) => a.id)).toEqual(['pack-flammes', 'pack-course', 'pack-atelier']);
+    expect(A_VENDRE.filter((a) => a.famille === 'pack').map((a) => a.id)).toEqual(['pack-flammes', 'pack-course', 'pack-atelier', 'pack-rue', 'pack-tapis']);
     for (const trophee of TROPHEES) {
       expect(trophee.prix).toBeNull();
       expect(trophee.famille).toBe('sticker');
@@ -223,7 +223,8 @@ describe('clôture d’une course', () => {
     const { bilan } = cloturer(etatVide(), r, REGLES);
     const ids = bilan.hautsFaits.map((h) => h.id);
     expect(ids).toEqual(expect.arrayContaining(['trois-tours-propres', 'longue-glisse', 'glisse', 'vitesse-200', 'vitesse-160', 'vitesse-120', 'sous-la-neige', 'trois-tours']));
-    expect(bilan.deblocages.map((a) => a.id).sort()).toEqual(['sticker-trophee-glisse', 'sticker-trophee-neige', 'sticker-trophee-propre', 'sticker-trophee-vitesse']);
+    // 200 km/h passe aussi 160 km/h : l'éclair en médaillon (vague U) vient avec les quatre trophées.
+    expect(bilan.deblocages.map((a) => a.id).sort()).toEqual(['sticker-eclair-triangle', 'sticker-trophee-glisse', 'sticker-trophee-neige', 'sticker-trophee-propre', 'sticker-trophee-vitesse']);
   });
 
   it('un record battu avec une ancienne marque donne « Meilleur que toi-même »', () => {

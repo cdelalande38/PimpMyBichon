@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { backToSections, changedRatio, openApp, openEntry, readBuilds, reloadSaved, waitForBench, waitForScene } from './helpers.ts';
+import { backToSections, changedRatio, openApp, openEntry, readBuilds, reloadSaved, waitForBench, waitForScene, type SavedBuilds } from './helpers.ts';
 
 // Stickers (§ 5.3, jalon 4) : choisir une zone, poser un motif de la bibliothèque, le déplacer au
 // doigt, le colorer, recharger : il est toujours là. Pendant la pose, la caméra du garage montre la
@@ -279,6 +279,218 @@ test('stickers : chaque zone d’une voiture et d’une moto cadrée, pack achet
       await expect(dock(page).locator('.stk-layer').first()).toBeVisible();
     }
   }
+});
+
+/** Colonne des boutons ronds à droite (portrait) : son bord gauche et son bas. */
+async function rail(page: Page): Promise<{ left: number; bottom: number }> {
+  return page.locator('header.hud nav.quick').evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    return { left: box.left, bottom: box.bottom };
+  });
+}
+
+test('stickers : en portrait, la colonne des boutons ronds ne recouvre aucune zone cadrée, sur chaque véhicule', async ({ page }) => {
+  test.setTimeout(600_000);
+  await openApp(page);
+  await waitForBench(page);
+  const mesures: string[] = [];
+  for (const id of VEHICLES) {
+    await chooseVehicle(page, id);
+    await openEntry(page, 'Stickers');
+    const zones = dock(page).getByRole('group', { name: 'Zones de stickers' });
+    const labels = (await zones.getByRole('button').allInnerTexts()).map((text) => text.split('\n')[0]!.trim()).filter((text) => !/Symétrie/i.test(text));
+    for (const label of labels) {
+      await zones.getByRole('button', { name: label, exact: true }).tap();
+      const zone = await dock(page).locator('.stickers').getAttribute('data-zone');
+      const { frame } = await expectFramed(page, zone!);
+      const column = await rail(page);
+      mesures.push(`${id}/${zone} : zone ${Math.round(frame.left)}-${Math.round(frame.right)} × ${Math.round(frame.top)}-${Math.round(frame.bottom)}, colonne à partir de x = ${Math.round(column.left)} jusqu'à y = ${Math.round(column.bottom)}`);
+      // Ni sous la colonne (à droite d'elle et à sa hauteur), ni à moins de quelques pixels d'elle.
+      const sous = frame.right > column.left - 6 && frame.top < column.bottom + 6;
+      expect(sous, mesures.at(-1)).toBe(false);
+    }
+    await backToSections(page);
+  }
+  console.log(mesures.join('\n'));
+});
+
+/** Réécrit la sauvegarde des builds avec le build d'un véhicule modifié (les autres champs sont gardés), puis relance l'app. */
+async function ecrireBuild(page: Page, vehicle: string, change: (build: Record<string, unknown>) => Record<string, unknown>): Promise<void> {
+  const saved = ((await readBuilds(page)) ?? { current: null, builds: {}, recents: [] }) as SavedBuilds;
+  const next = { ...saved, current: vehicle, builds: { ...saved.builds, [vehicle]: change({ paints: {}, ...saved.builds[vehicle] }) } };
+  await page.evaluate(
+    (value) =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open('pimpmybichon');
+        open.onupgradeneeded = () => open.result.createObjectStore('kv');
+        open.onerror = () => fail(open.error);
+        open.onsuccess = () => {
+          const transaction = open.result.transaction('kv', 'readwrite');
+          transaction.objectStore('kv').put(JSON.stringify({ state: value, version: 1 }), 'pmb-builds');
+          transaction.oncomplete = () => done();
+          transaction.onerror = () => fail(transaction.error);
+        };
+      }),
+    next,
+  );
+  await reloadSaved(page);
+  await waitForBench(page);
+}
+
+/** Pose un motif par la bibliothèque (pack Départ, offert) et rend la couleur que le calque reçoit. */
+async function poserEtLireCouleur(page: Page, vehicle: string, zone: string): Promise<string> {
+  const avant = (await savedLayers(page, vehicle, zone)).length;
+  await dock(page).getByRole('button', { name: 'Ajouter un sticker' }).tap();
+  await dock(page).locator('[data-bibliotheque] [data-motif="numero-rond-7"]').tap();
+  await expect.poll(async () => (await savedLayers(page, vehicle, zone)).length).toBe(avant + 1);
+  return (await savedLayers(page, vehicle, zone)).at(-1)!.color;
+}
+
+test('stickers : la couleur de départ se détache de la peinture (blanc sur le sombre, noir sur le clair), les stickers déjà posés ne changent pas', async ({ page }) => {
+  test.setTimeout(300_000);
+  mkdirSync(dir, { recursive: true });
+  await openApp(page);
+  await waitForBench(page);
+  // Le van d'origine est blanc : un sticker blanc ne s'y verrait pas, il part en noir.
+  await chooseVehicle(page, 'van');
+  await openEntry(page, 'Stickers');
+  const zone = (await dock(page).locator('.stickers').getAttribute('data-zone'))!;
+  expect(await poserEtLireCouleur(page, 'van', zone)).toBe('#0b0b0e');
+  await backToSections(page);
+  // Le même van repeint en noir : le prochain sticker part en blanc, le premier reste noir.
+  await ecrireBuild(page, 'van', (build) => ({ ...build, paints: { ...(build.paints as object), carrosserie: { color: '#0b0b0e' } } }));
+  await openEntry(page, 'Stickers');
+  expect(await poserEtLireCouleur(page, 'van', zone)).toBe('#f4f1ea');
+  const posees = await savedLayers(page, 'van', zone);
+  expect(posees.map((item) => item.color)).toEqual(['#0b0b0e', '#f4f1ea']);
+  await page.screenshot({ path: resolve(dir, 'couleur-depart-van-noir.png') });
+});
+
+interface SeedLayer {
+  motif: string;
+  x: number;
+  y: number;
+  size: number;
+  rotation?: number;
+  flip?: boolean;
+  color?: string;
+}
+
+/** Écrit des calques dans la sauvegarde d'un véhicule (sans passer par l'interface), puis relance l'app. */
+async function poserCalques(page: Page, vehicle: string, layers: Record<string, SeedLayer[]>): Promise<void> {
+  const stickers = {
+    layers: Object.fromEntries(Object.entries(layers).map(([zone, list]) => [zone, list.map((item) => ({ rotation: 0, flip: false, color: '#f4f1ea', opacity: 1, ...item }))])),
+    mirror: false,
+  };
+  await ecrireBuild(page, vehicle, (build) => ({ ...build, stickers }));
+}
+
+// Captures de revue de la vague U (à la demande : PMB_CAPTURES_STICKERS = dossier de sortie) : des motifs
+// posés sur chaque véhicule, la bibliothèque aux sept onglets, le garde-boue avant du bobber.
+// PMB_REVUE_VEHICULES=bobber,van : ne refaire que ces véhicules.
+const revue = process.env.PMB_CAPTURES_STICKERS;
+test('stickers : captures de revue de la vague U (sur demande)', async ({ page }) => {
+  test.skip(!revue, 'captures de revue : définir PMB_CAPTURES_STICKERS');
+  test.setTimeout(900_000);
+  const sortie = revue!;
+  mkdirSync(sortie, { recursive: true });
+  const orange = '#ff6a00';
+  const seulement = process.env.PMB_REVUE_VEHICULES?.split(',');
+  const voulu = (id: string) => !seulement || seulement.includes(id);
+  const cadrer = async (zone: string, label: string, nom: string) => {
+    await openEntry(page, 'Stickers');
+    const zones = dock(page).getByRole('group', { name: 'Zones de stickers' });
+    await zones.getByRole('button', { name: label }).first().tap();
+    await expectFramed(page, zone);
+    await quiet(page);
+    await page.screenshot({ path: resolve(sortie, nom) });
+  };
+  await openApp(page);
+  await waitForScene(page);
+  await poserJeu(page, { solde: 5000, articles: { 'pack-flammes': true, 'pack-course': true, 'pack-atelier': true, 'pack-rue': true, 'pack-tapis': true }, hautsFaits: {}, cumuls: {} });
+  await waitForBench(page);
+
+  if (voulu('cox')) {
+    await chooseVehicle(page, 'cox');
+    await poserCalques(page, 'cox', {
+      flanc_gauche: [
+        { motif: 'bande-fleche-rallye', x: 0.5, y: 0.16, size: 0.2 },
+        { motif: 'sponsor-joint-claque', x: 0.2, y: 0.58, size: 0.34, color: orange },
+        { motif: 'numero-hexagone-36', x: 0.5, y: 0.6, size: 0.56 },
+        { motif: 'drapeaux-croises', x: 0.8, y: 0.6, size: 0.5 },
+      ],
+    });
+    await cadrer('flanc_gauche', 'Flanc gauche', 'pose-cox-flanc.png');
+  }
+
+  if (voulu('van')) {
+    await chooseVehicle(page, 'van');
+    await poserCalques(page, 'van', {
+      flanc_gauche: [
+        { motif: 'soleil-retro', x: 0.2, y: 0.55, size: 0.9, color: orange },
+        { motif: 'vagues-bandeau', x: 0.55, y: 0.18, size: 0.3, color: '#132a72' },
+        { motif: 'sponsor-ecrou-fou', x: 0.62, y: 0.6, size: 0.48, color: '#0b0b0e' },
+        { motif: 'des-paire', x: 0.88, y: 0.6, size: 0.5, color: '#b0121c' },
+      ],
+    });
+    await cadrer('flanc_gauche', 'Flanc gauche', 'pose-van-flanc.png');
+  }
+
+  if (voulu('bobber')) {
+    await chooseVehicle(page, 'bobber');
+    await poserCalques(page, 'bobber', {
+      garde_boue_avant: [{ motif: 'etincelles', x: 0.5, y: 0.55, size: 0.12, color: orange }],
+      garde_boue: [{ motif: 'cartes-enseignes', x: 0.5, y: 0.5, size: 0.14, color: orange }],
+      reservoir_gauche: [{ motif: 'carte-as-pique', x: 0.5, y: 0.5, size: 0.24, color: '#f4f1ea' }],
+    });
+    await cadrer('garde_boue_avant', 'Garde-boue avant', 'pose-bobber-garde-boue-avant.png');
+    await cadrer('garde_boue', 'Garde-boue arrière', 'pose-bobber-garde-boue-arriere.png');
+  }
+
+  if (voulu('sportive')) {
+    await chooseVehicle(page, 'sportive');
+    await poserCalques(page, 'sportive', {
+      reservoir: [{ motif: 'engrenage', x: 0.5, y: 0.5, size: 0.3, color: '#0b0b0e' }],
+      flanc_gauche: [{ motif: 'numero-carre-5', x: 0.55, y: 0.5, size: 0.34, color: '#0b0b0e' }],
+    });
+    await cadrer('flanc_gauche', 'Flanc gauche', 'pose-sportive-flanc.png');
+  }
+
+  // Tous les motifs de la vague U posés sur les flancs du van (blanc, seize par zone) : lisibles de près, en
+  // grande densité (PMB_DSF=2 pour les voir de plus près). Seul 'planche' dans PMB_REVUE_VEHICULES les refait.
+  if (seulement?.includes('planche')) {
+    const nouveaux = (process.env.PMB_NOUVEAUX_MOTIFS ?? '').split(' ').filter(Boolean);
+    const ratios = new Map<string, number>(JSON.parse(process.env.PMB_RATIOS_MOTIFS ?? '[]') as [string, number][]);
+    const cellule = (motif: string, index: number): SeedLayer => {
+      const colonne = index % 8;
+      const rang = Math.floor(index / 8);
+      const ratio = ratios.get(motif) ?? 1;
+      return { motif, x: (colonne + 0.5) / 8, y: rang === 0 ? 0.72 : 0.28, size: Math.min(0.58 / ratio, 0.6), color: '#0b0b0e' };
+    };
+    await chooseVehicle(page, 'van');
+    await poserCalques(page, 'van', {
+      flanc_gauche: nouveaux.slice(0, 16).map(cellule),
+      flanc_droit: nouveaux.slice(16, 32).map(cellule),
+      face_avant: nouveaux.slice(32).map((motif, index) => ({ ...cellule(motif, index), y: 0.5, x: (index + 0.5) / Math.max(nouveaux.length - 32, 1) })),
+    });
+    for (const [zone, label, nom] of [['flanc_gauche', 'Flanc gauche', 'planche-van-gauche.png'], ['flanc_droit', 'Flanc droit', 'planche-van-droite.png']] as const) {
+      await openEntry(page, 'Stickers');
+      await dock(page).getByRole('group', { name: 'Zones de stickers' }).getByRole('button', { name: label, exact: true }).tap();
+      const { frame } = await expectFramed(page, zone);
+      await quiet(page);
+      await page.screenshot({ path: resolve(sortie, nom), clip: { x: Math.max(0, frame.left - 6), y: Math.max(0, frame.top - 6), width: Math.min(390, frame.right - frame.left + 12), height: frame.bottom - frame.top + 12 } });
+      await backToSections(page);
+    }
+  }
+
+  // Bibliothèque : l'onglet Atelier (vingt motifs), puis les trophées.
+  await openEntry(page, 'Stickers');
+  await dock(page).getByRole('button', { name: 'Ajouter un sticker' }).tap();
+  const bibliotheque = dock(page).locator('[data-bibliotheque]');
+  await bibliotheque.getByRole('group', { name: 'Packs de stickers' }).getByRole('button', { name: 'Atelier' }).tap();
+  await page.screenshot({ path: resolve(sortie, 'bibliotheque-atelier.png') });
+  await bibliotheque.getByRole('group', { name: 'Packs de stickers' }).getByRole('button', { name: 'Trophées' }).tap();
+  await page.screenshot({ path: resolve(sortie, 'bibliotheque-trophees.png') });
 });
 
 test.describe('stickers en paysage', () => {

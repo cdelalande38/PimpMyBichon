@@ -31,6 +31,8 @@ export const PACKS: readonly ArticleBoutique[] = [
   { id: 'pack-flammes', famille: 'pack', label: 'Pack Flammes', prix: 150, description: 'Des flammes pour le capot et les flancs, de la braise au grand brasier.' },
   { id: 'pack-course', famille: 'pack', label: 'Pack Course', prix: 300, description: 'L’allure d’une voiture d’atelier qui a déjà gagné : bandes larges, écussons, numéros de course.' },
   { id: 'pack-atelier', famille: 'pack', label: 'Pack Atelier', prix: 500, description: 'Les autocollants de la maison : outils, étincelles et fausses marques de pièces inventées.' },
+  { id: 'pack-rue', famille: 'pack', label: 'Pack Rue', prix: 250, description: 'Graffitis, éclaboussures, griffes et crânes : l’allure d’une voiture qui n’a pas peur du bitume.' },
+  { id: 'pack-tapis', famille: 'pack', label: 'Pack Tapis vert', prix: 200, description: 'Dés et cartes à jouer : pour les chanceux, et pour ceux qui font semblant de l’être.' },
 ];
 
 /**
@@ -47,6 +49,12 @@ export const TROPHEES: readonly ArticleBoutique[] = [
   { id: 'sticker-trophee-neige', famille: 'sticker', label: 'Trophée des neiges', prix: null, description: 'Gagné en finissant une course sous la neige.' },
   { id: 'sticker-trophee-route', famille: 'sticker', label: 'Trophée du grand voyage', prix: null, description: 'Gagné en roulant cent kilomètres en tout.' },
   { id: 'sticker-trophee-cartes', famille: 'sticker', label: 'Trophée des cartes', prix: null, description: 'Gagné en ayant couru sur toutes les cartes.' },
+  { id: 'sticker-eclair-triangle', famille: 'sticker', label: 'Éclair en triangle', prix: null, description: 'Gagné en passant 160 km/h en course.' },
+  { id: 'sticker-eclair-pluie', famille: 'sticker', label: 'Pluie d’éclairs', prix: null, description: 'Gagné en finissant une course sous la pluie.' },
+  { id: 'sticker-aile-seule', famille: 'sticker', label: 'Grande aile', prix: null, description: 'Gagné en roulant dix kilomètres en tout.' },
+  { id: 'sticker-tribal-lame', famille: 'sticker', label: 'Lame tribale', prix: null, description: 'Gagné en lançant vingt poussées de NOS.' },
+  { id: 'sticker-drapeaux-croises', famille: 'sticker', label: 'Drapeaux croisés', prix: null, description: 'Gagné en bouclant la carrière.' },
+  { id: 'sticker-etincelles', famille: 'sticker', label: 'Étincelles', prix: null, description: 'Gagné en battant cinq fois tes records.' },
 ];
 
 /**

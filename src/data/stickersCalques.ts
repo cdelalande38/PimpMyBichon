@@ -308,3 +308,57 @@ export function updateLayer(
 export function layerCount(stickers: BuildStickers | undefined): number {
   return Object.values(stickers?.layers ?? {}).reduce((sum, list) => sum + list.length, 0);
 }
+
+// ————————————————————————————————————————————————————————————————————————————————————————
+// Couleur de départ d'un sticker : choisie par contraste avec la peinture de la zone, pour qu'un
+// sticker neuf se voie toujours (un blanc sur une caisse blanche ne se voyait pas). Ne touche jamais
+// aux stickers déjà posés : seul le calque qu'on ajoute est concerné.
+
+/** Les deux couleurs de départ : le blanc cassé et le noir de la palette de peinture (src/data/paintColors.ts). */
+export const STICKER_COLOR_LIGHT: Hex = '#f4f1ea';
+export const STICKER_COLOR_DARK: Hex = '#0b0b0e';
+
+/** Contraste minimal (WCAG, de 1 à 21) au-dessous duquel un sticker se perd dans la peinture. */
+export const STICKER_MIN_CONTRAST = 3;
+
+function channel(value: number): number {
+  const v = value / 255;
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+}
+
+/** Luminance relative d'une couleur '#rrggbb' (WCAG 2) : 0 noir, 1 blanc. */
+export function relativeLuminance(hex: string): number {
+  const color = normalizeHexLoose(hex) ?? '#000000';
+  const r = parseInt(color.slice(1, 3), 16);
+  const g = parseInt(color.slice(3, 5), 16);
+  const b = parseInt(color.slice(5, 7), 16);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+/** Rapport de contraste entre deux couleurs (de 1, identiques, à 21, noir sur blanc). */
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * Couleur de départ d'un sticker neuf sur une peinture : celle du calque qu'on vient de régler
+ * (`previous`) tant qu'elle se détache de la peinture ; sinon le blanc cassé ou le noir, selon celui
+ * qui contraste le plus. Sans peinture connue : le blanc cassé.
+ */
+export function startColor(paint: string | undefined, previous?: string): Hex {
+  if (!paint) return normalizeHexLoose(previous) ?? STICKER_COLOR_LIGHT;
+  const kept = normalizeHexLoose(previous);
+  if (kept && contrastRatio(kept, paint) >= STICKER_MIN_CONTRAST) return kept;
+  return contrastRatio(STICKER_COLOR_LIGHT, paint) >= contrastRatio(STICKER_COLOR_DARK, paint) ? STICKER_COLOR_LIGHT : STICKER_COLOR_DARK;
+}
+
+/** Peinture d'une zone de livrée : celle de la première de ses zones de peinture que le build résout. */
+export function zonePaintColor(zone: Pick<LiveryZone, 'paints'>, paints: Readonly<Record<string, { color: string }>>): string | undefined {
+  for (const id of zone.paints) {
+    const paint = paints[id];
+    if (paint) return paint.color;
+  }
+  return undefined;
+}

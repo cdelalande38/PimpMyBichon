@@ -10,7 +10,7 @@ import { HAUTS_FAITS } from '../../src/data/hautsFaits.ts';
 import { motifsOf, stickerArticle } from '../../src/data/stickers.ts';
 import { zoneFrame, type LiveryZone } from '../../src/data/stickersCalques.ts';
 import type { VehicleManifest } from '../../src/data/vehicleTypes.ts';
-import { COVER_TOLERANCE, useZoneFocus } from '../../src/scene/cadrageZone.ts';
+import { COVER_TOLERANCE, freeBelowRail, freeBesideRail, placeBesideRail, RAIL_GAP, RAIL_KEEP_WIDTH, railCovers, useZoneFocus } from '../../src/scene/cadrageZone.ts';
 import {
   blendOrbit,
   createZoneRig,
@@ -284,5 +284,88 @@ describe('bibliothèque : pack à acheter, trophée à gagner', () => {
       expect(hint.split(/[.!?](\s|$)/).filter((part) => part.trim().length > 1)).toHaveLength(1);
     }
     expect(trophyHint(motifsOf(null).find((motif) => motif.id === 'trophee-or')!)).toBe(`Pour le gagner : ${HAUTS_FAITS.find((def) => def.id === 'premier-or')!.description.replace(/^D/, 'd')}`);
+  });
+});
+
+describe('colonne des boutons ronds (portrait)', () => {
+  // Mesure faite en 390 × 844, van et Cox : la colonne commence à x = 326 et descend jusqu'à y = 302.
+  const RAIL = { left: 326, bottom: 302 };
+  // Une moto a un bouton rond de moins (pas de bouton de conduite) : la colonne s'arrête à y = 242.
+  const RAIL_MOTO = { left: 326, bottom: 242 };
+
+  it('la zone recouverte se reconnaît : à droite du bord de la colonne et à sa hauteur', () => {
+    expect(railCovers({ left: 20, top: 290, right: 360, bottom: 352 }, RAIL)).toBe(true);
+    expect(railCovers({ left: 20, top: 320, right: 360, bottom: 380 }, RAIL)).toBe(false);
+    expect(railCovers({ left: 20, top: 200, right: 300, bottom: 380 }, RAIL)).toBe(false);
+    expect(railCovers({ left: 20, top: 200, right: 360, bottom: 380 }, null)).toBe(false);
+    // L'écart gardé compte : à moins de RAIL_GAP de la colonne, elle est déjà trop près.
+    expect(railCovers({ left: 20, top: 200, right: RAIL.left - RAIL_GAP + 1, bottom: 380 }, RAIL)).toBe(true);
+  });
+
+  it('la partie libre est coupée à gauche de la colonne, ou commencée sous elle, jamais vide, jamais élargie', () => {
+    const free = PORTRAIT.free;
+    expect(freeBesideRail(free, RAIL)).toEqual({ ...free, right: RAIL.left - RAIL_GAP });
+    expect(freeBesideRail({ ...free, right: 200 }, RAIL).right).toBe(200);
+    expect(freeBesideRail({ ...free, left: 340 }, RAIL).right).toBe(341);
+    expect(freeBelowRail(free, RAIL)).toEqual({ ...free, top: RAIL.bottom + RAIL_GAP });
+    expect(freeBelowRail({ ...free, top: 400 }, RAIL).top).toBe(400);
+    expect(freeBelowRail({ ...free, bottom: 300 }, RAIL).top).toBe(299);
+  });
+
+  it('sur les cinq véhicules, aucune zone ne finit sous la colonne ; un flanc est descendu sous elle et garde sa taille, une zone trop haute se serre à sa gauche', () => {
+    const places = new Map<string, string>();
+    for (const manifest of MANIFESTS) {
+      for (const zone of manifest.livery ?? []) {
+        const input = { width: PORTRAIT.width, height: PORTRAIT.height, zone, framing: zoneFramingFor(zone.face), turn: 0, polar: POLAR };
+        const seul = fitZone({ ...input, free: PORTRAIT.free });
+        const rail = manifest.kind === 'bike' ? RAIL_MOTO : RAIL;
+        const placed = placeBesideRail((free) => fitZone({ ...input, free }), PORTRAIT.free, rail);
+        const label = `${manifest.id}/${zone.id}`;
+        places.set(label, placed.place);
+        expect(railCovers(placed.fit.zoneFrame, rail), label).toBe(false);
+        expect(inside(placed.fit.frame, placed.free), label).toBe(true);
+        expect(inside(placed.free, PORTRAIT.free), label).toBe(true);
+        const gardee = (placed.fit.zoneFrame.right - placed.fit.zoneFrame.left) / (seul.zoneFrame.right - seul.zoneFrame.left);
+        if (placed.place === 'libre') expect(placed.fit).toEqual(seul);
+        if (placed.place === 'dessous') expect(gardee, label).toBeGreaterThanOrEqual(RAIL_KEEP_WIDTH);
+        // Dans tous les cas, au moins 70 % de la largeur qu'elle aurait sans colonne.
+        expect(gardee, label).toBeGreaterThan(0.7);
+      }
+    }
+    // Les flancs bas de la Cox et du concept sont descendus sous la colonne, à pleine taille ; le van,
+    // la sportive et le réservoir du bobber, trop hauts pour cela, se serrent à sa gauche ; les zones
+    // déjà à l'écart ne bougent pas.
+    expect(places.get('cox/flanc_gauche')).toBe('dessous');
+    expect(places.get('concept/flanc_droit')).toBe('dessous');
+    expect(places.get('van/flanc_gauche')).toBe('cote');
+    expect(places.get('sportive/flanc_gauche')).toBe('cote');
+    expect(places.get('cox/capot')).toBe('libre');
+    expect(places.get('bobber/garde_boue_avant')).toBe('libre');
+  });
+
+  it('la colonne mesurée se garde dans le store, une petite variation ne la remesure pas, la rendre `null` l’efface', () => {
+    const { setRail } = useZoneFocus.getState();
+    setRail(RAIL);
+    const first = useZoneFocus.getState().rail;
+    setRail({ left: RAIL.left + 2, bottom: RAIL.bottom - 3 });
+    expect(useZoneFocus.getState().rail).toBe(first);
+    setRail({ left: RAIL.left, bottom: RAIL.bottom + COVER_TOLERANCE + 1 });
+    expect(useZoneFocus.getState().rail?.bottom).toBe(RAIL.bottom + COVER_TOLERANCE + 1);
+    setRail(null);
+    expect(useZoneFocus.getState().rail).toBeNull();
+  });
+});
+
+describe('bobber : un cadre de livrée par garde-boue', () => {
+  it('le garde-boue avant a son cadre, posé sur la même peinture que l’arrière, devant lui et regardé de face (de dessus, la lampe le cache)', () => {
+    const bobber = MANIFESTS.find((manifest) => manifest.id === 'bobber')!;
+    const front = bobber.livery?.find((zone) => zone.id === 'garde_boue_avant');
+    const rear = bobber.livery?.find((zone) => zone.id === 'garde_boue');
+    expect(front).toBeDefined();
+    expect(front?.paints).toEqual(rear?.paints);
+    expect(front?.face).toBe('+x');
+    expect(front!.center[0]).toBeGreaterThan(0.5);
+    expect(rear!.center[0]).toBeLessThan(-0.5);
+    expect(front!.label).toBe('Garde-boue avant');
   });
 });

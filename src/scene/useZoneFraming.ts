@@ -12,7 +12,7 @@ import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'reac
 import { Vector3, type PerspectiveCamera } from 'three';
 import { ZONE_FRAMING_MS, zoneFramingFor } from '../data/framings.ts';
 import type { VehicleManifest } from '../data/vehicleTypes.ts';
-import { useZoneFocus } from './cadrageZone.ts';
+import { placeBesideRail, useZoneFocus } from './cadrageZone.ts';
 import { createZoneRig, dropZone, fitZone, requestZone, stepZone, zoneCorners, type FreeZone, type OrbitPose, type ScreenFrame, type ZoneFit, type ZonePhase, type ZoneRig } from './fit.ts';
 
 interface OrbitHandle {
@@ -68,6 +68,7 @@ const toPose = (position: Vector3, target: Vector3): OrbitPose => ({ position: [
 export function useZoneFraming({ vehicle, turn, width, height, paysage, bandTop, bandBottom, zone, allowed, instant, polar, controls, home, stage }: ZoneFramingOptions): ZoneFraming {
   const focus = useZoneFocus((state) => state.focus);
   const coverTop = useZoneFocus((state) => state.coverTop);
+  const rail = useZoneFocus((state) => state.rail);
   const spec = useMemo(() => {
     if (focus?.vehicle !== vehicle.id) return undefined;
     return focus.box ? { id: focus.zone, ...focus.box } : vehicle.livery?.find((item) => item.id === focus.zone);
@@ -78,12 +79,18 @@ export function useZoneFraming({ vehicle, turn, width, height, paysage, bandTop,
     ? { left: zone?.left ?? 0, right: zone?.right ?? width, top: bandTop, bottom: height }
     : { left: 0, right: width, top: bandTop, bottom: coverTop ?? bandBottom };
   const freeKey = `${Math.round(free.left)},${Math.round(free.top)},${Math.round(free.right)},${Math.round(free.bottom)}`;
-  const fit = useMemo(() => {
+  // Portrait : si la zone cadrée passerait sous la colonne des boutons ronds (bout d'un flanc long),
+  // elle est cadrée sous la colonne, ou à sa gauche si elle est trop haute ; sinon rien ne change.
+  const resolved = useMemo(() => {
     if (!spec) return null;
     const [left, top, right, bottom] = freeKey.split(',').map(Number) as [number, number, number, number];
-    return fitZone({ width, height, zone: spec, framing: zoneFramingFor(spec.face), turn, free: { left, top, right, bottom }, polar });
-  }, [spec, width, height, turn, freeKey, polar]);
-  const key = spec ? `${vehicle.id}|${spec.id}|${width}x${height}|${freeKey}|${turn}` : null;
+    const framing = zoneFramingFor(spec.face);
+    const cadrer = (free: { left: number; top: number; right: number; bottom: number }) => fitZone({ width, height, zone: spec, framing, turn, free, polar });
+    return placeBesideRail(cadrer, { left, top, right, bottom }, paysage ? null : rail);
+  }, [spec, width, height, turn, freeKey, polar, paysage, rail]);
+  const fit = resolved?.fit ?? null;
+  const usedKey = resolved ? `${Math.round(resolved.free.left)},${Math.round(resolved.free.top)},${Math.round(resolved.free.right)},${Math.round(resolved.free.bottom)}` : freeKey;
+  const key = spec ? `${vehicle.id}|${spec.id}|${width}x${height}|${usedKey}|${turn}` : null;
 
   const rig = useRef<ZoneRig>(createZoneRig());
   const [phase, setPhase] = useState<ZonePhase>('out');
@@ -153,7 +160,7 @@ export function useZoneFraming({ vehicle, turn, width, height, paysage, bandTop,
     last[2] = Math.round(right);
     last[3] = Math.round(bottom);
     putData(element, 'zoneEcran', last.join(','));
-    putData(element, 'cadrageLibre', freeKey);
+    putData(element, 'cadrageLibre', usedKey);
   }, 0);
 
   return { engaged, phase, fit, rig };

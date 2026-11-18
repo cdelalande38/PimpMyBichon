@@ -4,6 +4,9 @@ import 'fake-indexeddb/auto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { BoxGeometry, Group, Matrix4, Mesh, MeshPhysicalMaterial, ShaderLib, Vector3 } from 'three';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { ARTICLES, articleParId } from '../../src/data/boutique.ts';
+import { HAUTS_FAITS } from '../../src/data/hautsFaits.ts';
+import { PAINT_COLORS } from '../../src/data/paintColors.ts';
 import { lockHint, motifsOf, STICKER_MOTIFS, STICKER_PACKS, stickerById, stickerUnlocked, type StickerMotif } from '../../src/data/stickers.ts';
 import {
   addLayer,
@@ -18,10 +21,16 @@ import {
   projectPoint,
   removeLayer,
   sanitizeStickers,
+  contrastRatio,
   setMirror,
+  startColor,
+  STICKER_COLOR_DARK,
+  STICKER_COLOR_LIGHT,
+  STICKER_MIN_CONTRAST,
   updateLayer,
   zoneFrame,
   zoneLayers,
+  zonePaintColor,
   type BuildStickers,
   type LiveryZone,
   type StickerLayer,
@@ -44,12 +53,22 @@ const FLANKS: LiveryZone[] = [
 const layer = (patch: Partial<StickerLayer> = {}): StickerLayer => ({ motif: 'numero-rond-7', x: 0.3, y: 0.5, size: 0.3, rotation: 20, flip: false, color: '#ff6a00', opacity: 1, ...patch });
 
 describe('bibliothèque', () => {
-  it('quatre packs aux identifiants convenus, assez de motifs, des trophées hors pack', () => {
-    expect(STICKER_PACKS.map((pack) => pack.id)).toEqual(['depart', 'flammes', 'course', 'atelier']);
+  it('six packs aux identifiants convenus, au moins 80 motifs, des trophées hors pack', () => {
+    expect(STICKER_PACKS.map((pack) => pack.id)).toEqual(['depart', 'flammes', 'course', 'atelier', 'rue', 'tapis']);
     expect(motifsOf('depart').length).toBeGreaterThanOrEqual(8);
-    for (const pack of ['flammes', 'course', 'atelier'] as const) expect(motifsOf(pack).length).toBeGreaterThanOrEqual(6);
-    // Un trophée par article des hauts faits (l'économie : `sticker-trophee-…`).
-    expect(motifsOf(null).map((motif) => motif.id)).toEqual(['or', 'series', 'propre', 'vitesse', 'glisse', 'neige', 'route', 'cartes'].map((name) => `trophee-${name}`));
+    for (const pack of ['flammes', 'course', 'atelier', 'rue', 'tapis'] as const) expect(motifsOf(pack).length).toBeGreaterThanOrEqual(5);
+    // Cahier des charges, § 5.3 : au moins 80 motifs au lancement.
+    expect(STICKER_MOTIFS.length).toBeGreaterThanOrEqual(80);
+    // Un trophée par article de haut fait (l'économie : `sticker-…`) : les huit de la vague S, puis les six de la vague U.
+    expect(motifsOf(null).map((motif) => motif.id)).toEqual([
+      ...['or', 'series', 'propre', 'vitesse', 'glisse', 'neige', 'route', 'cartes'].map((name) => `trophee-${name}`),
+      'eclair-triangle',
+      'eclair-pluie',
+      'aile-seule',
+      'tribal-lame',
+      'drapeaux-croises',
+      'etincelles',
+    ]);
     expect(new Set(STICKER_MOTIFS.map((motif) => motif.id)).size).toBe(STICKER_MOTIFS.length);
   });
 
@@ -281,5 +300,83 @@ describe('rendu de la livrée', () => {
     expect(rig.texture).toBeNull();
     expect(material.customProgramCacheKey()).toBe(rig.materials[0]?.original.cacheKey.call(material));
     expect(createLiveryRig({ livery: [] } as unknown as VehicleManifest, body, new Map())).toBeNull();
+  });
+});
+
+describe('rangement des 82 motifs : libre, pack à acheter ou récompense', () => {
+  it('chaque motif est offert, dans un pack à vendre, ou la récompense d’un seul haut fait', () => {
+    for (const motif of STICKER_MOTIFS) {
+      if (motif.pack === 'depart') continue;
+      if (motif.pack !== null) {
+        const pack = articleParId(`pack-${motif.pack}`);
+        expect(pack?.prix, `${motif.id} : pack ${motif.pack}`).toBeGreaterThan(0);
+        continue;
+      }
+      const article = `sticker-${motif.id}`;
+      expect(articleParId(article), `${motif.id} : article`).toBeDefined();
+      expect(HAUTS_FAITS.filter((def) => def.recompense.articles?.includes(article)).length, `${motif.id} : haut fait`).toBe(1);
+    }
+  });
+
+  it('les packs à vendre restent dans la fourchette des prix (150 à 500 $) et chaque article offert par un haut fait existe', () => {
+    for (const pack of STICKER_PACKS.filter((item) => !item.gratuit)) {
+      const prix = articleParId(`pack-${pack.id}`)?.prix ?? 0;
+      expect(prix, pack.id).toBeGreaterThanOrEqual(150);
+      expect(prix, pack.id).toBeLessThanOrEqual(500);
+    }
+    for (const def of HAUTS_FAITS) for (const article of def.recompense.articles ?? []) expect(ARTICLES.some((item) => item.id === article), `${def.id} → ${article}`).toBe(true);
+    // Les prix existants ne bougent pas.
+    expect(['pack-flammes', 'pack-course', 'pack-atelier'].map((id) => articleParId(id)?.prix)).toEqual([150, 300, 500]);
+  });
+
+  it('au moins quatre motifs de plus sont offerts, et six récompenses de plus se gagnent avec des hauts faits qui ne donnaient que des dollars', () => {
+    expect(motifsOf('depart').length).toBeGreaterThanOrEqual(14);
+    expect(motifsOf(null).length).toBe(14);
+    const sansArticle = ['vitesse-160', 'sous-la-pluie', 'dix-kilometres', 'nos-vingt', 'carriere-bouclee', 'cinq-records'];
+    for (const id of sansArticle) expect(HAUTS_FAITS.find((def) => def.id === id)?.recompense.articles?.length, id).toBe(1);
+  });
+
+  it('chaque libellé est unique et en français soigné (majuscule, pas de trait d’union en tête)', () => {
+    const labels = STICKER_MOTIFS.map((motif) => motif.label);
+    expect(new Set(labels).size).toBe(labels.length);
+    for (const label of labels) expect(label, label).toMatch(/^\p{Lu}/u);
+  });
+});
+
+describe('couleur de départ d’un sticker', () => {
+  const noir = '#0b0b0e';
+  const blanc = '#f0efe9';
+
+  it('blanc cassé sur une peinture sombre, noir sur une peinture claire', () => {
+    expect(startColor(noir)).toBe(STICKER_COLOR_LIGHT);
+    expect(startColor('#0a3a46')).toBe(STICKER_COLOR_LIGHT);
+    expect(startColor('#b0121c')).toBe(STICKER_COLOR_LIGHT);
+    expect(startColor(blanc)).toBe(STICKER_COLOR_DARK);
+    expect(startColor('#e6dcc0')).toBe(STICKER_COLOR_DARK);
+    expect(startColor('#ff6a00')).toBe(STICKER_COLOR_DARK);
+  });
+
+  it('sur chaque peinture de la palette, le départ se détache d’au moins 4 pour 1', () => {
+    for (const color of PAINT_COLORS) expect(contrastRatio(startColor(color.hex), color.hex), color.id).toBeGreaterThanOrEqual(4);
+  });
+
+  it('la couleur du calque qu’on règle est gardée tant qu’elle se voit, remplacée sinon', () => {
+    expect(startColor('#0a3a46', '#ff6a00')).toBe('#ff6a00');
+    expect(startColor(blanc, STICKER_COLOR_LIGHT)).toBe(STICKER_COLOR_DARK);
+    expect(contrastRatio(STICKER_COLOR_LIGHT, blanc)).toBeLessThan(STICKER_MIN_CONTRAST);
+    expect(startColor(noir, '#0b0b0e')).toBe(STICKER_COLOR_LIGHT);
+  });
+
+  it('sans peinture connue : la couleur du calque réglé, ou le blanc cassé ; une couleur illisible est ignorée', () => {
+    expect(startColor(undefined)).toBe(STICKER_COLOR_LIGHT);
+    expect(startColor(undefined, '#ff0000')).toBe('#ff0000');
+    expect(startColor(blanc, 'pas une couleur')).toBe(STICKER_COLOR_DARK);
+  });
+
+  it('la peinture d’une zone est celle de la première zone de peinture que le build résout', () => {
+    const paints = { capot: { color: '#112233' }, carrosserie: { color: '#ffffff' } };
+    expect(zonePaintColor({ paints: ['inconnue', 'carrosserie', 'capot'] }, paints)).toBe('#ffffff');
+    expect(zonePaintColor({ paints: ['capot'] }, paints)).toBe('#112233');
+    expect(zonePaintColor({ paints: ['inconnue'] }, paints)).toBeUndefined();
   });
 });

@@ -42,8 +42,10 @@ import {
   removeLayer,
   setMirror,
   SIZE_MIN,
+  startColor,
   twinOf,
   updateLayer,
+  zonePaintColor,
   type BuildStickers,
   type LiveryZone,
   type StickerLayer,
@@ -51,7 +53,7 @@ import {
 import { stickerUrl } from "../../data/stickersFichiers.ts";
 import { resolveVehicle } from "../../data/vehicles.ts";
 import { useZoneFocus } from "../../scene/cadrageZone.ts";
-import { useBuilds } from "../../state/builds.ts";
+import { resolvePaints, useBuilds } from "../../state/builds.ts";
 import { useJeu } from "../../state/jeu.ts";
 import { useView } from "../../state/view.ts";
 import { Achat } from "../jeu/Achat.tsx";
@@ -92,7 +94,8 @@ function MotifThumb({ motif, color }: { motif: string; color?: string }) {
 
 export function StickersPanel() {
   const vehicle = resolveVehicle(useBuilds((state) => state.current));
-  const saved = useBuilds((state) => state.builds[vehicle.id]?.stickers);
+  const build = useBuilds((state) => state.builds[vehicle.id]);
+  const saved = build?.stickers;
   const setStickers = useBuilds((state) => state.setStickers);
   // Ce qui est acheté ou gagné (src/state/jeu.ts) : le panneau suit un achat ou un haut fait sans
   // qu'on ait à le rouvrir.
@@ -146,6 +149,31 @@ export function StickersPanel() {
     return () => {
       useZoneFocus.getState().setFocus(null);
       useZoneFocus.getState().setCoverTop(null);
+      useZoneFocus.getState().setRail(null);
+    };
+  }, []);
+  // Portrait : la colonne des boutons ronds à droite (radio, photo, atelier) recouvre le bout d'un
+  // flanc long ; la scène cadre alors la zone à sa gauche. Paysage : la colonne est à gauche et la
+  // partie libre l'évite déjà, rien à dire.
+  useEffect(() => {
+    const column = document.querySelector<HTMLElement>("header.hud nav.quick");
+    const measure = () => {
+      const box = column?.getBoundingClientRect();
+      useZoneFocus
+        .getState()
+        .setRail(
+          box && box.width > 0 && box.left > window.innerWidth / 2
+            ? { left: Math.round(box.left), bottom: Math.round(box.bottom) }
+            : null,
+        );
+    };
+    measure();
+    const observer = column ? new ResizeObserver(measure) : null;
+    if (column) observer?.observe(column);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
     };
   }, []);
   // Haut du panneau à l'écran (le dock qui le porte) : la zone se cadre au-dessus. Gelé pendant la
@@ -232,7 +260,10 @@ export function StickersPanel() {
       } else setNotice(`${motif.label}. ${trophyHint(motif)}`);
       return;
     }
-    const color = layer?.color ?? "#f4f1ea";
+    // Couleur de départ : celle du calque qu'on règle tant qu'elle se voit sur la peinture de la zone,
+    // sinon le blanc ou le noir, selon le contraste (les stickers déjà posés ne changent pas).
+    const paint = zonePaintColor(zone, resolvePaints(vehicle, build));
+    const color = startColor(paint, layer?.color);
     const next = addLayer(layers, zone, motif, color);
     if (!next) {
       setNotice(
