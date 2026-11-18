@@ -79,12 +79,14 @@ import {
 import { FrameMeter } from './FrameMeter.tsx';
 import { Garage } from './garage/Garage.tsx';
 import { SceneProbe } from './SceneProbe.tsx';
+import { useZoneFraming } from './useZoneFraming.ts';
 import { buildPanel } from './vehicle/tableau.ts';
 import { forgetModel, VehicleModel, type VehicleMeasure } from './vehicle/VehicleModel.tsx';
 import { bodyPoint, STILL_BODY, useBodyPose } from './vehicle/wheels.ts';
 
 /** Angle vertical borné de l'orbite (src/data/garage.ts). */
 const { minPolar: MIN_POLAR, maxPolar: MAX_POLAR } = GARAGE.orbit;
+const POLAR_RANGE = { min: MIN_POLAR, max: MAX_POLAR } as const;
 /** Plan proche de l'atelier (la vue intérieure le rapproche). */
 const NEAR = 0.1;
 /** Haut du dock compact, en part de la hauteur de l'écran, tant qu'il n'est pas mesuré. */
@@ -437,7 +439,28 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     look: { yaw: 0, pitch: 0 },
     fov: 60,
   });
-  const rotating = ((mayRotate && idle) || measuring) && outside;
+  // Contrôles d'orbite et vue d'atelier choisie au doigt (plus bas) : le cadrage d'une zone de stickers les lit.
+  const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
+  const orbit = useRef({ position: new Vector3(), target: new Vector3(), applied: new Vector3(), input: null as VehicleFrameInput | null, identity: '' });
+  // Custom › Stickers : la zone choisie, en grand au-dessus du panneau ; la rotation lente s'arrête (src/scene/useZoneFraming.ts).
+  const zoneView = useZoneFraming({
+    vehicle,
+    turn,
+    width,
+    height,
+    paysage,
+    bandTop,
+    bandBottom,
+    zone: freeZone,
+    allowed: outside && !photo && !measuring && viewMode === 'atelier',
+    instant: reducedMotion || photo,
+    polar: POLAR_RANGE,
+    controls,
+    home: orbit,
+    stage,
+  });
+  const zoneHeld = zoneView.phase !== 'out';
+  const rotating = ((mayRotate && idle) || measuring) && outside && !zoneView.engaged && !zoneHeld;
   const invalidate = useThree((state) => state.invalidate);
   useEffect(() => {
     if (rotating) invalidate();
@@ -462,8 +485,10 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // compact (le levier et le bas du tableau de bord restent dans l'image).
   // Paysage : aucun décalage en hauteur (le menu est sur le côté) ; en largeur, la vue glisse vers la
   // gauche, menu ouvert, pour que le véhicule soit au milieu de la zone libre (même mécanisme).
-  const shiftGoal = photo || paysage ? 0 : outside ? dockShiftFrom(bandBottom, dockTop) : dockShift(height, dockTop ?? bandBottom);
-  const shiftXGoal = photo || !paysage || !menuOpen ? 0 : zoneShift(width, freeZone);
+  // Zone de stickers cadrée : la vue glisse pour mettre la zone au milieu de ce que le panneau laisse libre.
+  const zoneShifted = !photo && zoneView.fit !== null && (zoneView.phase === 'entering' || zoneView.phase === 'in');
+  const shiftGoal = zoneShifted ? (zoneView.fit?.shiftY ?? 0) : photo || paysage ? 0 : outside ? dockShiftFrom(bandBottom, dockTop) : dockShift(height, dockTop ?? bandBottom);
+  const shiftXGoal = zoneShifted ? (zoneView.fit?.shiftX ?? 0) : photo || !paysage || !menuOpen ? 0 : zoneShift(width, freeZone);
   const shift = useRef({ value: 0, from: 0, goal: 0, x: 0, xFrom: 0, xGoal: 0, start: 0, applied: '' });
   useEffect(() => {
     invalidate();
@@ -563,7 +588,6 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // 120 i/s qu'à 60) ; avant sa mise à jour (priorité −1), on règle sa vitesse sur la durée de
   // l'image, pas borné après un repos (src/render/frameMeter.ts, slowSpinSpeed), et son
   // amortissement de même (controlsDamping : à 60 i/s, inchangé).
-  const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   // Entrée et sortie : on part de la caméra telle qu'elle est (même au milieu d'une transition).
   const instant = reducedMotion || photo;
   const getThree = useThree((state) => state.get);
@@ -572,10 +596,9 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   // La mémoire n'est pas rognée par la plage de zoom : un écran de passage (le paysage annoncé avant sa
   // taille) ne doit pas faire perdre le zoom à l'aller-retour. `applied` : la pose que la caméra avait
   // quand la mémoire l'a posée ; la mémoire ne relit la caméra que si le doigt l'a déplacée depuis.
-  const orbit = useRef({ position: new Vector3(), target: new Vector3(), applied: new Vector3(), input: null as VehicleFrameInput | null, identity: '' });
   useFrame((state) => {
     const memory = orbit.current;
-    if (interior.current.phase !== 'out' || photo || !controls.current) return;
+    if (interior.current.phase !== 'out' || photo || !controls.current || zoneView.engaged || zoneView.rig.current.phase !== 'out') return;
     if (state.camera.position.distanceToSquared(memory.applied) < 1e-8) return;
     memory.position.copy(state.camera.position);
     memory.target.copy(controls.current.target);
@@ -592,6 +615,11 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       memory.position.set(...position);
       memory.target.set(...fit.target);
       memory.applied.set(...position);
+      const saved = zoneView.rig.current.saved;
+      if (saved) {
+        memory.position.toArray(saved.position);
+        memory.target.toArray(saved.target);
+      }
       return;
     }
     if (previous === frameInput) return;
@@ -600,6 +628,13 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
     memory.target.set(...carried.target);
     const rig = interior.current;
     if (photo) return;
+    // Zone de stickers cadrée : la vue d'avant, rendue en sortant, suit la rotation de l'écran.
+    const saved = zoneView.rig.current.saved;
+    if (zoneView.rig.current.phase !== 'out' && saved) {
+      memory.position.toArray(saved.position);
+      memory.target.toArray(saved.target);
+      return;
+    }
     if (rig.phase === 'out') {
       const view = getThree().camera as Camera;
       seatOrbit(view, controls.current, memory.position, memory.target);
@@ -610,7 +645,7 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       rig.savedTarget.copy(memory.target);
     }
     invalidate();
-  }, [frameInput, viewIdentity, photo, position, fit.target, getThree, invalidate]);
+  }, [frameInput, viewIdentity, photo, position, fit.target, getThree, invalidate, zoneView.rig]);
   // Sortie du mode photo : la caméra retrouve la vue que le doigt avait choisie (et non la vue de départ).
   const wasPhoto = useRef(photo);
   useEffect(() => {
@@ -825,12 +860,12 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
         ref={controls}
         makeDefault
         target={start.target}
-        enabled={outside}
+        enabled={outside && (zoneView.phase === 'out' || zoneView.phase === 'in')}
         enablePan={false}
         enableDamping
         dampingFactor={CONTROLS_DAMPING}
-        minDistance={fit.minDistance}
-        maxDistance={fit.maxDistance}
+        minDistance={zoneView.phase === 'in' && zoneView.fit ? zoneView.fit.minDistance : fit.minDistance}
+        maxDistance={zoneView.phase === 'in' && zoneView.fit ? zoneView.fit.maxDistance : fit.maxDistance}
         minPolarAngle={MIN_POLAR}
         maxPolarAngle={MAX_POLAR}
         autoRotate={rotating}

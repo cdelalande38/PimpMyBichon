@@ -109,3 +109,65 @@ export function framingById(id: FramingId): Framing {
   if (!found) throw new RangeError(`Cadrage inconnu : ${id}`);
   return found;
 }
+
+// ————————————————————————————————————————————————————————————————————————————————————————
+// Cadrages de pose d'un sticker (Custom › Stickers) : tant qu'une zone de livrée est choisie, la
+// caméra du garage la montre en grand dans la partie de l'écran que le panneau laisse libre. Le
+// cadrage se déduit de la face que la zone regarde (manifeste, `livery[].face`) : aucun cas par
+// véhicule. La caméra regarde la zone comme le plan à plat du panneau la dessine (vue de dehors) :
+// glisser un sticker vers la droite du plan le pousse vers la droite de l'écran. Pour une zone de
+// dessus (capot, toit, réservoir, garde-boue), le plan met l'avant du véhicule en haut : la caméra
+// plonge donc depuis l'arrière de la zone, regard vers l'avant. Calcul : src/scene/fit.ts, fitZone.
+
+export const ZONE_FRAMING_IDS = ['profil', 'face', 'dessus'] as const;
+export type ZoneFramingId = (typeof ZONE_FRAMING_IDS)[number];
+
+export interface ZoneFraming {
+  id: ZoneFramingId;
+  /** Faces de zone de livrée (src/data/stickersCalques.ts, LiveryFace) que ce cadrage montre. */
+  faces: readonly ('+x' | '-x' | '+y' | '-y' | '+z' | '-z')[];
+  /**
+   * Cap de la caméra autour de la zone, dans le repère du véhicule (0 : devant, vers +X ; π/2 : à
+   * droite, vers +Z ; π : derrière) ; `normale` : en face de la zone, sur sa normale.
+   */
+  heading: number | 'normale';
+  /** Élévation de la caméra au-dessus de l'horizontale de la zone, en radians. */
+  elevation: number;
+  /**
+   * Marge gardée autour de la zone, en mètres, de chaque côté : un petit cadre (réservoir, capot
+   * moteur) se voit avec ce qui l'entoure, un grand (flanc) presque seul. Elle ne dépasse pas
+   * `marginShare` de la plus grande dimension de la zone : un tout petit cadre (garde-boue) reste en grand.
+   */
+  margin: number;
+  marginShare: number;
+  /** Part de la zone libre que la zone et sa marge occupent au plus, en largeur et en hauteur. */
+  share: number;
+  shareHeight: number;
+}
+
+/** Bornes des cadrages de pose (vérifiées par les tests). L'élévation reste dans l'orbite du garage. */
+export const ZONE_FRAMING_LIMITS = Object.freeze({
+  elevation: { min: 0, max: 1.0 },
+  margin: { min: 0, max: 0.6 },
+  marginShare: { min: 0, max: 1 },
+  share: { min: 0.5, max: 0.95 },
+});
+
+export const ZONE_FRAMINGS: readonly ZoneFraming[] = Object.freeze([
+  // Flancs, côtés du réservoir : de profil, un peu au-dessus, toute la longueur dans la largeur.
+  { id: 'profil', faces: ['+z', '-z'], heading: 'normale', elevation: 0.12, margin: 0.12, marginShare: 0.3, share: 0.92, shareHeight: 0.8 },
+  // Face avant, arrière, capot moteur : de face, un peu en plongée.
+  { id: 'face', faces: ['+x', '-x'], heading: 'normale', elevation: 0.22, margin: 0.35, marginShare: 0.3, share: 0.86, shareHeight: 0.8 },
+  // Capot, toit, réservoir, garde-boue : plongée depuis l'arrière de la zone, l'avant en haut de l'image.
+  { id: 'dessus', faces: ['+y', '-y'], heading: Math.PI, elevation: 0.98, margin: 0.35, marginShare: 0.3, share: 0.86, shareHeight: 0.8 },
+]);
+
+/** Durée du passage d'un cadrage à l'autre (et du retour à la vue d'avant), en millisecondes. */
+export const ZONE_FRAMING_MS = 480;
+
+/** Cadrage de pose d'une zone de livrée, d'après la face qu'elle regarde. */
+export function zoneFramingFor(face: ZoneFraming['faces'][number]): ZoneFraming {
+  const found = ZONE_FRAMINGS.find((item) => item.faces.includes(face));
+  if (!found) throw new RangeError(`Aucun cadrage pour la face ${face}`);
+  return found;
+}

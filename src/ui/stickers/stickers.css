@@ -16,8 +16,20 @@
   color: var(--muted, #b9b4c8);
 }
 
+/* Zones sur une rangée de 48 px (au lieu de 56) : le panneau rend de la hauteur au véhicule cadré. */
+.stk-zones .chip {
+  min-height: var(--tap, 48px);
+  padding-block: 0.25rem;
+}
+
+/* Symétrie : son état sur la même ligne que son nom. */
+.stk-mirror {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
 .stk-mirror small {
-  display: block;
   font-size: 0.75rem;
   opacity: 0.8;
 }
@@ -28,8 +40,13 @@
   justify-content: center;
 }
 
-.stk-plan {
+.stk-plan-cadre {
   position: relative;
+}
+
+.stk-plan {
+  position: absolute;
+  inset: 0;
   overflow: hidden;
   border: 1px dashed rgba(236, 233, 244, 0.45);
   border-radius: 10px;
@@ -71,6 +88,7 @@
 /* Poignée ronde : tourner et agrandir d'un seul doigt. 48 px de prise, 26 px visibles. */
 .stk-handle {
   position: absolute;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -125,8 +143,26 @@
   height: 2rem;
 }
 
+/* Calques, ajout et gestes du calque choisi : une seule rangée qui défile en largeur. */
+.stk-row {
+  display: flex;
+  flex: none;
+  gap: 0.375rem;
+}
+
 .stk-add {
   flex: none;
+  gap: 0.375rem;
+}
+
+.stk-add span {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.stk-actions {
+  padding-left: 0.375rem;
+  border-left: 1px solid var(--line, rgba(255, 255, 255, 0.2));
 }
 
 .stk-actions .btn {
@@ -238,6 +274,83 @@
 
 .stk-back {
   margin-top: 0.25rem;
+}
+
+/* Pack pas encore acheté : il se débloque ici, avec le bloc d'achat partagé. */
+.stk-offer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap, 48px);
+}
+
+.stk-offer span {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.stk-offer-lock {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Trophées : une ligne par sticker, gagné ou à gagner (et comment). */
+.stk-trophees {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stk-trophee {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: var(--tap, 48px);
+  padding: 0.375rem 2rem 0.375rem 0.5rem;
+  border: 1px solid var(--edge, rgba(255, 255, 255, 0.2));
+  border-radius: 10px;
+  background: var(--panel, rgba(20, 18, 30, 0.8));
+  color: var(--chrome, #ece9f4);
+  text-align: left;
+}
+
+.stk-trophee .stk-thumb {
+  flex: none;
+}
+
+.stk-trophee-texte {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.stk-trophee-texte b {
+  font-size: 0.875rem;
+}
+
+.stk-trophee-texte small {
+  font-size: 0.75rem;
+  line-height: 1.25;
+  color: var(--mute, #b9b4c8);
+}
+
+.stk-trophee[data-verrou] .stk-thumb {
+  opacity: 0.4;
+}
+
+.stk-trophee .stk-lock {
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
 }
 
 .stk-notice {

@@ -4,10 +4,15 @@
 // curseurs de taille, de rotation et d'opacité en repli (aucun geste à deux doigts). Retourner,
 // colorer, dupliquer, changer l'ordre, supprimer. La symétrie gauche-droite est mise par défaut sur
 // les flancs : le flanc droit reprend le gauche en miroir. Le véhicule à l'écran suit en direct.
+// Tant que le panneau est ouvert, la caméra du garage montre la zone choisie en grand au-dessus de lui
+// (src/scene/cadrageZone.ts, src/scene/useZoneFraming.ts), puis revient à la vue d'avant. Un pack pas
+// encore acheté se débloque sur place (bloc d'achat partagé) ; un trophée pas encore gagné dit comment
+// le gagner.
 
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -15,9 +20,9 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { possedeDans } from "../../jeu/achats.ts";
+import { articleParId } from "../../data/boutique.ts";
 import { PAINT_COLORS } from "../../data/paintColors.ts";
 import {
-  lockHint,
   motifsOf,
   STICKER_PACKS,
   stickerById,
@@ -45,10 +50,15 @@ import {
 } from "../../data/stickersCalques.ts";
 import { stickerUrl } from "../../data/stickersFichiers.ts";
 import { resolveVehicle } from "../../data/vehicles.ts";
+import { useZoneFocus } from "../../scene/cadrageZone.ts";
 import { useBuilds } from "../../state/builds.ts";
 import { useJeu } from "../../state/jeu.ts";
+import { useView } from "../../state/view.ts";
+import { Achat } from "../jeu/Achat.tsx";
+import { dollars } from "../jeu/libelles.ts";
 import { Padlock } from "../paint/Padlock.tsx";
 import { handleGesture, PLAN_MAX_HEIGHT, planWidth } from "./gestes.ts";
+import { packForSale, trophyHint } from "./verrous.ts";
 import "./stickers.css";
 
 type Tab = StickerPack | "trophees";
@@ -102,6 +112,8 @@ export function StickersPanel() {
   const [library, setLibrary] = useState(false);
   const [tab, setTab] = useState<Tab>("depart");
   const [notice, setNotice] = useState("");
+  // Pack dont le bloc d'achat est ouvert sous la bibliothèque (identifiant d'article), ou aucun.
+  const [buying, setBuying] = useState<string | null>(null);
   // Curseurs de taille, de rotation et d'opacité : en repli, sous un bouton (le plan suffit au doigt).
   const [fine, setFine] = useState(false);
   // Calques en cours de glissé : affichés tout de suite, enregistrés par paquets.
@@ -119,6 +131,43 @@ export function StickersPanel() {
   const layer = selected === null ? undefined : layers[selected];
 
   useEffect(() => () => window.clearTimeout(pending.current.timer), []);
+
+  // Cadrage : la scène montre la zone choisie au-dessus du panneau, tant qu'il est ouvert ; on la
+  // regarde de dehors (la vue intérieure se referme).
+  const root = useRef<HTMLDivElement>(null);
+  const focusZone = zone?.id ?? null;
+  useEffect(() => {
+    useZoneFocus
+      .getState()
+      .setFocus(focusZone ? { vehicle: vehicle.id, zone: focusZone } : null);
+  }, [vehicle.id, focusZone]);
+  useEffect(() => {
+    useView.getState().setMode("atelier");
+    return () => {
+      useZoneFocus.getState().setFocus(null);
+      useZoneFocus.getState().setCoverTop(null);
+    };
+  }, []);
+  // Haut du panneau à l'écran (le dock qui le porte) : la zone se cadre au-dessus. Gelé pendant la
+  // bibliothèque, plus haute : on choisit un motif, la caméra ne fait pas l'aller-retour.
+  useLayoutEffect(() => {
+    if (library) return undefined;
+    const element = root.current;
+    const dock = element?.closest<HTMLElement>("footer.dock") ?? element;
+    if (!dock) return undefined;
+    const measure = () =>
+      useZoneFocus
+        .getState()
+        .setCoverTop(Math.round(dock.getBoundingClientRect().top));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(dock);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [library, focusZone]);
 
   if (!zone) {
     return (
@@ -175,7 +224,12 @@ export function StickersPanel() {
 
   const pick = (motif: StickerMotif) => {
     if (!stickerUnlocked(motif, owns)) {
-      setNotice(`${motif.label} : ${lockHint(motif)}`);
+      // Motif d'un pack à vendre : le bloc d'achat s'ouvre ; trophée : comment le gagner.
+      const sale = packForSale(motif.pack);
+      if (sale) {
+        setBuying(sale.id);
+        setNotice("");
+      } else setNotice(`${motif.label}. ${trophyHint(motif)}`);
       return;
     }
     const color = layer?.color ?? "#f4f1ea";
@@ -197,7 +251,7 @@ export function StickersPanel() {
   const startMove = (event: ReactPointerEvent<HTMLElement>, index: number) => {
     event.stopPropagation();
     setSelected(index);
-    const plan = (event.currentTarget as HTMLElement).closest(".stk-plan");
+    const plan = (event.currentTarget as HTMLElement).closest(".stk-plan-cadre");
     const start = layers[index];
     if (!plan || !start) return;
     const box = plan.getBoundingClientRect();
@@ -222,7 +276,7 @@ export function StickersPanel() {
   const startHandle = (event: ReactPointerEvent<HTMLElement>) => {
     event.stopPropagation();
     if (selected === null || !layer) return;
-    const plan = (event.currentTarget as HTMLElement).closest(".stk-plan");
+    const plan = (event.currentTarget as HTMLElement).closest(".stk-plan-cadre");
     if (!plan) return;
     const box = plan.getBoundingClientRect();
     const index = selected;
@@ -290,6 +344,10 @@ export function StickersPanel() {
     };
   };
 
+  const sale = tab === "trophees" ? undefined : packForSale(tab);
+  const saleOpen = sale !== undefined && !owns(sale.id);
+  const buyingArticle =
+    buying !== null && !owns(buying) ? articleParId(buying) : undefined;
   const libraryView = (
     <div className="stk-library" data-bibliotheque="">
       <div
@@ -303,36 +361,104 @@ export function StickersPanel() {
             type="button"
             className="chip"
             aria-pressed={tab === item.id}
-            onClick={() => setTab(item.id)}
+            onClick={() => {
+              setTab(item.id);
+              setBuying(null);
+              setNotice("");
+            }}
           >
             <b>{item.label}</b>
           </button>
         ))}
       </div>
-      <div className="stk-grid" role="group" aria-label="Motifs">
-        {motifsOf(tab === "trophees" ? null : tab).map((motif) => {
-          const free = stickerUnlocked(motif, owns);
-          return (
-            <button
-              key={motif.id}
-              type="button"
-              className="stk-tile"
-              data-motif={motif.id}
-              data-verrou={free ? undefined : "ferme"}
-              aria-label={free ? motif.label : `${motif.label}, verrouillé`}
-              onClick={() => pick(motif)}
-            >
-              <MotifThumb motif={motif.id} />
-              <small>{motif.label}</small>
-              {!free && <Padlock open={false} className="stk-lock" />}
-            </button>
-          );
-        })}
-      </div>
+      {saleOpen && sale && (
+        <button
+          type="button"
+          className="btn stk-offer"
+          data-pack={sale.id}
+          aria-expanded={buying === sale.id}
+          onClick={() => {
+            setNotice("");
+            setBuying(buying === sale.id ? null : sale.id);
+          }}
+        >
+          <Padlock open={false} className="stk-offer-lock" />
+          <span>Débloquer le {sale.label}</span>
+          <b>{dollars(sale.prix ?? 0)}</b>
+        </button>
+      )}
+      {buyingArticle && (
+        <Achat
+          article={buyingArticle}
+          nom={`le ${buyingArticle.label}`}
+          fait={`${buyingArticle.label} débloqué : ses motifs sont à toi.`}
+          onClose={() => setBuying(null)}
+          onDone={(text) => {
+            setBuying(null);
+            setNotice(text);
+          }}
+        />
+      )}
+      {tab === "trophees" ? (
+        <ul className="stk-trophees" aria-label="Trophées">
+          {motifsOf(null).map((motif) => {
+            const won = stickerUnlocked(motif, owns);
+            return (
+              <li key={motif.id}>
+                <button
+                  type="button"
+                  className="stk-trophee"
+                  data-motif={motif.id}
+                  data-verrou={won ? undefined : "ferme"}
+                  aria-label={
+                    won
+                      ? `${motif.label}, gagné`
+                      : `${motif.label}, à gagner. ${trophyHint(motif)}`
+                  }
+                  onClick={() => pick(motif)}
+                >
+                  <MotifThumb motif={motif.id} />
+                  <span className="stk-trophee-texte">
+                    <b>{motif.label}</b>
+                    <small>
+                      {won ? "Gagné : touche pour le poser." : trophyHint(motif)}
+                    </small>
+                  </span>
+                  {!won && <Padlock open={false} className="stk-lock" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <div className="stk-grid" role="group" aria-label="Motifs">
+          {motifsOf(tab).map((motif) => {
+            const free = stickerUnlocked(motif, owns);
+            return (
+              <button
+                key={motif.id}
+                type="button"
+                className="stk-tile"
+                data-motif={motif.id}
+                data-verrou={free ? undefined : "ferme"}
+                aria-label={free ? motif.label : `${motif.label}, verrouillé`}
+                onClick={() => pick(motif)}
+              >
+                <MotifThumb motif={motif.id} />
+                <small>{motif.label}</small>
+                {!free && <Padlock open={false} className="stk-lock" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <button
         type="button"
         className="btn stk-back"
-        onClick={() => setLibrary(false)}
+        onClick={() => {
+          setLibrary(false);
+          setBuying(null);
+        }}
       >
         Retour à la zone
       </button>
@@ -340,7 +466,7 @@ export function StickersPanel() {
   );
 
   return (
-    <div className="stickers" data-zone={zone.id}>
+    <div ref={root} className="stickers" data-zone={zone.id}>
       <div
         className="chips stk-zones"
         role="group"
@@ -377,13 +503,18 @@ export function StickersPanel() {
       ) : (
         <>
           <div className="stk-plan-wrap">
+            {/* Le plan rogne les stickers à la zone ; la poignée, à côté, reste visible et prenable
+                même quand le sticker remplit la zone. */}
             <div
-              className="stk-plan"
+              className="stk-plan-cadre"
               style={{
                 width: planWidth(ratio),
                 aspectRatio: `${zone.size[0]} / ${zone.size[1]}`,
                 maxHeight: PLAN_MAX_HEIGHT,
               }}
+            >
+            <div
+              className="stk-plan"
               aria-label={`Plan de la zone : ${zone.label}`}
               onPointerDown={() => setSelected(null)}
             >
@@ -399,6 +530,7 @@ export function StickersPanel() {
                   onPointerDown={(event) => startMove(event, index)}
                 />
               ))}
+            </div>
               {layer && (
                 <span
                   className="stk-handle"
@@ -413,33 +545,37 @@ export function StickersPanel() {
             </div>
           </div>
 
-          <div className="chips stk-layers" role="group" aria-label="Calques">
-            {layers.map((item, index) => (
+          {/* Une seule rangée sous le plan : les calques, l'ajout, puis les gestes du calque choisi. */}
+          <div className="chips stk-tools">
+            <div className="stk-row stk-layers" role="group" aria-label="Calques">
+              {layers.map((item, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  className="stk-pick"
+                  aria-pressed={selected === index}
+                  aria-label={`Calque ${index + 1}`}
+                  onClick={() => setSelected(index)}
+                >
+                  <MotifThumb motif={item.motif} color={item.color} />
+                </button>
+              ))}
               <button
-                key={index}
                 type="button"
-                className="stk-pick"
-                aria-pressed={selected === index}
-                aria-label={`Calque ${index + 1}`}
-                onClick={() => setSelected(index)}
+                className="btn stk-add"
+                aria-label="Ajouter un sticker"
+                disabled={layers.length >= MAX_LAYERS}
+                onClick={() => {
+                  setLibrary(true);
+                  setNotice("");
+                }}
               >
-                <MotifThumb motif={item.motif} color={item.color} />
+                <span aria-hidden="true">+</span> Ajouter
               </button>
-            ))}
-            <button
-              type="button"
-              className="btn stk-add"
-              disabled={layers.length >= MAX_LAYERS}
-              onClick={() => setLibrary(true)}
-            >
-              Ajouter un sticker
-            </button>
-          </div>
-
-          {layer && selected !== null && (
-            <div className="stk-edit" data-calque-choisi={selected}>
+            </div>
+            {layer && selected !== null && (
               <div
-                className="chips stk-actions"
+                className="stk-row stk-actions"
                 role="group"
                 aria-label="Gestes sur le sticker"
               >
@@ -507,6 +643,11 @@ export function StickersPanel() {
                   Curseurs
                 </button>
               </div>
+            )}
+          </div>
+
+          {layer && selected !== null && (
+            <div className="stk-edit" data-calque-choisi={selected}>
               <div
                 className="chips stk-colors"
                 role="group"
