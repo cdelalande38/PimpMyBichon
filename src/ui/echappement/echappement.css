@@ -1,0 +1,76 @@
+/* Mécanique · Échappement (src/ui/echappement/). Les rangées de puces reprennent .chips et .chip de
+   src/app/styles.css, les commandes du son celles de src/ui/engine/engine.css ; ici, la mise en page. */
+
+.echappement {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+.ech-bloc {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.ech-bloc h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 0.9375rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ech-note {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.8125rem;
+}
+
+/* Puce de finition : la pastille à gauche, le mot et sa ligne à droite. */
+.ech-chips .chip-swatch .chip-text {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+/* Option verrouillée : le cadenas et le prix, sur la ligne d'atelier. */
+.ech-prix {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ambre) !important;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.ech-cadenas {
+  flex: none;
+  width: 0.95em;
+  height: 0.95em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.ech-chips .chip[data-verrou='ferme'] b {
+  opacity: 0.8;
+}
+
+.ech-message:empty {
+  display: none;
+}
+
+.ech-message {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--ok);
+  background: var(--panel);
+  font-size: 0.875rem;
+}

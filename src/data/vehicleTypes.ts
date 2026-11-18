@@ -350,6 +350,28 @@ export interface DriverSpec {
   hangOff?: number;
 }
 
+/** Une sortie d'échappement : bouche du tuyau (point du repère du véhicule), direction du jet, rayon (m). */
+export interface ExhaustOutlet {
+  position: VehiclePoint;
+  /** Vers où sort le jet (normalisée par l'app) : vers l'arrière, −X, le plus souvent. */
+  direction: VehiclePoint;
+  /** Rayon intérieur de la sortie, en mètres ; absent : 2,5 cm. */
+  radius?: number;
+}
+
+/**
+ * Ligne d'échappement (src/data/echappement.ts) : les sorties d'où partent les flammes en sortie de nuit
+ * (src/drive/scene/flammes.ts), et les nœuds du modèle qui portent les sorties, dont les pièces de métal
+ * prennent la finition choisie (src/scene/vehicle/echappement.ts). Sans `nodes` : pas de finition ;
+ * sans section : ni flammes ni finition (le son, lui, change toujours).
+ */
+export interface ExhaustSpec {
+  /** Une à quatre sorties. */
+  outlets: readonly ExhaustOutlet[];
+  /** Nœuds du modèle qui portent les sorties (« echappement »). */
+  nodes?: readonly string[];
+}
+
 /** Roues et assiette d'un véhicule. */
 export interface VehicleWheels {
   /** Jantes et pneus au choix ; absent : le modèle garde les siens, seule l'assiette se règle. */
@@ -462,6 +484,8 @@ export interface VehicleManifest {
   livery?: readonly LiveryZone[];
   /** Pièces montées sur la caisse, poste par poste (aileron…, src/data/pieces.ts) ; absent : aucune. */
   pieces?: Readonly<Record<string /* id de poste */, PieceMount>>;
+  /** Sorties d'échappement (flammes, finition) ; absent : ni flammes ni finition. */
+  exhaust?: ExhaustSpec;
 }
 
 /**

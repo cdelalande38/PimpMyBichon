@@ -11,6 +11,7 @@
 //   sur des nœuds déjà créés (aucune allocation) ; un ponctuel crée sa source à son départ.
 
 import { BOUCLES_ROUTE, FAMILLE_ROUTE, FONDU_BOUCLES, PONCTUELS_ROUTE, type BoucleRoute } from '../../data/bruitages.ts';
+import { retourFlammes } from '../engine/echappement.ts';
 import { engineFileUrl, parseEngineManifest } from '../engine/manifeste.ts';
 import { parseSfxManifest, sfxFileUrl, type SfxBoucle, type SfxManifest, type SfxPonctuel } from './manifeste.ts';
 import { feuxSon } from './feux.ts';
@@ -282,6 +283,7 @@ export class LecteurBruitages {
     present.nos = etat.nos;
     present.feuxRouges = feuxSon.rouges;
     present.vert = feuxSon.vert;
+    present.flammes = retourFlammes.tirs;
     if (!actif) {
       if (this.actif) this.couper();
       copierInstant(present, this.avant);

@@ -44,6 +44,7 @@ import { resolveWheels, TIRE_PAINT, WHEEL_SLOTS, wheelFiles } from '../../data/w
 import type { Build } from '../../data/vehicleTypes.ts';
 import { useHabitacle } from './habitacle.ts';
 import { usePieces } from './pieces.ts';
+import { separerEchappement, useFinitionEchappement } from './echappement.ts';
 import { applyLivery, createLiveryRig, disposeLivery, type LiveryRig } from './livree.ts';
 import { useVehicleLights } from './phares.ts';
 import { createMarkMaterial, mergeGround, mountWheels, preloadWheels, useBodyPose, useWheelMounts, useWheelSources, type WheelAnchor, type WheelMount, type WheelRig } from './wheels.ts';
@@ -300,6 +301,9 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   for (const lamp of adapt?.lamps ?? []) {
     for (const material of all) if (lamp.materials.includes(material.name)) makeLamp(material, lamp.color, lamp.intensity);
   }
+
+  // 4 bis. Sorties d'échappement du manifeste : leur métal à part, pour la finition (./echappement.ts).
+  separerEchappement(scene, vehicle, owned);
 
   // 5. Budget de draw calls (§ 8) : le modèle est immobile, ses pièces sont fusionnées par
   //    matériau. Seules les géométries aux attributs identiques se fusionnent.
@@ -589,6 +593,8 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   useVehicleLights(prepared.root, vehicle, { cloneRear: true, stageClass: 'stage', invalidate });
   // Pièces montées (aileron…) du build, sur la caisse (src/scene/vehicle/pieces.ts).
   const pieces = usePieces(prepared, vehicle, invalidate, bodyEnv, { preload: true });
+  // Finition des sorties d'échappement du build (./echappement.ts).
+  useFinitionEchappement(prepared.root, vehicle, invalidate);
 
   // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
   // vernis), et compilerait pour rien une variante de plus pendant le démarrage. Rendu à la

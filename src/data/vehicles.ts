@@ -167,6 +167,23 @@ function point(value: unknown): boolean {
 
 const PLACES: readonly PlaceId[] = ['conducteur', 'passager', 'arriere'];
 
+/** Sorties d'échappement (section exhaust) : une à quatre bouches, direction non nulle, nœuds nommés. */
+function checkExhaust(raw: unknown, problems: string[]): void {
+  if (raw === undefined) return;
+  const outlets = isObject(raw) ? raw.outlets : undefined;
+  if (!isObject(raw) || !Array.isArray(outlets) || outlets.length < 1 || outlets.length > 4) {
+    problems.push('exhaust doit porter outlets : une à quatre sorties');
+    return;
+  }
+  outlets.forEach((outlet: unknown, index) => {
+    const ok = isObject(outlet) && point(outlet.position) && point(outlet.direction) && Math.hypot(...(outlet.direction as number[])) > 1e-3;
+    if (!ok || (isObject(outlet) && outlet.radius !== undefined && !(positive(outlet.radius) && (outlet.radius as number) < 0.2))) {
+      problems.push(`exhaust.outlets n° ${index + 1} : position et direction (trois nombres, direction non nulle), radius facultatif (en mètres, sous 0,2)`);
+    }
+  });
+  if (raw.nodes !== undefined && (!strings(raw.nodes) || raw.nodes.length === 0 || raw.nodes.some((name) => name.trim() === ''))) problems.push('exhaust.nodes doit être une liste de noms de nœuds');
+}
+
 function checkView(view: unknown, where: string, problems: string[]): void {
   if (!isObject(view)) {
     problems.push(`${where} doit être un objet`);
@@ -415,6 +432,7 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
     checkInteriorParts(raw, problems);
     checkWheels(raw, problems);
     checkPieces(raw, problems);
+    checkExhaust(raw.exhaust, problems);
   }
   if (problems.length > 0) {
     throw new Error(`Manifeste de véhicule invalide, ${manifestPath(folder)} : ${problems.join(' ; ')}.`);

@@ -90,9 +90,11 @@ describe('ombre de contact : plan, halo, libération', () => {
     const component = source.slice(source.indexOf('function VehicleShadow('), source.indexOf('/** Intervalle'));
     expect(component).toMatch(/if \(!pending\.current\) return;\s*pending\.current = false;\s*rig\.render\(/);
     expect(component).toMatch(/useEffect\(\(\) => \(\) => rig\.dispose\(\), \[rig\]\)/);
-    // Nouvelle pose (autre véhicule, autre mesure, autres roues ou autre assiette) : le drapeau se relève.
-    expect(component).toMatch(/useLayoutEffect\(\(\) => \{\s*pending\.current = true;[\s\S]*\}, \[gl, rig, caster, invalidate, stamp\]\)/);
-    expect(source).toMatch(/<VehicleShadow key=\{epoch\} caster=\{prepared\.root\}[^>]*stamp=\{stamp\}/);
+    // Nouvelle pose (autre véhicule, autre mesure, autres roues, autre assiette, ou une pièce montée
+    // qui arrive ou part, src/scene/vehicle/pieces.ts) : le drapeau se relève.
+    expect(component).toMatch(/useLayoutEffect\(\(\) => \{\s*pending\.current = true;[\s\S]*\}, \[gl, rig, caster, invalidate, stamp, pieces\]\)/);
+    expect(source).toMatch(/<VehicleShadow key=\{epoch\} caster=\{prepared\.root\}[^>]*stamp=\{stamp\} pieces=\{pieces\}/);
+    expect(source).toMatch(/const pieces = usePieces\(prepared, vehicle, invalidate, bodyEnv/);
   });
 });
 

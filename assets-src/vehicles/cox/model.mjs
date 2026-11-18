@@ -723,10 +723,12 @@ export default function cox(k) {
     ...wsTrim,
     ...rwTrim,
     ...hood,
-    ...exhaust,
     ...plates,
     ...mirror,
   ]);
+
+  // Sorties d'échappement à part : la finition choisie dans Mécanique · Échappement (src/scene/vehicle/echappement.ts).
+  m.add('echappement', exhaust);
 
   // Roues : quatre ancres (axe Z, face extérieure vers +Z) ; l'app y pose la jante et les pneus
   // choisis dans le catalogue partagé (d'origine : huit branches, 165 à l'avant et 185 à l'arrière).

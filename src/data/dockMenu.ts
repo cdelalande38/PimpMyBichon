@@ -98,7 +98,7 @@ export const DOCK_MENU: readonly DockSection[] = [
     entries: [
       { id: 'preparation', label: 'Préparation', icon: 'compteur', available: true },
       { id: 'moteur', label: 'Moteur', icon: 'moteur', available: false },
-      { id: 'echappement', label: 'Échappement', icon: 'echappement', available: false },
+      { id: 'echappement', label: 'Échappement', icon: 'echappement', available: true },
     ],
   },
   {

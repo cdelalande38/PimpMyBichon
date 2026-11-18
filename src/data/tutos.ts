@@ -175,6 +175,18 @@ export const TUTOS: readonly Tuto[] = [
     ],
   },
   {
+    id: 'echappement',
+    ecrans: ['entree:echappement'],
+    titre: 'L’échappement',
+    but: 'Ici, tu choisis la ligne d’échappement : elle change le son du moteur, et la plus libre crache des flammes.',
+    etapes: [
+      { texte: 'Quatre lignes ; l’origine est offerte. Un cadenas et un prix : touche, puis « Acheter », et elle est montée.', cible: 'footer.dock .echappement' },
+      { texte: 'Écoute-la tout de suite : « Démarrer », puis garde le doigt sur « Coup de gaz ».' },
+      { texte: 'Avec la ligne libre, en sortie, lâche le gaz après avoir bien fait monter le moteur : les sorties crachent.' },
+      { texte: 'Sur les modèles dont les sorties sont des pièces à part, choisis aussi leur finition : chrome, noir ou bleui.' },
+    ],
+  },
+  {
     id: 'ambiance',
     ecrans: ['entree:ambiance'],
     titre: 'L’ambiance du garage',

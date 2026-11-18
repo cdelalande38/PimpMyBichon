@@ -85,7 +85,9 @@ export type Declencheur =
   /** Départ arrêté : le feu vert s'allume. */
   | { type: 'feu-vert' }
   /** Lever de pied à haut régime (part du rupteur), au hasard (`chance` par lever). */
-  | { type: 'leve-pied'; regimeMin: number; chance: number };
+  | { type: 'leve-pied'; regimeMin: number; chance: number }
+  /** Retour de flammes : la scène vient d'en lancer un (src/drive/scene/flammes.ts ; ligne d'échappement qui le permet). */
+  | { type: 'flamme' };
 
 /** Bruitage ponctuel. */
 export interface PonctuelRoute {
@@ -142,5 +144,6 @@ export const PONCTUELS_ROUTE: readonly PonctuelRoute[] = Object.freeze([
   // Départ arrêté : un bip bref à chaque feu rouge, un bip plus long et plus aigu au vert.
   { emplacement: 'depart-feu', famille: 'route', declencheur: { type: 'feu-rouge' }, niveau: 0.8, attente: 0.3 },
   { emplacement: 'depart-vert', famille: 'route', declencheur: { type: 'feu-vert' }, niveau: 0.9, attente: 0.3 },
-  { emplacement: 'backfire', famille: 'moteur', declencheur: { type: 'leve-pied', regimeMin: 0.75, chance: 0.3 }, niveau: 0.8, attente: 4 },
+  // Claquement du retour de flammes : avec les flammes de la scène, seulement si la ligne d'échappement le permet (src/data/echappement.ts).
+  { emplacement: 'backfire', famille: 'moteur', declencheur: { type: 'flamme' }, niveau: 0.8, attente: 0.5 },
 ] satisfies PonctuelRoute[]);

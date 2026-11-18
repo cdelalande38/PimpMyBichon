@@ -49,6 +49,8 @@ export interface InstantRoute {
   feuxRouges?: number;
   /** Feu vert du départ allumé. */
   vert?: boolean;
+  /** Retours de flammes lancés par la scène depuis le lancement (le lecteur les tire de src/audio/engine/echappement.ts). */
+  flammes?: number;
 }
 
 /** Au-dessus de cette coupure (Hz), le filtre d'une boucle est grand ouvert. */
@@ -193,6 +195,8 @@ export function declenche(d: Declencheur, avant: InstantRoute, maintenant: Insta
       return maintenant.vert === true && avant.vert !== true;
     case 'leve-pied':
       return avant.charge >= LEVE_PIED.avant && maintenant.charge <= LEVE_PIED.apres && avant.regime >= d.regimeMin && alea < d.chance;
+    case 'flamme':
+      return (maintenant.flammes ?? 0) > (avant.flammes ?? 0);
   }
 }
 
@@ -211,4 +215,5 @@ export function copierInstant(de: InstantRoute, vers: InstantRoute): void {
   vers.nos = de.nos;
   vers.feuxRouges = de.feuxRouges;
   vers.vert = de.vert;
+  vers.flammes = de.flammes;
 }

@@ -10,6 +10,7 @@
 // `setLevel(volume)` (volume d'ensemble, en rampe, sans toucher à la hauteur), démarrage sans le
 // démarreur enregistré (véhicule déjà lancé).
 
+import { brancherEchappement, type ChaineEchappement } from './echappement.ts';
 import { dbToGain, loadGain, loopLevels, rpmRange, stepRpm } from './mix.ts';
 import { engineFileUrl, parseEngineManifest, type EngineLoop, type EngineOneShot, type EngineSoundManifest } from './manifeste.ts';
 
@@ -43,6 +44,8 @@ export class EngineSoundPlayer {
   private bus: GainNode | null = null;
   /** Sortie commune (limiteur vers les haut-parleurs) : le moteur et les bruitages de route y passent. */
   private master: DynamicsCompressorNode | null = null;
+  /** Ligne d'échappement entre le bus et le limiteur (./echappement.ts). */
+  private exhaust: ChaineEchappement | null = null;
   private readonly cache = new Map<string, Promise<Loaded | null>>();
   private current: Loaded | null = null;
   private voices: LoopVoice[] = [];
@@ -93,7 +96,9 @@ export class EngineSoundPlayer {
       limiter.release.value = 0.2;
       const bus = ctx.createGain();
       bus.gain.value = BUS_GAIN * this.level;
-      bus.connect(limiter).connect(ctx.destination);
+      // Le bus passe par la ligne d'échappement choisie (égalisation, saturation douce), puis le limiteur.
+      this.exhaust = brancherEchappement(ctx, bus, limiter);
+      limiter.connect(ctx.destination);
       this.ctx = ctx;
       this.bus = bus;
       this.master = limiter;
@@ -363,6 +368,7 @@ export class EngineSoundPlayer {
     this.ctx = null;
     this.bus = null;
     this.master = null;
+    this.exhaust = null;
     this.cache.clear();
   }
 
@@ -410,6 +416,7 @@ export class EngineSoundPlayer {
     const ctx = this.ctx;
     const manifest = this.current?.manifest;
     if (!ctx || !manifest || this.voices.length === 0) return;
+    this.exhaust?.suivre();
     const now = ctx.currentTime;
     const range = rpmRange(manifest.boucles, manifest.ralenti);
     let load: number;

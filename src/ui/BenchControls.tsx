@@ -14,6 +14,7 @@ import { resolveVehicle } from '../data/vehicles.ts';
 import { useBench } from '../state/bench.ts';
 import { useBuilds } from '../state/builds.ts';
 import { useDock } from '../state/dock.ts';
+import { EchappementPanel } from './echappement/EchappementPanel.tsx';
 import { EnginePanel } from './engine/EnginePanel.tsx';
 import { HabitaclePanel } from './habitacle/HabitaclePanel.tsx';
 import { Icon } from './icons.tsx';
@@ -60,6 +61,7 @@ export const ENTRY_BODIES: Partial<Record<EntryId, () => ReactNode>> = {
   phares: () => <PharesPanel />,
   ailerons: () => <PiecesPanel poste="aileron" />,
   preparation: () => <EnginePanel />,
+  echappement: () => <EchappementPanel />,
   ambiance: () => <AmbianceChoices />,
   sortie: () => <SortieEntree />,
 };

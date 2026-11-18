@@ -239,12 +239,13 @@ describe('bruitages de route : ponctuels', () => {
     expect(declenche(freinage.declencheur, instant({ vitesseKmh: 10 }), instant({ vitesseKmh: 10, accel: -7 }), 0.5)).toBe(false);
   });
 
-  it('le retour de flamme : lever de pied à haut régime, au hasard', () => {
-    const avant = instant({ charge: 0.9, regime: 0.9 });
-    const leve = instant({ charge: 0, regime: 0.85 });
-    expect(declenche(flamme.declencheur, avant, leve, 0)).toBe(true);
-    expect(declenche(flamme.declencheur, avant, leve, 0.99)).toBe(false);
-    expect(declenche(flamme.declencheur, instant({ charge: 0.9, regime: 0.4 }), leve, 0)).toBe(false);
+  it('le retour de flamme : le claquement part avec chaque jet de flammes de la scène, jamais sans', () => {
+    // La scène décide (ligne d'échappement qui le permet, lever de pied à haut régime : src/drive/scene/flammes.ts).
+    expect(flamme.declencheur).toEqual({ type: 'flamme' });
+    expect(declenche(flamme.declencheur, instant({ flammes: 2 }), instant({ flammes: 3 }), 0.99)).toBe(true);
+    expect(declenche(flamme.declencheur, instant({ flammes: 3 }), instant({ flammes: 3 }), 0)).toBe(false);
+    // Un lever de pied à haut régime sans jet (ligne d'origine) ne claque pas.
+    expect(declenche(flamme.declencheur, instant({ charge: 0.9, regime: 0.9 }), instant({ charge: 0, regime: 0.85 }), 0)).toBe(false);
   });
 
   it('le coup d’envoi du NOS part une seule fois par poussée, au front montant', () => {

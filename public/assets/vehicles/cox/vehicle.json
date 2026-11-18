@@ -331,5 +331,12 @@
         ]
       }
     }
+  },
+  "exhaust": {
+    "nodes": ["echappement"],
+    "outlets": [
+      { "position": [-1.91, 0.22, 0.27], "direction": [-1, 0, 0], "radius": 0.016 },
+      { "position": [-1.91, 0.22, -0.27], "direction": [-1, 0, 0], "radius": 0.016 }
+    ]
   }
 }

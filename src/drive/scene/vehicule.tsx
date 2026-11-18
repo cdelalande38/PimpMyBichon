@@ -48,6 +48,7 @@ import { createBeam, createGlare } from './ciel.ts';
 import { HEADLIGHT } from './materiaux.ts';
 import { routeLight } from '../../data/phares.ts';
 import { tintAdditive, useVehicleLights } from '../../scene/vehicle/phares.ts';
+import { useEchappementSortie } from './flammes.ts';
 import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 import { usePieces } from '../../scene/vehicle/pieces.ts';
 import { DEFAULT_SEAT, placeEye, seatMetrics, type PlacedSeat } from '../../scene/fit.ts';
@@ -391,6 +392,8 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   }, [phares.couleur]);
   // Pièces montées (aileron…) du build, posées comme au garage.
   const pieces = usePieces(drive.prepared, vehicle, invalidate, bodyEnv);
+  // Échappement : finition des sorties et retour de flammes au lever de pied (./flammes.ts).
+  useEchappementSortie(drive.prepared.root, vehicle, invalidate);
   const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins, vehicle.kind), [drive, spins, vehicle.kind]);
   // Direction d'une moto : fourche, guidon et poignées tournent avec la roue avant ; remis droits au départ.
   const steering = useMemo(() => bikeSteering(drive.prepared.root, wheels, vehicle.kind), [drive, wheels, vehicle.kind]);

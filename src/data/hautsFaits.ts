@@ -70,7 +70,7 @@ export const HAUTS_FAITS: readonly HautFaitDef[] = [
   { id: 'premier-argent', label: 'Un peu mieux', description: 'Finis une course avec une médaille d’argent ou mieux.', recompense: { dollars: 40 }, quand: [plus('course.rangMedaille', 2)] },
   { id: 'premier-or', label: 'L’or au cou', description: 'Décroche ta première médaille d’or.', recompense: { dollars: 80, articles: ['sticker-trophee-or'] }, quand: [plus('cumul.or', 1)] },
   { id: 'premier-record', label: 'Meilleur que toi-même', description: 'Bats ton propre record sur une carte.', recompense: { dollars: 40 }, quand: [egal('course.record', 1)] },
-  { id: 'premier-achat', label: 'Premier achat', description: 'Achète ton premier pack à la boutique.', recompense: { dollars: 25 }, quand: [plus('cumul.achats', 1)] },
+  { id: 'premier-achat', label: 'Premier achat', description: 'Fais ton premier achat : un pack de stickers ou une pièce.', recompense: { dollars: 25 }, quand: [plus('cumul.achats', 1)] },
   // La régularité.
   { id: 'dix-courses', label: 'Habitué de la route', description: 'Termine dix courses.', recompense: { dollars: 100 }, quand: [plus('cumul.courses', 10)] },
   { id: 'vingt-cinq-courses', label: 'Pilote de l’atelier', description: 'Termine vingt-cinq courses.', recompense: { dollars: 200, articles: ['sticker-trophee-series'] }, quand: [plus('cumul.courses', 25)] },
