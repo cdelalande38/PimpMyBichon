@@ -14,7 +14,7 @@ import './mixage.css';
 const AIDE: Record<string, string> = {
   radio: 'Ce qui reste de la radio quand le moteur tourne.',
   moteur: 'Le moteur, du ralenti au rupteur.',
-  route: 'Pneus, vent, pluie, freinage, rapports.',
+  route: 'Pneus, vent, pluie, freinage, rapports, et les sons de gain.',
 };
 
 /** Les trois curseurs et « Valeurs d'origine ». */

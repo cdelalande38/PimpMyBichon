@@ -120,6 +120,8 @@ export function ArriveePanneau() {
   const commencer = useDrive((state) => state.commencer);
   const fin = useDrive((state) => state.fin !== null);
   if (phase !== 'arrive' || !arrivee || fin) return null;
+  // Le bout d'une balade (ou d'une course que le pilote automatique a rendue balade) : ni gain ni haut fait.
+  // « Course d'un tour ici » relance la même route en course (le format choisi devient « 1 tour »).
   const { temps, meilleur, precedent } = arrivee;
   const record = precedent > 0 && temps < precedent;
   const ligne =
@@ -130,13 +132,25 @@ export function ArriveePanneau() {
         : `Ton meilleur ici : ${formatChrono(meilleur)}.`;
   return (
     <div className="drive-veil drive-arrivee-voile">
-      <section className="drive-arrivee" aria-labelledby="drive-arrivee-titre" data-record={record || undefined}>
+      <section className="drive-arrivee" aria-labelledby="drive-arrivee-titre" data-record={record || undefined} data-balade="oui">
         <h2 id="drive-arrivee-titre">Arrivée</h2>
         <p className="drive-arrivee-temps" role="status">
           {formatChrono(temps)}
         </p>
         <p className="drive-arrivee-meilleur">{ligne}</p>
+        <p className="drive-arrivee-balade">Balade : pour le plaisir, sans gain. Lance une course pour gagner des dollars et des hauts faits.</p>
         <div className="drive-arrivee-actes">
+          <button
+            type="button"
+            className="btn cta"
+            onClick={() => {
+              useDrive.getState().setFormat('tour1');
+              commencer();
+            }}
+          >
+            <DriveIcon name="repartir" />
+            Course d’un tour ici
+          </button>
           <button type="button" className="btn" onClick={commencer}>
             Repartir
           </button>

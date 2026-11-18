@@ -236,6 +236,16 @@ body:has(.fin-course) .tuto-aide {
   gap: 0.4rem;
 }
 
+/* Les gains qui arrivent un par un (src/ui/jeu/NotificationsGain.tsx) : la liste s'allonge sous le résultat, le
+   panneau défile avec elle. « Tout afficher » : 48 px. */
+.fin-course-notifs {
+  gap: 0.5rem;
+}
+
+.fin-course-defile[data-defilement='en-cours'] {
+  cursor: pointer;
+}
+
 /* Paysage, peu de hauteur : deux colonnes, le résultat à gauche ; les boutons à droite, en bas. */
 @media (orientation: landscape) and (max-height: 540px) {
   .fin-course-voile {
@@ -258,6 +268,10 @@ body:has(.fin-course) .tuto-aide {
     grid-row: 1 / span 2;
   }
 
+  .fin-course-notifs {
+    grid-row: 1 / span 2;
+  }
+
   .fin-course-bloc + .fin-course-bloc {
     padding-top: 0;
     border-top: 0;
@@ -274,5 +288,67 @@ body:has(.fin-course) .tuto-aide {
 
   .fin-course-actes {
     padding: 0.5rem 1rem 0.75rem;
+  }
+}
+
+/* Le bout d'une balade (panneau « Arrivée », src/ui/drive/Depart.tsx) : la phrase qui dit qu'il n'y a ni gain
+   ni haut fait, et le bouton qui relance en course. Les règles du panneau sont dans depart.css. */
+.drive-arrivee-balade {
+  margin: 0;
+  padding: 0.5rem 0.625rem;
+  border-left: 2px solid var(--ambre);
+  background: rgba(255, 178, 36, 0.08);
+  color: var(--chrome);
+  font-size: 0.875rem;
+  line-height: 1.35;
+}
+
+/* Trois commandes : la course d'un tour prend toute la ligne, « Repartir » et « Rentrer au garage » se
+   partagent la suivante. */
+.drive-arrivee-actes .btn.cta {
+  flex: 1 1 100%;
+}
+
+/* Paysage, peu de hauteur : le résultat à gauche ; la phrase et les commandes à droite, pour tenir sans déborder. */
+@media (orientation: landscape) and (max-height: 540px) {
+  /* Le voile garde 30 % de SA LARGEUR sous lui (un pourcentage de remplissage se compte sur la largeur) : en paysage,
+     cela mange toute la hauteur et rogne le haut du panneau. Ici, un simple petit bord. */
+  .drive-arrivee-voile {
+    padding-top: calc(0.5rem + var(--safe-t));
+    padding-bottom: calc(0.5rem + var(--safe-b));
+  }
+
+  .drive-arrivee {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
+    align-items: start;
+    column-gap: 1rem;
+    max-width: 38rem;
+  }
+
+  .drive-arrivee h2 {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .drive-arrivee-temps {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .drive-arrivee-meilleur {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .drive-arrivee-balade {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .drive-arrivee-actes {
+    grid-column: 2;
+    grid-row: 3;
+    margin-top: 0;
   }
 }

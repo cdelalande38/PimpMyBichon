@@ -2,8 +2,9 @@
 // Familles de sons et emplacements nommés (§ 9 du cahier des charges, LISEZ-MOI.md du dossier
 // privé). Une famille de moteur est jouée par src/audio/engine/ ; une famille de bruitages
 // (route, atelier, interface) est fabriquée de la même façon. Les bruitages de route sont joués en
-// sortie de nuit par src/audio/sfx/ (qui joue quoi : src/data/bruitages.ts) ; ceux de l'atelier et
-// de l'interface ne sont pas encore branchés.
+// sortie par src/audio/sfx/ (qui joue quoi : src/data/bruitages.ts) ; ceux de l'interface (gain, dollars)
+// par src/audio/sfx/interface.ts, à la fin d'une course et au garage ; ceux de l'atelier ne sont pas
+// encore branchés.
 //
 // Un emplacement est une « boucle » (régime tenu, ambiance : bouclée sans clic) ou un « ponctuel »
 // (démarrage, coup de gaz, bruitage court : début et fin adoucis). `variantes` : nombre de prises

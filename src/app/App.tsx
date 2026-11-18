@@ -17,6 +17,7 @@ import { QuitterSortie } from '../ui/drive/QuitterSortie.tsx';
 import { Hud } from '../ui/Hud.tsx';
 import { SceneOverlay } from '../ui/overlay/SceneOverlay.tsx';
 import { PhotoBar } from '../ui/PhotoBar.tsx';
+import { AnnoncesJeu } from '../ui/jeu/AnnoncesJeu.tsx';
 import { Sheets } from '../ui/Sheets.tsx';
 import { Chargement } from '../ui/tuto/Chargement.tsx';
 import { Tutos } from '../ui/tuto/Tutos.tsx';
@@ -132,6 +133,8 @@ export function App() {
       {/* En sortie, le garage n'est pas monté : l'écran d'ouverture du garage cède la place à celui de la route. */}
       <Chargement sceneFailed={sceneFailed || sortie} />
       <Tutos />
+      {/* Les hauts faits gagnés hors course (le premier achat) : une pile de cartes avec leur son. */}
+      <AnnoncesJeu />
     </>
   );
 }

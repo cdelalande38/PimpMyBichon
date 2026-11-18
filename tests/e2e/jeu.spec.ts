@@ -104,6 +104,14 @@ test.describe('jeu : dollars, boutique, hauts faits', () => {
     await flammes.tap();
     await panneau.getByRole('group', { name: 'Acheter Pack Flammes' }).getByRole('button', { name: 'Acheter', exact: true }).tap();
     await expect(panneau.getByRole('status').filter({ hasText: 'Pack Flammes acheté' })).toContainText('Haut fait : Premier achat.');
+    // Le haut fait s'annonce aussi par la pile de cartes du garage (moins de mouvement : d'emblée) et un son.
+    const pile = page.locator('.notif-garage');
+    await expect(pile).toBeVisible();
+    await expect(pile.locator('.notif-carte')).toHaveCount(1);
+    await expect(pile.locator('.notif-carte')).toContainText('Premier achat');
+    await expect(pile.locator('.notif-carte')).toContainText('+ 25 $');
+    await expect(pile).toHaveAttribute('data-sons-demandes', '1');
+    await expect(pile).toHaveAttribute('data-son-dernier', 'gain');
     await expect(panneau.getByRole('status', { name: /Ton solde : 55 dollars/ })).toBeVisible();
     await expect(panneau.getByRole('button', { name: /Acheter Pack Flammes/ })).toHaveCount(0);
     await expect(panneau.getByText('Acquis')).toBeVisible();
@@ -127,6 +135,34 @@ test.describe('jeu : dollars, boutique, hauts faits', () => {
     await expect(page.getByRole('button', { name: /Ton solde : 55 dollars/ })).toBeVisible();
     await page.getByRole('button', { name: /Ton solde/ }).tap();
     await expect(page.getByRole('dialog', { name: 'Ton compte' }).getByText('Acquis')).toBeVisible();
+  });
+
+  test.describe('avec du mouvement', () => {
+    test.use({ reducedMotion: 'no-preference' });
+
+    test('le premier achat s’annonce au garage : une carte de haut fait, son « gain », puis la pile s’efface', async ({ page }) => {
+      await openApp(page);
+      await waitForScene(page);
+      await poserSauvegarde(page, { solde: 180, articles: {}, hautsFaits: { 'premiere-course': true }, cumuls: { courses: 4, distance: 9300 } });
+      await page.getByRole('button', { name: /Ton solde : 180 dollars/ }).tap();
+      const panneau = page.getByRole('dialog', { name: 'Ton compte' });
+      await panneau.getByRole('button', { name: /Acheter Pack Flammes : 150 dollars/ }).tap();
+      await panneau.getByRole('group', { name: 'Acheter Pack Flammes' }).getByRole('button', { name: 'Acheter', exact: true }).tap();
+      const pile = page.locator('.notif-garage');
+      // La carte arrive après le délai de la première notification (0,6 s), avec son son.
+      await expect(pile.locator('.notif-carte')).toHaveCount(1);
+      await expect(pile.locator('.notif-carte')).toContainText('Premier achat');
+      await expect(pile.locator('.notif-carte')).toHaveAttribute('data-genre', 'haut-fait');
+      await expect(pile).toHaveAttribute('data-sons-demandes', '1');
+      await expect(pile).toHaveAttribute('data-son-dernier', 'gain');
+      await photo(page, '11-garage-annonce-premier-achat');
+      // Les doigts passent à travers la pile : le panneau reste utilisable.
+      await expect(pile).toHaveCSS('pointer-events', 'none');
+      // Elle s'efface seule, une seule annonce pour un seul haut fait.
+      await expect(pile).toHaveAttribute('data-actif', 'non', { timeout: 30_000 });
+      await expect(pile.locator('.notif-carte')).toHaveCount(0);
+      await expect(pile).toHaveAttribute('data-sons-demandes', '1');
+    });
   });
 
   test('un haut fait déjà obtenu s’affiche, un trophée reste à gagner, et le lien direct #/jeu marche', async ({ page }) => {

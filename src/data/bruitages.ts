@@ -147,3 +147,20 @@ export const PONCTUELS_ROUTE: readonly PonctuelRoute[] = Object.freeze([
   // Claquement du retour de flammes : avec les flammes de la scène, seulement si la ligne d'échappement le permet (src/data/echappement.ts).
   { emplacement: 'backfire', famille: 'moteur', declencheur: { type: 'flamme' }, niveau: 0.8, attente: 0.5 },
 ] satisfies PonctuelRoute[]);
+
+// Sons d'interface (vague U, 18 novembre 2026) : les prises courtes que le commanditaire a générées
+// (public/assets/audio/sfx/interface/, famille « interface » de tools/sons/emplacements.mjs). Joués par
+// src/audio/sfx/interface.ts, au niveau du curseur « Route » du panneau « Son » : un seul curseur de plus
+// n'aurait rien apporté, ces sons sont des bruitages comme les autres.
+
+/** Famille de bruitages d'interface (public/assets/audio/sfx/interface/). */
+export const FAMILLE_INTERFACE = 'interface';
+
+/** Les sons d'interface que l'app demande : `gain` (haut fait, objet débloqué, médaille, record), `dollars` (de l'argent seul). */
+export type SonInterface = 'gain' | 'dollars';
+
+/** Qui joue quoi : l'emplacement de l'index et son niveau, de 0 à 1, avant le curseur « Route ». */
+export const SONS_INTERFACE: Readonly<Record<SonInterface, { emplacement: string; niveau: number }>> = Object.freeze({
+  gain: { emplacement: 'gain', niveau: 1 },
+  dollars: { emplacement: 'dollars', niveau: 1 },
+});

@@ -1,0 +1,216 @@
+/* Les notifications de gain (src/ui/jeu/NotificationsGain.tsx) : une carte par gain, son dessin à gauche, ce
+   qu'elle rapporte à droite. L'écran de fin les empile dans son bloc (src/ui/drive/fincourse.css), le garage
+   les pose en haut de l'écran (src/ui/jeu/AnnoncesJeu.tsx). Les tailles sont en rem ; toute commande fait 48 px.
+   Avec mouvement seulement : une carte glisse et s'éclaire en arrivant ; « moins de mouvement » : rien ne bouge. */
+
+.notif-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notif-carte {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ambre);
+  border-radius: 4px;
+  background: rgba(16, 14, 26, 0.92);
+  color: var(--chrome);
+}
+
+.notif-dessin {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: rgba(255, 178, 36, 0.12);
+  color: var(--ambre);
+}
+
+.notif-carte[data-genre='dollars'] .notif-dessin {
+  background: rgba(34, 211, 182, 0.12);
+  color: var(--ok);
+}
+
+.notif-carte[data-genre='dollars'] {
+  border-left-color: var(--ok);
+}
+
+.notif-carte[data-genre='record'] .notif-dessin {
+  background: rgba(59, 123, 255, 0.16);
+  color: #8fb2ff;
+}
+
+.notif-carte[data-genre='record'] {
+  border-left-color: var(--bleu);
+}
+
+.notif-carte[data-genre='medaille'] .notif-dessin {
+  background: radial-gradient(circle at 35% 30%, #fff3b0, #f5b301 55%, #9a6a00);
+  color: #2a1c00;
+}
+
+.notif-carte[data-genre='medaille'][data-medaille='argent'] .notif-dessin {
+  background: radial-gradient(circle at 35% 30%, #ffffff, #b9c0cf 55%, #6c7385);
+  color: #1c2030;
+}
+
+.notif-carte[data-genre='medaille'][data-medaille='bronze'] .notif-dessin {
+  background: radial-gradient(circle at 35% 30%, #ffd2a8, #c46f2c 55%, #6e3a12);
+  color: #2d1405;
+}
+
+.notif-carte[data-genre='haut-fait'] {
+  border-left-color: var(--rouge);
+}
+
+.notif-carte[data-genre='haut-fait'] .notif-dessin {
+  background: rgba(255, 45, 63, 0.14);
+  color: #ff7b88;
+}
+
+.notif-texte {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.notif-texte b {
+  font-size: 0.9375rem;
+  line-height: 1.2;
+}
+
+.notif-texte small {
+  color: var(--mute);
+  font-size: 0.8125rem;
+  line-height: 1.25;
+}
+
+.notif-montant {
+  flex: none;
+  color: var(--ambre);
+  font-size: 0.9375rem;
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.notif-objet {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.notif-ancre {
+  display: block;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Le total qui monte pendant le défilé. */
+.notif-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.875rem;
+}
+
+.notif-total b {
+  display: inline-block;
+  color: var(--ambre);
+  font-size: 1.375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.notif-passer {
+  min-height: var(--tap);
+  align-self: stretch;
+}
+
+/* Lue par les lecteurs d'écran seulement. */
+.notif-vocal {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Le garage : la pile est dans la couche supérieure (attribut popover), en haut de l'écran, sans prise aux doigts. */
+.notif-garage {
+  position: fixed;
+  inset: calc(4.25rem + var(--safe-t)) auto auto 50%;
+  width: min(24rem, calc(100vw - 1.5rem));
+  max-height: 60dvh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: visible;
+  background: transparent;
+  color: inherit;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.notif-garage:not(:popover-open) {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .notif-carte[data-nouvelle] {
+    animation: notif-arrive 0.42s cubic-bezier(0.2, 0.9, 0.25, 1) both;
+  }
+
+  .notif-total b {
+    animation: notif-monte 0.32s ease-out;
+  }
+}
+
+@keyframes notif-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.97);
+    box-shadow: 0 0 0 rgba(255, 178, 36, 0);
+  }
+
+  60% {
+    box-shadow: 0 0 1.25rem rgba(255, 178, 36, 0.45);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+    box-shadow: 0 0 0 rgba(255, 178, 36, 0);
+  }
+}
+
+@keyframes notif-monte {
+  from {
+    transform: translateY(-0.2rem) scale(1.12);
+    color: var(--chrome);
+  }
+
+  to {
+    transform: none;
+    color: var(--ambre);
+  }
+}

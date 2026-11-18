@@ -12,6 +12,7 @@ import { nettoyerProgression, progressionVide, type ProgressionCarriere } from '
 import { verifierCumuls } from '../jeu/cloture.ts';
 import { etatVide, nettoyerEtat, type EtatJeu } from '../jeu/etat.ts';
 import { visible } from '../jeu/hautsFaits.ts';
+import { notificationsDeHautsFaits, type NotificationGain } from '../ui/jeu/notifications.ts';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
 export const JEU_KEY = 'pmb-jeu';
@@ -24,6 +25,13 @@ export interface JeuState extends EtatJeu {
   hydrated: boolean;
   /** Mode carrière (src/jeu/carriere.ts) : les rendez-vous réussis et leurs résultats ; remis à zéro avec le reste. */
   carriere: ProgressionCarriere;
+  /**
+   * Hauts faits obtenus hors course (le premier achat) et pas encore annoncés, un lot par achat : `AnnoncesJeu`
+   * (src/ui/jeu/AnnoncesJeu.tsx) montre le premier lot et le retire (`lotAnnonce`) une fois montré. Jamais sauvegardé.
+   */
+  annonces: readonly (readonly NotificationGain[])[];
+  /** Le premier lot d'annonces a été montré : il sort de la file. */
+  lotAnnonce: () => void;
   /** Remplace l'état du jeu (utilisé par la clôture d'une course, src/jeu/bilan.ts). */
   appliquer: (etat: EtatJeu) => void;
   /** Achète un article de la boutique ; l'état ne change que si l'achat réussit. */
@@ -43,14 +51,17 @@ export const useJeu = create<JeuState>()(
       ...etatVide(),
       carriere: progressionVide(),
       hydrated: false,
+      annonces: [],
+      lotAnnonce: () => set((state) => (state.annonces.length === 0 ? state : { annonces: state.annonces.slice(1) })),
       appliquer: (etat) => set(etatDe(etat)),
       acheter: (id) => {
         const issue = acheterDans(etatDe(get()), id);
         if (!issue.ok) return issue;
         // Un achat peut faire obtenir un haut fait qui ne tient qu'aux cumuls (« Premier achat »).
         const suite = verifierCumuls(issue.etat);
-        set(etatDe(suite.etat));
-        return { ...issue, etat: suite.etat, hautsFaits: suite.hautsFaits.map(visible) };
+        const faits = suite.hautsFaits.map(visible);
+        set({ ...etatDe(suite.etat), ...(faits.length > 0 ? { annonces: [...get().annonces, notificationsDeHautsFaits(faits, suite.deblocages)] } : {}) });
+        return { ...issue, etat: suite.etat, hautsFaits: faits };
       },
       remettreAZero: () => set({ ...etatVide(), carriere: progressionVide() }),
     }),
