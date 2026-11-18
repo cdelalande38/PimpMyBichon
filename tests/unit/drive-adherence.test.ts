@@ -294,6 +294,7 @@ describe('le pilote automatique tient la route sous les trois météos', () => {
     const file = new URL(`../../public/assets/maps/${id}/route.json`, import.meta.url);
     describe.skipIf(!existsSync(file))(id, () => {
       for (const w of WEATHERS) {
+        // Un trajet entier simulé par véhicule : large délai, la machine peut être chargée (agents, parcours).
         it(w, () => {
           const route = JSON.parse(readFileSync(file, 'utf8')) as MapRoute;
           const rail = createRail(route);
@@ -328,7 +329,7 @@ describe('le pilote automatique tient la route sous les trois météos', () => {
             expect(maxBrake, `${vehicle.id} freinage`).toBeLessThan(7 * ADHERENCE_METEO[w].adherence);
           }
           relever(`${id} ${w} :\n  ${rows.join('\n  ')}`);
-        });
+        }, 60_000);
       }
     });
   }

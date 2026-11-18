@@ -456,7 +456,7 @@ export class DriveEngine {
     pasDepart(depart, dt, this.vehicleReady && !this.vehicleFailed && decor.status.loaded > 0 && this.frames > 2, motion.s, this.rail, motion.finished);
     if (!arrived && depart.phase === 'arrive' && drive.map && !depart.lance) {
       const format = formatCouru(drive.format, this.rail.loop);
-      const finie = enCourse(depart) ? courseFinie(depart, this.suivi.mesures, { carte: drive.map, depart: this.startId, vehicule: this.vehicleId, format, meteo: drive.weather, moment: 'nuit' }) : null;
+      const finie = enCourse(depart) ? courseFinie(depart, this.suivi.mesures, { carte: drive.map, depart: this.startId, vehicule: this.vehicleId, format, meteo: drive.weather, moment: drive.moment }) : null;
       if (finie) drive.terminerCourse(finie);
       else drive.noterArrivee(cleTemps(drive.map, this.startId, this.vehicleId), depart.arrivee);
     }
