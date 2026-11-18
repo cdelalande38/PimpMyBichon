@@ -1,5 +1,6 @@
 // La boutique : ce qui se débloque avec des dollars, en données. Rien ne s'achète ici qui n'existe pas :
 // les entrées du menu encore marquées « bientôt » restent « bientôt » (elles n'ont pas d'article).
+// Les pièces de véhicule ont leurs articles dans src/data/articles/ (un fichier par poste).
 // Ce qui est libre aujourd'hui (peinture, roues, suspension, intérieur, ambiance, les quatre cartes) reste
 // gratuit et n'est pas une marchandise.
 //
@@ -7,6 +8,9 @@
 // `possede('pack-<son pack>')` ou `possede('sticker-<son id>')` (src/jeu/bilan.ts).
 
 import type { Article } from '../jeu/contrat.ts';
+import { ARTICLES_AILERONS } from './articles/ailerons.ts';
+import { ARTICLES_ECHAPPEMENT } from './articles/echappement.ts';
+import { ARTICLES_PHARES } from './articles/phares.ts';
 
 export interface ArticleBoutique extends Article {
   /** Une phrase tutoyée : ce que ça apporte. */
@@ -42,8 +46,17 @@ export const TROPHEES: readonly ArticleBoutique[] = [
   { id: 'sticker-trophee-cartes', famille: 'sticker', label: 'Trophée des cartes', prix: null, description: 'Gagné en ayant couru sur toutes les cartes.' },
 ];
 
+/**
+ * Les pièces et options de véhicule qui se débloquent : un fichier par poste dans src/data/articles/.
+ * Convention : identifiant `piece-<poste>-<option>` (le poste et l'option sont ceux de `Build.parts`,
+ * src/data/vehicleTypes.ts), famille `piece`. L'option d'origine n'est jamais un article. Une option
+ * dont l'article n'est pas acquis se voit, avec son cadenas et son prix ; elle se débloque sur place
+ * par le bloc d'achat partagé (src/ui/jeu/Achat.tsx), et `usePossede` (src/state/jeu.ts) dit si elle l'est.
+ */
+export const PIECES: readonly ArticleBoutique[] = [...ARTICLES_AILERONS, ...ARTICLES_PHARES, ...ARTICLES_ECHAPPEMENT];
+
 /** Tout ce que le jeu sait posséder. */
-export const ARTICLES: readonly ArticleBoutique[] = [...PACKS, ...TROPHEES];
+export const ARTICLES: readonly ArticleBoutique[] = [...PACKS, ...TROPHEES, ...PIECES];
 
 export function articleParId(id: string): ArticleBoutique | undefined {
   return ARTICLES.find((article) => article.id === id);

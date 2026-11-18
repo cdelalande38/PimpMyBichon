@@ -1,14 +1,14 @@
 // Atelier › Jeu : ton solde, la boutique (packs de stickers, trophées à gagner) et les hauts faits,
 // obtenus et à faire. Tout vient des données (src/data/boutique.ts, hautsFaits.ts, economie.ts).
 
-import { useEffect, useRef, useState } from 'react';
-import { A_VENDRE, ARTICLES, TROPHEES, articleParId, type ArticleBoutique } from '../../data/boutique.ts';
-import { ECONOMIE } from '../../data/economie.ts';
+import { useState } from 'react';
+import { A_VENDRE, ARTICLES, TROPHEES, articleParId } from '../../data/boutique.ts';
 import { HAUTS_FAITS, type HautFaitDef } from '../../data/hautsFaits.ts';
 import { MAPS } from '../../data/maps.ts';
 import { possedeDans } from '../../jeu/achats.ts';
 import { progression } from '../../jeu/hautsFaits.ts';
 import { useJeu } from '../../state/jeu.ts';
+import { Achat } from './Achat.tsx';
 import { dollars, gain, kilometres, pluriel } from './libelles.ts';
 import './jeu.css';
 
@@ -43,60 +43,6 @@ function Resume() {
           ? 'Aucune course finie pour l’instant : chaque course rapporte des dollars.'
           : `${pluriel(cumuls.courses, 'course finie', 'courses finies')} · ${kilometres(cumuls.distance)} · ${obtenus} sur ${HAUTS_FAITS.length} hauts faits`}
       </small>
-    </div>
-  );
-}
-
-/** Le bloc qui s'ouvre sous un pack : la confirmation, ou l'explication quand le solde ne suffit pas. */
-function Achat({ article, onClose, onDone }: { article: ArticleBoutique; onClose: () => void; onDone: (message: string) => void }) {
-  const solde = useJeu((state) => state.solde);
-  const acheter = useJeu((state) => state.acheter);
-  const bloc = useRef<HTMLDivElement>(null);
-  const prix = article.prix ?? 0;
-  const assez = solde >= prix;
-  useEffect(() => {
-    bloc.current?.scrollIntoView({ block: 'nearest' });
-    bloc.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
-  }, []);
-
-  if (!assez) {
-    const manque = prix - solde;
-    return (
-      <div ref={bloc} className="jeu-achat" role="alert" data-etat="insuffisant">
-        <p>
-          Il te manque <b>{dollars(manque)}</b> pour le {article.label}. Une course d’un tour rapporte au moins {dollars(ECONOMIE.tour1.base)} : va rouler, puis reviens.
-        </p>
-        <div className="jeu-achat-actes">
-          <button type="button" className="btn" onClick={onClose}>
-            Compris
-          </button>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div ref={bloc} className="jeu-achat" role="group" aria-label={`Acheter ${article.label}`} data-etat="confirmation">
-      <p>
-        Acheter le {article.label} pour <b>{dollars(prix)}</b> ? Il te restera {dollars(solde - prix)}.
-      </p>
-      <div className="jeu-achat-actes">
-        <button
-          type="button"
-          className="btn cta"
-          onClick={() => {
-            const issue = acheter(article.id);
-            if (issue.ok) {
-              const faits = (issue.hautsFaits ?? []).map((fait) => `Haut fait : ${fait.label}.`);
-              onDone([`${article.label} acheté : ses motifs t’attendent dans les stickers.`, ...faits].join(' '));
-            } else onClose();
-          }}
-        >
-          Acheter
-        </button>
-        <button type="button" className="btn" onClick={onClose}>
-          Pas maintenant
-        </button>
-      </div>
     </div>
   );
 }
@@ -148,6 +94,8 @@ function Boutique() {
             {choix === pack.id && !possede(pack.id) && (
               <Achat
                 article={pack}
+                nom={`le ${pack.label}`}
+                fait={`${pack.label} acheté : ses motifs t’attendent dans les stickers.`}
                 onClose={() => setChoix(null)}
                 onDone={(texte) => {
                   setChoix(null);
