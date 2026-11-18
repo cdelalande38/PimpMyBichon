@@ -20,6 +20,7 @@ import { repartirEau } from './eau.mjs';
 import { chausseeCouverte, gardeChaussee, resumerCouverture } from './couverture.mjs';
 import { aire, boite, dansPolygone, hasard, indexPolyligne, simplifier } from './geom2d.mjs';
 import { Assembleur, ecrireGlb } from './maillage.mjs';
+import { DOSSIER_MATIERES as SOL_DIR, ecrireMatieres } from './matieres.mjs';
 import { Grille, jalonner, vitessesLeLong } from './enrichissement.mjs';
 import { continuiteChaussee, LARGEUR_MIN, LARGEUR_MIN_DEUX_VOIES, resumerContinuite } from './continuite.mjs';
 import { adoucirVirages, decouper, dentsDeScie, densifier, largeurAdoucie, lisserSerie, pentes, rayonCercle, rayons, reechantillonnerCorde, sections as faireSections } from './trace.mjs';
@@ -1615,6 +1616,11 @@ async function main() {
       console.error(`${id} : ${error instanceof Error ? (error.stack ?? error.message) : error}`);
     }
   }
+  // Textures des matières du sol et du bâti, communes à toutes les cartes (tools/maps/matieres.mjs).
+  const started = Date.now();
+  const mat = await ecrireMatieres(join(OUT, SOL_DIR));
+  console.log(`matières : ${mat.fichiers} textures · ${(mat.poids / 1e6).toFixed(2)} Mo · ${(mat.memoire / 1e6).toFixed(1)} Mo de mémoire graphique · ${((Date.now() - started) / 1000).toFixed(1)} s`);
+  console.log(`  → ${relative(ROOT, join(OUT, SOL_DIR))}/`);
   if (failed) process.exitCode = 1;
 }
 

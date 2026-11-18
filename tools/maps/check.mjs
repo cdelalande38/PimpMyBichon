@@ -11,7 +11,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { countGeometry, parseGlb } from '../lib/glb.mjs';
+import { countGeometry, imageSize, parseGlb } from '../lib/glb.mjs';
+import { DOSSIER_MATIERES, MATIERES } from './matieres.mjs';
 import { continuiteChaussee, erreursContinuite, resumerContinuite } from './continuite.mjs';
 import { chausseeCouverte, resumerCouverture } from './couverture.mjs';
 import { rayons } from './trace.mjs';
@@ -362,6 +363,48 @@ export function verifierCarte(id, o = {}) {
   return { erreurs, notes };
 }
 
+/** Poids des textures des matières (toutes cartes confondues), en octets. */
+export const BUDGET_MATIERES = 1.5e6;
+
+/**
+ * Textures des matières du sol et du bâti (public/assets/maps/_matieres/, tools/maps/matieres.mjs) :
+ * manifeste lisible, une texture par matière, carrée, puissance de deux, 1 024 px au plus (§ 8),
+ * poids total sous le budget.
+ * @param {string} [root]
+ */
+export function verifierMatieres(root = ROOT) {
+  /** @type {string[]} */
+  const erreurs = [];
+  const dir = join(root, 'public', 'assets', 'maps', DOSSIER_MATIERES);
+  const file = join(dir, 'matieres.json');
+  if (!existsSync(file)) return { erreurs: ['matieres.json absent : npm run maps:build'], note: '' };
+  /** @type {any} */
+  const m = JSON.parse(readFileSync(file, 'utf8'));
+  if (m.format !== 'pmb-matieres' || m.version !== 1 || !Array.isArray(m.matieres)) return { erreurs: ['matieres.json mal formé'], note: '' };
+  let poids = statSync(file).size;
+  let memoire = 0;
+  for (const def of MATIERES) {
+    const e = m.matieres.find((/** @type {any} */ x) => x.id === def.id);
+    if (!e) {
+      erreurs.push(`matière ${def.id} absente du manifeste`);
+      continue;
+    }
+    const f = join(dir, e.fichier);
+    if (!existsSync(f)) {
+      erreurs.push(`${e.fichier} absent`);
+      continue;
+    }
+    const bytes = readFileSync(f);
+    poids += bytes.byteLength;
+    const size = imageSize(new Uint8Array(bytes));
+    if (!size || size.width !== size.height || (size.width & (size.width - 1)) !== 0 || size.width > 1024) erreurs.push(`${e.fichier} : ${size ? `${size.width} × ${size.height}` : 'illisible'} (carrée, puissance de deux, 1 024 px au plus)`);
+    else memoire += (size.width * size.height * 4 * 4) / 3;
+    if (!(e.tuile > 0)) erreurs.push(`${e.fichier} : tuile ${e.tuile}`);
+  }
+  if (poids > BUDGET_MATIERES) erreurs.push(`matières : ${(poids / 1e6).toFixed(2)} Mo, budget ${BUDGET_MATIERES / 1e6} Mo`);
+  return { erreurs, note: `matières : ${m.matieres.length} textures, ${(poids / 1e6).toFixed(2)} Mo, ${(memoire / 1e6).toFixed(1)} Mo de mémoire graphique (mipmaps comprises)` };
+}
+
 function main() {
   const base = join(ROOT, 'public', 'assets', 'maps');
   const args = process.argv.slice(2).filter((a) => !a.startsWith('-'));
@@ -377,6 +420,10 @@ function main() {
     for (const x of erreurs) console.error(`  ✗ ${id} : ${x}`);
     n += erreurs.length;
   }
+  const mat = verifierMatieres();
+  if (mat.note) console.log(`  ${mat.note}`);
+  for (const x of mat.erreurs) console.error(`  ✗ ${x}`);
+  n += mat.erreurs.length;
   console.log(n ? `maps:check : ${n} erreur(s)` : `maps:check : ${ids.length} carte(s) conforme(s)`);
   if (n) process.exitCode = 1;
 }

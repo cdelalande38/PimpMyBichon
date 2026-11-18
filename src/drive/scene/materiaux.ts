@@ -36,6 +36,7 @@ import {
   type WebGLProgramParametersWithUniforms,
 } from 'three';
 import type { MapMaterialRole } from '../../data/mapTypes.ts';
+import { SOL_FACADE, SOL_HEAD, SOL_NORMAL, SOL_ROLES, SOL_SURFACE, SOL_TOIT, SOL_UNIFORMS, loadSolTextures, releaseSolTextures, solDefines, type SolUse } from './sol.ts';
 
 /** Lampadaires qui éclairent la chaussée, au plus (taille du tableau d'uniformes). */
 export const MAX_LAMPS = 16;
@@ -316,6 +317,7 @@ float pmbBox( float x, float a, float b, float w ) {
   return clamp( ( x - a ) / w + 0.5, 0.0, 1.0 ) - clamp( ( x - b ) / w + 0.5, 0.0, 1.0 );
 }
 ${HEAD_BEAM}
+${SOL_HEAD}
 `;
 
 // Après l'éclairage direct : le reflet direct des vraies lumières (lune, lampadaires proches, feux
@@ -350,6 +352,7 @@ float pmbWetL = pmbWet * ( 1.0 - pmbDryL );
 float pmbRainL = pmbRain * ( 1.0 - pmbDryL );
 float pmbSnowL = pmbSnow * ( 1.0 - pmbDryL );
 float pmbWetA = 0.0;
+${SOL_SURFACE}
 #ifdef PMB_WET
 {
   // Mouillé par plaques : des zones restent plus sèches (reflets cassés, jamais un miroir), des flaques
@@ -357,8 +360,9 @@ float pmbWetA = 0.0;
   vec2 q = vPmbWorld.xz;
   float dryPatch = smoothstep( 0.32, 0.72, pmbNoise( q * 0.09 + 2.1 ) * 0.7 + pmbNoise( q * 0.37 ) * 0.3 );
   pmbWetA = pmbWetL * ( 1.0 - 0.6 * dryPatch );
-  pmbPuddle = pmbRainL * smoothstep( 0.6, 0.82, pmbNoise( q * 0.055 ) * 0.75 + pmbNoise( q * 0.16 + 7.3 ) * 0.25 );
-  roughnessFactor = mix( roughnessFactor, PMB_WET_ROUGH, pmbWetA );
+  pmbPuddle = pmbRainL * smoothstep( 0.6, 0.82, pmbNoise( q * 0.055 ) * 0.75 + pmbNoise( q * 0.16 + 7.3 ) * 0.25 + 0.12 * ( pmbSolLow - 0.5 ) );
+  // Creux du relief (liant, joints) plus mouillés que la tête des granulats (sol.ts).
+  roughnessFactor = mix( roughnessFactor, PMB_WET_ROUGH, clamp( pmbWetA * ( 0.6 + 0.8 * pmbSolLow ), 0.0, 1.0 ) );
   roughnessFactor = mix( roughnessFactor, 0.05, pmbPuddle );
   diffuseColor.rgb *= 1.0 - 0.55 * pmbWetA - 0.2 * pmbPuddle;
 }
@@ -373,8 +377,14 @@ float pmbGrain = 0.5;
   float g1 = pmbNoise( q * 7.0 );
   float g2 = pmbHash( floor( q * 55.0 ) );
   float patchy = pmbNoise( q * 0.21 + 3.7 ) * 0.6 + pmbNoise( q * 0.9 ) * 0.4;
+  #ifdef PMB_SOL_ROUTE
+  // Grain lu dans la texture de l'enrobé (sol.ts) ; ici, les seules plaques d'usure.
+  pmbGrain = pmbSolGrain;
+  diffuseColor.rgb *= 0.88 + 0.24 * patchy;
+  #else
   pmbGrain = mix( 0.5, g2, fine * 0.8 ) * 0.6 + g1 * 0.4;
   diffuseColor.rgb *= ( 0.62 + 0.76 * pmbGrain ) * ( 0.8 + 0.4 * patchy );
+  #endif
   roughnessFactor = clamp( roughnessFactor * ( 0.8 + 0.45 * g1 ), 0.03, 1.0 );
   #ifdef PMB_ROAD
   {
@@ -425,7 +435,7 @@ float pmbGrain = 0.5;
   diffuseColor.rgb = mix( vec3( 0.07, 0.07, 0.08 ), diffuseColor.rgb, clamp( PMB_MARK / max( px, 1e-4 ), 0.15, 1.0 ) );
 }
 #endif
-#ifdef PMB_GRASS
+#if defined( PMB_GRASS ) && !defined( PMB_SOL_BORD )
 {
   // Accotement herbeux : touffes plus claires et terre nue par plaques, effacées au loin.
   vec2 q = vPmbWorld.xz;
@@ -468,6 +478,7 @@ float pmbGlass = 0.0;
   else if ( fam < 1.5 ) wallTint = hs < 0.3 ? vec3( 0.78, 0.66, 0.5 ) : ( hs < 0.55 ? vec3( 0.8, 0.77, 0.7 ) : ( hs < 0.8 ? vec3( 0.66, 0.64, 0.62 ) : vec3( 0.78, 0.6, 0.55 ) ) );
   else wallTint = hs < 0.5 ? vec3( 0.55, 0.58, 0.62 ) : vec3( 0.66, 0.66, 0.64 );
   diffuseColor.rgb *= wallTint * 1.6;
+  ${SOL_FACADE}
   if ( abs( nW.y ) < 0.6 ) {
     vec2 td = normalize( vec2( -nW.z, nW.x ) + vec2( 1e-4 ) );
     float u = dot( vPmbWorld.xz, td );
@@ -570,6 +581,7 @@ float pmbGlass = 0.0;
     float g = pmbHash( floor( q * 6.0 ) );
     diffuseColor.rgb = vec3( 0.32, 0.31, 0.3 ) * ( 0.75 + 0.5 * mix( 0.5, g, fine ) );
   }
+  ${SOL_TOIT}
 }
 #endif
 pmbGloss = clamp( 1.0 - roughnessFactor * 1.6, 0.0, 1.0 );
@@ -591,7 +603,7 @@ const OUTPUT_PATCH = /* glsl */ `
 {
   vec3 pW = vPmbWorld;
   vec3 pmbV = normalize( cameraPosition - pW );
-  vec3 pmbNw = normalize( vPmbNormal );
+  vec3 pmbNw = normalize( normalize( vPmbNormal ) + pmbSolN );
   float pmbF = 0.03 + 0.97 * pow( 1.0 - clamp( dot( pmbNw, pmbV ), 0.0, 1.0 ), 5.0 );
   vec3 pmbExtra = vec3( 0.0 );
   {
@@ -758,6 +770,8 @@ export interface NightPatch {
   grass?: boolean;
   /** Ciel réfléchi calculé : force, et part métallique (1 : reflet teinté plein, sans Fresnel). */
   sky?: { gain: number; metal: number };
+  /** Textures du sol et du bâti (sol.ts) : enrobé, marquage, bas-côté, terrain, façade. */
+  sol?: SolUse;
 }
 
 const fixed = (value: number) => value.toFixed(4);
@@ -799,6 +813,7 @@ export function patchNight<T extends MeshStandardMaterial>(material: T, uniforms
     defines.PMB_SKY = fixed(patch.sky.gain);
     defines.PMB_SKY_METAL = fixed(patch.sky.metal);
   }
+  if (patch.sol) Object.assign(defines, solDefines(patch.sol));
   defines.PMB_HEAD_DIFFUSE = fixed(patch.head?.diffuse ?? 1);
   defines.PMB_HEAD_SPEC = fixed(patch.head?.spec ?? 1);
   material.defines = { ...material.defines, ...defines };
@@ -807,12 +822,13 @@ export function patchNight<T extends MeshStandardMaterial>(material: T, uniforms
     .join(',')}`;
   material.customProgramCacheKey = () => key;
   material.onBeforeCompile = (shader: WebGLProgramParametersWithUniforms) => {
-    Object.assign(shader.uniforms, uniforms);
+    Object.assign(shader.uniforms, uniforms, SOL_UNIFORMS);
     shader.vertexShader = VERTEX_HEAD + shader.vertexShader.replace('#include <project_vertex>', VERTEX_BODY);
     shader.fragmentShader =
       FRAGMENT_HEAD +
       shader.fragmentShader
         .replace('#include <roughnessmap_fragment>', ROUGHNESS_PATCH)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${SOL_NORMAL}`)
         .replace('#include <lights_fragment_begin>', LIGHTS_BEGIN)
         .replace('#include <emissivemap_fragment>', EMISSIVE_PATCH)
         .replace('#include <aomap_fragment>', '#include <aomap_fragment>\n' + HEADLIGHT_PATCH)
@@ -865,9 +881,11 @@ export function createRoleMaterials(uniforms: NightUniforms): Map<string, MeshSt
       m.polygonOffsetFactor = -1;
       m.polygonOffsetUnits = -4;
     }
-    patchNight(m, uniforms, look.patch);
+    patchNight(m, uniforms, { ...look.patch, sol: SOL_ROLES[role] });
+    if (SOL_ROLES[role]) m.addEventListener('dispose', releaseSolTextures);
     out.set(role, m);
   }
+  loadSolTextures();
   return out;
 }
 
