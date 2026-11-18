@@ -83,7 +83,8 @@ export const DOCK_MENU: readonly DockSection[] = [
       { id: 'suspension', label: 'Suspension', icon: 'ressort', available: true },
       // Volant, pommeau, sièges et ciel étoilé (§ 5.4) ; l'ouvrir fait entrer dans la vue intérieure.
       { id: 'interieur', label: 'Intérieur', icon: 'siege', available: true },
-      { id: 'stickers', label: 'Stickers', icon: 'sticker', available: false },
+      // Poser des stickers sur les zones de livrée du véhicule (§ 5.3, premier lot).
+      { id: 'stickers', label: 'Stickers', icon: 'sticker', available: true },
       { id: 'carrosserie', label: 'Carrosserie', icon: 'portiere', available: false },
       { id: 'phares', label: 'Phares', icon: 'phare', available: false },
       { id: 'ailerons', label: 'Ailerons', icon: 'aileron', available: false },

@@ -5,6 +5,7 @@
 // moteur) arriveront avec leur jalon ; un manifeste ou un build qui les porte déjà reste lisible.
 
 import type { FinishId } from './finishes.ts';
+import type { BuildStickers, LiveryZone } from './stickersCalques.ts';
 
 /** Nom du dossier du véhicule dans public/assets/vehicles/. */
 export type VehicleId = string;
@@ -402,6 +403,8 @@ export interface VehicleManifest {
   interior?: VehicleInterior;
   /** Le conducteur à bord (src/data/conducteur.ts) ; absent : les réglages par défaut de son genre. */
   driver?: DriverSpec;
+  /** Zones de livrée où se posent les stickers (src/data/stickersCalques.ts) ; absent : pas de stickers. */
+  livery?: readonly LiveryZone[];
 }
 
 /**
@@ -416,4 +419,6 @@ export interface Build {
   tune?: Record<string /* id de curseur */, number>;
   /** Couleur propre d'une pièce (§ 6) : la marque du pneu (liseré, flanc blanc, lettres). */
   partPaints?: Record<string /* id de poste */, Partial<Paint>>;
+  /** Stickers posés, zone de livrée par zone (§ 5.3). */
+  stickers?: BuildStickers;
 }

@@ -21,6 +21,7 @@ import { PaintControls } from './paint/PaintControls.tsx';
 import { PictoAmbiance } from './pictos/Pictos.tsx';
 import { useLevelScroll, useRevealPressed } from './scroll.ts';
 import { SortieEntree } from './drive/SortieEntree.tsx';
+import { StickersPanel } from './stickers/StickersPanel.tsx';
 import { VehiclePicker } from './vehicles/VehiclePicker.tsx';
 import { SuspensionPanel } from './wheels/SuspensionPanel.tsx';
 import { WheelsPanel } from './wheels/WheelsPanel.tsx';
@@ -53,6 +54,7 @@ export const ENTRY_BODIES: Partial<Record<EntryId, () => ReactNode>> = {
   roues: () => <WheelsPanel />,
   suspension: () => <SuspensionPanel />,
   interieur: () => <HabitaclePanel />,
+  stickers: () => <StickersPanel />,
   preparation: () => <EnginePanel />,
   ambiance: () => <AmbianceChoices />,
   sortie: () => <SortieEntree />,

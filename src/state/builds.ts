@@ -15,6 +15,7 @@ import type {
   VehicleManifest,
   Zone,
 } from '../data/vehicleTypes.ts';
+import { sanitizeStickers, type BuildStickers } from '../data/stickersCalques.ts';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
 export const BUILDS_KEY = 'pmb-builds';
@@ -145,11 +146,13 @@ function sanitizeBuild(raw: unknown): Build {
     }
     if (Object.keys(kept).length > 0) build.partPaints = kept;
   }
+  const stickers = sanitizeStickers((raw as Record<string, unknown>).stickers);
+  if (stickers) build.stickers = stickers;
   return build;
 }
 
 function isEmpty(build: Build): boolean {
-  return Object.keys(build.paints).length === 0 && build.parts === undefined && build.tune === undefined && build.partPaints === undefined;
+  return Object.keys(build.paints).length === 0 && build.parts === undefined && build.tune === undefined && build.partPaints === undefined && build.stickers === undefined;
 }
 
 /** Retire une clé d'un dictionnaire du build ; le dictionnaire vidé disparaît. */
@@ -160,7 +163,7 @@ function withEntry<T>(map: Record<string, T> | undefined, key: string, value: T 
 }
 
 /** Pose un champ facultatif du build : absent quand il est vide. */
-function withField<K extends 'parts' | 'tune' | 'partPaints'>(build: Build, key: K, value: Build[K] | undefined): Build {
+function withField<K extends 'parts' | 'tune' | 'partPaints' | 'stickers'>(build: Build, key: K, value: Build[K] | undefined): Build {
   const next: Build = { ...build };
   if (value === undefined) delete next[key];
   else next[key] = value;
@@ -225,6 +228,8 @@ export interface BuildsState extends BuildsData {
   setTune: (vehicle: VehicleId, param: string, value: number | null) => void;
   /** Couleur propre d'une pièce (§ 6, partPaints : la marque du pneu) ; `null` : celle d'origine. */
   setPartPaint: (vehicle: VehicleId, slot: string, patch: Partial<Paint> | null) => void;
+  /** Stickers du véhicule (§ 5.3) : calques et symétrie ; relus comme une sauvegarde, rien de vide n'est gardé. */
+  setStickers: (vehicle: VehicleId, stickers: BuildStickers | undefined) => void;
   /** Range une couleur en tête des dernières couleurs (à appeler quand un choix est posé). */
   rememberColor: (color: Hex) => void;
   /** Rend au véhicule son état d'origine : peintures, pièces, curseurs. */
@@ -278,6 +283,11 @@ export const useBuilds = create<BuildsState>()(
           const build = state.builds[vehicle] ?? { paints: {} };
           const choice = patch === null ? null : sanitizeChoice({ ...build.partPaints?.[slot], ...patch });
           return { builds: { ...state.builds, [vehicle]: withField(build, 'partPaints', withEntry(build.partPaints, slot, choice)) } };
+        }),
+      setStickers: (vehicle, stickers) =>
+        set((state) => {
+          const build = state.builds[vehicle] ?? { paints: {} };
+          return { builds: { ...state.builds, [vehicle]: withField(build, 'stickers', sanitizeStickers(stickers)) } };
         }),
       rememberColor: (color) =>
         set((state) => {

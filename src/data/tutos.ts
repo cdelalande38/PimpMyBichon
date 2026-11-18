@@ -90,6 +90,18 @@ export const TUTOS: readonly Tuto[] = [
     ],
   },
   {
+    id: 'stickers',
+    ecrans: ['entree:stickers'],
+    titre: 'Les stickers',
+    but: 'Ici, tu colles des stickers sur ton véhicule et tu les places au doigt.',
+    etapes: [
+      { texte: 'Choisis une zone : les flancs, le capot, le toit… Sur une moto, le réservoir.', cible: 'footer.dock [aria-label="Zones de stickers"]' },
+      { texte: '« Ajouter un sticker » ouvre la bibliothèque. Un cadenas : le motif se gagne avec tes dollars ou un haut fait.' },
+      { texte: 'Sur le plan, glisse le sticker pour le placer. La poignée ronde le tourne et l’agrandit ; « Curseurs » pour le réglage fin.' },
+      { texte: 'Symétrie mise, le flanc droit reprend le gauche en miroir et les lettrages restent lisibles. Coupe-la pour deux côtés différents.' },
+    ],
+  },
+  {
     id: 'roues',
     ecrans: ['entree:roues'],
     titre: 'Les roues',

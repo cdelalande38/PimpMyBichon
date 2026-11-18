@@ -89,7 +89,7 @@ describe('pile des niveaux du dock', () => {
     expect(dock().levels).toEqual([]);
     // Une entrée « bientôt » ne s'ouvre pas.
     dock().setSection('custom');
-    dock().setEntry('stickers');
+    dock().setEntry('carrosserie');
     expect(entryOf('custom', dock().entries)).toBe('peinture');
     // Ouverture de l'extérieur, sur une zone : le dock se rouvre s'il était fermé.
     dock().setClosed(true);

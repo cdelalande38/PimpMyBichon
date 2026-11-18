@@ -83,5 +83,66 @@
     "nodes": ["WheelFrontL", "WheelFrontR", "WheelRearL", "WheelRearR"],
     "gap": [0.032, 0.028],
     "floor": 0.089
-  }
+  },
+  "livery": [
+    {
+      "id": "flanc_gauche",
+      "label": "Flanc gauche",
+      "paints": [
+        "carrosserie",
+        "secondaire"
+      ],
+      "face": "-z",
+      "center": [
+        0,
+        0.62,
+        -0.62
+      ],
+      "size": [
+        4.5,
+        1.05,
+        1.24
+      ],
+      "pairLabel": "Flancs"
+    },
+    {
+      "id": "flanc_droit",
+      "label": "Flanc droit",
+      "paints": [
+        "carrosserie",
+        "secondaire"
+      ],
+      "face": "+z",
+      "center": [
+        0,
+        0.62,
+        0.62
+      ],
+      "size": [
+        4.5,
+        1.05,
+        1.24
+      ],
+      "mirrorOf": "flanc_gauche"
+    },
+    {
+      "id": "capot",
+      "label": "Capot",
+      "paints": [
+        "carrosserie",
+        "secondaire"
+      ],
+      "face": "+y",
+      "center": [
+        1.5,
+        1.0,
+        0
+      ],
+      "size": [
+        1.9,
+        1.5,
+        1.2
+      ]
+    }
+  ]
 }

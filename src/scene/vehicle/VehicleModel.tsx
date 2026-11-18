@@ -43,6 +43,7 @@ import { resolvePaints, useBuilds } from '../../state/builds.ts';
 import { resolveWheels, TIRE_PAINT, WHEEL_SLOTS, wheelFiles } from '../../data/wheels.ts';
 import type { Build } from '../../data/vehicleTypes.ts';
 import { useHabitacle } from './habitacle.ts';
+import { applyLivery, createLiveryRig, disposeLivery, type LiveryRig } from './livree.ts';
 import { createMarkMaterial, mergeGround, mountWheels, preloadWheels, useBodyPose, useWheelMounts, useWheelSources, type WheelAnchor, type WheelMount, type WheelRig } from './wheels.ts';
 
 const BASE = import.meta.env.BASE_URL;
@@ -88,6 +89,8 @@ export interface Prepared extends VehicleMeasure {
    * peinture) appartient au cache de chargement, partagé : jamais libéré ici.
    */
   owned: { geometries: BufferGeometry[]; materials: Material[] };
+  /** Stickers (src/scene/vehicle/livree.ts) ; `null` : le véhicule ne déclare pas de zone de livrée. */
+  livery?: LiveryRig | null;
 }
 
 type Adapt = NonNullable<VehicleManifest['adapt']>;
@@ -382,8 +385,12 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
     anchors.push({ node, base: { x: node.position.x, y: node.position.y, z: node.position.z }, front: middle.x > 0, own });
   }
   for (const node of loose.grounded) ground.attach(node);
+  // Stickers du build, posés dès la préparation (garage, sortie) ; le garage les suit ensuite (useLivery).
+  const livery = createLiveryRig(vehicle, body, zones);
+  if (livery) applyLivery(livery, useBuilds.getState().builds[vehicle.id]?.stickers);
 
   return {
+    livery,
     root,
     paints,
     zones,
@@ -455,6 +462,7 @@ export function useVehicleWheels(prepared: Prepared, vehicle: VehicleManifest, i
 export function disposePrepared(prepared: Prepared): void {
   for (const geometry of prepared.owned.geometries) geometry.dispose();
   for (const material of prepared.owned.materials) material.dispose();
+  disposeLivery(prepared.livery);
 }
 
 /**
@@ -582,6 +590,11 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
     paintZones(prepared.zones, paints, bodyEnv);
     invalidate();
   }, [prepared, paints, bodyEnv, invalidate]);
+  // Stickers : recomposés à chaque changement du build, une image redemandée quand la texture est prête.
+  const stickers = useBuilds((state) => state.builds[vehicle.id]?.stickers);
+  useLayoutEffect(() => {
+    if (prepared.livery) applyLivery(prepared.livery, stickers, invalidate);
+  }, [prepared, stickers, invalidate]);
   // Vue intérieure : vitrages presque incolores, pour voir dehors par toutes les vitres.
   const inside = useView((state) => state.mode === 'interieur');
   useLayoutEffect(() => {
