@@ -939,14 +939,27 @@ body:has(.drive-top) .tuto-aide {
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
-  /* Bandeau réduit : le nom sur une ligne à gauche, le compte-tours au milieu, radio et pause à droite. */
+  /* Bandeau réduit : le nom sur une ligne à gauche ; le compte-tours, plus petit, rangé à droite contre
+     les réglages, la radio et la pause. Le milieu du haut reste à la route (retour du 18 novembre 2026 :
+     en paysage, compte-tours et chrono au centre prenaient trop de place) ; le chrono, fin, est tout en
+     haut au milieu (depart.css). */
   .drive-top {
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto auto;
     padding-top: calc(0.25rem + var(--safe-t));
   }
 
   .drive-dial {
-    width: 7.25rem;
+    /* Sur deux rangées : la première ne fait que la hauteur du nom et des boutons, la mini-carte tient dessous. */
+    grid-row: 1 / span 2;
+    width: 6.25rem;
+  }
+
+  /* Le « ? » de l'aide avec les boutons ronds du coin droit, sous le dernier (retour du 18 novembre
+     2026) : le bord gauche reste au nom de la carte et à la mini-carte. */
+  body:has(.drive-top) .tuto-aide {
+    top: calc(0.25rem + var(--safe-t) + var(--tap) + 0.5rem);
+    right: calc(var(--gutter) + var(--safe-r));
+    left: auto;
   }
 
   /* Réglages, radio et pause côte à côte, dans le coin droit. */
@@ -1026,9 +1039,13 @@ body:has(.drive-top) .tuto-aide {
     transform: translate(-50%, -50%);
   }
 
-  /* La mini-carte en haut à gauche, sous le bouton « ? » de l'aide. */
+  /* La mini-carte juste sous le nom de la carte, dans la grille du bandeau : relevée, elle laisse le
+     milieu et le bas du bord gauche au pouce qui tient le manche (retour du 18 novembre 2026). */
   .drive-minicarte-place {
-    top: calc(8.25rem + var(--safe-t));
+    position: static;
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: start;
   }
 
   .drive-bas {

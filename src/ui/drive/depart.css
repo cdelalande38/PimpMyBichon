@@ -163,9 +163,19 @@
 }
 
 @media (orientation: landscape) and (max-height: 540px) {
+  /* En paysage, les feux et le chrono quittent le pied du compte-tours (rangé à droite) : tout en haut,
+     au milieu du bandeau, sur une ligne fine qui laisse le point de fuite de la route dégagé. */
+  .drive-feux-place {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    grid-column: 1 / -1;
+    width: 0;
+  }
+
   .drive-feux,
   .drive-chrono {
-    top: 0.25rem;
+    top: 0;
   }
 
   .drive-arrivee {
@@ -174,6 +184,13 @@
 
   .drive-arrivee-temps {
     font-size: 1.75rem;
+  }
+}
+
+/* Paysage étroit : pas la place entre le nom de la carte et le compte-tours ; feux et chrono sous le bandeau. */
+@media (orientation: landscape) and (max-height: 540px) and (max-width: 780px) {
+  .drive-feux-place {
+    top: calc(100% + 0.25rem);
   }
 }
 
