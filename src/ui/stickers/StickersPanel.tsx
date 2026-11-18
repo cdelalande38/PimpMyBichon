@@ -6,6 +6,7 @@
 // les flancs : le flanc droit reprend le gauche en miroir. Le véhicule à l'écran suit en direct.
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -13,7 +14,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { possede } from "../../jeu/bilan.ts";
+import { possedeDans } from "../../jeu/achats.ts";
 import { PAINT_COLORS } from "../../data/paintColors.ts";
 import {
   lockHint,
@@ -45,6 +46,7 @@ import {
 import { stickerUrl } from "../../data/stickersFichiers.ts";
 import { resolveVehicle } from "../../data/vehicles.ts";
 import { useBuilds } from "../../state/builds.ts";
+import { useJeu } from "../../state/jeu.ts";
 import { Padlock } from "../paint/Padlock.tsx";
 import { handleGesture, PLAN_MAX_HEIGHT, planWidth } from "./gestes.ts";
 import "./stickers.css";
@@ -54,17 +56,6 @@ const TABS: ReadonlyArray<{ id: Tab; label: string }> = [
   ...STICKER_PACKS.map((pack) => ({ id: pack.id as Tab, label: pack.label })),
   { id: "trophees", label: "Trophées" },
 ];
-
-/**
- * Article non possédé, forcé par les parcours d'essai (window.__pmbStickersVerrous, posé avant le
- * chargement, comme __pmbRadioPlafond) : montre l'état verrouillé tant que l'économie offre tout.
- */
-function owns(article: string): boolean {
-  const forced = (globalThis as { __pmbStickersVerrous?: unknown })
-    .__pmbStickersVerrous;
-  if (Array.isArray(forced) && forced.includes(article)) return false;
-  return possede(article);
-}
 
 /** Écart de la poignée au coin du sticker, en pixels. */
 const HANDLE_GAP = 26;
@@ -93,6 +84,13 @@ export function StickersPanel() {
   const vehicle = resolveVehicle(useBuilds((state) => state.current));
   const saved = useBuilds((state) => state.builds[vehicle.id]?.stickers);
   const setStickers = useBuilds((state) => state.setStickers);
+  // Ce qui est acheté ou gagné (src/state/jeu.ts) : le panneau suit un achat ou un haut fait sans
+  // qu'on ait à le rouvrir.
+  const acquis = useJeu((state) => state.articles);
+  const owns = useCallback(
+    (article: string) => possedeDans({ articles: acquis }, article),
+    [acquis],
+  );
   const zones = useMemo(() => vehicle.livery ?? [], [vehicle]);
   const editable = editableZones(zones, saved);
   const [zoneId, setZoneId] = useState<string | null>(null);

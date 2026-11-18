@@ -1,13 +1,12 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { motifsOf, packArticle, stickerArticle } from '../../src/data/stickers.ts';
 import { openApp, openEntry, readBuilds, reloadSaved, waitForBench } from './helpers.ts';
 
 // Stickers (§ 5.3, jalon 4, premier lot) : choisir une zone, poser un motif de la bibliothèque, le
 // déplacer au doigt, le colorer, recharger : il est toujours là. Un motif dont le pack n'est pas
-// possédé montre son cadenas (l'économie offre encore tout : le parcours force le verrou par
-// window.__pmbStickersVerrous). Captures de revue : PMB_CAPTURES (dossier), sinon captures/stickers/.
+// possédé montre son cadenas (sauvegarde neuve : seul le pack Départ est offert). Captures de revue :
+// PMB_CAPTURES (dossier), sinon captures/stickers/.
 
 const dock = (page: Page) => page.locator('footer.dock');
 
@@ -27,11 +26,7 @@ test('stickers : poser, déplacer, colorer, recharger', async ({ page }) => {
   test.setTimeout(300_000);
   const dir = process.env.PMB_CAPTURES ?? resolve('captures', 'stickers');
   mkdirSync(dir, { recursive: true });
-  // Ni le pack Flammes, ni ses motifs un par un.
-  const verrous = [packArticle('flammes'), ...motifsOf('flammes').map((motif) => stickerArticle(motif.id))];
-  await page.addInitScript((articles) => {
-    (globalThis as { __pmbStickersVerrous?: string[] }).__pmbStickersVerrous = articles;
-  }, verrous);
+  // Sauvegarde neuve : le pack Flammes n'est ni acheté, ni gagné (src/data/boutique.ts).
   await openApp(page);
   await waitForBench(page);
   const vehicle = await page.locator('.stage').getAttribute('data-vehicle');

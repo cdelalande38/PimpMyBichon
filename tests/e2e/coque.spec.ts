@@ -47,7 +47,10 @@ test.describe('coque de l’app', () => {
       if (inDock) {
         expect(box.y, `« ${label} » dans le tiers bas`).toBeGreaterThanOrEqual((VIEWPORT.height * 2) / 3);
       } else if (!onScene) {
-        expect(await button.evaluate((element) => element.closest('nav.quick') !== null), `« ${label} » hors du dock : bouton rond du haut`).toBe(true);
+        // Le solde du jeu (vague S, src/ui/jeu/Solde.tsx) : dans le bandeau du haut, à côté de la marque.
+        const enHaut = await button.evaluate((element) => element.closest('nav.quick') !== null || element.matches('header.hud > .solde-pill'));
+        expect(enHaut, `« ${label} » hors du dock : bouton rond du haut ou solde du bandeau`).toBe(true);
+        expect(box.y + box.height, `« ${label} » dans le tiers haut`).toBeLessThanOrEqual(VIEWPORT.height / 2);
       }
     }
   });

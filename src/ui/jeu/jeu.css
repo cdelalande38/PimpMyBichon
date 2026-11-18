@@ -2,16 +2,30 @@
    rem (elles suivent le réglage du texte) ; toute commande a au moins 48 px de haut. */
 
 /* Solde : à côté de la marque, discret. Le bandeau du haut laisse passer les gestes vers la scène : le
-   bouton les reprend. Sa zone d'appui déborde du dessin (8 px en haut et en bas) pour offrir 48 px. */
+   bouton les reprend. Le bouton fait 48 px de côté au moins (zone d'appui) ; son dessin, plus petit, est
+   porté par l'étiquette qu'il contient, centrée sur la ligne de la marque. */
 .solde-pill {
-  position: relative;
   flex: none;
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
+  min-width: max(3rem, 48px);
+  min-height: max(3rem, 48px);
+  /* Le bandeau répartit ses éléments aux deux bouts : la marge automatique cale le solde contre la marque.
+     Les marges négatives centrent les 48 px sur le dessin sans pousser le bandeau. */
+  margin: -0.5rem auto -0.5rem 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.solde-pill-dessin {
+  display: inline-flex;
+  align-items: center;
   min-height: 1.75rem;
-  /* Le bandeau répartit ses éléments aux deux bouts : la marge automatique cale le solde contre la marque. */
-  margin: 0.125rem auto 0 0;
   padding: 0.125rem 0.5rem;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -23,21 +37,17 @@
   line-height: 1.15;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  pointer-events: auto;
-  cursor: pointer;
 }
 
-.solde-pill::after {
-  content: '';
-  position: absolute;
-  inset: -0.625rem -0.375rem;
-}
-
-.solde-pill:active {
+.solde-pill:active .solde-pill-dessin {
   filter: brightness(1.25);
 }
 
 .solde-pill:focus-visible {
+  outline: none;
+}
+
+.solde-pill:focus-visible .solde-pill-dessin {
   outline: 2px solid var(--ambre);
   outline-offset: 2px;
 }

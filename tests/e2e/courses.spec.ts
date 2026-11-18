@@ -1,8 +1,9 @@
 // Courses de la sortie (vague S, 18 novembre 2026 ; src/data/courses.ts) :
 // - le choix du format au menu (balade, 1 tour, 3 tours grisés sur une route ouverte), gardé au rechargement ;
 // - la course en 3 tours sur le circuit : « Tour 1/3 » près du chrono une fois parti ;
-// - l'écran de fin d'une course en 1 tour : temps, record, bilan (vide : la souche de l'économie),
-//   « Rejouer » (retour aux feux) et « Rentrer au garage ».
+// - l'écran de fin d'une course en 1 tour : temps, record, gains et déblocages (la première course finie
+//   paie toujours sa prime et son haut fait), « Rejouer » (retour aux feux), « Rentrer au garage », et le
+//   solde retrouvé au garage.
 // Une course entière est trop longue en rendu logiciel. Pour l'écran de fin, le parcours sert lui-même la
 // route de Miami Beach (page.route) avec le départ « Vers la 41e rue » posé 120 m avant le bout : c'est la
 // donnée de la carte qui change, dans le navigateur du test seulement ; l'app n'a aucune porte dérobée
@@ -100,7 +101,7 @@ test.describe('courses : format, tours, écran de fin', () => {
     // La route servie par le parcours doit passer par le réseau de la page, pas par le service worker.
     test.use({ serviceWorkers: 'block' });
 
-    test('course en 1 tour finie : temps, record, bilan vide, Rejouer revient aux feux', async ({ page }) => {
+    test('course en 1 tour finie : temps, record, gains et déblocages, Rejouer revient aux feux, solde au garage', async ({ page }) => {
       test.setTimeout(600_000);
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
@@ -138,8 +139,16 @@ test.describe('courses : format, tours, écran de fin', () => {
       await expect(fin.getByRole('heading', { name: 'Arrivée' })).toBeVisible();
       await expect(fin).toContainText('Course 1 tour');
       await expect(fin).toContainText('Premier temps posé ici dans ce format');
-      await expect(fin).toContainText('Rien de gagné cette fois.');
-      await expect(fin).toContainText('Rien de nouveau cette fois.');
+      // Les gains : la prime de la course finie, toujours ; médailles et primes dépendent du temps posé.
+      const gains = fin.locator('.fin-course-gains');
+      await expect(gains).toContainText('Course d’un tour finie');
+      await expect(gains).toContainText('+ 40 $');
+      await expect(gains).toContainText('Total');
+      await expect(fin).not.toContainText('Rien de gagné cette fois.');
+      // Les déblocages : la toute première course finie est un haut fait, quel que soit le temps.
+      await expect(fin.locator('.fin-course-debloque')).toContainText('Premier tour de piste');
+      const solde = Number(((await fin.locator('.fin-course-solde').textContent()) ?? '').replace(/\D/g, ''));
+      expect(solde, 'solde après la course').toBeGreaterThanOrEqual(40);
       await expect(fin.locator('.fin-course-temps')).toHaveText(/^\d+:\d\d\.\d$/);
       // Le panneau d'arrivée de la balade ne s'ajoute pas ; un seul « Rentrer au garage ».
       await expect(page.locator('.drive-arrivee')).toHaveCount(0);
@@ -148,7 +157,7 @@ test.describe('courses : format, tours, écran de fin', () => {
         const b = await fin.getByRole('button', { name: nom }).boundingBox();
         expect(b?.height ?? 0, nom).toBeGreaterThanOrEqual(48);
       }
-      await shot(page, '04-fin-bilan-vide');
+      await shot(page, '04-fin-bilan');
       // Rejouer : mêmes réglages, retour sur la ligne, aux feux, à la main.
       await fin.getByRole('button', { name: 'Rejouer' }).tap();
       await expect(fin).toHaveCount(0);
@@ -156,6 +165,8 @@ test.describe('courses : format, tours, écran de fin', () => {
       await expect(zone).toHaveAttribute('data-conduite', 'main');
       await rentrerAuGarage(page);
       await expect(stage(page)).toHaveCount(0);
+      // Au garage, la pastille porte le solde annoncé par l'écran de fin.
+      await expect(page.getByRole('button', { name: new RegExp(`Ton solde : ${solde} dollars`) })).toBeVisible();
       expect(errors).toEqual([]);
     });
   });
