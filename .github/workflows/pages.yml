@@ -25,11 +25,13 @@ on:
 permissions:
   contents: read
 
-# Un run à la fois par branche. Sur main, le run en cours va au bout ; une pull request
-# remplacée par un nouveau push annule son run précédent.
+# Un run à la fois par branche, et c'est le plus récent : un nouveau push annule le run précédent,
+# sur main comme sur une pull request. Sans cela, la passe complète de la version d'avant (une
+# demi-heure) retenait la publication de la suivante (constaté le 18 novembre 2026). Le run annulé
+# ne perd rien d'utile : sa version est remplacée, et le nouveau rejoue toute la passe.
 concurrency:
   group: pages-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   build:
