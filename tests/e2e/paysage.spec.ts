@@ -444,20 +444,24 @@ async function orbitOf(page: Page): Promise<Orbit | null> {
 
 /** Attend que l'orbite ne bouge plus (le rendu logiciel est lent) et la rend. */
 async function settledOrbit(page: Page): Promise<Orbit> {
+  // Trois lectures égales de suite, à 700 ms : en rendu logiciel sur une machine lente (la CI), une image
+  // peut durer plus qu'un intervalle, et deux lectures égales ne prouvaient pas que la caméra était posée
+  // (azimut lu en pleine transition, run du 18 novembre 2026).
   let last = '';
+  let egales = 0;
   let orbit: Orbit | null = null;
   await expect
     .poll(
       async () => {
         orbit = await orbitOf(page);
         const key = JSON.stringify(orbit);
-        const same = orbit !== null && key === last;
+        egales = orbit !== null && key === last ? egales + 1 : 0;
         last = key;
-        return same;
+        return egales;
       },
-      { message: 'orbite posée', timeout: 30_000, intervals: [400] },
+      { message: 'orbite posée', timeout: 60_000, intervals: [700] },
     )
-    .toBe(true);
+    .toBeGreaterThanOrEqual(2);
   if (!orbit) throw new Error('pas d’orbite');
   return orbit;
 }

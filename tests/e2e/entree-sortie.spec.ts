@@ -115,7 +115,7 @@ async function fil(page: Page): Promise<string> {
 test.describe('menu de la sortie par étapes', () => {
   test.setTimeout(240_000);
 
-  test('portrait : une étape à la fois, le fil, « Retour » d’une étape, « Sortir » entier et qui redit le format', async ({ page }) => {
+  test('portrait : une étape à la fois, le fil, « Retour » d’une étape, « Sortir » entier et qui redit le format', { tag: '@essentiel' }, async ({ page }) => {
     const { plusieurs, seul } = lieux();
     const multi = plusieurs[plusieurs.length - 1]!;
     await openApp(page);
@@ -267,7 +267,7 @@ test.describe('menu de la sortie par étapes', () => {
     test.describe(`paysage ${vue.width} × ${vue.height}`, () => {
       test.use({ viewport: vue });
 
-      test('chaque étape seule dans la colonne ; « Sortir » entier en texte normal, grand et très grand', async ({ page }) => {
+      test('chaque étape seule dans la colonne ; « Sortir » entier en texte normal, grand et très grand', { tag: '@essentiel' }, async ({ page }) => {
         test.setTimeout(360_000);
         const { plusieurs } = lieux();
         const multi = plusieurs[plusieurs.length - 1]!;

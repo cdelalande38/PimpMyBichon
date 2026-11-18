@@ -217,7 +217,7 @@ async function capturer(page: Page, name: string): Promise<void> {
   await page.screenshot({ path });
 }
 
-test('une nouvelle version attend un geste, puis s’applique', async ({ page }) => {
+test('une nouvelle version attend un geste, puis s’applique', { tag: '@essentiel' }, async ({ page }) => {
   test.setTimeout(120_000);
   let loads = 0;
   page.on('load', () => {
@@ -323,7 +323,7 @@ test('la pastille « Nouvelle version » se voit au garage, menu fermé, et appl
 });
 
 test.describe('au lancement', () => {
-  test('une version plus récente est annoncée par l’écran de chargement, puis l’app s’ouvre dessus sans aucun geste', async ({ page }) => {
+  test('une version plus récente est annoncée par l’écran de chargement, puis l’app s’ouvre dessus sans aucun geste', { tag: '@essentiel' }, async ({ page }) => {
     test.setTimeout(240_000);
     await journaliser(page);
     const charges = compterChargements(page);

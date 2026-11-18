@@ -121,7 +121,7 @@ test.describe('sortie de nuit', () => {
     await waitForScene(page);
   });
 
-  test('lien direct vers la sortie : la première carte ; toutes les commandes offrent 48 px au doigt', async ({ page }) => {
+  test('lien direct vers la sortie : la première carte ; toutes les commandes offrent 48 px au doigt', { tag: '@essentiel' }, async ({ page }) => {
     // Route lente à venir : l'écran de chargement le dit, crédits de la carte compris.
     let release = () => {};
     const held = new Promise<void>((done) => (release = done));
@@ -164,7 +164,7 @@ test.describe('sortie de nuit', () => {
     expect(await tailles()).toBeGreaterThanOrEqual(4);
   });
 
-  test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les trois météos, puis de jour', async ({ page }) => {
+  test('les matières de nuit se compilent : ni erreur de nuanceur ni erreur de page, par les trois météos, puis de jour', { tag: '@essentiel' }, async ({ page }) => {
     test.setTimeout(300_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));

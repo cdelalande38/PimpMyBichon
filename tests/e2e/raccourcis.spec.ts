@@ -17,7 +17,7 @@ async function shot(page: Page, name: string): Promise<void> {
 }
 
 test.describe('raccourcis et dock de personnalisation', () => {
-  test('colonne de boutons ronds en haut à droite, dock à quatre onglets sans rangée d’actions', async ({ page }) => {
+  test('colonne de boutons ronds en haut à droite, dock à quatre onglets sans rangée d’actions', { tag: '@essentiel' }, async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
 
@@ -86,7 +86,7 @@ test.describe('raccourcis et dock de personnalisation', () => {
       .toBeLessThanOrEqual(1);
   });
 
-  test('« Atelier » ouvre un panneau à trois rubriques ; un seul « Retour » le ferme', async ({ page }) => {
+  test('« Atelier » ouvre un panneau à trois rubriques ; un seul « Retour » le ferme', { tag: '@essentiel' }, async ({ page }) => {
     await openApp(page);
     await openAtelier(page, 'Réglages');
     await expect(page).toHaveURL(/#\/reglages$/);

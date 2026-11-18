@@ -66,7 +66,7 @@ async function linkableZone(page: Page): Promise<number> {
 test.describe('peinture', () => {
   test.setTimeout(300_000);
 
-  test('zone, couleur hexadécimale, finition et zone détachée sont retrouvées après rechargement', async ({
+  test('zone, couleur hexadécimale, finition et zone détachée sont retrouvées après rechargement', { tag: '@essentiel' }, async ({
     page,
   }) => {
     await openApp(page);

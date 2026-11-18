@@ -95,7 +95,7 @@ test.describe('catalogue des véhicules', () => {
     }
   });
 
-  test('changer de véhicule et revenir : chacun garde ses peintures, le véhicule est retrouvé au rechargement', async ({ page }) => {
+  test('changer de véhicule et revenir : chacun garde ses peintures, le véhicule est retrouvé au rechargement', { tag: '@essentiel' }, async ({ page }) => {
     test.skip(!OTHER, 'un seul modèle présent : lance npm run vehicles:build');
     const other = OTHER as Entry;
     await openApp(page);

@@ -6,7 +6,7 @@ import { capture, openApp, openAtelier, reloadSaved, waitForBench, waitForScene,
 // après une première visite.
 
 test.describe('hors ligne et installation', () => {
-  test('après une première visite, l’app s’ouvre sans réseau, véhicule de départ compris', async ({
+  test('après une première visite, l’app s’ouvre sans réseau, véhicule de départ compris', { tag: '@essentiel' }, async ({
     page,
     context,
   }) => {
@@ -48,7 +48,7 @@ test.describe('hors ligne et installation', () => {
     expect(failed).toEqual([]);
   });
 
-  test('le précache contient toute la coque, et rien d’autre que l’app', async ({ page, baseURL }) => {
+  test('le précache contient toute la coque, et rien d’autre que l’app', { tag: '@essentiel' }, async ({ page, baseURL }) => {
     await openApp(page);
     await waitOfflineReady(page);
 
@@ -73,7 +73,7 @@ test.describe('hors ligne et installation', () => {
     expect(cached.every((url) => url.startsWith(baseURL ?? ''))).toBe(true);
   });
 
-  test('le manifeste rend l’app installable', async ({ page, context }) => {
+  test('le manifeste rend l’app installable', { tag: '@essentiel' }, async ({ page, context }) => {
     await openApp(page);
     await waitOfflineReady(page);
 

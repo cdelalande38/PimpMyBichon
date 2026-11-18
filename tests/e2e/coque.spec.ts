@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { capture, changedRatio, openApp, openAtelier, quick, sceneBand, VIEWPORT, waitForBench, waitForScene } from './helpers.ts';
 
 test.describe('coque de l’app', () => {
-  test('l’écran principal s’affiche en 390 × 844, véhicule de départ compris', async ({ page }) => {
+  test('l’écran principal s’affiche en 390 × 844, véhicule de départ compris', { tag: '@essentiel' }, async ({ page }) => {
     test.setTimeout(180_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
@@ -55,7 +55,7 @@ test.describe('coque de l’app', () => {
     }
   });
 
-  test('aucune requête ne part vers un tiers', async ({ page, baseURL }) => {
+  test('aucune requête ne part vers un tiers', { tag: '@essentiel' }, async ({ page, baseURL }) => {
     const requested: string[] = [];
     page.on('request', (request) => requested.push(request.url()));
 
@@ -139,7 +139,7 @@ test.describe('coque de l’app', () => {
       .toBe(0);
   });
 
-  test('si la 3D ne se charge pas, le reste de l’app tient et propose de relancer', async ({
+  test('si la 3D ne se charge pas, le reste de l’app tient et propose de relancer', { tag: '@essentiel' }, async ({
     page,
   }) => {
     await page.route(/\/assets\/GarageCanvas-[\w-]+\.js$/, (route) => route.abort());

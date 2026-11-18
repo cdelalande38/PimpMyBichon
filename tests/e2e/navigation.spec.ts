@@ -72,7 +72,7 @@ async function touchableHeights(page: Page, selector: string): Promise<Array<{ n
 const dockTop = (page: Page) => dock(page).evaluate((footer) => Math.round(footer.getBoundingClientRect().top));
 
 test.describe('navigation du dock', () => {
-  test('peinture : descendre jusqu’au nuancier, remonter niveau par niveau, fermer, rouvrir à l’accueil du menu, recharger', async ({ page }) => {
+  test('peinture : descendre jusqu’au nuancier, remonter niveau par niveau, fermer, rouvrir à l’accueil du menu, recharger', { tag: '@essentiel' }, async ({ page }) => {
     test.setTimeout(150_000);
     await openApp(page);
     await waitForScene(page);

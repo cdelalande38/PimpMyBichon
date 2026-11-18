@@ -51,7 +51,7 @@ async function commandesA48(page: Page): Promise<void> {
 }
 
 test.describe('jeu : dollars, boutique, hauts faits', () => {
-  test('le solde au garage, un achat avec confirmation, un solde insuffisant, tout gardé au rechargement', async ({ page }) => {
+  test('le solde au garage, un achat avec confirmation, un solde insuffisant, tout gardé au rechargement', { tag: '@essentiel' }, async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
     await poserSauvegarde(page, { solde: 180, articles: {}, hautsFaits: { 'premiere-course': true }, cumuls: { courses: 4, distance: 9300 } });
@@ -141,6 +141,8 @@ test.describe('jeu : dollars, boutique, hauts faits', () => {
     test.use({ reducedMotion: 'no-preference' });
 
     test('le premier achat s’annonce au garage : une carte de haut fait, son « gain », puis la pile s’efface', async ({ page }) => {
+      // Avec le mouvement, la rotation lente occupe un cœur en rendu logiciel : large, pour la CI.
+      test.setTimeout(240_000);
       await openApp(page);
       await waitForScene(page);
       await poserSauvegarde(page, { solde: 180, articles: {}, hautsFaits: { 'premiere-course': true }, cumuls: { courses: 4, distance: 9300 } });

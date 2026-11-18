@@ -7,7 +7,7 @@
 import { expect, test } from '@playwright/test';
 import { ENTREE_SORTIE, openApp, pickMap, quick, VIEWPORT, waitForScene } from './helpers.ts';
 
-test('« Jouer », à côté de « Personnaliser », ouvre le menu de la sortie, prêt à sortir', async ({ page }) => {
+test('« Jouer », à côté de « Personnaliser », ouvre le menu de la sortie, prêt à sortir', { tag: '@essentiel' }, async ({ page }) => {
   await openApp(page);
   await waitForScene(page);
   const dock = page.locator('footer.dock');
@@ -53,7 +53,7 @@ test('« Jouer », à côté de « Personnaliser », ouvre le menu de la sortie,
   await page.screenshot({ path: 'test-results/sortie-raccourci.png' });
 });
 
-test('en paysage, menu replié : « Personnaliser » et « Jouer » entiers, sans rien recouvrir', async ({ page }) => {
+test('en paysage, menu replié : « Personnaliser » et « Jouer » entiers, sans rien recouvrir', { tag: '@essentiel' }, async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await openApp(page);
   await waitForScene(page);

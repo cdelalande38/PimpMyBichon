@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 
 const HACHE = /^assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/;
 
-test('précache : seuls les fichiers nommés d’après leur contenu se passent de révision', async ({ request }) => {
+test('précache : seuls les fichiers nommés d’après leur contenu se passent de révision', { tag: '@essentiel' }, async ({ request }) => {
   const response = await request.get('./sw.js');
   expect(response.ok()).toBe(true);
   const source = await response.text();
