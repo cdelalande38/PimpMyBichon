@@ -34,7 +34,10 @@ describe('silhouette de la Cox', () => {
     const url = pathToFileURL(new URL('../../assets-src/vehicles/cox/model.mjs', import.meta.url).pathname).href;
     const mod = (await import(url)) as { default: (k: typeof kit) => { nodes: Map<string, Node> } };
     nodes = mod.default(kit).nodes;
-    shell = points(nodes, 'carrosserie', () => true);
+    // Le capot moteur est un nœud à part, posé sur sa charnière (vague U, « capot ») : il fait partie de la caisse.
+    const lid = nodes.get('capot_moteur') as (Node & { position?: P3 }) | undefined;
+    const [hx, hy, hz] = lid?.position ?? [0, 0, 0];
+    shell = [...points(nodes, 'carrosserie', () => true), ...points(nodes, 'capot_moteur', () => true).map(([x, y, z]): P3 => [x + hx, y + hy, z + hz])];
   }, 60_000);
 
   /** Haut de la caisse (toutes matières) dans la tranche [x - 2 cm, x + 2 cm]. */

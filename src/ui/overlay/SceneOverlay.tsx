@@ -10,6 +10,7 @@ import { runPieceAction } from '../../scene/extras/actions.ts';
 import { usePiece } from '../../state/piece.ts';
 import { useView } from '../../state/view.ts';
 import { Icon } from '../icons.tsx';
+import { CapotPastille } from './CapotPastille.tsx';
 import './overlay.css';
 
 export interface SceneOverlayProps {
@@ -28,27 +29,33 @@ export function SceneOverlay({ covered }: SceneOverlayProps) {
   }, [covered]);
   useEffect(() => () => usePiece.setState({ covered: false }), []);
 
-  if (covered || mode !== 'atelier' || pins.length === 0) return null;
+  if (covered || mode !== 'atelier') return null;
+  // Le capot moteur du véhicule à l'écran, s'il s'ouvre (src/ui/overlay/CapotPastille.tsx).
+  const capot = <CapotPastille shown={shown} />;
+  if (pins.length === 0) return capot;
   return (
-    <div className="piece-overlay" data-visible={shown ? 'oui' : 'non'}>
-      {pins.map((pin) => {
-        const point = POINTS_INTERET.find((item) => item.id === pin.id);
-        if (!point) return null;
-        return (
-          <button
-            key={pin.id}
-            type="button"
-            className="piece-pin"
-            data-point={pin.id}
-            aria-label={point.label}
-            title={point.label}
-            style={{ left: `${pin.x}px`, top: `${pin.y}px` }}
-            onClick={() => runPieceAction(point.action)}
-          >
-            <Icon name={point.icon} />
-          </button>
-        );
-      })}
-    </div>
+    <>
+      <div className="piece-overlay" data-visible={shown ? 'oui' : 'non'}>
+        {pins.map((pin) => {
+          const point = POINTS_INTERET.find((item) => item.id === pin.id);
+          if (!point) return null;
+          return (
+            <button
+              key={pin.id}
+              type="button"
+              className="piece-pin"
+              data-point={pin.id}
+              aria-label={point.label}
+              title={point.label}
+              style={{ left: `${pin.x}px`, top: `${pin.y}px` }}
+              onClick={() => runPieceAction(point.action)}
+            >
+              <Icon name={point.icon} />
+            </button>
+          );
+        })}
+      </div>
+      {capot}
+    </>
   );
 }

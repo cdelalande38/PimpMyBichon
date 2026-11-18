@@ -99,7 +99,17 @@ describe('manifeste de la Cox', () => {
   });
 
   it('donne le moteur de la fiche', () => {
-    expect(manifest.engine).toEqual({ label: '4 cylindres à plat refroidi par air', fuel: 'essence', feed: 'carburateur', boost: 'atmo', power: 50, sound: 'quatre-a-plat', model: 'quatre-a-plat' });
+    expect(manifest.engine).toEqual({
+      label: '4 cylindres à plat refroidi par air',
+      fuel: 'essence',
+      feed: 'carburateur',
+      boost: 'atmo',
+      power: 50,
+      sound: 'quatre-a-plat',
+      model: 'quatre-a-plat',
+      // Le moteur de l'établi posé dans le compartiment arrière (vague U, « capot » : tests/unit/capot.test.ts).
+      pose: { position: [-1.6, -0.21, 0], yaw: 0, scale: 0.84 },
+    });
   });
 });
 

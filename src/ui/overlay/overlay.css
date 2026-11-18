@@ -77,3 +77,11 @@
     border-color: rgba(233, 230, 242, 0.8);
   }
 }
+
+/* Pastille du capot moteur (src/ui/overlay/CapotPastille.tsx) : même dessin que les autres ; capot
+   ouvert, le rond prend la couleur d'un réglage actif. Sélecteur précis : il ne dépend pas de l'ordre
+   des feuilles. */
+.capot-overlay .piece-pin.capot-pin[aria-pressed='true']::before {
+  border-color: var(--ok);
+  background: rgba(10, 9, 17, 0.6);
+}

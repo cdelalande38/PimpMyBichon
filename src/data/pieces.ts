@@ -12,11 +12,17 @@
 //
 // Dans le build : parts.<poste> (identifiant d'option ; l'origine n'est pas écrite), partPaints.<poste>
 // (couleur propre ; absente : la peinture de la carrosserie).
+//
+// Quatrième pose (vague U, demande du 18 novembre 2026) : « capot ». Ses options ne sont pas des
+// fichiers partagés mais des nœuds du modèle que le manifeste nomme (capot d'origine et son pivot, capot
+// vitré, compartiment) : src/scene/vehicle/capot.ts les montre ou les cache, le style de l'option dit
+// quoi faire (`vitre` : la variante vitrée ; `depose` : plus de capot). Aucune couleur propre : le capot
+// garde la peinture de sa zone.
 
 import type { ArticleBoutique } from './boutique.ts';
 import { FINISHES } from './finishes.ts';
 import type { LiveryFace } from './stickersCalques.ts';
-import type { Build, CrownProfile, Paint, PieceMount, PieceRailMount, PieceSupports, PieceSurfaceMount, VehicleManifest, VehiclePoint } from './vehicleTypes.ts';
+import type { Build, CrownProfile, Paint, PieceLidMount, PieceMount, PieceRailMount, PieceSupports, PieceSurfaceMount, VehicleManifest, VehiclePoint } from './vehicleTypes.ts';
 
 export interface PieceOption {
   id: string;
@@ -24,9 +30,10 @@ export interface PieceOption {
   style: string;
   /**
    * « surface » : épouse la surface au bord de fuite ; « supports » : aileron de niveau sur pieds ;
-   * « rail » : suit une ligne de la caisse (kit carrosserie, section `rail` du manifeste).
+   * « rail » : suit une ligne de la caisse (kit carrosserie, section `rail` du manifeste) ; « capot » :
+   * un nœud du modèle (capot vitré, capot déposé), aucun fichier.
    */
-  mount: 'surface' | 'supports' | 'rail';
+  mount: 'surface' | 'supports' | 'rail' | 'capot';
   label: string;
   /** Le nom avec son article, pour les phrases : « l’aileron haut ». */
   phrase: string;
@@ -61,6 +68,8 @@ export interface PiecePoste {
   mirror?: boolean;
   /** Le nom du poste est un pluriel (« les jupes ») : les phrases s'accordent. */
   plural?: boolean;
+  /** Faux : le poste ne prend pas de couleur propre (le capot garde la peinture de sa zone). Absent : vrai. */
+  peinture?: boolean;
   /** Fin de phrase après le nom d'un véhicule qui n'a pas ce poste. */
   absent: string;
   /** Nom du réglage de couleur propre : « Couleur de l’aileron ». */
@@ -88,6 +97,10 @@ export const PIECES_DIR = 'assets/shared/pieces/';
 
 /** Nœuds d'un fichier de pièce (mêmes noms que tools/vehicles/pieces.mjs, NODES). */
 export const PIECE_NODES = Object.freeze({ surface: 'surface', level: 'niveau', rail: 'rail' });
+
+/** Styles des options de capot : la variante vitrée du modèle, ou plus de capot du tout. */
+export const CAPOT_STYLES = Object.freeze(['vitre', 'depose'] as const);
+export type CapotStyle = (typeof CAPOT_STYLES)[number];
 
 /** Pièce sur supports : sous cette hauteur (repère de la pièce), tout descend sur la surface (pieds, semelles). */
 export const FOOT_BAND = 0.012;
@@ -125,7 +138,7 @@ export function validatePiecesCatalogue(raw: unknown): PiecesCatalogue {
     const none = poste.none;
     if (!isObject(none) || typeof none.id !== 'string' || !ID.test(none.id) || !text(none.label) || !text(none.phrase)) problems.push(`${at}.none doit porter id, label et phrase`);
     if (poste.groupe !== undefined && !(typeof poste.groupe === 'string' && groupes.has(poste.groupe))) problems.push(`${at}.groupe doit citer un groupe du catalogue`);
-    for (const key of ['mirror', 'plural']) if (poste[key] !== undefined && typeof poste[key] !== 'boolean') problems.push(`${at}.${key} doit être vrai ou faux`);
+    for (const key of ['mirror', 'plural', 'peinture']) if (poste[key] !== undefined && typeof poste[key] !== 'boolean') problems.push(`${at}.${key} doit être vrai ou faux`);
     const options = Array.isArray(poste.options) ? poste.options : [];
     const mounts = new Set(options.map((option: unknown) => (isObject(option) ? option.mount : undefined)));
     const ref = poste.reference;
@@ -137,6 +150,8 @@ export function validatePiecesCatalogue(raw: unknown): PiecesCatalogue {
       if (ref.ends !== undefined && !(typeof ref.ends === 'number' && ref.ends >= 0 && ref.ends < ref.width / 2 - 0.05)) problems.push(`${at}.reference.ends doit être une longueur de 0 à la demi-largeur moins 5 cm`);
     }
     if (mounts.has('rail') && mounts.size > 1) problems.push(`${at}.options : un poste sur rail n'a que des options sur rail`);
+    if (mounts.has('capot') && mounts.size > 1) problems.push(`${at}.options : un poste de capot n'a que des options de capot`);
+    if (mounts.has('capot') && options.some((option: unknown) => !isObject(option) || !(CAPOT_STYLES as readonly unknown[]).includes(option.style))) problems.push(`${at}.options : une option de capot a pour style ${CAPOT_STYLES.join(' ou ')}`);
     if (poste.mirror === true && !mounts.has('rail')) problems.push(`${at}.mirror ne vaut que pour un poste sur rail`);
     if (options.length === 0) problems.push(`${at}.options : au moins une option`);
     const seen = new Set<string>(isObject(none) && typeof none.id === 'string' ? [none.id] : []);
@@ -147,12 +162,12 @@ export function validatePiecesCatalogue(raw: unknown): PiecesCatalogue {
         typeof option.id !== 'string' ||
         !ID.test(option.id) ||
         !text(option.style) ||
-        (option.mount !== 'surface' && option.mount !== 'supports' && option.mount !== 'rail') ||
+        (option.mount !== 'surface' && option.mount !== 'supports' && option.mount !== 'rail' && option.mount !== 'capot') ||
         !text(option.label) ||
         !text(option.phrase) ||
         !text(option.picto)
       ) {
-        problems.push(`${o} doit porter id, style, mount (surface, supports ou rail), label, phrase et picto`);
+        problems.push(`${o} doit porter id, style, mount (surface, supports, rail ou capot), label, phrase et picto`);
         return;
       }
       if (seen.has(option.id)) problems.push(`${o}.id « ${option.id} » en double (ou égal à none.id)`);
@@ -189,9 +204,16 @@ export function mountOf(vehicle: Pick<VehicleManifest, 'pieces'>, poste: string)
 /** Vrai pour un poste posé le long d'une ligne de la caisse (kit carrosserie). */
 export const isRailMount = (mount: PieceMount): mount is PieceRailMount => 'rail' in mount;
 
-/** La pose du manifeste reçoit-elle cette option ? Rail pour rail ; supports seulement s'ils sont déclarés. */
+/** Vrai pour le poste du capot moteur (nœuds du modèle, src/scene/vehicle/capot.ts). */
+export const isLidMount = (mount: PieceMount): mount is PieceLidMount => 'lid' in mount;
+
+/** Une option a-t-elle un fichier partagé (public/assets/shared/pieces/) ? Celles du capot, non. */
+export const hasPieceFile = (option: Pick<PieceOption, 'mount'>): boolean => option.mount !== 'capot';
+
+/** La pose du manifeste reçoit-elle cette option ? Rail pour rail, capot pour capot ; supports seulement s'ils sont déclarés. */
 function accepts(mount: PieceMount, option: PieceOption): boolean {
   if (isRailMount(mount)) return option.mount === 'rail';
+  if (isLidMount(mount)) return option.mount === 'capot';
   return option.mount === 'surface' || (option.mount === 'supports' && mount.supports !== undefined);
 }
 
@@ -390,6 +412,29 @@ function checkSurface(where: string, mount: Raw, problems: string[]): void {
   }
 }
 
+const NODE = /^[a-z0-9_]+$/;
+const FACES = ['+x', '-x', '+y', '-y', '+z', '-z'];
+
+/** Problèmes d'un poste de capot (nœuds du modèle, ouverture, pastille, cadre de la caméra). */
+function checkLid(where: string, mount: Raw, problems: string[], catalogue: PiecesCatalogue): void {
+  for (const key of ['anchor', 'normal', 'width', 'crown', 'bend', 'supports', 'rail', 'rise']) if (mount[key] !== undefined) problems.push(`${where}.${key} : un capot n'a que lid, glazed, bay, axis, angle, pin, frame et carries`);
+  const carries = mount.carries;
+  if (carries !== undefined && !(Array.isArray(carries) && carries.every((id) => typeof id === 'string' && catalogue.postes.some((poste) => poste.id === id && !poste.options.some((option) => option.mount === 'capot'))))) {
+    problems.push(`${where}.carries doit citer des postes du catalogue (ceux posés sur le capot)`);
+  }
+  if (typeof mount.lid !== 'string' || !NODE.test(mount.lid)) problems.push(`${where}.lid doit nommer le nœud du capot (minuscules, chiffres et _)`);
+  for (const key of ['glazed', 'bay']) if (mount[key] !== undefined && (typeof mount[key] !== 'string' || !NODE.test(mount[key]) || mount[key] === mount.lid)) problems.push(`${where}.${key} doit nommer un autre nœud du modèle`);
+  if (!normal(mount.axis)) problems.push(`${where}.axis doit être un axe unitaire (trois nombres), repère du nœud`);
+  if (!(typeof mount.angle === 'number' && Math.abs(mount.angle) >= 20 && Math.abs(mount.angle) <= 100)) problems.push(`${where}.angle doit être une ouverture de 20 à 100 degrés (signe : le sens)`);
+  const pin = mount.pin;
+  if (!isObject(pin) || !point(pin.at) || !normal(pin.normal)) problems.push(`${where}.pin doit porter at (trois nombres, en mètres : la pastille sur le capot) et normal (la normale du capot, unitaire)`);
+  const frame = mount.frame;
+  const size = isObject(frame) ? frame.size : undefined;
+  if (!isObject(frame) || !FACES.includes(frame.face as string) || !point(frame.center) || !point(size) || !(size as number[]).every((v) => v > 0.05 && v <= 3)) {
+    problems.push(`${where}.frame doit porter face (${FACES.join(', ')}), center et size (trois nombres, 5 cm à 3 m)`);
+  }
+}
+
 /** Problèmes de la section `pieces` d'un manifeste brut, ajoutés à `problems`. */
 export function checkPieces(raw: Raw, problems: string[], catalogue: PiecesCatalogue = PIECES_CATALOGUE): void {
   const pieces = raw.pieces;
@@ -410,6 +455,7 @@ export function checkPieces(raw: Raw, problems: string[], catalogue: PiecesCatal
       continue;
     }
     if (poste.options.some((option) => option.mount === 'rail')) checkRail(where, mount, poste, problems);
+    else if (poste.options.some((option) => option.mount === 'capot')) checkLid(where, mount, problems, catalogue);
     else checkSurface(where, mount, problems);
     const known = poste.options.map((option) => option.id);
     if (mount.options !== undefined && !(Array.isArray(mount.options) && mount.options.length > 0 && mount.options.every((option) => typeof option === 'string' && known.includes(option)))) {
@@ -512,6 +558,7 @@ export function fitPositions(
   floor?: number,
 ): Float32Array {
   if (isRailMount(mount)) return fitRail(source, mount, poste, option, floor);
+  if (isLidMount(mount)) return Float32Array.from(source);
   return fitSurface(source, node, mount, poste, option);
 }
 
@@ -738,4 +785,31 @@ export function railZone(mount: Pick<PieceRailMount, 'rail'>, mirror: boolean): 
   const low = Math.min(...ys);
   const along = face === '+z' || face === '-z' ? x1 - x0 : z1 - z0;
   return { face, center: [(x0 + x1) / 2, low + 0.12, (z0 + z1) / 2], size: [along + 0.2, 0.42, 0.3] };
+}
+
+/**
+ * Cadre d'un poste pour la caméra du garage, s'il en a un : pièce sur rail (railZone), capot (le cadre
+ * du manifeste, compartiment moteur) ; `null` : la caméra ne bouge pas (aileron).
+ */
+export function zoneDuPoste(mount: PieceMount, poste: Pick<PiecePoste, 'mirror'>): { face: LiveryFace; center: VehiclePoint; size: [number, number, number] } | null {
+  if (isRailMount(mount)) return railZone(mount, poste.mirror === true);
+  if (isLidMount(mount)) return { face: mount.frame.face, center: mount.frame.center, size: [mount.frame.size[0], mount.frame.size[1], mount.frame.size[2]] };
+  return null;
+}
+
+/** Le poste du capot moteur d'un véhicule, s'il en déclare un (la pose « capot » du manifeste). */
+export function posteCapot(vehicle: Pick<VehicleManifest, 'pieces'>, catalogue: PiecesCatalogue = PIECES_CATALOGUE): { poste: PiecePoste; mount: PieceLidMount } | null {
+  for (const poste of postesOf(vehicle, catalogue)) {
+    const mount = mountOf(vehicle, poste.id);
+    if (mount && isLidMount(mount)) return { poste, mount };
+  }
+  return null;
+}
+
+/** Ce que le build pose sur le capot : l'origine (`null`), la variante vitrée ou plus de capot. */
+export function capotDuBuild(vehicle: Pick<VehicleManifest, 'pieces'>, build: Build | undefined, catalogue: PiecesCatalogue = PIECES_CATALOGUE): CapotStyle | null {
+  const found = posteCapot(vehicle, catalogue);
+  if (!found) return null;
+  const style = resolvePiece(vehicle, build, found.poste.id, catalogue)?.option?.style;
+  return style === 'vitre' || style === 'depose' ? style : null;
 }

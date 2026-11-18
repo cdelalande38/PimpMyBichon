@@ -113,6 +113,21 @@ export interface EngineSpec {
    * (src/data/moteurs.ts). Absent : l'entrée « Moteur » dit que le modèle reste à faire.
    */
   model?: string;
+  /**
+   * Le moteur de l'établi posé dans le véhicule (capot ouvert, vitré ou déposé : pieces.capot) : où va
+   * l'origine de son fichier (au sol, au pied du support), repère du véhicule posé ; demi-tour autour de
+   * la verticale (degrés) ; échelle. Absent : le moteur ne se voit que sur l'établi.
+   */
+  pose?: EnginePose;
+}
+
+/** Pose du moteur dans le véhicule (src/data/moteurs.ts, checkEnginePose). */
+export interface EnginePose {
+  position: VehiclePoint;
+  /** Rotation autour de la verticale, en degrés (0 : l'avant du moteur, côté volant moteur, vers l'avant du véhicule). */
+  yaw?: number;
+  /** Échelle du modèle (0,5 à 1,2) : un substitut à la taille d'un véhicule qui l'est aussi. */
+  scale?: number;
 }
 
 /**
@@ -486,8 +501,28 @@ export interface PieceRailMount extends PieceChoices {
   rise: number;
 }
 
-/** Un poste de pièce montée : sur une surface ou le long d'une ligne. Absent du manifeste : le poste n'existe pas. */
-export type PieceMount = PieceSurfaceMount | PieceRailMount;
+/**
+ * Le poste « capot » (capot moteur qui s'ouvre, capot vitré, sans capot ; src/scene/vehicle/capot.ts) :
+ * les nœuds du modèle, pas un fichier partagé. `lid` : le capot d'origine, son pivot sur la charnière ;
+ * `glazed` : sa variante vitrée (même pivot) ; `bay` : le compartiment, caché capot fermé ; `axis` et
+ * `angle` : l'ouverture, autour d'un axe du nœud, en degrés ; `pin` : la pastille « Ouvrir le capot » (son point et la normale du capot : vue de l'autre côté, elle se cache) ;
+ * `frame` : ce que la caméra du garage cadre capot ouvert (repère du véhicule posé) ; `carries` : les
+ * postes posés sur le capot.
+ */
+export interface PieceLidMount extends PieceChoices {
+  lid: string;
+  glazed?: string;
+  bay?: string;
+  axis: VehiclePoint;
+  angle: number;
+  pin: { at: VehiclePoint; normal: VehiclePoint };
+  frame: { face: '+x' | '-x' | '+y' | '-y' | '+z' | '-z'; center: VehiclePoint; size: VehiclePoint };
+  /** Postes posés sur le capot (un aileron sur le capot moteur) : ils s'ouvrent avec lui, partent avec lui. */
+  carries?: readonly string[];
+}
+
+/** Un poste de pièce montée : sur une surface, le long d'une ligne, ou un capot. Absent du manifeste : le poste n'existe pas. */
+export type PieceMount = PieceSurfaceMount | PieceRailMount | PieceLidMount;
 
 export interface VehicleManifest {
   /** Égal au nom du dossier. */

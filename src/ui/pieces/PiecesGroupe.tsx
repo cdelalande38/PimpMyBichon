@@ -10,7 +10,7 @@
 // moto) le dit, comme Ailerons.
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { groupeById, isRailMount, mountOf, postesDuGroupe, railZone, resolvePiece } from '../../data/pieces.ts';
+import { groupeById, mountOf, postesDuGroupe, resolvePiece, zoneDuPoste } from '../../data/pieces.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { useZoneFocus } from '../../scene/cadrageZone.ts';
 import { useBuilds } from '../../state/builds.ts';
@@ -39,7 +39,7 @@ export function PiecesGroupe({ groupe: groupeId }: { groupe: string }) {
 
   // Cadrage du poste ouvert ; à la liste, la vue d'avant. On regarde la caisse de dehors.
   const root = useRef<HTMLDivElement>(null);
-  const cadre = poste && mount && isRailMount(mount) ? railZone(mount, poste.mirror === true) : null;
+  const cadre = poste && mount ? zoneDuPoste(mount, poste) : null;
   const cadreCle = cadre ? JSON.stringify(cadre) : '';
   useEffect(() => {
     const box = cadreCle ? (JSON.parse(cadreCle) as NonNullable<typeof cadre>) : null;

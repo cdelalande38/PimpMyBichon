@@ -53,6 +53,16 @@ const X_LID = /** @type {const} */ ([-1.93, -1.56]); // capot moteur : bas, haut
 const SEAMS_X = [0.585, -0.345]; // joints de porte, sous la ceinture
 const VENTS = [-1.6, -1.622, -1.644, -1.666, -1.688, -1.71];
 const SEAM = 0.006;
+// Capot moteur (vague U, « capot ») : un nœud à part, son pivot sur la charnière (bord haut, sur l'axe,
+// un centimètre sous la tôle) ; l'app le fait tourner autour de son Z local (manifeste, pieces.capot).
+// Sa variante vitrée (même pivot) porte une vitre fumée sur presque tout le capot (super-ellipse, comme
+// la lunette), de la plaque au haut du capot ; pas d'éclaireur. Le compartiment moteur : un bac peint
+// comme la caisse, vu de dedans, ouvert sous le capot, qui ne se montre que capot ouvert, vitré ou déposé.
+const LID = 'capot:'; // préfixe des faces du capot dans le loft (jamais écrit dans le GLB)
+const X_WIN = /** @type {const} */ ([-1.85, -1.598]); // vitre du capot vitré : bas (au ras de la plaque), haut
+const WIN_Z = 0.27; // demi-largeur de la vitre
+const X_BAY = /** @type {const} */ ([-1.948, -1.35]); // compartiment moteur : fond, cloison avant (sous la lunette, devant le filtre à air)
+const BAY_HOLE = 'paint_vide'; // faces du bac sous l'ouverture du capot (écartées)
 
 // Fractions fixes de chaque tronçon du dôme (même nombre de points dans toutes les sections).
 const FA = [0, 0.06, 0.15, 0.27, 0.4, 0.53, 0.66, 0.78, 0.89, 0.95]; // de la ceinture B vers E
@@ -289,6 +299,10 @@ export default function cox(k) {
   const xDoorFront = (/** @type {number} */ y) => X_DOOR[1] - 0.255 * clamp((y - 0.91) / 0.34, 0, 1) ** 0.9;
   const xQtrRear = (/** @type {number} */ y) => X_QTR[0] + 0.3 * (1 - Math.sqrt(1 - clamp((y - 0.91) / 0.335, 0, 1) ** 2));
   const inVents = (/** @type {number} */ x) => VENTS.some((v) => x < v && x > v - 0.011);
+  const WIN_C = (X_WIN[0] + X_WIN[1]) / 2;
+  const WIN_H = (X_WIN[1] - X_WIN[0]) / 2;
+  /** Vitre du capot vitré : super-ellipse, coins arrondis (comme la lunette). @param {number} x @param {number} az */
+  const inWindow = (x, az) => ((x - WIN_C) / WIN_H) ** 4 + (az / WIN_Z) ** 4 < 1;
 
   /** @param {Face} f */
   const bodyRegion = (f) => {
@@ -315,8 +329,8 @@ export default function cox(k) {
     if (f.x < X_LID[1] && f.x > X_LID[0] - SEAM) {
       if (p >= I_E) {
         if (f.x > X_LID[1] - SEAM || f.x < X_LID[0]) return 'black';
-        if (az < 0.24 && az > 0.03 && inVents(f.x)) return 'black';
-        return 'paint_capot_moteur';
+        // Face du capot (nœud à part) : la tôle et ses fentes noires.
+        return `${LID}${az < 0.24 && az > 0.03 && inVents(f.x) ? 'black' : 'paint_capot_moteur'}`;
       }
       if (p >= I_SEAM) return 'black';
       return 'paint_carrosserie';
@@ -495,6 +509,10 @@ export default function cox(k) {
   // le bossage chromé de l'éclaireur.
   /** @type {Parts} */
   const plates = [];
+  /** Plaque arrière et éclaireur : sur le capot moteur, ils tournent avec lui. @type {Parts} */
+  const rearPlate = [];
+  /** L'éclaireur seul (le capot vitré n'en a pas : sa vitre descend jusqu'à la plaque). @type {Parts} */
+  const plateLamp = [];
   {
     const front = /** @type {P3} */ ([X_FRONT + 0.012, 0.37, 0]);
     plates.push(...k.orient(k.roundedExtrude(k.roundedRect(0.46, 0.11, 0.01), { material: 'black', depth: 0.012, bevel: 0.003 }), { position: front, normal: [1, 0.12, 0], up: [0, 1, 0] }));
@@ -503,11 +521,11 @@ export default function cox(k) {
     const ry = ytop(rx) - 0.005;
     const rn = /** @type {P3} */ ([-0.9, 0.42, 0]);
     const rup = /** @type {P3} */ ([0.42, 0.9, 0]);
-    plates.push(...k.orient(k.roundedExtrude(k.roundedRect(0.34, 0.15, 0.012), { material: 'black', depth: 0.012, bevel: 0.003 }), { position: [rx - 0.004, ry, 0], normal: rn, up: rup }));
-    plates.push(...k.orient(k.roundedExtrude(k.roundedRect(0.32, 0.135, 0.008), { material: 'alu', depth: 0.004, bevel: 0.0015 }), { position: [rx - 0.011, ry + 0.003, 0], normal: rn, up: rup }));
+    rearPlate.push(...k.orient(k.roundedExtrude(k.roundedRect(0.34, 0.15, 0.012), { material: 'black', depth: 0.012, bevel: 0.003 }), { position: [rx - 0.004, ry, 0], normal: rn, up: rup }));
+    rearPlate.push(...k.orient(k.roundedExtrude(k.roundedRect(0.32, 0.135, 0.008), { material: 'alu', depth: 0.004, bevel: 0.0015 }), { position: [rx - 0.011, ry + 0.003, 0], normal: rn, up: rup }));
     // Éclaireur de plaque : bossage chromé au-dessus de la plaque.
     const lx = -1.835;
-    plates.push(...k.ellipsoid([lx, ytop(lx) + 0.004, 0], [0.05, 0.03, 0.09], { material: 'chrome', segments: 18 }));
+    plateLamp.push(...k.ellipsoid([lx, ytop(lx) + 0.004, 0], [0.05, 0.03, 0.09], { material: 'chrome', segments: 18 }));
   }
 
   // Joncs chromés des vitres latérales, posés le long des bords des régions.
@@ -702,6 +720,71 @@ export default function cox(k) {
     frames,
   });
 
+  // --- Capot moteur, capot vitré, compartiment (vague U, « capot ») -------------------------
+  // Le capot d'origine : les faces du loft repérées par LID (tôle et fentes), mêmes triangles et mêmes
+  // normales qu'avant, plus la plaque arrière et son éclaireur ; posé dans son nœud, pivot sur la charnière.
+  const lidTop = X_LID[1] - SEAM;
+  const HINGE = /** @type {P3} */ ([lidTop - 0.004, ytop(lidTop) - 0.01, 0]);
+  const toHinge = { position: /** @type {P3} */ ([-HINGE[0], -HINGE[1], -HINGE[2]]) };
+  const bodyParts = body.filter((part) => !part.material.startsWith(LID));
+  const lidShut = body.filter((part) => part.material.startsWith(LID)).map((part) => ({ material: part.material.slice(LID.length), geometry: part.geometry }));
+  // Le capot vitré : un loft à lui sur la même étendue (mêmes bords, mêmes sections), plus serré là où
+  // passe le bord de la vitre ; un jonc chromé cache le bord en escalier, comme sur la lunette.
+  /** @param {Face} f */
+  const glazedRegion = (f) => (f.cap || band(f) < I_E ? BAY_HOLE : inWindow(f.x, Math.abs(f.z)) ? 'glass' : 'paint_capot_moteur');
+  const glazed = k
+    .loft({
+      sectionAt: (x) => k.mirrorSection(half(x)),
+      xs: k.sampleX(X_LID[0], lidTop, { step: 0.015, endZone: 0.02, endCount: 2, breaks: [...X_WIN] }),
+      around: 2,
+      material: glazedRegion,
+      caps: 'none',
+      crease: 60,
+    })
+    .filter((part) => part.material !== BAY_HOLE);
+  /** @type {P3[]} */
+  const winLoop = [];
+  for (let i = 0; i < 56; i += 1) {
+    const a = (2 * Math.PI * i) / 56;
+    const cs = Math.cos(a);
+    const sn = Math.sin(a);
+    const x = WIN_C + WIN_H * Math.sign(cs) * Math.abs(cs) ** 0.5;
+    const p = onDome(x, WIN_Z * Math.sign(sn) * Math.abs(sn) ** 0.5, 0.004);
+    winLoop.push([x, p[1], p[2]]);
+  }
+  const winTrim = k.tube(winLoop, { material: 'chrome', radius: 0.0055, closed: true, segments: 96, radial: 6 });
+  // Le compartiment : la section de caisse resserrée (4 % sur les flancs), vue de dedans, du fond à la
+  // cloison avant, peint comme la caisse (comme une vraie baie moteur) ; percé sous l'ouverture du
+  // capot (le point de caisse qu'une face regarde, 4 cm dehors, est sur le capot ou à moins de 1,5 cm
+  // de son bord) et sous la lunette.
+  /** Le point q de la caisse est-il sous l'ouverture du capot ? @param {P3} q */
+  const underLid = ([x, y, z]) => {
+    if (x < X_LID[0] - SEAM - 0.015 || x > X_LID[1] + 0.015) return false;
+    const d = dims(clamp(x, X_LID[0], lidTop));
+    return Math.abs(z) < d.zE + 0.015 && y > dome(d, uAtZ(d, d.zE))[1] - 0.04;
+  };
+  const BAY_Y0 = 0.16;
+  /** @param {Face} f */
+  const bayRegion = (f) => {
+    if (f.cap) return 'paint_carrosserie';
+    /** @type {P3} */
+    const q = [f.x - f.nx * 0.04, f.y - f.ny * 0.04, f.z - f.nz * 0.04];
+    // Sous l'ouverture du capot, et sous la lunette (le bac ne double aucune vitre) : percé.
+    return underLid(q) || glassAt(q, 0.02) ? BAY_HOLE : 'paint_carrosserie';
+  };
+  const bay = k
+    .loft({
+      sectionAt: (x) => k.mirrorSection(half(x).map(([z, y]) => /** @type {P2} */ ([z * 0.96, BAY_Y0 + (y - BAY_Y0) * 0.975]))),
+      xs: k.sampleX(X_BAY[0], X_BAY[1], { step: 0.035, endZone: 0.02, endCount: 2, breaks: [X_LID[0], lidTop] }),
+      around: 1,
+      material: bayRegion,
+      inward: true,
+      capRows: 2,
+      capColumns: 6,
+      crease: 70,
+    })
+    .filter((part) => part.material !== BAY_HOLE);
+
   // --- Modèle --------------------------------------------------------------------------------
   const m = new k.Model('cox');
   const teal = { color: '#0a3a46', roughness: 0.3 };
@@ -713,19 +796,24 @@ export default function cox(k) {
     .material('paint_jantes', { color: '#d9dde2', metallic: 1, roughness: 0.08 })
     .material('paint_sellerie', { color: '#111114', roughness: 0.6 })
     .material('paint_pommeau', { color: '#e9e0c8', roughness: 0.4 });
-  m.add('carrosserie', [...body, ...fenders, ...beads, ...k.symmetric(step)]);
+  // Accessoires : leurs pièces peintes (cuvelages des phares, socles des feux, nervure du capot) vont
+  // avec la caisse, et le jonc chromé des marchepieds avec les chromes. L'app fusionne tout par matière
+  // (VehicleModel.tsx, prepare) : rien ne change à l'image ; le compte des appels de dessin du § 8, fait
+  // nœud par nœud (tools/vehicles/build.mjs), suit enfin ce que l'app dessine (trois de moins).
+  const accessories = [...k.symmetric([...headlight, ...blinker, ...taillight, ...handle, ...hinges, ...trims]), ...wsTrim, ...rwTrim, ...hood, ...plates, ...mirror];
+  const painted = (/** @type {{ material: string }} */ part) => part.material.startsWith('paint_');
+  const steps = k.symmetric(step);
+  m.add('carrosserie', [...bodyParts, ...fenders, ...beads, ...steps.filter((part) => part.material !== 'chrome'), ...accessories.filter(painted)]);
+  // Capot moteur (pivot sur la charnière, l'app le fait tourner autour de son Z), sa variante vitrée
+  // (cachée tant qu'elle n'est pas posée) et le compartiment (caché capot fermé) : manifeste, pieces.capot.
+  m.anchor('capot_moteur', { position: HINGE }, k.place([...lidShut, ...rearPlate, ...plateLamp], toHinge));
+  m.anchor('capot_moteur_vitre', { position: HINGE }, k.place([...glazed, ...winTrim, ...rearPlate], toHinge));
+  m.add('compartiment_moteur', bay);
   m.add('habitacle', cabin);
   // Habitacle : ancres du volant, du pommeau et des sièges avant ; l'app y pose les pièces partagées
   // choisies (tools/vehicles/habitacle.mjs ; d'origine : sport, tête de mort, baquets bas).
   for (const { node, ...pose } of ancres(k)) m.anchor(node, pose);
-  m.add('accessoires', [
-    ...k.symmetric([...headlight, ...blinker, ...taillight, ...handle, ...hinges, ...trims]),
-    ...wsTrim,
-    ...rwTrim,
-    ...hood,
-    ...plates,
-    ...mirror,
-  ]);
+  m.add('accessoires', [...accessories.filter((part) => !painted(part)), ...steps.filter((part) => part.material === 'chrome')]);
 
   // Sorties d'échappement à part : la finition choisie dans Mécanique · Échappement (src/scene/vehicle/echappement.ts).
   m.add('echappement', exhaust);

@@ -146,7 +146,7 @@ export function PiecesPanel({ poste: posteId }: { poste: string }) {
         </p>
       )}
       <div className="pieces-head">
-        {resolved.option && paint ? (
+        {resolved.option && paint && poste.peinture !== false ? (
           <div className="pieces-modes" role="group" aria-label={poste.colorLabel}>
             <button type="button" className="pieces-mode" aria-pressed={!own} onClick={() => setPartPaint(vehicle.id, posteId, null)}>
               <span className="pieces-pastille" style={{ background: body?.color }} aria-hidden="true" />
@@ -165,7 +165,7 @@ export function PiecesPanel({ poste: posteId }: { poste: string }) {
           <span>D’origine</span>
         </button>
       </div>
-      {resolved.option && own && paint && (
+      {resolved.option && own && paint && poste.peinture !== false && (
         <>
           <div className="pieces-swatches" role="group" aria-label={`${poste.colorLabel} : teinte`}>
             {PAINT_COLORS.map((swatch) => (

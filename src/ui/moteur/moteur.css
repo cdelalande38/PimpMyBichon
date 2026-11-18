@@ -259,7 +259,8 @@
   font-size: 0.8125rem;
 }
 
-.moteur-head > .moteur-reset {
+.moteur-head > .moteur-reset,
+.moteur-head > .moteur-capot {
   display: inline-flex;
   flex: none;
   flex-direction: column;
@@ -275,7 +276,8 @@
   text-transform: none;
 }
 
-.moteur-reset .icon {
+.moteur-reset .icon,
+.moteur-capot .icon {
   width: 1.125rem;
   height: 1.125rem;
 }

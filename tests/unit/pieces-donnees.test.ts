@@ -66,7 +66,9 @@ describe('catalogue des pièces montées', () => {
 describe('poste par véhicule', () => {
   it('les trois voitures ont un aileron (et le kit carrosserie), les motos n’en ont pas', () => {
     for (const vehicle of VEHICLES) {
-      expect(postesOf(vehicle).map((poste) => poste.id), vehicle.id).toEqual(vehicle.kind === 'car' ? ['aileron', 'lame', 'jupes', 'diffuseur'] : []);
+      // La Cox a en plus son capot moteur (vague U, « capot » : tests/unit/capot.test.ts).
+      const capot = vehicle.id === 'cox' ? ['capot'] : [];
+      expect(postesOf(vehicle).map((poste) => poste.id), vehicle.id).toEqual(vehicle.kind === 'car' ? ['aileron', 'lame', 'jupes', 'diffuseur', ...capot] : []);
       if (vehicle.kind === 'bike') expect(resolvePiece(vehicle, undefined, 'aileron')).toBeNull();
     }
   });

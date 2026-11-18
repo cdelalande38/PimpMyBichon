@@ -138,10 +138,10 @@ test.describe('Custom · Carrosserie', () => {
     await expect(scene(page)).toHaveAttribute('data-vehicle', 'cox');
     await waitForBench(page);
 
-    // Étape « Élément » : les trois postes de la Cox, et rien d'autre ; le véhicule entier, rien de cadré.
+    // Étape « Élément » : les trois postes du kit de la Cox, puis son capot moteur (tests/e2e/capot.spec.ts), et rien d'autre ; le véhicule entier, rien de cadré.
     await openEntry(page, 'Carrosserie');
     await expect(groupe(page)).toHaveAttribute('data-etape', 'liste');
-    await expect(groupe(page).locator('.pieces-poste')).toHaveText([/^Lame avant\s*Sans lame$/, /^Jupes\s*Sans jupes$/, /^Diffuseur\s*Sans diffuseur$/]);
+    await expect(groupe(page).locator('.pieces-poste')).toHaveText([/^Lame avant\s*Sans lame$/, /^Jupes\s*Sans jupes$/, /^Diffuseur\s*Sans diffuseur$/, /^Capot moteur\s*D’origine$/]);
     await expect(groupe(page).locator('.pieces-poste[aria-pressed="true"]')).toHaveCount(0);
     await expect(panneau(page)).toHaveCount(0);
     await expect(scene(page)).not.toHaveAttribute('data-cadrage', /piece-/);

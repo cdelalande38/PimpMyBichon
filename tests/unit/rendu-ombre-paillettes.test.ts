@@ -93,7 +93,8 @@ describe('ombre de contact : plan, halo, libération', () => {
     // Nouvelle pose (autre véhicule, autre mesure, autres roues, autre assiette, ou une pièce montée
     // qui arrive ou part, src/scene/vehicle/pieces.ts) : le drapeau se relève.
     expect(component).toMatch(/useLayoutEffect\(\(\) => \{\s*pending\.current = true;[\s\S]*\}, \[gl, rig, caster, invalidate, stamp, pieces\]\)/);
-    expect(source).toMatch(/<VehicleShadow key=\{epoch\} caster=\{prepared\.root\}[^>]*stamp=\{stamp\} pieces=\{pieces\}/);
+    // Le capot moteur (src/scene/vehicle/capot.ts) qui s'ouvre, se pose vitré ou se dépose relève aussi le drapeau.
+    expect(source).toMatch(/<VehicleShadow key=\{epoch\} caster=\{prepared\.root\}[^>]*stamp=\{stamp\} pieces=\{`\$\{pieces\}\|\$\{capot\.signature\}`\}/);
     expect(source).toMatch(/const pieces = usePieces\(prepared, vehicle, invalidate, bodyEnv/);
   });
 });

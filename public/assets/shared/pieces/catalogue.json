@@ -1,5 +1,5 @@
 {
-  "about": "Pièces montées sur la caisse, partagées entre véhicules (§ 5.4, § 6, § 8) : un poste par ligne de « postes », une option par ligne de ses « options ». npm run vehicles:build fabrique un fichier par option (tools/vehicles/pieces.mjs, nom <poste>_<option>.glb) ; l'app pose une option sur les véhicules dont le manifeste déclare le poste (section pieces : bord de fuite, normale, largeur utile, pieds des supports, options permises). Chaque fichier porte un nœud : « surface » (épouse la surface de pose au bord de fuite, mise à la largeur utile et au bombé), « niveau » (reste de niveau ; ses pieds, au ras de y = 0, descendent sur la surface, sa lame se met à l'envergure) ou « rail » (kit carrosserie : suit la ligne de pose du manifeste, section rail, sur l'axe ou en paire gauche-droite si le poste porte mirror ; rise et depth disent sa hauteur au-dessus et sous la ligne, que l'app tasse au besoin). Un groupe réunit plusieurs postes sous une entrée du menu (Carrosserie). Matériaux : paint_piece (la couleur de la caisse ou une couleur propre) et les rôles. Substituts déclarés : placeholder_ailerons et placeholder_kit_carrosserie (TODO_ASSETS.md).",
+  "about": "Pièces montées sur la caisse, partagées entre véhicules (§ 5.4, § 6, § 8) : un poste par ligne de « postes », une option par ligne de ses « options ». npm run vehicles:build fabrique un fichier par option (tools/vehicles/pieces.mjs, nom <poste>_<option>.glb) ; l'app pose une option sur les véhicules dont le manifeste déclare le poste (section pieces : bord de fuite, normale, largeur utile, pieds des supports, options permises). Chaque fichier porte un nœud : « surface » (épouse la surface de pose au bord de fuite, mise à la largeur utile et au bombé), « niveau » (reste de niveau ; ses pieds, au ras de y = 0, descendent sur la surface, sa lame se met à l'envergure) ou « rail » (kit carrosserie : suit la ligne de pose du manifeste, section rail, sur l'axe ou en paire gauche-droite si le poste porte mirror ; rise et depth disent sa hauteur au-dessus et sous la ligne, que l'app tasse au besoin). Un groupe réunit plusieurs postes sous une entrée du menu (Carrosserie). Le poste « capot » (mount « capot ») n'a aucun fichier : ses options montrent ou cachent des nœuds du modèle que le manifeste nomme (pieces.capot : capot d'origine et son pivot, capot vitré, compartiment) ; style « vitre » : la variante vitrée, « depose » : plus de capot ; « peinture » faux : pas de couleur propre, reference ignorée. Matériaux : paint_piece (la couleur de la caisse ou une couleur propre) et les rôles. Substituts déclarés : placeholder_ailerons et placeholder_kit_carrosserie (TODO_ASSETS.md).",
   "groupes": [
     {"id": "carrosserie", "label": "Kit carrosserie", "absent": "n’a pas de kit carrosserie : sur une moto, pas de bas de caisse à habiller."}
   ],
@@ -184,6 +184,37 @@
           "rise": 0.045,
           "depth": 0.1,
           "picto": "M31 27.4 L45 24.8 M34 26.9 L34 29.6 M37 26.4 L37 29.6 M40 25.8 L40 29.6 M43 25.2 L43 29.6"
+        }
+      ]
+    },
+    {
+      "id": "capot",
+      "label": "Capot moteur",
+      "groupe": "carrosserie",
+      "peinture": false,
+      "absent": "n’a pas de capot moteur à ouvrir ici.",
+      "colorLabel": "Le capot garde la couleur de sa zone, dans Peinture.",
+      "none": {"id": "origine", "label": "D’origine", "hint": "Le capot plein, fermé", "phrase": "le capot d’origine"},
+      "reference": {"width": 0.7},
+      "picto": "M3 8 L16 8 Q30 8 38 18 Q41 22 41 27 L3 27",
+      "options": [
+        {
+          "id": "vitre",
+          "style": "vitre",
+          "mount": "capot",
+          "label": "Vitré",
+          "phrase": "le capot vitré",
+          "hint": "Une vitre fumée sur le moteur",
+          "picto": "M24.5 11 Q30.5 13.6 34.5 18.6 M26 15.2 Q30 17 32.4 20"
+        },
+        {
+          "id": "sans",
+          "style": "depose",
+          "mount": "capot",
+          "label": "Sans capot",
+          "phrase": "le capot déposé",
+          "hint": "Le moteur à l’air",
+          "picto": "M22 9.5 L37 3 M27 15 L35 15 L35 21 L27 21 Z"
         }
       ]
     }

@@ -10,23 +10,9 @@
 
 import { useFrame, useThree } from '@react-three/fiber';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { Box3, Color, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Vector3, type Group, type Material, type Object3D } from 'three';
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MATERIAL_ROLES, type MaterialRole } from '../../data/materialRoles.ts';
-import {
-  ENGINES_DIR,
-  fichierMoteur,
-  matiereById,
-  noeudsFamille,
-  PART_PREFIX,
-  resolveEchange,
-  resolveTraitement,
-  signatureEtabli,
-  SUPPORT_NODE,
-  type MoteurFamille,
-  type MoteurMatiere,
-  type TraitementResolu,
-} from '../../data/moteurs.ts';
+import { Box3, Color, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Vector3, type Group, type Object3D } from 'three';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { noeudsFamille, PART_PREFIX, resolveEchange, signatureEtabli, type MoteurFamille } from '../../data/moteurs.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import type { Build } from '../../data/vehicleTypes.ts';
 import { useRenderStats } from '../../render/renderStats.ts';
@@ -34,10 +20,11 @@ import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
 import { useBuilds } from '../../state/builds.ts';
 import { useZoneFocus, type ZoneFocus } from '../cadrageZone.ts';
 import { useEtabli } from './etabli.ts';
+import { loadEngine, lookOf, looksOf, morceauDe, noeudMontre, optionsPosees, pieceDe, setLook, type MorceauType } from './habillage.ts';
 
-const BASE = import.meta.env.BASE_URL;
-const loader = new GLTFLoader();
-const sources = new Map<string, Promise<GLTF>>();
+// Lecture du fichier, reconnaissance des morceaux, rendu d'un traitement : ./habillage.ts (partagé avec
+// le moteur posé dans le véhicule, src/scene/vehicle/moteur.ts).
+export { loadEngine };
 
 /** Rang de dessin des pièces opaques, comme celles du véhicule (VehicleModel.tsx). */
 const RENDER_ORDER = -2;
@@ -48,18 +35,6 @@ const NO_GLOW = new Color(0, 0, 0);
 /** Attente après le dernier changement (curseur, échange) avant de refaire l'ombre de contact. */
 const SHADOW_DELAY_MS = 150;
 
-/** Charge (une fois par séance) le moteur d'une famille. Un échec s'oublie : le prochain appel réessaie. */
-export function loadEngine(famille: string): Promise<GLTF> {
-  const url = `${BASE}${ENGINES_DIR}${fichierMoteur(famille)}`;
-  let promise = sources.get(url);
-  if (!promise) {
-    promise = loader.loadAsync(url);
-    promise.catch(() => sources.delete(url));
-    sources.set(url, promise);
-  }
-  return promise;
-}
-
 /** Pose ou retire un attribut `data-*` de la scène sans toucher au DOM si rien ne change. */
 function putData(element: HTMLElement | null, key: string, value: string | null): void {
   if (!element) return;
@@ -68,20 +43,8 @@ function putData(element: HTMLElement | null, key: string, value: string | null)
   } else if (element.dataset[key] !== value) element.dataset[key] = value;
 }
 
-/** Nom d'origine du nœud du GLB qui porte cet objet (GLTFLoader le garde dans userData.name). */
-function nodeOf(object: Object3D): string | null {
-  for (let node: Object3D | null = object; node; node = node.parent) {
-    const name = node.userData.name as unknown;
-    if (typeof name === 'string' && (name.startsWith(PART_PREFIX) || name === SUPPORT_NODE)) return name;
-  }
-  return null;
-}
-
-/** Un morceau du moteur : le nœud qui le porte (sans part_ ; `null` : le support), sa matière ou son rôle, son matériau à lui. */
-interface Morceau {
-  node: string | null;
-  matiere: MoteurMatiere | null;
-  role: MaterialRole | null;
+/** Un morceau du moteur : ce qu'il est (./habillage.ts, morceauDe), son matériau à lui. */
+interface Morceau extends MorceauType {
   material: MeshStandardMaterial;
 }
 
@@ -102,15 +65,12 @@ function prepare(gltf: GLTF): Prepared {
     const name = object.userData.name as unknown;
     if (typeof name === 'string' && name.startsWith(PART_PREFIX)) nodes.set(name.slice(PART_PREFIX.length), object);
     if (!(object instanceof Mesh)) return;
-    const node = nodeOf(object);
-    const materialName = (object.material as Material).name;
-    const matiere = materialName.startsWith('paint_') ? (matiereById(materialName) ?? null) : null;
-    const role = matiere ? null : (MATERIAL_ROLES.find((item) => item.id === materialName) ?? MATERIAL_ROLES.find((item) => item.id === 'black') ?? null);
-    const material = matiere?.traitable ? new MeshPhysicalMaterial() : new MeshStandardMaterial();
-    material.name = materialName;
+    const morceau = morceauDe(object);
+    const material = morceau.matiere?.traitable ? new MeshPhysicalMaterial() : new MeshStandardMaterial();
+    material.name = (object.material as MeshStandardMaterial).name;
     object.material = material;
     object.renderOrder = RENDER_ORDER;
-    morceaux.push({ node: node && node !== SUPPORT_NODE ? node.slice(PART_PREFIX.length) : null, matiere, role, material });
+    morceaux.push({ ...morceau, material });
   });
   return { root, nodes, morceaux };
 }
@@ -133,31 +93,16 @@ function useEngineGltf(famille: MoteurFamille): GLTF | null {
   return loaded?.id === famille.id ? loaded.gltf : null;
 }
 
-/** Règle un matériau : couleur, métal, rugosité, vernis (matériau physique seulement), reflet. */
-function setLook(material: MeshStandardMaterial, look: { color: string; metalness: number; roughness: number; clearcoat?: number; clearcoatRoughness?: number; envMapIntensity: number }, bodyEnv: number): void {
-  material.color.set(look.color);
-  material.metalness = look.metalness;
-  material.roughness = look.roughness;
-  // Les métaux prennent la part de reflet de l'ambiance, comme la carrosserie (src/data/materialRoles.ts).
-  material.envMapIntensity = look.envMapIntensity * (look.metalness >= 0.5 ? bodyEnv : 1);
-  if (material instanceof MeshPhysicalMaterial) {
-    material.clearcoat = look.clearcoat ?? 0;
-    material.clearcoatRoughness = look.clearcoatRoughness ?? 0;
-  }
-}
-
 type Noeuds = ReturnType<typeof noeudsFamille>;
 
 /** Repeint chaque morceau : le traitement de sa pièce (ou sa matière, son rôle), la lueur de la pièce choisie. */
 function paint(prepared: Prepared, famille: MoteurFamille, known: Noeuds, build: Build | undefined, selected: string | null, bodyEnv: number): void {
-  const looks = new Map<string, TraitementResolu>(famille.pieces.map((piece) => [piece.id, resolveTraitement(piece, build)]));
-  for (const { node, matiere, role, material } of prepared.morceaux) {
-    const piece = node ? (known.get(node)?.piece ?? null) : null;
-    const resolved = piece ? looks.get(piece) : undefined;
-    const rendu = matiere?.traitable ? resolved?.traitement.rendu : null;
-    if (rendu) setLook(material, { ...rendu, color: resolved?.couleur ?? rendu.color }, bodyEnv);
-    else if (matiere) setLook(material, { color: matiere.color, metalness: matiere.metalness, roughness: matiere.roughness, envMapIntensity: 1 }, bodyEnv);
-    else if (role) setLook(material, role, bodyEnv);
+  const looks = looksOf(famille, build);
+  for (const morceau of prepared.morceaux) {
+    const { material } = morceau;
+    const piece = pieceDe(morceau, known);
+    const look = lookOf(morceau, known, looks);
+    if (look) setLook(material, look, bodyEnv);
     const glow = piece !== null && piece === selected;
     material.emissive.copy(glow ? HIGHLIGHT : NO_GLOW);
     material.emissiveIntensity = glow ? HIGHLIGHT_INTENSITY : 0;
@@ -166,12 +111,12 @@ function paint(prepared: Prepared, famille: MoteurFamille, known: Noeuds, build:
 
 /** Pose chaque nœud à son écart de vue éclatée ; seule l'option posée de chaque échange se montre. */
 function pose(prepared: Prepared, famille: MoteurFamille, known: Noeuds, build: Build | undefined, eclate: number): void {
-  const shown = new Map(famille.pieces.filter((piece) => piece.echange).map((piece) => [piece.id, resolveEchange(piece, build)?.id ?? null]));
+  const shown = optionsPosees(famille, build);
   for (const [node, object] of prepared.nodes) {
     const info = known.get(node);
     if (!info) continue;
     object.position.set(info.eclate[0] * eclate, info.eclate[1] * eclate, info.eclate[2] * eclate);
-    object.visible = info.option === null || shown.get(info.piece) === info.option;
+    object.visible = noeudMontre(info, shown);
   }
   prepared.root.updateMatrixWorld(true);
 }

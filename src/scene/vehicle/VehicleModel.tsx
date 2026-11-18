@@ -45,6 +45,8 @@ import type { Build } from '../../data/vehicleTypes.ts';
 import { useHabitacle } from './habitacle.ts';
 import { usePieces } from './pieces.ts';
 import { separerEchappement, useFinitionEchappement } from './echappement.ts';
+import { useCapotScene } from './capot.ts';
+import { finirCapot, noterFusion, preparerCapot, type CapotRig } from './capotRig.ts';
 import { useFlammesGarage } from './flammes.ts';
 import { useGabarit } from './gabarit.ts';
 import { applyLivery, createLiveryRig, disposeLivery, type LiveryRig } from './livree.ts';
@@ -96,6 +98,8 @@ export interface Prepared extends VehicleMeasure {
   owned: { geometries: BufferGeometry[]; materials: Material[] };
   /** Stickers (src/scene/vehicle/livree.ts) ; `null` : le véhicule ne déclare pas de zone de livrée. */
   livery?: LiveryRig | null;
+  /** Capot moteur qui s'ouvre, vitré, déposé (./capot.ts) ; `null` : le manifeste n'en déclare pas. */
+  capot?: CapotRig | null;
 }
 
 type Adapt = NonNullable<VehicleManifest['adapt']>;
@@ -309,6 +313,10 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
   // 4 ter. Voyants de l'habitacle dans la matière d'une optique : à part, hors des réglages des phares (./phares.ts).
   separerVoyants(scene, vehicle, owned);
 
+  // 4 ter. Capot moteur du manifeste (./capot.ts) : compartiment en tête de la fusion, capot en queue,
+  //        variante vitrée à part.
+  const capot = preparerCapot(scene, vehicle, meshes, apart, owned);
+
   // 5. Budget de draw calls (§ 8) : le modèle est immobile, ses pièces sont fusionnées par
   //    matériau. Seules les géométries aux attributs identiques se fusionnent.
   scene.updateMatrixWorld(true);
@@ -330,6 +338,7 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
     const first = parts[0];
     if (!first || parts.length < 2) continue;
     const geometries = parts.map((part) => part.geometry.clone().applyMatrix4(part.matrixWorld));
+    const counts = geometries.map((item) => item.index?.count ?? item.getAttribute('position').count);
     const geometry = mergeGeometries(geometries, false);
     for (const item of geometries) item.dispose();
     if (!geometry) continue;
@@ -337,8 +346,10 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
     const mesh = new Mesh(geometry, first.material);
     mesh.name = `fusion_${(first.material as Material).name}`;
     merged.add(mesh);
+    noterFusion(capot, mesh, parts, counts);
     for (const part of parts) removeMerged(part);
   }
+  finirCapot(capot);
 
   // 6. Pose : longueur sur X, au sol, centré. Orientation mesurée, jamais supposée.
   const root = new Group();
@@ -401,6 +412,7 @@ export function prepare(source: Group, vehicle: VehicleManifest): Prepared {
 
   return {
     livery,
+    capot,
     root,
     paints,
     zones,
@@ -604,6 +616,8 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   useFinitionEchappement(prepared.root, vehicle, invalidate);
   // Retour de flammes au garage, au lâcher d'un coup de gaz (Mécanique · Échappement, ligne libre).
   useFlammesGarage(prepared.root, vehicle, invalidate);
+  // Capot moteur : ouvert à la pastille, vitré ou déposé, le moteur de l'établi dedans (./capot.ts).
+  const capot = useCapotScene(prepared, vehicle, invalidate, bodyEnv, { garage: true, stageClass: 'stage', pieces });
 
   // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
   // vernis), et compilerait pour rien une variante de plus pendant le démarrage. Rendu à la
@@ -693,7 +707,7 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
           avec le modèle déjà en place. */}
       {/* Hors de la sonde : elle n'y entrerait qu'aux captures faites après le modèle (revue n° 7). */}
       <group userData={{ hideInProbe: true }}>
-        <VehicleShadow key={epoch} caster={prepared.root} halfLength={halfLength} halfWidth={halfWidth} height={height} stamp={stamp} pieces={pieces} />
+        <VehicleShadow key={epoch} caster={prepared.root} halfLength={halfLength} halfWidth={halfWidth} height={height} stamp={stamp} pieces={`${pieces}|${capot.signature}`} />
       </group>
     </>
   );

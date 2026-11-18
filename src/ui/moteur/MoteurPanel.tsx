@@ -40,6 +40,7 @@ import { PAINT_COLORS } from '../../data/paintColors.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { possedeDans } from '../../jeu/achats.ts';
 import { useEtabli } from '../../scene/moteur/etabli.ts';
+import { ouvrirCapot, useCapot } from '../../scene/vehicle/capotEtat.ts';
 import { normalizeHex, useBuilds } from '../../state/builds.ts';
 import { useDock } from '../../state/dock.ts';
 import { useJeu } from '../../state/jeu.ts';
@@ -130,6 +131,8 @@ export function MoteurPanel() {
   }, [ouverteId]);
   useEffect(() => () => useEtabli.getState().setCadree(null), []);
   const pieceRow = useRevealPressed<HTMLDivElement>(ouverteId ? '' : (allumee ?? ''));
+  // Le capot du véhicule s'ouvre (manifeste) : un bouton mène voir le moteur à sa place, dans la voiture.
+  const aCapot = useCapot((state) => state.vehicule !== null);
 
   if (!famille) {
     return (
@@ -204,7 +207,20 @@ export function MoteurPanel() {
               </span>
             )}
           </p>
-          {/* Place du bouton du capot (lot « capot », ouvrirCapot / fermerCapot) : ici, avant « D'origine ». */}
+          {/* L'établi cache la voiture : on quitte l'entrée, capot ouvert, pour voir le moteur à sa place. */}
+          {aCapot && (
+            <button
+              type="button"
+              className="btn moteur-capot"
+              data-testid="moteur-capot"
+              onClick={() => {
+                if (ouvrirCapot()) useDock.getState().back();
+              }}
+            >
+              <Icon name="voiture" />
+              <span>Sous le capot</span>
+            </button>
+          )}
           <button type="button" className="btn moteur-reset" disabled={!touche} onClick={remettre}>
             <Icon name="origine" />
             <span>D’origine</span>

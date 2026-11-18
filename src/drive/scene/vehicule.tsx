@@ -51,6 +51,7 @@ import { isVoyant, tintAdditive, useVehicleLights } from '../../scene/vehicle/ph
 import { useEchappementSortie } from './flammes.ts';
 import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 import { usePieces } from '../../scene/vehicle/pieces.ts';
+import { useCapotScene } from '../../scene/vehicle/capot.ts';
 import { DEFAULT_SEAT, placeEye, seatMetrics, type PlacedSeat } from '../../scene/fit.ts';
 import { bodyPoint, STILL_BODY, useBodyPose } from '../../scene/vehicle/wheels.ts';
 import { TableauVivant } from '../../scene/vehicle/tableau.ts';
@@ -429,6 +430,8 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   }, [phares.couleur]);
   // Pièces montées (aileron…) du build, posées comme au garage.
   const pieces = usePieces(drive.prepared, vehicle, invalidate, bodyEnv);
+  // Capot vitré ou déposé : le moteur de l'établi se voit en roulant (src/scene/vehicle/capot.ts) ; le capot reste fermé.
+  const capot = useCapotScene(drive.prepared, vehicle, invalidate, bodyEnv, { garage: false, stageClass: DRIVE_STAGE_CLASS, pieces });
   // Échappement : finition des sorties et retour de flammes au lever de pied (./flammes.ts).
   useEchappementSortie(drive.prepared.root, vehicle, invalidate);
   const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins, vehicle.kind), [drive, spins, vehicle.kind]);
@@ -562,8 +565,8 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
     pending.current = true;
     shadow.compile(gl);
     cast.compile(gl);
-    // `pieces` : une pièce montée (aileron…) arrive après le modèle ; les ombres se refont avec elle.
-  }, [gl, shadow, cast, stamp, pieces]);
+    // `pieces` : une pièce montée (aileron…) arrive après le modèle ; les ombres se refont avec elle (le capot aussi).
+  }, [gl, shadow, cast, stamp, pieces, capot.signature]);
   useFrame(() => {
     if (!pending.current) return;
     pending.current = false;

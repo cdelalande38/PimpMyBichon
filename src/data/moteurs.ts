@@ -409,3 +409,44 @@ export function checkEngineModel(value: unknown, problems: string[], catalogue: 
   if (value === undefined) return;
   if (typeof value !== 'string' || !familleById(value, catalogue)) problems.push(`engine.model doit nommer une famille du catalogue des moteurs (${catalogue.familles.map((famille) => famille.id).join(', ')})`);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Le moteur posé dans le véhicule (vague U, « capot » : capot ouvert, vitré ou déposé)
+
+/** Bornes de l'échelle du moteur posé : un substitut à la taille d'un véhicule qui l'est aussi. */
+export const POSE_SCALE = Object.freeze({ min: 0.5, max: 1.2 });
+
+/**
+ * Problèmes du champ `engine.pose` d'un manifeste brut (appelée par src/data/vehicles.ts) : il demande
+ * un modèle ; position (trois nombres, à 3 m au plus de l'origine), demi-tour en degrés, échelle bornée.
+ */
+export function checkEnginePose(value: unknown, model: unknown, problems: string[]): void {
+  if (value === undefined) return;
+  if (model === undefined) problems.push('engine.pose demande engine.model (le moteur à poser)');
+  if (!isObject(value)) {
+    problems.push('engine.pose doit être un objet (position, yaw, scale)');
+    return;
+  }
+  const position = value.position;
+  if (!Array.isArray(position) || position.length !== 3 || !position.every((n) => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 3)) problems.push('engine.pose.position doit porter trois nombres, en mètres (3 m au plus)');
+  if (value.yaw !== undefined && !(typeof value.yaw === 'number' && Number.isFinite(value.yaw) && Math.abs(value.yaw) <= 360)) problems.push('engine.pose.yaw doit être un angle en degrés (−360 à 360)');
+  if (value.scale !== undefined && !(typeof value.scale === 'number' && value.scale >= POSE_SCALE.min && value.scale <= POSE_SCALE.max)) problems.push(`engine.pose.scale doit être une échelle de ${POSE_SCALE.min} à ${POSE_SCALE.max}`);
+  for (const key of Object.keys(value)) if (!['position', 'yaw', 'scale'].includes(key)) problems.push(`engine.pose.${key} : inconnu (position, yaw, scale)`);
+}
+
+/** Le moteur à poser dans le véhicule : sa famille et sa pose ; `null` : le manifeste n'en pose pas. */
+export function moteurPose(vehicle: Pick<VehicleManifest, 'engine'>, catalogue: MoteursCatalogue = MOTEURS_CATALOGUE): { famille: MoteurFamille; pose: Required<NonNullable<NonNullable<VehicleManifest['engine']>['pose']>> } | null {
+  const famille = familleOf(vehicle, catalogue);
+  const pose = vehicle.engine?.pose;
+  if (!famille || !pose) return null;
+  return { famille, pose: { position: pose.position, yaw: pose.yaw ?? 0, scale: pose.scale ?? 1 } };
+}
+
+/**
+ * Signature de ce que montre le moteur posé : traitement, couleur et option de chaque pièce (comme
+ * l'établi, sans la vue éclatée ni la pièce choisie). `''` : pas de moteur posé.
+ */
+export function signatureMoteurPose(vehicle: Pick<VehicleManifest, 'engine'>, build: Build | undefined): string {
+  const posed = moteurPose(vehicle);
+  return posed ? signatureEtabli(posed.famille, build) : '';
+}

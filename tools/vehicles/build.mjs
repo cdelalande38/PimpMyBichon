@@ -29,6 +29,7 @@ import * as habitacle from './habitacle.mjs';
 import * as conducteur from './conducteur.mjs';
 import * as montees from './pieces.mjs';
 import * as moteurs from './moteurs.mjs';
+import * as compartiment from './compartiment.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SRC = join(ROOT, 'assets-src', 'vehicles');
@@ -198,6 +199,8 @@ export function buildPieces() {
   mkdirSync(PIECES_OUT, { recursive: true });
   for (const poste of catalogue.postes) {
     for (const option of poste.options) {
+      // Capot (vitré, déposé) : des nœuds du modèle du véhicule, aucun fichier partagé.
+      if (option.mount === 'capot') continue;
       const file = montees.pieceFile(poste.id, option.id);
       const built = montees.buildPiece(option);
       const m = new kit.Model(file.replace(/\.glb$/, ''));
@@ -364,6 +367,40 @@ export function withWheels(id, body, wheels) {
   };
 }
 
+/** Le moteur du manifeste tel que l'app le pose dans le véhicule ; `null` : pas de modèle (ou fichier absent). @param {string} id */
+function postedEngine(id) {
+  const manifest = JSON.parse(readFileSync(join(OUT, id, 'vehicle.json'), 'utf8'));
+  const model = manifest.engine?.model;
+  const file = model ? join(ENGINES_OUT, moteurs.engineFile(model)) : null;
+  return file && existsSync(file) ? compartiment.engineInVehicle(readFileSync(file)) : null;
+}
+
+/** Plus grand débord admis du moteur posé hors de la caisse, en mètres (arrondis des tôles). */
+const ENGINE_FIT_TOLERANCE = 0.006;
+
+/**
+ * Le moteur posé (engine.pose) tient-il dans la caisse, capot fermé ? Rayons verticaux sur la coque
+ * (nœuds carrosserie et capot) : aucun sommet ne la traverse ; ce qui pend sous le plancher est permis.
+ * @param {any} manifest @param {Uint8Array} bytes
+ * @returns {{ ok: boolean, line: string } | null}
+ */
+export function engineFit(manifest, bytes) {
+  const pose = manifest.engine?.pose;
+  const model = manifest.engine?.model;
+  const lid = manifest.pieces?.capot?.lid;
+  if (!pose || !model) return null;
+  const file = join(ENGINES_OUT, moteurs.engineFile(model));
+  if (!existsSync(file)) return null;
+  const shell = compartiment.nodeTriangles(bytes, (name) => name === 'carrosserie' || name === lid);
+  const r = compartiment.checkEngineFit(shell, compartiment.engineVertices(readFileSync(file)), pose, compartiment.poseOffset(bytes));
+  const cm = (/** @type {number} */ v) => (v * 100).toFixed(1).replace('.', ',');
+  const box = /** @type {const} */ ([0, 1, 2]).map((k) => `${r.min[k].toFixed(2)} à ${r.max[k].toFixed(2)}`).join(', ');
+  const base = `moteur posé (${model}, échelle ${pose.scale ?? 1}) : ${r.tested} sommets, boîte ${box} ; jour sous la tôle ${cm(r.above)} cm ; garde au sol ${cm(r.ground)} cm ; ${r.under} sous le plancher`;
+  if (r.worst <= ENGINE_FIT_TOLERANCE && r.ground > 0.05) return { ok: true, line: `${base} ; aucun ne traverse la caisse` };
+  const at = r.where ? ` (${r.where.map((v) => v.toFixed(2)).join(', ')})` : '';
+  return { ok: false, line: `${base} ; ${r.outside} traversent la caisse, jusqu'à ${cm(r.worst)} cm${at}${r.ground <= 0.05 ? ', garde au sol trop basse' : ''}` };
+}
+
 async function main() {
   const args = process.argv.slice(2).filter((a) => !a.startsWith('-'));
   const ids = args.length > 0 ? args : existsSync(SRC) ? readdirSync(SRC).filter((d) => existsSync(join(SRC, d, 'model.mjs'))).sort() : [];
@@ -473,8 +510,18 @@ async function main() {
         const posed = montees.piecesWorst(JSON.parse(readFileSync(join(OUT, id, 'vehicle.json'), 'utf8')), mounted);
         full.triangles += posed.triangles;
         full.drawCalls += posed.drawCalls;
+        // Capot moteur (pieces.capot) : variante et compartiment à leur tour, moteur posé avec eux.
+        const capot = compartiment.capotWorst(JSON.parse(readFileSync(join(OUT, id, 'vehicle.json'), 'utf8')), bytes, postedEngine(id));
+        if (capot) {
+          full.triangles += capot.triangles;
+          full.drawCalls += capot.drawCalls;
+        }
         const over = full.triangles > VEHICLE_MAX.triangles || full.drawCalls > VEHICLE_MAX.drawCalls;
-        const extra = (inside.anchors > 0 ? ` et habitacle le plus lourd sur ${inside.anchors} ancres` : '') + (driver ? ', conducteur à bord' : '') + (posed.postes > 0 ? `, pièce montée la plus lourde (${posed.triangles.toLocaleString('fr-FR')} tr.)` : '');
+        const extra =
+          (inside.anchors > 0 ? ` et habitacle le plus lourd sur ${inside.anchors} ancres` : '') +
+          (driver ? ', conducteur à bord' : '') +
+          (posed.postes > 0 ? `, pièce montée la plus lourde (${posed.triangles.toLocaleString('fr-FR')} tr.)` : '') +
+          (capot ? `, capot au pire cas (${capot.state})` : '');
         const line = `  complet, roues les plus lourdes sur ${full.anchors} ancres${extra} : ${full.triangles.toLocaleString('fr-FR')} triangles · ${full.drawCalls} appels de dessin (maximum § 8 : ${VEHICLE_MAX.triangles.toLocaleString('fr-FR')} et ${VEHICLE_MAX.drawCalls})`;
         if (over) {
           failed += 1;
@@ -486,6 +533,14 @@ async function main() {
       if (problems.length > 0) {
         failed += 1;
         console.error(`  habitacle : ${problems.join(' ; ')}`);
+      }
+      const fit = engineFit(manifest, bytes);
+      if (fit) {
+        if (fit.ok) console.log(`  ${fit.line}`);
+        else {
+          failed += 1;
+          console.error(`  ${fit.line}`);
+        }
       }
       console.log(`  → ${relative(ROOT, out)}`);
     } catch (error) {

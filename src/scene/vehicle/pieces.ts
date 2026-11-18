@@ -15,7 +15,7 @@ import { BufferAttribute, BufferGeometry, Group, Mesh, MeshStandardMaterial, typ
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { finish as findFinish } from '../../data/finishes.ts';
 import { MATERIAL_ROLES } from '../../data/materialRoles.ts';
-import { fitPositions, flipWinding, mirrorZ, optionsFor, PIECE_NODES, PIECES_DIR, pieceFile, piecePaint, postesOf, resolvePiece, type PieceOption } from '../../data/pieces.ts';
+import { fitPositions, flipWinding, isLidMount, mirrorZ, optionsFor, PIECE_NODES, PIECES_DIR, pieceFile, piecePaint, postesOf as tousLesPostes, resolvePiece, type PieceOption } from '../../data/pieces.ts';
 import type { Build, Paint, VehicleManifest } from '../../data/vehicleTypes.ts';
 import { applyPaint, createPaintMaterial } from '../../render/paint.ts';
 import { masterZone, resolvePaint, useBuilds } from '../../state/builds.ts';
@@ -38,6 +38,14 @@ export function loadPieceSource(file: string): Promise<GLTF> {
     sources.set(url, promise);
   }
   return promise;
+}
+
+/** Postes posés par un fichier partagé : tous, sauf le capot (des nœuds du modèle, ./capot.ts). */
+function postesOf(vehicle: Pick<VehicleManifest, 'pieces'>) {
+  return tousLesPostes(vehicle).filter((poste) => {
+    const mount = vehicle.pieces?.[poste.id];
+    return mount !== undefined && !isLidMount(mount);
+  });
 }
 
 /** Les options qu'un véhicule accepte, chargées en tâche de fond : changer d'aileron ne fait plus attendre. */

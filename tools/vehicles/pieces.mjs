@@ -30,7 +30,7 @@ import * as k from './kit.mjs';
 /** @typedef {import('./kit.mjs').Parts} Parts */
 /** @typedef {[number, number]} P2 */
 /** @typedef {[number, number, number]} P3 */
-/** @typedef {{ id: string, style: string, mount: 'surface' | 'supports' | 'rail', label: string, phrase: string, hint?: string, spanFactor?: number, rise?: number, depth?: number, picto: string }} Option */
+/** @typedef {{ id: string, style: string, mount: 'surface' | 'supports' | 'rail' | 'capot', label: string, phrase: string, hint?: string, spanFactor?: number, rise?: number, depth?: number, picto: string }} Option */
 /** @typedef {{ id: string, label: string, groupe?: string, mirror?: boolean, plural?: boolean, absent: string, colorLabel: string, none: { id: string, label: string, hint?: string, phrase: string }, reference: { width: number, feet?: number, ends?: number }, picto: string, options: Option[] }} Poste */
 /** @typedef {{ groupes?: { id: string, label: string, absent: string }[], postes: Poste[] }} Catalogue */
 
@@ -799,7 +799,7 @@ export function buildPiece(option) {
 /**
  * Pièce la plus lourde qu'un véhicule accepte, par poste déclaré dans son manifeste (une paire compte
  * deux fois ses triangles : la pièce et son miroir, fondus dans les mêmes maillages).
- * @param {{ pieces?: Record<string, { options?: string[], supports?: unknown, rail?: unknown }> }} manifest
+ * @param {{ pieces?: Record<string, { options?: string[], supports?: unknown, rail?: unknown, lid?: unknown }> }} manifest
  * @param {Map<string, { triangles: number, primitives: number }>} summaries résumé par fichier
  * @returns {{ postes: number, triangles: number, drawCalls: number }}
  */
@@ -811,6 +811,8 @@ export function piecesWorst(manifest, summaries) {
   for (const [id, mount] of Object.entries(manifest.pieces ?? {})) {
     const poste = catalogue.postes.find((item) => item.id === id);
     if (!poste) continue;
+    // Le capot (nœuds du modèle) se compte avec la caisse (tools/vehicles/compartiment.mjs, capotWorst).
+    if (mount.lid) continue;
     postes += 1;
     const accepts = (/** @type {Option} */ option) => (mount.rail ? option.mount === 'rail' : option.mount === 'surface' || (option.mount === 'supports' && mount.supports));
     const allowed = poste.options.filter((option) => (!mount.options || mount.options.includes(option.id)) && accepts(option));

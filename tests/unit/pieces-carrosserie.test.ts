@@ -76,7 +76,8 @@ const STRAIGHT: PieceRailMount = {
 describe('kit carrosserie : catalogue et boutique', () => {
   it('le groupe « carrosserie » réunit lame avant, jupes et diffuseur, chacun avec son origine et deux ou trois options sur rail', () => {
     expect(groupeById('carrosserie')?.label).toBe('Kit carrosserie');
-    expect(postesDuGroupe('carrosserie').map((item) => item.id)).toEqual([...KIT]);
+    // Le capot moteur (vague U, « capot ») rejoint le groupe : ses options ne sont pas sur rail (tests/unit/capot.test.ts).
+    expect(postesDuGroupe('carrosserie').map((item) => item.id)).toEqual([...KIT, 'capot']);
     const counts = KIT.map((id) => poste(id).options.length);
     expect(counts).toEqual([3, 3, 2]);
     for (const id of KIT) {
@@ -101,7 +102,7 @@ describe('kit carrosserie : catalogue et boutique', () => {
         expect(article?.prix).toBeLessThanOrEqual(400);
       }
     }
-    expect(ARTICLES_CARROSSERIE).toHaveLength(8);
+    expect(ARTICLES_CARROSSERIE).toHaveLength(10);
     const cox = car('cox');
     expect(isFree(cox, 'jupes', 'aucunes')).toBe(true);
     expect(isFree(cox, 'jupes', 'larges')).toBe(false);
@@ -111,7 +112,7 @@ describe('kit carrosserie : catalogue et boutique', () => {
   it('les voitures déclarent les trois postes ; les motos aucun', () => {
     for (const id of CARS) {
       const vehicle = car(id);
-      expect(postesOf(vehicle).map((item) => item.id), id).toEqual(['aileron', ...KIT]);
+      expect(postesOf(vehicle).map((item) => item.id), id).toEqual(['aileron', ...KIT, ...(id === 'cox' ? ['capot'] : [])]);
       for (const item of KIT) expect(optionsFor(vehicle, item).length, `${id} ${item}`).toBe(poste(item).options.length);
     }
     for (const id of ['bobber', 'sportive']) expect(postesOf(car(id)).filter((item) => item.groupe === 'carrosserie'), id).toEqual([]);
