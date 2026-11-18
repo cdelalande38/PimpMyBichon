@@ -59,7 +59,7 @@ export const TUTOS: readonly Tuto[] = [
         texte: 'La croix range le menu ; il revient d’une touche sur « Personnaliser ». Dans une entrée, la flèche l’agrandit s’il a plus à montrer.',
         cible: 'footer.dock .dock-close',
       },
-      { texte: 'En haut à droite, les boutons ronds : atelier, photo, radio, carrière, intérieur. Pour rouler, c’est « Jouer », en bas. Les objets du garage se touchent aussi.', cible: 'nav.quick' },
+      { texte: 'En haut à droite : atelier, photo, radio, carrière, intérieur. En bas, « Jouer » pour rouler. Les objets du garage se touchent aussi.', cible: 'nav.quick' },
       { texte: 'Perdu ? Le bouton « ? » réexplique l’écran où tu es, et garde tous les tutos.', cible: '.tuto-aide' },
     ],
   },
