@@ -16,6 +16,8 @@ export interface PrepOption {
   label: string;
   /** Une ligne d'atelier sous la puce. */
   hint: string;
+  /** Prix de l'article, en dollars : un seul achat vaut pour tous les véhicules (src/data/articles/moteur.ts). */
+  prix: number;
   /**
    * Postes à multiplicateur : coefficient appliqué à la puissance d'origine, selon la
    * suralimentation d'origine (reprogrammation) ou le même pour tous (carburation).
@@ -41,6 +43,9 @@ export interface PrepSlot {
   options: readonly PrepOption[];
 }
 
+/** Article de la boutique d'une option de la fiche (convention `piece-<poste>-<option>` de src/data/boutique.ts). */
+export const articlePrep = (slot: string, option: string): string => `piece-${slot}-${option}`;
+
 /** Libellé de la puce qui rend un poste à son origine. */
 export const ORIGIN_LABEL = 'Origine';
 
@@ -57,18 +62,21 @@ export const ENGINE_SLOTS: readonly PrepSlot[] = Object.freeze([
         id: 'stage1',
         label: 'Stage 1',
         hint: 'Carto seule',
+        prix: 120,
         ratio: { atmo: 1.05, compresseur: 1.15, turbo: 1.3 },
       },
       {
         id: 'stage2',
         label: 'Stage 2',
         hint: 'Carto, admission, ligne',
+        prix: 220,
         ratio: { atmo: 1.08, compresseur: 1.25, turbo: 1.5 },
       },
       {
         id: 'stage3',
         label: 'Stage 3',
         hint: 'Gros échangeur, tout y passe',
+        prix: 350,
         ratio: { atmo: 1.12, compresseur: 1.35, turbo: 1.72 },
       },
     ],
@@ -81,9 +89,9 @@ export const ENGINE_SLOTS: readonly PrepSlot[] = Object.freeze([
     effect: 'ratio',
     resultLabel: 'Préparé',
     options: [
-      { id: 'gicleurs', label: 'Gicleurs et filtre', hint: 'Filtre libre, gicleurs revus', ratio: 1.06 },
-      { id: 'gros-carbu', label: 'Gros carbu', hint: 'Un corps plus gros', ratio: 1.12 },
-      { id: 'double-carbu', label: 'Double carbu', hint: 'Un carbu par côté', ratio: 1.2 },
+      { id: 'gicleurs', label: 'Gicleurs et filtre', hint: 'Filtre libre, gicleurs revus', prix: 80, ratio: 1.06 },
+      { id: 'gros-carbu', label: 'Gros carbu', hint: 'Un corps plus gros', prix: 160, ratio: 1.12 },
+      { id: 'double-carbu', label: 'Double carbu', hint: 'Un carbu par côté', prix: 260, ratio: 1.2 },
     ],
   },
   {
@@ -92,9 +100,9 @@ export const ENGINE_SLOTS: readonly PrepSlot[] = Object.freeze([
     hint: 'Des chevaux en plus, bouteille ouverte seulement. Comptés à part.',
     effect: 'shot',
     options: [
-      { id: 'nitro-petit', label: 'Petit kit', hint: 'Pour goûter', shot: { car: 50, bike: 15 } },
-      { id: 'nitro-moyen', label: 'Kit moyen', hint: 'Ça décolle', shot: { car: 100, bike: 25 } },
-      { id: 'nitro-gros', label: 'Gros kit', hint: 'Accroche-toi', shot: { car: 150, bike: 40 } },
+      { id: 'nitro-petit', label: 'Petit kit', hint: 'Pour goûter', prix: 100, shot: { car: 50, bike: 15 } },
+      { id: 'nitro-moyen', label: 'Kit moyen', hint: 'Ça décolle', prix: 200, shot: { car: 100, bike: 25 } },
+      { id: 'nitro-gros', label: 'Gros kit', hint: 'Accroche-toi', prix: 320, shot: { car: 150, bike: 40 } },
     ],
   },
 ] satisfies PrepSlot[]);

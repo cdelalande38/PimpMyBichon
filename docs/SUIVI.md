@@ -2,13 +2,13 @@
 
 Document de passation, tenu à jour à chaque étape. Il dit, pour quelqu'un qui arrive à froid : ce que le commanditaire a demandé (avec ses mots), ce qui est en ligne, ce qui reste faux dans ce qui est livré, et ce qui vient. Le détail technique de chaque lot est dans le message de son commit ; les règles de travail sont dans `CLAUDE.md` ; le périmètre est dans `CAHIER_DES_CHARGES.md` (§ 5.5 pour la sortie, § 11 pour ce que la publication attend) ; les substituts et ce qui manque sont dans `TODO_ASSETS.md`.
 
-Dernière mise à jour : 19 novembre 2026, 19 h 30.
+Dernière mise à jour : 19 novembre 2026, 19 h 45.
 
 ## 1. Où on en est
 
-- **En ligne** : `4f71f0c` (« Jouer » et ce document), poussé le 19 novembre à 18 h 39 avec son accord (« tu peux publier »).
-- **Prêt en local** : `59b38d2` (longueur de course sur les départs, « Conduite assistée ») et le correctif des stickers, validés ; publication à 19 h 40.
-- **En cours** : « duel3 » (restes du duel) et « nos2 » (restes du NOS), agents Opus lancés à 18 h 46 ; « prepa » (préparation payante), agent Sonnet lancé à 19 h. En file : « fonds » (Opus).
+- **En ligne** : `4f71f0c` (vérifié sur le site à 19 h 45). Poussé à 19 h 41 : `7b4f566` (départs, « Conduite assistée », stickers), CI en cours.
+- **Prêt en local, validé** : le lot « prepa » (préparation moteur payante) ; publication à 20 h 41 au plus tôt.
+- **En cours** : « duel3 » (restes du duel) et « nos2 » (restes du NOS), agents Opus lancés à 18 h 46 ; « fonds » (fonds des écrans de chargement), agent Opus lancé à 19 h 40.
 
 ## 2. Journal des demandes
 
@@ -18,8 +18,8 @@ Dernière mise à jour : 19 novembre 2026, 19 h 30.
 |---|---|---|
 | « Direction à renommer en conduite assistée » | Le réglage s'appelle « Conduite assistée », choix « Oui » et « Non » | `59b38d2` |
 | « il faudra revoir les distances de circuit annoncés dans les menu ca affiche 0km parfois c'est juste pas possible » | Chaque départ affichait sa borne kilométrique (« km 0,0 » pour le premier) : il dit maintenant la distance jusqu'à l'arrivée, ou la longueur du tour sur un circuit | `59b38d2` |
-| « un élément à fixer ca sera pour la configuration des stickers j'ai l'impression qu'on a pas toutes les options visibles par exemple je peux pas en supprimer » | Les gestes du sticker (dont « Supprimer » et « Curseurs ») étaient au bout d'une rangée qui défilait de côté, hors de l'écran : ils ont leur propre rangée, qui passe à la ligne | (ce commit) |
-| « les préparation moteur ca doit etre payant » | Lot « prepa » en cours : chaque option de la fiche devient un article (Stage 1 à 3 : 120, 220, 350 $ ; carburation : 80, 160, 260 $ ; nitro : 100, 200, 320 $) ; une option déjà montée le reste | — |
+| « un élément à fixer ca sera pour la configuration des stickers j'ai l'impression qu'on a pas toutes les options visibles par exemple je peux pas en supprimer » | Les gestes du sticker (dont « Supprimer » et « Curseurs ») étaient au bout d'une rangée qui défilait de côté, hors de l'écran : ils ont leur propre rangée, qui passe à la ligne | `7b4f566` |
+| « les préparation moteur ca doit etre payant » | Chaque option de la fiche de préparation (hors « Origine ») est un article, valable pour tous les véhicules : Stage 1 à 3 à 120, 220, 350 $ ; carburation à 80, 160, 260 $ ; nitro à 100, 200, 320 $. Une option déjà montée dans une sauvegarde reste montée et agit ; elle garde son cadenas (règle commune des panneaux) | (ce commit) |
 | « pour les écrans de chargement il faudra générer des fonds (fond général de chargement de l'application, fond pour chaque lieux de courses) » | Source choisie par lui : des rendus de nos propres scènes par le jeu. Lot « fonds » prêt, lancé quand une place se libère ; images montrées avant d'être versées | — |
 | « traite les reste du del en prio puis NOS puis rodéo puis cartes puis vehicules » | Ordre de la file (§ 4) ; lots « duel3 » et « nos2 » en cours | — |
 
@@ -72,7 +72,7 @@ Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : t
 - **Capot** : la Cox seulement (le van n'a pas de modèle de moteur, le pivot du capot du concept n'est pas à la charnière, les motos ont leur moteur dans leur carrosserie) ; de dos, la vitre montre peu le moteur ; pas d'ouverture en pause pendant une sortie.
 - **Fin de course** : en paysage et très grand texte, le bouton du garage s'écrit sur plusieurs lignes ; l'écran d'un rendez-vous manqué n'a pas de capture.
 - **Clavier** : jamais essayé sur un vrai clavier ; pas de touche de pause.
-- **Tests** : `sortie-pilotage.spec.ts:204` est trop lourd (à couper en deux) ; `drift.spec.ts` a besoin de quinze minutes en CI ; `carriere.spec.ts:310` a échoué une fois sur un chargement de modèle (« Failed to fetch »), vert rejoué seul ; le parcours d'échec de la carrière est à réécrire.
+- **Tests** : `sortie-pilotage.spec.ts:204` est trop lourd (à couper en deux) ; `drift.spec.ts` a besoin de quinze minutes en CI, et le 19 novembre à 18 h 39 sa tranche (parcours complets 5/5) a atteint la limite de 60 min avec un échec à `drift.spec.ts:257` (`data-placement` du manche sous 0,5), alors que le test passe en local : la publication n'en dépend pas, mais la CI est rouge ; `carriere.spec.ts:310` a échoué une fois sur un chargement de modèle (« Failed to fetch »), vert rejoué seul ; le parcours d'échec de la carrière est à réécrire.
 - **Plus ancien, toujours ouvert** : le véhicule ne reçoit pas l'ombre du décor ; talus d'herbe en gradins sur certaines cartes ; le moteur du van ; le kit large.
 
 ## 4. Lots à venir

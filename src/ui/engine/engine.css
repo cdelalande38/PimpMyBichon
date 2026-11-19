@@ -146,6 +146,35 @@
   white-space: normal;
 }
 
+/* Option payante non acquise : cadenas et prix sous la puce, comme dans Mécanique · Moteur. */
+.engine-lock {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+.chip .engine-prix {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ambre);
+  font-variant-numeric: tabular-nums;
+}
+
+.engine-message {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--ok);
+  background: var(--panel);
+  font-size: 0.875rem;
+}
+
 /* Son du moteur (EngineSoundControls) : trois boutons de 48 px et une ligne d'état de hauteur
    fixe, pour que le menu ne bouge pas quand l'état change. */
 .engine-sound {

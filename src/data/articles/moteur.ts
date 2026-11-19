@@ -5,10 +5,13 @@
 // soit la famille du moteur. Identifiants : src/data/moteurs.ts (articleTraitement, articleEchange).
 // Repères de prix : une course d'un tour rapporte 40 $ à 125 $ (src/data/economie.ts) ; le noir satiné
 // se paie en une course, le chrome en trois à six. Les niveaux d'optimisation (prix et gains dans
-// src/data/optimisation.ts) suivent la même règle : un article par niveau, pour tous les moteurs.
+// src/data/optimisation.ts) suivent la même règle : un article par niveau, pour tous les moteurs. La fiche
+// de préparation (Mécanique · Préparation, src/data/enginePrep.ts) aussi : chaque option au-dessus de
+// l'origine (reprogrammation, carburation, nitro) est un article, pour tous les véhicules.
 
 import type { ArticleBoutique } from '../boutique.ts';
 import { articleEchange, articleTraitement, traitementById, type TraitementId } from '../moteurs.ts';
+import { articlePrep, ENGINE_SLOTS } from '../enginePrep.ts';
 import { articleNiveau, OPTIMISATIONS } from '../optimisation.ts';
 
 /** Prix de chaque traitement payant, en dollars. */
@@ -52,6 +55,16 @@ export const ARTICLES_MOTEUR: readonly ArticleBoutique[] = [
       label: `${genre.label} · ${niveau.label}`,
       prix: niveau.prix,
       description: `${niveau.effet} + ${niveau.puissance} % de puissance, sur tous tes moteurs.`,
+    })),
+  ),
+  // Fiche de préparation : chaque option d'un poste, hors origine, au prix de ses données.
+  ...ENGINE_SLOTS.flatMap((slot) =>
+    slot.options.map((option) => ({
+      id: articlePrep(slot.id, option.id),
+      famille: 'piece' as const,
+      label: `${slot.label} · ${option.label}`,
+      prix: option.prix,
+      description: `${option.hint}. Un seul achat, et c’est monté sur tous tes véhicules.`,
     })),
   ),
 ];
