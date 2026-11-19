@@ -6,8 +6,9 @@ import { commencerCourse, ENTREE_SORTIE, openApp, openEntry, ouvrirReglages, pic
 
 // « Retour » en sortie de nuit : le geste retour du téléphone, le retour du navigateur et le bouton
 // « Rentrer au garage » demandent d'abord « Rentrer au garage ? » tant que la route roule ; la sortie se
-// met en pause le temps de la question. Pas de question pendant le chargement. Après « Rentrer », un
-// retour de plus ne rouvre pas la sortie. Captures : captures/vague-p-retour/.
+// met en pause le temps de la question. Pas de question pendant le chargement, qui n'a plus de bouton
+// (vague U) : le retour et Échap y ramènent au garage. Après « Rentrer », un retour de plus ne rouvre pas
+// la sortie. Captures : captures/vague-p-retour/.
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const dialogue = (page: Page) => page.getByRole('dialog', { name: 'Rentrer au garage ?' });
@@ -148,13 +149,34 @@ test.describe('retour en sortie de nuit', () => {
     await pickMap(page);
     await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
     await expect(page).toHaveURL(/#\/sortie$/);
-    // L'écran de chargement de la carte est là, la route n'est pas encore prête.
+    // L'écran de chargement de la carte est là, la route n'est pas encore prête ; il n'a aucun bouton.
     await expect(page.locator('.drive-chargement')).toBeVisible();
+    await expect(page.locator('.drive-chargement').getByRole('button')).toHaveCount(0);
     await expect(stage(page)).not.toHaveAttribute('data-sortie', 'prete');
 
     await page.goBack();
     await expect(garage(page)).toBeVisible({ timeout: 30_000 });
     await expect(dialogue(page)).toHaveCount(0);
     expect(new URL(page.url()).hash).toBe('');
+  });
+
+  test('pendant le chargement : Échap ramène au garage, sans question, sans entrée fantôme', async ({ page }) => {
+    // La route tarde : le chargement reste à l'écran le temps du geste.
+    let lacher = () => {};
+    const retenue = new Promise<void>((done) => (lacher = done));
+    await page.route('**/assets/maps/*/route.json', async (route) => {
+      await retenue;
+      await route.continue().catch(() => undefined);
+    });
+    await page.goto('./#/sortie');
+    const chargement = page.locator('.drive-chargement');
+    await expect(chargement).toBeVisible({ timeout: 30_000 });
+    await expect(chargement.getByRole('button')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(garage(page)).toBeVisible({ timeout: 30_000 });
+    await expect(dialogue(page)).toHaveCount(0);
+    await expect(stage(page)).toHaveCount(0);
+    expect(new URL(page.url()).hash).toBe('');
+    lacher();
   });
 });

@@ -291,6 +291,7 @@ export const TUTOS: readonly Tuto[] = [
       { texte: 'Pose ton pouce n’importe où : en haut les gaz, en bas le frein, sur les côtés tu tournes. Téléphone couché, la manette.', cible: '.drive-mid' },
       { texte: 'Au vert, le chrono part. Cadran : vert ça tire, orange passe la vitesse, rouge zone rouge. « NOS » envoie une poussée.' },
       { texte: 'La petite icône du coin range tout : caméras, météo, son, pédales, pilote automatique, « Repartir », « Rentrer au garage ».', cible: '.drive-reglages-btn' },
+      { texte: 'À l’arrivée, tes gains tombent un à un. « Rejouer » repart aux feux ; en carrière, « Course suivante » file à l’épreuve d’après.' },
     ],
   },
 ];

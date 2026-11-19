@@ -322,8 +322,8 @@ export async function choisirCamera(page: Page, nom: string, options: { garder?:
 }
 
 /**
- * « Rentrer au garage » : celui de l'écran de chargement tant que la route charge, celui de
- * l'arrivée au bout d'un parcours, sinon celui des réglages. Tant que la route roule, il demande
+ * « Rentrer au garage » : tant que la route charge, le retour du téléphone (l'écran de chargement n'a plus
+ * de bouton depuis la vague U) ; celui de l'arrivée au bout d'un parcours, sinon celui des réglages. Tant que la route roule, il demande
  * d'abord « Rentrer au garage ? » (src/app/gardeSortie.ts) : on confirme par « Rentrer ». Route pas
  * encore prête, en erreur ou au bout : pas de question, le garage revient tout de suite.
  */
@@ -331,7 +331,7 @@ export async function rentrerAuGarage(page: Page): Promise<void> {
   const chargement = page.locator('.drive-veil[data-etat="chargement"]:not([data-fini])');
   const arrivee = page.locator('.drive-arrivee');
   const erreur = page.locator('.drive-veil[data-etat="erreur"]');
-  if (await chargement.isVisible()) await chargement.getByRole('button', { name: 'Rentrer au garage' }).tap();
+  if (await chargement.isVisible()) await page.goBack();
   else if (await arrivee.isVisible()) await arrivee.getByRole('button', { name: 'Rentrer au garage' }).tap();
   else if (await erreur.isVisible()) await erreur.getByRole('button', { name: 'Rentrer au garage' }).tap();
   else {

@@ -134,10 +134,23 @@ test.describe('sortie de nuit', () => {
     const veil = page.locator('.drive-veil[data-etat="chargement"]');
     await expect(veil).toBeVisible({ timeout: 30_000 });
     await expect(veil).toContainText('Licence Ouverte');
-    // Écran de chargement plein : la carte nommée, ses étapes, « Rentrer au garage » atteignable.
+    // Écran de chargement plein : la carte nommée, ses étapes ; plus de bouton (vague U : il cachait les titres
+    // en paysage) : Précédent et Échap ramènent au garage (tests/e2e/retour-sortie.spec.ts). Les titres entiers
+    // dans l'écran, en portrait comme en paysage.
     await expect(veil.locator('.tuto-marque b')).not.toBeEmpty();
     await expect(veil.locator('.tuto-etapes li')).toHaveCount(4);
-    await expect(veil.getByRole('button', { name: 'Rentrer au garage' })).toBeVisible();
+    await expect(veil.getByRole('button')).toHaveCount(0);
+    for (const vue of [{ width: 390, height: 844 }, { width: 844, height: 390 }, { width: 780, height: 360 }, { width: 912, height: 350 }]) {
+      await page.setViewportSize(vue);
+      for (const titre of [veil.locator('.tuto-marque span'), veil.locator('.tuto-marque b'), veil.locator('.tuto-etapes')]) {
+        const boite = await titre.boundingBox();
+        expect(boite, `titre du chargement (${vue.width} × ${vue.height})`).not.toBeNull();
+        expect(boite?.y ?? -1, `haut du titre (${vue.width} × ${vue.height})`).toBeGreaterThanOrEqual(0);
+        expect((boite?.y ?? 0) + (boite?.height ?? 0), `bas du titre (${vue.width} × ${vue.height})`).toBeLessThanOrEqual(vue.height);
+      }
+      await capture(page, `sortie-chargement-${vue.width}x${vue.height}`);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
     await capture(page, 'sortie-chargement');
     release();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });

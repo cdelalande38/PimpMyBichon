@@ -23,7 +23,8 @@
 // où tout est imposé (carte, départ, format, météo, moment) ; les choix libres sont mis de côté
 // (`rendezVous.libre`), jamais écrasés dans la sauvegarde, et reviennent au garage (`leave`). Météo, moment
 // et format ne se changent pas pendant un rendez-vous ; à l'arrivée, la carrière juge la course
-// (src/jeu/carriereCloture.ts) après la clôture ordinaire.
+// (src/jeu/carriereCloture.ts) après la clôture ordinaire. « Course suivante » (écran de fin) enchaîne sur le
+// rendez-vous suivant sans quitter la sortie : `relancerSur` remonte la scène sur sa carte (l'adresse ne change pas).
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -318,6 +319,11 @@ export interface DriveState extends DriveStore {
   rendezVous: RendezVousEnCours | null;
   /** Prépare la sortie d'un rendez-vous : carte, départ, format, météo et moment imposés ; l'appelant ouvre la sortie. */
   lancerRendezVous: (rdv: RendezVous, numero: number, total: number) => void;
+  /**
+   * « Course suivante » (écran de fin, vague U) : sans quitter la sortie, la scène se remonte sur cette carte et
+   * ce départ (nouvel essai : chargement, puis aperçu), même si c'est la même carte. Carte inconnue : rien.
+   */
+  relancerSur: (map: MapId, start: string | null) => void;
 }
 
 /** Bilan sans rien (économie absente ou en erreur) : l'écran de fin montre quand même le résultat. */
@@ -521,6 +527,12 @@ export const useDrive = create<DriveState>()(
           weather: rdv.meteo,
           format: rdv.format,
         })),
+      relancerSur: (map, start) =>
+        set((state) =>
+          state.map === null || !mapById(map)
+            ? state
+            : { map, start, attempt: state.attempt + 1, apercu: true, fondu: 'non', fin: null, director: true, input: { ...AUTO_INPUT }, orbit: { ...DEFAULT_ORBIT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+        ),
     }),
     {
       name: DRIVE_KEY,

@@ -411,28 +411,9 @@
   text-transform: uppercase;
 }
 
-.carriere-fin-actes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-
-/* Plus précis que « .drive-veil .btn { flex: none } » (drive.css) : l'ordre des feuilles dans le paquet ne
-   doit pas décider si le bouton se plie à la largeur du bloc (il débordait de 32 px en portrait). */
-.carriere-fin .carriere-fin-actes .btn {
-  flex: 1 1 9rem;
-  min-height: var(--tap);
-  gap: 0.4rem;
-}
-
-@media (orientation: landscape) and (max-height: 540px) {
-  .fin-course-defile > .carriere-fin {
-    grid-column: 2;
-    padding-top: 0.75rem;
-    border-top: 1px solid var(--line);
-  }
-}
+/* Les boutons de la fin d'un rendez-vous (« Course suivante », « Retenter », « Rentrer au garage préparer le
+   véhicule ») sont ceux du bas de l'écran de fin (src/ui/drive/fincourse.css) : un seul jeu. En paysage, le bloc
+   vit dans la colonne de droite, qui défile seule. */
 
 /* ───────────── En sortie ───────────── */
 

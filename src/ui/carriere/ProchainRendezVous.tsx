@@ -1,17 +1,17 @@
-// L'écran de fin d'une course de carrière (contrat entre lots : une ligne, `<ProchainRendezVous />`, sous
-// les gains de src/ui/drive/FinCourseVue.tsx) : le rendez-vous réussi ou manqué, dit clairement (ce qui
-// manquait, de combien) ; réussi, l'annonce du suivant, pour préparer le véhicule avant d'y aller ;
-// « Retenter » (manqué) et « Rentrer au garage préparer le véhicule ». Au dernier rendez-vous, une fin
-// de carrière sobre. Course libre : rien.
+// L'écran de fin d'une course de carrière (contrat entre lots : une ligne, `<ProchainRendezVous />`, dans la
+// colonne des gains de src/ui/drive/FinCourseVue.tsx) : le rendez-vous réussi ou manqué, dit clairement (ce
+// qui manquait, de combien) ; réussi, l'annonce du suivant, pour préparer le véhicule avant d'y aller. Au
+// dernier rendez-vous, une fin de carrière sobre. Course libre : rien.
+// Les boutons (« Course suivante », « Retenter », « Rentrer au garage préparer le véhicule ») ne sont plus ici
+// (retour du 18 novembre 2026 : deux retours au garage à l'écran) : un seul jeu, en bas de l'écran de fin
+// (`boutonsDeFin`, src/ui/drive/FinCourseVue.tsx).
 // Le verdict accompagne le bilan (src/jeu/carriereCloture.ts) : la vue reste sans état propre.
 
-import { closeSheet } from '../../app/useRoute.ts';
 import { OBJECTIF_LABEL } from '../../data/carriere.ts';
 import { formatChrono } from '../../drive/depart.ts';
 import { verdictDe, type VerdictRendezVous } from '../../jeu/carriereCloture.ts';
 import type { Bilan } from '../../jeu/contrat.ts';
 import { useDrive } from '../../state/drive.ts';
-import { DriveIcon } from '../drive/icones.tsx';
 import { dollars } from '../jeu/libelles.ts';
 import { FicheRendezVous } from './FicheRendezVous.tsx';
 import './carriere.css';
@@ -49,7 +49,6 @@ export function texteVerdict(v: VerdictRendezVous, temps: number): { titre: stri
 
 export function ProchainRendezVous({ bilan }: { bilan?: Bilan }) {
   const fin = useDrive((state) => state.fin);
-  const commencer = useDrive((state) => state.commencer);
   const source = bilan ?? fin;
   const v = verdictDe(source);
   if (!v || !source) return null;
@@ -68,18 +67,6 @@ export function ProchainRendezVous({ bilan }: { bilan?: Bilan }) {
           <FicheRendezVous rdv={v.suivant} numero={v.suivantNumero} total={v.total} />
         </div>
       )}
-      <div className="carriere-fin-actes">
-        {!v.reussi && (
-          <button type="button" className="btn cta" onClick={commencer}>
-            <DriveIcon name="repartir" />
-            Retenter
-          </button>
-        )}
-        <button type="button" className="btn" onClick={closeSheet}>
-          <DriveIcon name="garage" />
-          Rentrer au garage préparer le véhicule
-        </button>
-      </div>
     </div>
   );
 }

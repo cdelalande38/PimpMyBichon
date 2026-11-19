@@ -207,12 +207,12 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await page.goto('./');
     await putOnScreen(page, 'concept');
 
-    // Chargement : plein écran, la carte nommée, « Rentrer au garage » atteignable ; parti une fois la route prête.
+    // Chargement : plein écran, la carte nommée, sans bouton (Précédent et Échap ramènent au garage) ; parti une fois la route prête.
     await page.goto('./#/sortie');
     const loading = page.locator('.drive-chargement');
     await expect(loading).toBeVisible({ timeout: 30_000 });
     await expect(loading.locator('.tuto-marque b')).not.toBeEmpty();
-    await expect(loading.getByRole('button', { name: 'Rentrer au garage' })).toBeVisible();
+    await expect(loading.getByRole('button')).toHaveCount(0);
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(loading).toHaveCount(0, { timeout: 10_000 });
 

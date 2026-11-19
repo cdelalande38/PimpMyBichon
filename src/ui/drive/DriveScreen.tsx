@@ -23,8 +23,10 @@
 //   l'écran redevient épuré, et un appui sur la route reprend la main. Dans l'aperçu et sous le pilote,
 //   un appui long met le ralenti, et, sur la caméra d'orbite, un glissé tourne autour du véhicule.
 // Tant que la route n'est pas prête, un écran de chargement plein et opaque (même air que celui du
-// lancement de l'app) nomme la carte et coche ses étapes, « Rentrer au garage » compris ; il s'efface
-// en fondu à la première image de la route. L'erreur garde son message et « Réessayer ».
+// lancement de l'app) nomme la carte et coche ses étapes ; il s'efface en fondu à la première image de la
+// route. Plus de bouton « Rentrer au garage » (retour du 18 novembre 2026 : il prenait de la place et cachait
+// les titres en paysage) : Précédent (le téléphone) et Échap (le clavier) y ramènent au garage, sans question
+// (src/app/gardeSortie.ts). L'erreur garde son message, « Réessayer » et « Rentrer au garage ».
 // Le son du moteur est branché sur la sortie tant que l'écran est monté (src/drive/son.ts).
 
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
@@ -625,7 +627,8 @@ function useEtapes(ready: boolean): number {
 
 /**
  * Chargement plein écran, du même air que celui du lancement (src/ui/tuto/Chargement.tsx). Monté de
- * nouveau à chaque essai (clé), il revient avec « Réessayer » et « Repartir ».
+ * nouveau à chaque essai (clé), il revient avec « Réessayer », « Repartir » et « Course suivante ». Sans
+ * bouton : on en sort par Précédent ou par Échap.
  */
 function DriveLoading() {
   const mapId = useDrive((state) => state.map);
@@ -643,6 +646,18 @@ function DriveLoading() {
     const t = window.setTimeout(() => setGone(true), reduced ? 0 : FONDU_MS);
     return () => window.clearTimeout(t);
   }, [ready, reduced]);
+
+  // Échap, tant que la route charge : retour au garage (Précédent le fait déjà, par la garde de la sortie).
+  useEffect(() => {
+    if (ready) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      closeSheet();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [ready]);
 
   if (!map || failed || gone) return null;
   const etapes: readonly { nom: string; enCours: string }[] = [...ETAPES.slice(0, ETAPES.length - 1), ETAPE_CIEL[moment] ?? ETAPE_CIEL.nuit];
@@ -677,10 +692,6 @@ function DriveLoading() {
           {faites >= ETAPES.length ? 'C’est parti' : faites === 2 ? `${vehicle.name} sort du garage…` : `${courante.enCours}…`}
         </p>
         <p className="drive-credits">Données de la carte : {map.credits.map(creditLine).join(' ; ')}.</p>
-        <button type="button" className="btn drive-home drive-chargement-garage" onClick={closeSheet}>
-          <DriveIcon name="garage" />
-          Rentrer au garage
-        </button>
       </div>
     </div>
   );

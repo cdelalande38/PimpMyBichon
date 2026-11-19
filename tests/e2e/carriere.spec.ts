@@ -7,17 +7,22 @@
 //   ni la météo ni le moment ; la course finie ; l'écran de fin annonce le rendez-vous suivant, la prime
 //   est dans les gains ; au garage, le rappel est passé au suivant, et le reste après un rechargement ;
 // - l'échec (parcours long, PMB_CARRIERE_ECHEC=1) : un rendez-vous au bronze couru trop lentement, ce qui
-//   manquait et de combien, « Retenter » repart aux feux, le rendez-vous reste le courant.
+//   manquait et de combien, « Retenter » repart aux feux, le rendez-vous reste le courant ;
+// - « Course suivante » (lot « fin », retour du 18 novembre 2026) : un seul jeu de boutons en bas de l'écran de
+//   fin ; en paysage, le résultat et les boutons à gauche, la suite à droite qui défile seule (aucune moitié
+//   vide) ; « Course suivante » recharge la sortie sur le rendez-vous suivant, tout imposé, et Précédent
+//   ramène au garage, pas à la course d'avant.
 // Une course entière est trop longue en rendu logiciel : comme tests/e2e/courses.spec.ts, le parcours sert
 // lui-même la route de la carte avec le départ du rendez-vous posé 120 m avant le bout (données servies au
 // seul test ; l'app n'a aucune porte dérobée). La suite des rendez-vous est lue dans le fichier de données.
-// Captures de revue à la demande : PMB_CAPTURES_CARRIERE=<dossier>.
+// Captures de revue à la demande : PMB_CAPTURES_CARRIERE=<dossier> (celles de l'écran de fin, PMB_CAPTURES_FIN=<dossier>).
 
 import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreSurLaRoute, commencerCourse, DELAI_ROUTE, fermerReglages, openApp, ouvrirReglages, reglerSortie, reloadSaved, rentrerAuGarage, tempsDeRoute, waitForScene } from './helpers.ts';
+import { boutonsDeFin, finEnDeuxColonnes, finEnPortrait } from './fin-course.ts';
+import { attendreApercu, attendreSurLaRoute, commencerCourse, DELAI_ROUTE, fermerReglages, openApp, ouvrirReglages, reglerSortie, reloadSaved, rentrerAuGarage, tempsDeRoute, waitForScene } from './helpers.ts';
 
 interface Rdv {
   id: string;
@@ -121,7 +126,7 @@ async function tenirLeGaz(page: Page): Promise<() => Promise<void>> {
 
 /** « Rentrer au garage préparer le véhicule », puis la confirmation éventuelle. */
 async function rentrerPreparer(page: Page): Promise<void> {
-  await page.locator('.carriere-fin').getByRole('button', { name: 'Rentrer au garage préparer le véhicule' }).tap();
+  await page.locator('.fin-course-actes').getByRole('button', { name: 'Rentrer au garage préparer le véhicule' }).tap();
   const question = page.getByRole('dialog', { name: 'Rentrer au garage ?' });
   const garage = page.getByRole('heading', { level: 1, name: 'PimpMyBichon' });
   await expect(question.or(garage)).toBeVisible();
@@ -206,9 +211,10 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await expect(fin.locator('.fin-course-gains')).toContainText(`+ ${premier.prime} $`);
     await expect(bloc).toContainText('Prochain rendez-vous');
     await expect(bloc.locator(`.carriere-fiche[data-rendez-vous="${second.id}"]`)).toContainText(second.titre);
-    await expect(bloc.getByRole('button', { name: 'Retenter' })).toHaveCount(0);
-    const rentrer = bloc.getByRole('button', { name: 'Rentrer au garage préparer le véhicule' });
-    await rentrer.scrollIntoViewIfNeeded();
+    // Un seul jeu de boutons : « Course suivante » (qui dit lequel), « Rejouer », « Rentrer au garage préparer le véhicule ».
+    await boutonsDeFin(page, [new RegExp(`^Course suivante Rendez-vous 2 · `), 'Rejouer', 'Rentrer au garage préparer le véhicule']);
+    await expect(fin.getByRole('button', { name: 'Retenter' })).toHaveCount(0);
+    const rentrer = fin.getByRole('button', { name: 'Rentrer au garage préparer le véhicule' });
     await entiere(page, rentrer, 'Rentrer au garage préparer le véhicule');
     await bloc.scrollIntoViewIfNeeded();
     await photo(page, '04-fin-annonce-portrait');
@@ -280,10 +286,14 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await expect(bloc.getByRole('heading', { name: `Rendez-vous ${numero} manqué` })).toBeVisible();
     await expect(bloc).toContainText(/Il fallait le bronze, sous \d+:\d\d\.\d\. Tu as mis \d+:\d\d\.\d : \d+,\d s de trop\./);
     await expect(fin.locator('.fin-course-gains')).not.toContainText('Prime du rendez-vous');
-    const retenter = bloc.getByRole('button', { name: 'Retenter' });
-    await retenter.scrollIntoViewIfNeeded();
+    await boutonsDeFin(page, ['Retenter', 'Rentrer au garage préparer le véhicule']);
+    const retenter = fin.getByRole('button', { name: 'Retenter' });
     await entiere(page, retenter, 'Retenter');
     await photo(page, '09-fin-manque-portrait');
+    await finEnPortrait(page, 'manque-390x844');
+    await page.setViewportSize(PAYSAGE);
+    await finEnDeuxColonnes(page, 'manque-844x390');
+    await page.setViewportSize(PORTRAIT);
     // Retenter : mêmes conditions imposées, retour sur la ligne, aux feux.
     await retenter.tap();
     await expect(fin).toHaveCount(0);
@@ -293,6 +303,91 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await rentrerAuGarage(page);
     await expect(stage(page)).toHaveCount(0);
     await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${numero} sur ${SUITE.length}`));
+    expect(errors).toEqual([]);
+  });
+  test('« Course suivante » : la sortie se recharge sur le rendez-vous suivant, tout imposé ; Précédent ramène au garage', async ({ page }) => {
+    test.setTimeout(600_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    // Un rendez-vous en un tour sur une route ouverte (le départ peut se rapprocher du bout), suivi d'un rendez-vous sur
+    // une autre carte, sous une autre météo ou à un autre moment ; la carte suivante la plus courte d'abord.
+    const boucle = (carte: string) => (JSON.parse(readFileSync(resolve('public/assets/maps', carte, 'route.json'), 'utf8')) as { loop?: boolean; length: number });
+    const candidats = SUITE.map((rdv, i) => ({ rdv, i, suivant: SUITE[i + 1] }))
+      .filter((c): c is { rdv: Rdv; i: number; suivant: Rdv } => c.suivant !== undefined && c.rdv.format === 'tour1' && !boucle(c.rdv.carte).loop && c.suivant.carte !== c.rdv.carte && (c.suivant.meteo !== c.rdv.meteo || c.suivant.moment !== c.rdv.moment))
+      .sort((a, b) => boucle(a.suivant.carte).length - boucle(b.suivant.carte).length);
+    const choisi = candidats[0];
+    if (!choisi) throw new Error('aucun rendez-vous suivi d’un autre, sur une autre carte, sous d’autres conditions');
+    const { rdv, i, suivant } = choisi;
+    await departPresDuBout(page, rdv);
+    await openApp(page);
+    await waitForScene(page);
+    const reussis = Object.fromEntries(SUITE.slice(0, i).map((r) => [r.id, { reussi: true, essais: 1, meilleurTemps: 60, medaille: null }]));
+    await poserJeu(page, { solde: 500, articles: {}, hautsFaits: {}, cumuls: {}, carriere: { resultats: reussis } });
+    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${i + 1} sur ${SUITE.length}`));
+    await pastille(page).tap();
+    await menuCarriere(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await expect(stage(page)).toHaveAttribute('data-carte', rdv.carte);
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
+    await reglerSortie(page, 'Direction', 'Assistée');
+    await commencerCourse(page, { parti: true });
+    const lacher = await tenirLeGaz(page);
+    const fin = page.locator('.fin-course');
+    await attendreSurLaRoute(page, 'écran de fin', () => fin.isVisible(), (vu) => vu, { secondes: 60, horloge: 480_000, intervalle: 500 });
+    await lacher();
+    await expect(fin.locator('.carriere-fin')).toHaveAttribute('data-verdict', 'reussi');
+
+    // Un seul jeu de boutons ; « Course suivante » dit lequel.
+    await boutonsDeFin(page, [new RegExp(`^Course suivante Rendez-vous ${i + 2} · `), 'Rejouer', 'Rentrer au garage préparer le véhicule']);
+    await finEnPortrait(page, 'reussi-390x844');
+    await page.setViewportSize(PAYSAGE);
+    await finEnDeuxColonnes(page, 'reussi-844x390');
+    // Revue à la demande (chaque taille redessine la scène en rendu logiciel : trop long pour la passe courante) :
+    // les autres téléphones, et le texte très grand en paysage, où rien ne doit passer derrière les boutons.
+    if (process.env.PMB_CAPTURES_FIN) {
+      for (const vue of [{ width: 360, height: 780 }]) {
+        await page.setViewportSize(vue);
+        await finEnPortrait(page, `reussi-${vue.width}x${vue.height}`);
+      }
+      for (const vue of [{ width: 915, height: 412 }, { width: 780, height: 360 }]) {
+        await page.setViewportSize(vue);
+        await finEnDeuxColonnes(page, `reussi-${vue.width}x${vue.height}`);
+      }
+      const taille = await page.evaluate(() => document.documentElement.dataset.text ?? '');
+      await page.evaluate(() => (document.documentElement.dataset.text = 'tres-grand'));
+      await page.setViewportSize(PAYSAGE);
+      await finEnDeuxColonnes(page, 'reussi-844x390-tres-grand');
+      await page.evaluate((t) => (document.documentElement.dataset.text = t), taille);
+    }
+    await page.setViewportSize(PORTRAIT);
+
+    // « Course suivante » : la sortie se recharge sur la carte du rendez-vous suivant, tout imposé, sans passer par le garage.
+    await fin.getByRole('button', { name: /^Course suivante/ }).tap();
+    await expect(fin).toHaveCount(0);
+    await expect(stage(page)).toHaveAttribute('data-carte', suivant.carte, { timeout: 60_000 });
+    await expect(page).toHaveURL(/#\/sortie$/);
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
+    await expect(stage(page)).toHaveAttribute('data-meteo', suivant.meteo);
+    await attendreApercu(page);
+    await expect(page.locator('.drive-rendez-vous')).toContainText(`Rendez-vous ${i + 2} sur ${SUITE.length}`);
+    const reglages = await ouvrirReglages(page);
+    const meteo = { sec: 'Sec', pluie: 'Pluie', neige: 'Neige' }[suivant.meteo] ?? suivant.meteo;
+    const moment = suivant.moment === 'jour' ? 'Jour' : 'Nuit';
+    for (const [groupe, attendu] of [['Météo', meteo], ['Moment', moment]] as const) {
+      await expect(reglages.getByRole('group', { name: groupe }).getByRole('button').first()).toBeDisabled();
+      await expect(reglages.getByRole('group', { name: groupe }).locator('[aria-pressed="true"]')).toHaveText(new RegExp(attendu));
+    }
+    await expect(reglages.getByText(`imposé par le rendez-vous ${i + 2}`)).toBeVisible();
+    await fermerReglages(page);
+
+    // Précédent : la question habituelle, puis le garage ; jamais la course d'avant.
+    await page.goBack();
+    const question = page.getByRole('dialog', { name: 'Rentrer au garage ?' });
+    await expect(question).toBeVisible();
+    await question.getByRole('button', { name: 'Rentrer', exact: true }).tap();
+    await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
+    await expect(stage(page)).toHaveCount(0);
+    expect(new URL(page.url()).hash).toBe('');
+    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${i + 2} sur ${SUITE.length}`));
     expect(errors).toEqual([]);
   });
 });

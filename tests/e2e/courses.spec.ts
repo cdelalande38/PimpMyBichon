@@ -2,8 +2,8 @@
 // - le choix du format au menu (balade, 1 tour, 3 tours grisés sur une route ouverte), gardé au rechargement ;
 // - la course en 3 tours sur le circuit : « Tour 1/3 » près du chrono une fois parti ;
 // - l'écran de fin d'une course en 1 tour : temps, record, gains et déblocages (la première course finie
-//   paie toujours sa prime et son haut fait), « Rejouer » (retour aux feux), « Rentrer au garage », et le
-//   solde retrouvé au garage.
+//   paie toujours sa prime et son haut fait), un seul jeu de boutons, « Rejouer » (retour aux feux) et
+//   « Rentrer au garage », la mise en page en portrait et en paysage, et le solde retrouvé au garage.
 // Une course entière est trop longue en rendu logiciel. Pour l'écran de fin, le parcours sert lui-même la
 // route de Miami Beach (page.route) avec le départ « Vers la 41e rue » posé 120 m avant le bout : c'est la
 // donnée de la carte qui change, dans le navigateur du test seulement ; l'app n'a aucune porte dérobée
@@ -16,6 +16,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
+import { boutonsDeFin, finEnDeuxColonnes, finEnPortrait } from './fin-course.ts';
 import { attendreSurLaRoute, auSec, backToSections, choisirCarte, choisirDepart, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, reglerSortie, reloadSaved, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
@@ -158,6 +159,18 @@ test.describe('courses : format, tours, écran de fin', () => {
         const b = await fin.getByRole('button', { name: nom }).boundingBox();
         expect(b?.height ?? 0, nom).toBeGreaterThanOrEqual(48);
       }
+      // Course libre (lot « fin », vague U) : un seul jeu de boutons, « Rejouer » en rouge, pas de « Course suivante »
+      // (rien n'y fait suite de façon simple) ; en paysage, deux colonnes sans moitié vide (tests/e2e/fin-course.ts).
+      await boutonsDeFin(page, ['Rejouer', 'Rentrer au garage']);
+      await expect(fin.getByRole('button', { name: /Course suivante/ })).toHaveCount(0);
+      await finEnPortrait(page, 'libre-390x844');
+      // 844 × 390 à chaque passe ; les autres tailles à la demande (PMB_CAPTURES_FIN), la scène se redessinant à chacune.
+      const paysages = [{ width: 844, height: 390 }, ...(process.env.PMB_CAPTURES_FIN ? [{ width: 915, height: 412 }, { width: 780, height: 360 }] : [])];
+      for (const vue of paysages) {
+        await page.setViewportSize(vue);
+        await finEnDeuxColonnes(page, `libre-${vue.width}x${vue.height}`);
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
       await shot(page, '04-fin-bilan');
       // Rejouer : mêmes réglages, retour sur la ligne, aux feux, à la main.
       await fin.getByRole('button', { name: 'Rejouer' }).tap();

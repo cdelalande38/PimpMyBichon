@@ -2,9 +2,13 @@
 // et ce qu'on a débloqué ») : la vue seule, sans état, pour qu'un test la rende avec un bilan fabriqué
 // (tests/unit/courses-fin.test.ts). Le conteneur (FinCourse.tsx) la branche sur le store.
 //
-// De haut en bas : la médaille et le temps total ; le temps de chaque tour (meilleur tour marqué) ; le
-// record (ancien, nouveau, écart) ; les gains, ligne par ligne, et le solde ; les hauts faits obtenus et
-// ce qui vient d'être débloqué ; « Rejouer » et « Rentrer au garage », collés en bas sous le pouce.
+// De haut en bas : la médaille, le temps total et le record (ancien, nouveau, écart), le temps de chaque tour
+// (meilleur tour marqué) et les chiffres de la course ; puis, dans la suite, les gains, ligne par ligne, et le
+// solde ; les hauts faits obtenus et ce qui vient d'être débloqué ; en carrière, le rendez-vous jugé et le
+// suivant. En bas, sous le pouce, UN SEUL jeu de boutons (`boutonsDeFin`, retour du 18 novembre 2026 : deux
+// retours au garage à l'écran, et rien pour partir sur la course suivante) : trois au plus, le principal en rouge.
+// En paysage (fincourse.css), le résultat et les boutons à gauche, toujours visibles ; la suite à droite, qui
+// défile seule : aucune moitié d'écran vide, à aucun moment du défilement.
 // Le bilan vient de `cloturerCourse` (src/jeu/bilan.ts) : vide, l'écran le dit en clair.
 //
 // Les gains ARRIVENT un par un (vague U, 18 novembre 2026) : tant que le défilé tourne, le bloc « Gains » est une
@@ -16,11 +20,14 @@
 import { useMemo } from 'react';
 import { formatChrono } from '../../drive/depart.ts';
 import type { SonInterface } from '../../data/bruitages.ts';
+import type { RendezVous } from '../../data/carriere.ts';
 import { formatSpec, indulgence, seuilsMedailles, tempsReference } from '../../data/courses.ts';
+import { verdictDe, type VerdictRendezVous } from '../../jeu/carriereCloture.ts';
 import type { Bilan, Medaille } from '../../jeu/contrat.ts';
 import { AnnonceVocale, ListeNotifications, useDefilement } from '../jeu/NotificationsGain.tsx';
 import { FAMILLES_ARTICLE, notificationsDuBilan } from '../jeu/notifications.ts';
-import { DriveIcon } from './icones.tsx';
+import { DriveIcon, type DriveIconName } from './icones.tsx';
+import { resumeRendezVous } from '../carriere/FicheRendezVous.tsx';
 import { ProchainRendezVous } from '../carriere/ProchainRendezVous.tsx';
 
 const MEDAILLE_LABEL: Readonly<Record<Medaille, string>> = { or: 'Médaille d’or', argent: 'Médaille d’argent', bronze: 'Médaille de bronze' };
@@ -56,17 +63,56 @@ export function prochaineMedaille(bilan: Bilan): string | null {
 
 const POUR: Readonly<Record<Medaille, string>> = { or: 'Pour l’or', argent: 'Pour l’argent', bronze: 'Pour le bronze' };
 
+/** Un bouton du bas de l'écran de fin. */
+export interface BoutonFin {
+  acte: 'suivante' | 'rejouer' | 'retenter' | 'garage';
+  label: string;
+  /** Petite ligne sous le libellé (le rendez-vous suivant, ou « préparer le véhicule »). */
+  detail?: string;
+  /** Le bouton principal, en rouge : toujours le premier. */
+  principal: boolean;
+}
+
+/**
+ * Les boutons de l'écran de fin, un seul jeu, trois au plus, le principal d'abord :
+ * - course libre (ou rendez-vous rejoué une fois la carrière bouclée) : « Rejouer », « Rentrer au garage » ;
+ * - rendez-vous réussi : « Course suivante » (le rendez-vous suivant, dit en petit), « Rejouer » (pour le temps
+ *   ou la médaille), « Rentrer au garage » pour préparer le véhicule ;
+ * - rendez-vous manqué (ou couru hors de ses conditions) : « Retenter », « Rentrer au garage » pour préparer ;
+ * - carrière bouclée par cette course : pas de « Course suivante », « Rejouer » et « Rentrer au garage ».
+ * Course libre : pas de « Course suivante » (rien n'y fait suite de façon simple et prévisible).
+ */
+export function boutonsDeFin(v: VerdictRendezVous | null): BoutonFin[] {
+  const garage: BoutonFin = { acte: 'garage', label: 'Rentrer au garage', principal: false };
+  const preparer: BoutonFin = { ...garage, detail: 'préparer le véhicule' };
+  if (!v) return [{ acte: 'rejouer', label: 'Rejouer', principal: true }, garage];
+  if (!v.reussi) return [{ acte: 'retenter', label: 'Retenter', principal: true }, preparer];
+  if (v.suivant && !v.bouclee) {
+    return [
+      { acte: 'suivante', label: 'Course suivante', detail: `Rendez-vous ${v.suivantNumero} · ${resumeRendezVous(v.suivant)}`, principal: true },
+      { acte: 'rejouer', label: 'Rejouer', principal: false },
+      preparer,
+    ];
+  }
+  return [{ acte: 'rejouer', label: 'Rejouer', principal: true }, garage];
+}
+
+const ICONE_ACTE: Readonly<Record<BoutonFin['acte'], DriveIconName>> = { suivante: 'lecture', rejouer: 'repartir', retenter: 'repartir', garage: 'garage' };
+
 export interface FinCourseVueProps {
   bilan: Bilan;
+  /** « Rejouer » et « Retenter » : retour sur la ligne, aux feux. */
   onRejouer: () => void;
   onGarage: () => void;
+  /** « Course suivante » (carrière, rendez-vous réussi) : part sur le rendez-vous suivant, tout imposé. */
+  onCourseSuivante?: (rdv: RendezVous, numero: number, total: number) => void;
   /** Vrai : les gains arrivent un par un, chacun avec son son. Faux ou absent : l'écran complet d'emblée (« moins de mouvement »). */
   anime?: boolean;
   /** Demande un son d'interface (src/audio/sfx/interface.ts) ; absent : aucun son. */
   onSon?: (son: SonInterface) => void;
 }
 
-export function FinCourseVue({ bilan, onRejouer, onGarage, anime = false, onSon }: FinCourseVueProps) {
+export function FinCourseVue({ bilan, onRejouer, onGarage, onCourseSuivante, anime = false, onSon }: FinCourseVueProps) {
   const r = bilan.resultat;
   const notifications = useMemo(() => notificationsDuBilan(bilan), [bilan]);
   const defilement = useDefilement({ notifications, anime, onSon });
@@ -76,9 +122,18 @@ export function FinCourseVue({ bilan, onRejouer, onGarage, anime = false, onSon 
   const prochaine = prochaineMedaille(bilan);
   const stats = r.stats;
   const rien = bilan.hautsFaits.length === 0 && bilan.deblocages.length === 0;
+  const verdict = verdictDe(bilan);
+  const boutons = boutonsDeFin(verdict);
+  const agir = (acte: BoutonFin['acte']) => {
+    if (acte === 'garage') onGarage();
+    else if (acte === 'suivante') {
+      if (verdict?.suivant) onCourseSuivante?.(verdict.suivant, verdict.suivantNumero, verdict.total);
+    } else onRejouer();
+  };
   return (
     <section className="fin-course" aria-labelledby="fin-course-titre" data-medaille={r.medaille ?? 'aucune'}>
-      {/* Un appui sur l'écran pendant le défilé : tout de suite l'écran complet. Les boutons du bas restent à eux. */}
+      {/* Un appui sur l'écran pendant le défilé : tout de suite l'écran complet. Les boutons du bas restent à eux.
+          En paysage, ce conteneur s'efface (display: contents) : le résultat et la suite deviennent deux colonnes. */}
       <div className="fin-course-defile" data-defilement={defile ? 'en-cours' : 'fini'} onClick={defile ? defilement.passer : undefined}>
         <div className="fin-course-bloc fin-course-resultat">
           <header className="fin-course-tete">
@@ -93,95 +148,112 @@ export function FinCourseVue({ bilan, onRejouer, onGarage, anime = false, onSon 
             {formatChrono(r.temps * 1000)}
           </p>
           {prochaine && <p className="fin-course-note">{prochaine}</p>}
-          {r.tours.length > 1 && (
-            <ol className="fin-course-tours" aria-label="Temps par tour">
-              {r.tours.map((t, i) => (
-                <li key={i} data-meilleur={t === meilleurTour || undefined}>
-                  <span>Tour {i + 1}</span>
-                  <b>{formatChrono(t * 1000)}</b>
-                </li>
-              ))}
-            </ol>
-          )}
           <p className="fin-course-record" data-record={record.record || undefined}>
             {record.texte}
           </p>
-          <p className="fin-course-stats">
-            {(stats.distance / 1000).toFixed(1).replace('.', ',')} km · {Math.round(stats.vitesseMax)} km/h au plus · {stats.chocs} choc{stats.chocs > 1 ? 's' : ''} · {Math.round(stats.glisse)} m de glisse · NOS ×{stats.nos}
-          </p>
+          <div className="fin-course-chiffres">
+            {r.tours.length > 1 && (
+              <ol className="fin-course-tours" aria-label="Temps par tour">
+                {r.tours.map((t, i) => (
+                  <li key={i} data-meilleur={t === meilleurTour || undefined}>
+                    <span>Tour {i + 1}</span>
+                    <b>{formatChrono(t * 1000)}</b>
+                  </li>
+                ))}
+              </ol>
+            )}
+            <p className="fin-course-stats">
+              {(stats.distance / 1000).toFixed(1).replace('.', ',')} km · {Math.round(stats.vitesseMax)} km/h au plus · {stats.chocs} choc{stats.chocs > 1 ? 's' : ''} · {Math.round(stats.glisse)} m de glisse · NOS ×{stats.nos}
+            </p>
+          </div>
         </div>
 
-        {defile ? (
-          <div className="fin-course-bloc fin-course-notifs" aria-labelledby="fin-course-notifs-titre">
-            <h3 id="fin-course-notifs-titre">Gains</h3>
-            <ListeNotifications notifications={notifications} revelees={defilement.revelees} passer={defilement.passer} />
-          </div>
-        ) : (
-          <>
-            <div className="fin-course-bloc fin-course-gains" aria-labelledby="fin-course-gains-titre">
-              <h3 id="fin-course-gains-titre">Gains</h3>
-              {bilan.gains.detail.length === 0 ? (
-                <p className="fin-course-vide">Rien de gagné cette fois.</p>
-              ) : (
-                <ul className="fin-course-lignes">
-                  {bilan.gains.detail.map((ligne, i) => (
-                    <li key={i}>
-                      <span>{ligne.motif}</span>
-                      <b>+ {formatDollars(ligne.dollars)}</b>
-                    </li>
-                  ))}
-                  <li className="fin-course-total">
-                    <span>Total</span>
-                    <b>+ {formatDollars(bilan.gains.dollars)}</b>
-                  </li>
-                </ul>
-              )}
-              <p className="fin-course-solde">
-                Solde : <b>{formatDollars(bilan.solde)}</b>
-              </p>
+        {/* La suite : les gains, ce qui est débloqué, le rendez-vous de carrière. */}
+        <div className="fin-course-suite">
+          {defile ? (
+            <div className="fin-course-bloc fin-course-notifs" aria-labelledby="fin-course-notifs-titre">
+              <h3 id="fin-course-notifs-titre">Gains</h3>
+              <ListeNotifications notifications={notifications} revelees={defilement.revelees} passer={defilement.passer} />
             </div>
+          ) : (
+            <>
+              <div className="fin-course-bloc fin-course-gains" aria-labelledby="fin-course-gains-titre">
+                <h3 id="fin-course-gains-titre">Gains</h3>
+                {bilan.gains.detail.length === 0 ? (
+                  <p className="fin-course-vide">Rien de gagné cette fois.</p>
+                ) : (
+                  <ul className="fin-course-lignes">
+                    {bilan.gains.detail.map((ligne, i) => (
+                      <li key={i}>
+                        <span>{ligne.motif}</span>
+                        <b>+ {formatDollars(ligne.dollars)}</b>
+                      </li>
+                    ))}
+                    <li className="fin-course-total">
+                      <span>Total</span>
+                      <b>+ {formatDollars(bilan.gains.dollars)}</b>
+                    </li>
+                  </ul>
+                )}
+                <p className="fin-course-solde">
+                  Solde : <b>{formatDollars(bilan.solde)}</b>
+                </p>
+              </div>
 
-            <div className="fin-course-bloc fin-course-debloque" aria-labelledby="fin-course-debloque-titre">
-              <h3 id="fin-course-debloque-titre">Débloqué</h3>
-              {rien ? (
-                <p className="fin-course-vide">Rien de nouveau cette fois.</p>
-              ) : (
-                <ul className="fin-course-lignes">
-                  {bilan.hautsFaits.map((fait) => (
-                    <li key={`h-${fait.id}`} className="fin-course-haut-fait">
-                      <span>
-                        <b>{fait.label}</b>
-                        <small>{fait.description}</small>
-                      </span>
-                      <em>{fait.recompense.dollars ? `Haut fait · + ${formatDollars(fait.recompense.dollars)}` : 'Haut fait'}</em>
-                    </li>
-                  ))}
-                  {bilan.deblocages.map((article) => (
-                    <li key={`a-${article.id}`}>
-                      <span>
-                        <b>{article.label}</b>
-                      </span>
-                      <em>{FAMILLES_ARTICLE[article.famille] ?? article.famille}</em>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </>
-        )}
-        {/* Sous les gains, défilé comme écran complet : le rendez-vous de carrière jugé et l'annonce du suivant (src/ui/carriere/). */}
-        <ProchainRendezVous bilan={bilan} />
-        <AnnonceVocale notifications={notifications} actif={!anime} />
+              <div className="fin-course-bloc fin-course-debloque" aria-labelledby="fin-course-debloque-titre">
+                <h3 id="fin-course-debloque-titre">Débloqué</h3>
+                {rien ? (
+                  <p className="fin-course-vide">Rien de nouveau cette fois.</p>
+                ) : (
+                  <ul className="fin-course-lignes">
+                    {bilan.hautsFaits.map((fait) => (
+                      <li key={`h-${fait.id}`} className="fin-course-haut-fait">
+                        <span>
+                          <b>{fait.label}</b>
+                          <small>{fait.description}</small>
+                        </span>
+                        <em>{fait.recompense.dollars ? `Haut fait · + ${formatDollars(fait.recompense.dollars)}` : 'Haut fait'}</em>
+                      </li>
+                    ))}
+                    {bilan.deblocages.map((article) => (
+                      <li key={`a-${article.id}`}>
+                        <span>
+                          <b>{article.label}</b>
+                        </span>
+                        <em>{FAMILLES_ARTICLE[article.famille] ?? article.famille}</em>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </>
+          )}
+          {/* Sous les gains, défilé comme écran complet : le rendez-vous de carrière jugé et l'annonce du suivant (src/ui/carriere/). */}
+          <ProchainRendezVous bilan={bilan} />
+          <AnnonceVocale notifications={notifications} actif={!anime} />
+        </div>
       </div>
-      <div className="fin-course-actes">
-        <button type="button" className="btn cta" onClick={onRejouer}>
-          <DriveIcon name="repartir" />
-          Rejouer
-        </button>
-        <button type="button" className="btn drive-home" onClick={onGarage}>
-          <DriveIcon name="garage" />
-          Rentrer au garage
-        </button>
+      <div className="fin-course-actes" data-boutons={boutons.length}>
+        {boutons.map((b) => (
+          <button
+            key={b.acte}
+            type="button"
+            className={b.principal ? 'btn cta fin-course-acte' : 'btn fin-course-acte'}
+            data-acte={b.acte}
+            aria-label={b.detail ? `${b.label} ${b.detail}` : undefined}
+            onClick={() => agir(b.acte)}
+          >
+            <DriveIcon name={ICONE_ACTE[b.acte]} />
+            {b.detail ? (
+              <span className="fin-course-acte-texte">
+                <b>{b.label}</b>
+                <small>{b.detail}</small>
+              </span>
+            ) : (
+              b.label
+            )}
+          </button>
+        ))}
       </div>
     </section>
   );

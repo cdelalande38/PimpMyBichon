@@ -1,6 +1,9 @@
 /* Écran de fin d'une course (src/ui/drive/FinCourseVue.tsx) : par-dessus la scène, un panneau qui défile
-   si le texte est grand, les deux boutons collés en bas sous le pouce. En paysage : le résultat à gauche,
-   gains et déblocages à droite. */
+   si le texte est grand, un seul jeu de boutons (trois au plus) collé en bas sous le pouce. En paysage
+   (retour du 18 novembre 2026 : la moitié gauche restait vide une fois défilé) : le résultat et les boutons à
+   gauche, toujours visibles ; la suite (chiffres, gains, déblocages, rendez-vous) à droite, qui défile seule.
+   Les règles des boutons sont assez précises (.fin-course .fin-course-actes …) pour ne pas dépendre de l'ordre
+   des feuilles dans le paquet (« .drive-veil .btn », drive.css). */
 
 /* Le « ? » de l'aide (fixe, au-dessus de la sortie) ne passe pas sur le titre de l'écran de fin. */
 body:has(.fin-course) .tuto-aide {
@@ -44,7 +47,22 @@ body:has(.fin-course) .tuto-aide {
   gap: 0.375rem;
 }
 
-.fin-course-bloc + .fin-course-bloc {
+.fin-course-suite {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  min-width: 0;
+}
+
+/* Les chiffres de la course (temps par tour, distance, vitesse…), sous le record ; chaque bloc de la suite
+   (gains, débloqué, rendez-vous) a son trait. */
+.fin-course-chiffres {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.fin-course-suite > .fin-course-bloc {
   padding-top: 0.75rem;
   border-top: 1px solid var(--line);
 }
@@ -222,18 +240,56 @@ body:has(.fin-course) .tuto-aide {
   color: var(--chrome);
 }
 
-.fin-course-actes {
+.fin-course .fin-course-actes {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.75rem 1rem 1rem;
   border-top: 1px solid var(--line);
 }
 
-.fin-course-actes .btn {
-  flex: 1 1 9rem;
+.fin-course .fin-course-actes .btn {
+  flex: 1 1 8rem;
+  min-width: 0;
   min-height: var(--tap);
   gap: 0.4rem;
+  padding: 0.25rem 0.75rem;
+}
+
+.fin-course .fin-course-actes .btn .drive-icon {
+  flex: none;
+}
+
+/* Trois boutons : « Course suivante » prend toute la ligne ; dessous, « Rejouer » à sa largeur et « Rentrer au
+   garage préparer le véhicule » le reste, sur une seule rangée même en très grand texte (la hauteur compte,
+   téléphone couché). */
+.fin-course .fin-course-actes[data-boutons='3'] {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.fin-course .fin-course-actes[data-boutons='3'] .btn[data-acte='suivante'] {
+  grid-column: 1 / -1;
+}
+
+/* Un libellé et sa petite ligne (le rendez-vous suivant, « préparer le véhicule »). */
+.fin-course-acte-texte {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  text-align: left;
+}
+
+.fin-course-acte-texte small {
+  font-family: var(--body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  text-transform: none;
+  opacity: 0.9;
 }
 
 /* Les gains qui arrivent un par un (src/ui/jeu/NotificationsGain.tsx) : la liste s'allonge sous le résultat, le
@@ -246,48 +302,69 @@ body:has(.fin-course) .tuto-aide {
   cursor: pointer;
 }
 
-/* Paysage, peu de hauteur : deux colonnes, le résultat à gauche ; les boutons à droite, en bas. */
+/* Paysage, peu de hauteur (844 × 390, 915 × 412, 780 × 360) : deux colonnes sur toute la hauteur du panneau.
+   À gauche le résultat (il défile seul si le texte est très grand) et, sous lui, les boutons, toujours
+   visibles ; à droite la suite, qui défile seule. Le conteneur du défilé s'efface (display: contents) : ses deux
+   enfants deviennent les colonnes ; l'appui qui passe le défilé reste le sien (l'événement remonte). */
 @media (orientation: landscape) and (max-height: 540px) {
   .fin-course-voile {
     justify-content: center;
+    padding-top: calc(0.5rem + var(--safe-t));
+    padding-bottom: calc(0.5rem + var(--safe-b));
   }
 
   .fin-course {
-    max-width: 52rem;
-  }
-
-  .fin-course-defile {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto 1fr;
-    column-gap: 1.25rem;
-    padding-bottom: 0.5rem;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    max-width: 60rem;
   }
 
-  .fin-course-resultat {
+  .fin-course .fin-course-defile {
+    display: contents;
+  }
+
+  .fin-course .fin-course-resultat {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    padding: 0.75rem 1rem 0.5rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .fin-course .fin-course-suite {
+    grid-column: 2;
     grid-row: 1 / span 2;
+    min-height: 0;
+    padding: 0.75rem 1rem;
+    border-left: 1px solid var(--line);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
-  .fin-course-notifs {
-    grid-row: 1 / span 2;
-  }
-
-  .fin-course-bloc + .fin-course-bloc {
+  .fin-course .fin-course-suite > .fin-course-bloc:first-child {
     padding-top: 0;
     border-top: 0;
   }
 
-  .fin-course-debloque {
-    padding-top: 0.75rem !important;
-    border-top: 1px solid var(--line) !important;
+  /* Une colonne qui ne tient pas (texte très grand, longue suite) s'estompe en bas au lieu de couper une ligne
+     net : on voit qu'elle défile. Le bas de la colonne, vide une fois défilée jusqu'au bout, porte le fondu. */
+  .fin-course .fin-course-resultat,
+  .fin-course .fin-course-suite {
+    padding-bottom: 1rem;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 0.875rem), transparent);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 0.875rem), transparent);
+  }
+
+  .fin-course .fin-course-actes {
+    grid-column: 1;
+    grid-row: 2;
+    padding: 0.5rem 1rem 0.75rem;
   }
 
   .fin-course-temps {
     font-size: 2rem;
-  }
-
-  .fin-course-actes {
-    padding: 0.5rem 1rem 0.75rem;
   }
 }
 
