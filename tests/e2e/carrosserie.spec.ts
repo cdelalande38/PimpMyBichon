@@ -343,7 +343,7 @@ test.describe('Carrosserie : captures de revue', () => {
       await pickMap(page);
       await auSec(page);
       await page.locator('footer.dock').getByRole('group', { name: 'Moment' }).getByRole('button', { name: 'Jour', exact: true }).tap();
-      await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(page.locator('.drive-stage')).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
       await expect(page.locator('.drive-stage')).toHaveAttribute('data-moment', 'jour');
       await choisirCamera(page, 'Poursuite');

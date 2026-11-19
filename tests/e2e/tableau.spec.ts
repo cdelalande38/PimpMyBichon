@@ -30,7 +30,7 @@ async function choisir(page: Page, vehicle: string): Promise<void> {
 async function sortir(page: Page): Promise<void> {
   await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
-  await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
 }
 
@@ -137,7 +137,7 @@ test.describe('vue conducteur : captures de revue', () => {
       await openEntry(page, ENTREE_SORTIE);
       await pickMap(page);
       await choisirDepart(page, /rampe/i);
-      await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
       await embarquee(page);
       await expect(stage(page)).toHaveAttribute('data-tableau', /^\d+$/, { timeout: 60_000 });

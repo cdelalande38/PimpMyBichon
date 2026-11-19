@@ -194,11 +194,11 @@ test.describe('format « Drift »', () => {
     await openEntry(page, ENTREE_SORTIE);
     await choisirCarte(page, 'Miami Beach');
     await choisirDepart(page, /Vers la 41e rue/);
-    // Le format « Drift », à côté de la balade et des courses : 48 px au doigt, redit sous « Sortir ».
+    // Le format « Drift », à côté de la balade et des courses : 48 px au doigt, redit sous « Jouer ».
     await format(page, 'Drift').tap();
     await expect(format(page, 'Drift')).toHaveAttribute('aria-pressed', 'true');
     expect((await format(page, 'Drift').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(48);
-    await expect(dock(page).getByRole('button', { name: 'Sortir', exact: true })).toContainText('Drift');
+    await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toContainText('Drift');
     await shot(page, '01-menu-format-drift-390x844');
     if (CAPTURES) {
       await page.setViewportSize({ width: 844, height: 390 });
@@ -207,7 +207,7 @@ test.describe('format « Drift »', () => {
       await page.setViewportSize({ width: 390, height: 844 });
     }
     await auSec(page);
-    await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
 
     // Téléphone couché : la manette (manche à gauche, GAZ, FREIN et NOS à droite). Sa préférence est l'assistée : au

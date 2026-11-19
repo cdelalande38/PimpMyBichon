@@ -43,7 +43,7 @@ export const FORMATS: readonly FormatSpec[] = [
 ];
 
 /**
- * Petite ligne sous chaque format, au menu, et sous « Sortir » : ce que le format rapporte (retour du
+ * Petite ligne sous chaque format, au menu, et sous « Jouer » : ce que le format rapporte (retour du
  * 18 novembre 2026 : une balade menée au bout ne rapportait rien, et rien ne le disait). Les gains
  * eux-mêmes sont dans src/data/economie.ts.
  */

@@ -291,7 +291,7 @@ export const TUTOS: readonly Tuto[] = [
       { texte: 'En libre : le lieu, puis son circuit, puis ton départ. Chaque choix remplace le précédent ; « Retour » remonte d’une étape.', cible: 'footer.dock .dock-back' },
       { texte: 'Dernière étape : nuit ou jour, la météo, le format. La balade ne rapporte rien ; la course, des dollars et des hauts faits.' },
       { texte: '« Drift » : en virage, un coup sec sur FREIN puis plein gaz, ça glisse et ça marque. « Duel » : un adversaire part avec toi aux feux.', cible: 'footer.dock .drive-formats [data-format="drift"]' },
-      { texte: 'Touche « Sortir » : la porte se lève et c’est parti. La fois suivante, le menu se rouvre sur ces réglages.' },
+      { texte: 'Touche « Jouer » : la porte se lève et c’est parti. La fois suivante, le menu se rouvre sur ces réglages.' },
     ],
   },
   {

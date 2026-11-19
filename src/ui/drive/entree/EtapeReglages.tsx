@@ -1,7 +1,7 @@
 // Dernière étape du menu de la sortie : le rappel des choix (lieu › circuit › départ) et « Changer de
 // circuit », le moment (nuit, jour), la météo (au choix en mode libre), le format (chacun dit ce qu'il
 // rapporte ; 3 tours grisés avec leur phrase sur une route ouverte), les crédits des données de la
-// carte (obligation de licence), puis « Sortir ». « Sortir » n'est jamais dans ce qui défile : il est
+// carte (obligation de licence), puis « Jouer ». « Jouer » n'est jamais dans ce qui défile : il est
 // sous le corps de l'étape, entier, sur toute la largeur du menu, sous le pouce, et redit le format.
 
 import { useEffect } from 'react';
@@ -64,7 +64,7 @@ export function EtapeReglages() {
     chooseStart(start?.id ?? null);
     openSheet({ name: 'sortie' });
   };
-  // « Sortir » redit le format et ce qu'il rapporte : « Course 1 tour : chrono, dollars et hauts faits ».
+  // « Jouer » redit le format et ce qu'il rapporte : « Course 1 tour : chrono, dollars et hauts faits ».
   const aide = AIDES_FORMAT[couru];
   const redit = (duel ? reditDuel() : null) ?? `${formatSpec(couru).label} : ${aide.charAt(0).toLowerCase()}${aide.slice(1)}`;
 
@@ -130,8 +130,8 @@ export function EtapeReglages() {
           Données de la carte : {map.credits.map(creditLine).join(' ; ')}.
         </p>
       </div>
-      <button type="button" className="btn cta drive-go" aria-label="Sortir" aria-describedby="sortie-go-format" data-format={duel ? 'duel' : couru} onClick={go}>
-        <span>Sortir</span>
+      <button type="button" className="btn cta drive-go" aria-label="Jouer" aria-describedby="sortie-go-format" data-format={duel ? 'duel' : couru} onClick={go}>
+        <span>Jouer</span>
         <small id="sortie-go-format" className="drive-go-format">
           {redit}
         </small>

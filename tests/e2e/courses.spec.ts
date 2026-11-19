@@ -64,7 +64,7 @@ test.describe('courses : format, tours, écran de fin', () => {
     // Retour sur une route ouverte : le choix gardé est grisé, on y courrait 1 tour.
     await carte(page, 'Miami Beach');
     await expect(format(page, 'Course 1 tour')).toHaveAttribute('aria-pressed', 'true');
-    await expect(dock(page).getByRole('button', { name: 'Sortir', exact: true })).toContainText('Course 1 tour');
+    await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toContainText('Course 1 tour');
     await dock(page).getByText('Trois tours, c’est sur un circuit').scrollIntoViewIfNeeded();
     await shot(page, '02-format-route-ouverte');
     // Gardé au rechargement.
@@ -86,7 +86,7 @@ test.describe('courses : format, tours, écran de fin', () => {
     await carte(page, 'Monaco, le circuit');
     await format(page, 'Course 3 tours').tap();
     await auSec(page);
-    await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await commencerCourse(page, { parti: true });
     const chrono = page.locator('.drive-chrono');
@@ -122,7 +122,7 @@ test.describe('courses : format, tours, écran de fin', () => {
       await choisirDepart(page, /Vers la 41e rue/);
       await format(page, 'Course 1 tour').tap();
       await auSec(page);
-      await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
       // Direction assistée : le manche tenu vers le haut suffit à suivre la route jusqu'au bout.
       await reglerSortie(page, 'Direction', 'Assistée');

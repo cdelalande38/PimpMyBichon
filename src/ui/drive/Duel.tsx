@@ -20,7 +20,7 @@ import { useBoucleImage } from './CompteTours.tsx';
 import type { BoutonFin } from './FinCourseVue.tsx';
 import './duel.css';
 
-/** La petite ligne du format au menu, et ce que redit « Sortir ». */
+/** La petite ligne du format au menu, et ce que redit « Jouer ». */
 export const AIDE_DUEL = 'Un tour contre un adversaire, dollars en plus';
 
 /** « 1,2 s » au dixième. */
@@ -108,7 +108,7 @@ export function ChoixAdversaire() {
   );
 }
 
-/** Ce que « Sortir » redit en duel : l'adversaire et le niveau. */
+/** Ce que « Jouer » redit en duel : l'adversaire et le niveau. */
 export function reditDuel(): string | null {
   const choix = useDuel.getState();
   const c = duelChoisi(choix, resolveVehicle(useBuilds.getState().current).id);

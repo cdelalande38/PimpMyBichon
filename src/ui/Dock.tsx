@@ -309,7 +309,7 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
   // l'affichage), et quand la taille de l'écran, du texte ou du contenu change.
   const [more, setMore] = useState(false);
   // Un contenu qui se montre toujours agrandi (`data-agrandir="d-office"` : les réglages de la sortie,
-  // et « Sortir » dessous) : le dock monte de lui-même, sans poignée, et redescend quand on en sort.
+  // et « Jouer » dessous) : le dock monte de lui-même, sans poignée, et redescend quand on en sort.
   const [doffice, setDoffice] = useState(false);
   // Resté « agrandi » là où la poignée n'a rien à montrer : affiché compact, à sa hauteur utile.
   // Paysage : le menu est une colonne sur toute la hauteur, qui présente toujours ses options en

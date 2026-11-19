@@ -52,7 +52,7 @@ async function sortir(page: Page, format: 'Balade' | 'Course 1 tour'): Promise<v
   await choisirDepart(page, /Vers la 41e rue/);
   await dock(page).getByRole('group', { name: 'Format' }).getByRole('button', { name: new RegExp(`^${format}`) }).tap();
   await auSec(page);
-  await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
 }
 

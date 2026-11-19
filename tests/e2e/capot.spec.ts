@@ -174,7 +174,7 @@ test.describe('Capot moteur', () => {
       await pickMap(page);
       await auSec(page);
       await page.locator('footer.dock').getByRole('group', { name: 'Moment' }).getByRole('button', { name: moment, exact: true }).tap();
-      await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
       const drive = page.locator('.drive-stage');
       await expect(drive).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
       await expect(drive).toHaveAttribute('data-capot-option', 'vitre');
@@ -268,7 +268,7 @@ test.describe('Capot moteur : captures de revue', () => {
       await pickMap(page);
       await auSec(page);
       await page.locator('footer.dock').getByRole('group', { name: 'Moment' }).getByRole('button', { name: 'Jour', exact: true }).tap();
-      await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
       const drive = page.locator('.drive-stage');
       await expect(drive).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
       await expect(drive).toHaveAttribute('data-moteur-pose', 'quatre-a-plat', { timeout: 60_000 });

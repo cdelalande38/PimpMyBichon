@@ -42,7 +42,7 @@ async function sortieEnFeux(page: Page, duel: boolean): Promise<void> {
     await page.locator('footer.dock').getByRole('group', { name: 'Adversaire' }).locator('[data-adversaire="comete"]').tap();
     await page.locator('footer.dock').getByRole('group', { name: 'Difficulté' }).locator('[data-niveau="difficile"]').tap();
   }
-  await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(page.locator(`.${DRIVE_STAGE_CLASS}`)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
   await commencerCourse(page);
   await expect(page.locator(`.${DRIVE_STAGE_CLASS}`)).toHaveAttribute('data-depart', 'feux', { timeout: DELAI_ROUTE });

@@ -388,7 +388,7 @@ test.describe('vues de revue des finitions', () => {
     await poser(page, 'cox', { parts: { phares: 'violet' } });
     await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);
-    await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(sortie(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await expect(sortie(page)).toHaveAttribute('data-meteo', 'pluie');
     await expect(sortie(page)).toHaveAttribute('data-phares', 'violet');
@@ -412,7 +412,7 @@ test.describe('vues de revue des finitions', () => {
       await pickMap(page);
       await auSec(page);
       if (moment === 'jour') await dock(page).getByRole('group', { name: 'Moment' }).getByRole('button', { name: 'Jour', exact: true }).tap();
-      await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(sortie(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
       await expect(sortie(page)).toHaveAttribute('data-moment', moment);
       await choisirCamera(page, 'Poursuite');

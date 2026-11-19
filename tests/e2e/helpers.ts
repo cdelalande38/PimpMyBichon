@@ -473,7 +473,7 @@ export async function allerALaCarte(page: Page, carte: CarteDuMenu, { depart }: 
 /**
  * Menu « Sortie » : choisit une carte (la première du catalogue par défaut ; `index` : son rang dans
  * l'ordre du catalogue) par les étapes du menu, et arrive à ses réglages : moment, météo, format et
- * « Sortir » sont à l'écran. Le départ est celui déjà choisi, le premier par défaut (voir choisirDepart).
+ * « Jouer » sont à l'écran. Le départ est celui déjà choisi, le premier par défaut (voir choisirDepart).
  */
 export async function pickMap(page: Page, index = 0): Promise<void> {
   const carte = cartesDuMenu()[index];

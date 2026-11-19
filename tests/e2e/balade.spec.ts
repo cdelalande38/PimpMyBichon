@@ -38,7 +38,7 @@ async function partir(page: Page, nomFormat: string): Promise<void> {
   await format(page, nomFormat).tap();
   await expect(format(page, nomFormat)).toHaveAttribute('aria-pressed', 'true');
   await auSec(page);
-  await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
 }
 

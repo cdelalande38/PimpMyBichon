@@ -30,7 +30,7 @@ async function sortirDuMenu(page: Page): Promise<void> {
   await pickMap(page, CARTE);
   const dock = page.locator('footer.dock');
   await choisirDepart(page, new RegExp(DEPART));
-  await dock.getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await dock.getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
 }
 

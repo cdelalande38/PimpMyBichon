@@ -112,7 +112,7 @@ export const DOCK_MENU: readonly DockSection[] = [
     icon: 'garage',
     entries: [
       { id: 'ambiance', label: 'Ambiance', icon: 'neon', available: true },
-      // La sortie de nuit (§ 5.5) : la carte, le départ, la météo et « Sortir ».
+      // La sortie de nuit (§ 5.5) : la carte, le départ, la météo et « Jouer ».
       { id: 'sortie', label: 'Sortie', icon: 'route', available: true },
     ],
   },

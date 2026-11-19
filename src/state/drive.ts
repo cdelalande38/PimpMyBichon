@@ -5,7 +5,7 @@
 // tolérante, partagées entre les pages de l'app) ; le reste dure la sortie.
 // Passer « À la main » met la caméra de poursuite et coupe le réalisateur (demande du 16 novembre
 // 2026) ; ensuite rien ne les change tout seul : seuls les boutons de caméra et de réalisateur le font.
-// Le choix fait dans le menu (carte, départ) dure la séance : « Sortir » part de là.
+// Le choix fait dans le menu (carte, départ) dure la séance : « Jouer » part de là.
 // Déroulé (demande du 17 novembre 2026) : la sortie s'ouvre sur l'aperçu (`apercu` : la vitrine en
 // pilote automatique, réalisateur, départ lancé sans feux) ; « commencer » (un appui sur la route)
 // remet le véhicule sur la ligne du départ choisi, feux, à la main ; « Repartir » fait de même.

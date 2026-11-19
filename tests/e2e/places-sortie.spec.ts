@@ -23,7 +23,7 @@ test('sortie de nuit : la caméra embarquée est à la place du conducteur de la
   await waitForBench(page);
   await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
-  await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
   // La caméra embarquée, choisie dans les réglages (l'aperçu roule derrière).
   await choisirCamera(page, 'Embarquée');

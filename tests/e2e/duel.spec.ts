@@ -72,9 +72,9 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
     await choisirDuel(page, adversaire, niveau);
   }
 
-  /** « Sortir », direction assistée, la course commencée (feux). */
+  /** « Jouer », direction assistée, la course commencée (feux). */
   async function sortirEnDuel(page: Page): Promise<void> {
-    await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await reglerSortie(page, 'Direction', 'Assistée');
     await commencerCourse(page);
@@ -92,7 +92,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
     await expect(adversaires.getByRole('button')).toHaveCount(5);
     await expect(niveaux.getByRole('button')).toHaveCount(3);
     await expect(adversaires.locator('small', { hasText: 'à ta mesure' })).toHaveCount(1);
-    const sortir = dock.getByRole('button', { name: 'Sortir', exact: true });
+    const sortir = dock.getByRole('button', { name: 'Jouer', exact: true });
     await expect(sortir).toHaveAttribute('data-format', 'duel');
     await expect(dock.locator('#sortie-go-format')).toContainText('Duel contre Dédé Pépère, facile');
     // 48 px au doigt et rien ne déborde, en portrait puis en paysage.
@@ -182,7 +182,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
       await choisirDepart(page, depart);
       await auSec(page);
       await choisirDuel(page, adversaire, 'normal');
-      await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
       await commencerCourse(page);
       await expect(stage(page)).toHaveAttribute('data-duel-verdict', 'non', { timeout: DELAI_ROUTE });

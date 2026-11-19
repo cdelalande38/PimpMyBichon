@@ -73,7 +73,7 @@ async function goOut(page: Page, { sec = false }: { sec?: boolean } = {}): Promi
   await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
   if (sec) await auSec(page);
-  await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(page).toHaveURL(/#\/sortie$/);
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 90_000 });
 }

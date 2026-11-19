@@ -21,17 +21,17 @@ test.describe('sortie de nuit', () => {
     await waitForScene(page);
 
     // Le menu, par étapes (vague U) : le mode, le lieu (lu dans le catalogue), son circuit, le départ,
-    // puis les réglages : crédits, météo, « Sortir ». Chaque étape remplace la précédente.
+    // puis les réglages : crédits, météo, « Jouer ». Chaque étape remplace la précédente.
     await openEntry(page, ENTREE_SORTIE);
     const dock = page.locator('footer.dock');
-    // Rien n'est choisi à l'ouverture : le mode seul ; ni lieux, ni départs, ni météo, ni « Sortir ».
+    // Rien n'est choisi à l'ouverture : le mode seul ; ni lieux, ni départs, ni météo, ni « Jouer ».
     await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'mode');
     const lieux = dock.getByRole('group', { name: 'Lieu' });
     const starts = dock.getByRole('group', { name: 'Départ' });
     await expect(lieux).toHaveCount(0);
     await expect(starts).toHaveCount(0);
     await expect(dock.getByRole('group', { name: 'Météo' })).toHaveCount(0);
-    await expect(dock.getByRole('button', { name: 'Sortir', exact: true })).toHaveCount(0);
+    await expect(dock.getByRole('button', { name: 'Jouer', exact: true })).toHaveCount(0);
     await dock.getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
     await expect(lieux.getByRole('button').first()).toBeVisible();
     await expect(lieux.locator('[aria-pressed="true"]')).toHaveCount(0);
@@ -47,7 +47,7 @@ test.describe('sortie de nuit', () => {
     await expect(dock.locator('.drive-credits')).toContainText('Licence Ouverte');
     await dock.getByRole('group', { name: 'Météo' }).getByRole('button', { name: 'Pluie' }).tap();
     await capture(page, 'sortie-menu');
-    await dock.getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await dock.getByRole('button', { name: 'Jouer', exact: true }).tap();
 
     // L'écran de la sortie : l'atelier s'efface, la scène de la route est prête.
     await expect(page).toHaveURL(/#\/sortie$/);

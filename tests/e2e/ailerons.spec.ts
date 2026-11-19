@@ -291,7 +291,7 @@ test.describe('Ailerons : captures de revue', () => {
       await openEntry(page, ENTREE_SORTIE);
       await pickMap(page);
       await auSec(page);
-      await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(page.locator('.drive-stage')).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
       await choisirCamera(page, 'Poursuite');
       const depart = await tempsDeRoute(page);

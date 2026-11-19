@@ -46,10 +46,10 @@ test('« Jouer », à côté de « Personnaliser », ouvre le menu de la sortie,
   await expect(dock.locator('.dock-crumb-here')).toHaveText(ENTREE_SORTIE);
   // Le menu s'ouvre sur sa première étape, le mode (vague U : une étape à la fois).
   await expect(dock.getByRole('group', { name: 'Mode' })).toBeVisible();
-  // « Sortir » n'apparaît qu'aux réglages, une carte choisie.
-  await expect(dock.getByRole('button', { name: 'Sortir', exact: true })).toHaveCount(0);
+  // « Jouer » n'apparaît qu'aux réglages, une carte choisie.
+  await expect(dock.getByRole('button', { name: 'Jouer', exact: true })).toHaveCount(0);
   await pickMap(page);
-  await expect(dock.getByRole('button', { name: 'Sortir', exact: true })).toBeVisible();
+  await expect(dock.getByRole('button', { name: 'Jouer', exact: true })).toBeVisible();
   await page.screenshot({ path: 'test-results/sortie-raccourci.png' });
 });
 

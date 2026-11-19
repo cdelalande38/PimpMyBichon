@@ -226,7 +226,7 @@ async function flammesEnSortie(page: Page, vehicle: string, regime: number, capt
   await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
   await auSec(page);
-  await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
   await expect(stage(page)).toHaveAttribute('data-echappement', 'libre');
   await expect(stage(page)).toHaveAttribute('data-sorties', '2');

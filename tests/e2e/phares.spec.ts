@@ -215,7 +215,7 @@ test.describe('phares', () => {
     await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);
     await auSec(page);
-    await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(sortie(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(sortie(page)).toHaveAttribute('data-moment', 'nuit');
     await expect(sortie(page)).toHaveAttribute('data-meteo', 'sec');

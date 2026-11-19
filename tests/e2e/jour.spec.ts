@@ -40,7 +40,7 @@ test.describe('sortie de jour', () => {
     const box = await jour.boundingBox();
     expect(Math.min(box?.width ?? 0, box?.height ?? 0)).toBeGreaterThanOrEqual(47.5);
     await capture(page, 'jour-menu');
-    await dock.getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await dock.getByRole('button', { name: 'Jouer', exact: true }).tap();
 
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(stage(page)).toHaveAttribute('data-moment', 'jour');

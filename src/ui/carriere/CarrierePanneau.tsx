@@ -208,7 +208,7 @@ export function CarrierePanneau() {
         )}
         <ListeSaisons progression={progression} />
       </div>
-      {courant && <Action rdv={courant} numero={numero} total={total} label="Sortir" aide={`${saisonNumero > 1 ? `Saison ${saisonNumero} · rendez-vous` : 'Rendez-vous'} ${numero} · tout est imposé`} />}
+      {courant && <Action rdv={courant} numero={numero} total={total} label="Jouer" aide={`${saisonNumero > 1 ? `Saison ${saisonNumero} · rendez-vous` : 'Rendez-vous'} ${numero} · tout est imposé`} />}
     </section>
   );
 }

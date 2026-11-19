@@ -1,6 +1,6 @@
 // Étapes du menu de la sortie (vague U, retour du 18 novembre 2026, pour la deuxième fois : « bien
 // dissocier la sélection de la zone de la sélection du circuit »). Une étape à la fois, chacune remplace
-// la précédente : mode (Libre ou Carrière) → lieu → circuit du lieu → départ → réglages, puis « Sortir ».
+// la précédente : mode (Libre ou Carrière) → lieu → circuit du lieu → départ → réglages, puis « Jouer ».
 // Un lieu à une seule carte saute l'étape du circuit ; une carte à un seul départ saute celle du départ.
 // Les étapes sont des niveaux du dock (src/state/dock.ts) : « Retour » remonte d'une étape, toujours le
 // même chemin, et le fil lit le libellé que porte chaque niveau (le choix qui y a mené).

@@ -348,7 +348,7 @@ test.describe('néons : captures de revue', () => {
       await openEntry(page, ENTREE_SORTIE);
       await pickMap(page);
       await auSec(page);
-      await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(page.locator('.drive-stage')).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
       await attendreApercu(page);
       await choisirCamera(page, 'Poursuite');
@@ -411,7 +411,7 @@ async function sortieDeNuit(page: Page, nom: string): Promise<void> {
   await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
   await auSec(page);
-  await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
   const stage = page.locator('.drive-stage');
   await expect(stage).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
   await attendreApercu(page);
@@ -497,7 +497,7 @@ test.describe('néons : arcs et lueur, captures de revue', () => {
     await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);
     await auSec(page);
-    await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     const stage = page.locator('.drive-stage');
     await expect(stage).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await attendreApercu(page);

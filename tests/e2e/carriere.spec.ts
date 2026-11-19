@@ -1,7 +1,7 @@
 // Le mode carrière (vague U, 18 novembre 2026 ; src/data/carriere.ts, src/ui/carriere/) :
 // - au garage, le bouton rond du prochain rendez-vous ; un appui ouvre le panneau de la carrière (il vit
 //   dans le menu de la sortie, à l'étape « Mode », Carrière choisie) ; la fiche du premier
-//   rendez-vous (zone, départ, météo, moment, format, objectif, prime, conseil) et « Sortir », entier,
+//   rendez-vous (zone, départ, météo, moment, format, objectif, prime, conseil) et « Jouer », entier,
 //   en portrait comme en paysage ;
 // - la sortie imposée : l'écran de route dit le rendez-vous et son objectif, les réglages ne laissent changer
 //   ni la météo ni le moment ; la course finie ; l'écran de fin annonce le rendez-vous suivant, la prime
@@ -172,14 +172,14 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await expect(fiche.locator('.carriere-fiche-conseil')).not.toBeEmpty();
     // Rien à choisir : ni météo, ni moment, ni format.
     await expect(panneau.getByRole('group')).toHaveCount(0);
-    const sortir = panneau.getByRole('button', { name: 'Sortir', exact: true });
-    await entiere(page, sortir, 'Sortir (portrait)');
+    const sortir = panneau.getByRole('button', { name: 'Jouer', exact: true });
+    await entiere(page, sortir, 'Jouer (portrait)');
     await photo(page, '02-panneau-portrait');
 
-    // Paysage : le menu est une colonne étroite à droite ; « Sortir » y reste entier.
+    // Paysage : le menu est une colonne étroite à droite ; « Jouer » y reste entier.
     await page.setViewportSize(PAYSAGE);
     await expect(panneau).toBeVisible();
-    await entiere(page, sortir, 'Sortir (paysage)');
+    await entiere(page, sortir, 'Jouer (paysage)');
     await photo(page, '03-panneau-paysage');
     await page.setViewportSize(PORTRAIT);
 
@@ -269,7 +269,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await poserJeu(page, { solde: 500, articles: {}, hautsFaits: {}, cumuls: {}, carriere: { resultats: reussis } });
     await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${numero} sur ${SUITE.length}`));
     await pastille(page).tap();
-    await menuCarriere(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await menuCarriere(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     const objectif = (await page.locator('.drive-rendez-vous small').textContent()) ?? '';
     const lu = /sous (\d+):(\d\d\.\d)/.exec(objectif);
@@ -327,7 +327,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await poserJeu(page, { solde: 500, articles: {}, hautsFaits: {}, cumuls: {}, carriere: { resultats: reussis } });
     await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${i + 1} sur ${SUITE.length}`));
     await pastille(page).tap();
-    await menuCarriere(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await menuCarriere(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-carte', rdv.carte);
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await reglerSortie(page, 'Direction', 'Assistée');
@@ -424,11 +424,11 @@ test.describe('carrière : les saisons', () => {
     await expect(fiche).toContainText(`Saison 2 · rendez-vous 1 sur ${S2.length}`);
     await expect(fiche.locator('[data-contrainte]')).toHaveText(['Sans NOS']);
     await expect(fiche).toContainText(/L’argent au moins : sous \d+:\d\d\.\d/);
-    const sortir = panneau.getByRole('button', { name: 'Sortir', exact: true });
-    await entiere(page, sortir, 'Sortir (saison 2, portrait)');
+    const sortir = panneau.getByRole('button', { name: 'Jouer', exact: true });
+    await entiere(page, sortir, 'Jouer (saison 2, portrait)');
     await photo(page, '10-saison2-fiche-portrait');
     await page.setViewportSize(PAYSAGE);
-    await entiere(page, sortir, 'Sortir (saison 2, paysage)');
+    await entiere(page, sortir, 'Jouer (saison 2, paysage)');
     await photo(page, '11-saison2-fiche-paysage');
     // La liste des saisons, sous la fiche : la saison 1 bouclée, la 2 en cours.
     const saisons = panneau.getByRole('region', { name: 'Les saisons' });
@@ -460,7 +460,7 @@ test.describe('carrière : les saisons', () => {
     await expect(panneau.locator('.carriere-surtitre')).toHaveText(`Saison 2 · 1 sur ${S2.length}`);
 
     // La sortie du premier rendez-vous de la saison 2 : tout imposé, la contrainte rappelée sur la route.
-    await panneau.getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await panneau.getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-carte', premier.carte);
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await expect(stage(page)).toHaveAttribute('data-meteo', premier.meteo);

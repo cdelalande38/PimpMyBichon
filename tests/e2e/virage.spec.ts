@@ -29,7 +29,7 @@ async function sortie(page: Page, vehicle: string): Promise<void> {
   // Au sec : le parcours ne parle pas de météo, et sous la pluie le pilote automatique prend le lacet plus lentement.
   await auSec(page);
   await choisirDepart(page, /rampe/i);
-  await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
   await page.evaluate((cls) => {
     const element = document.querySelector<HTMLElement>(`.${cls}`);

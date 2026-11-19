@@ -55,7 +55,7 @@ test.describe('retour en sortie de nuit', () => {
     await waitForScene(page);
     await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);
-    await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(page).toHaveURL(/#\/sortie$/);
     await sortieEnRoute(page);
     await expect(dialogue(page)).toHaveCount(0);
@@ -147,7 +147,7 @@ test.describe('retour en sortie de nuit', () => {
     await waitForScene(page);
     await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);
-    await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(page).toHaveURL(/#\/sortie$/);
     // L'écran de chargement de la carte est là, la route n'est pas encore prête ; il n'a aucun bouton.
     await expect(page.locator('.drive-chargement')).toBeVisible();

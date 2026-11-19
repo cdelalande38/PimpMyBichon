@@ -27,7 +27,7 @@ async function choisirVehicule(page: Page, vehicle: string): Promise<void> {
 async function sortir(page: Page, carte = 0): Promise<void> {
   await openEntry(page, ENTREE_SORTIE);
   await pickMap(page, carte);
-  await page.locator('footer.dock').getByRole('button', { name: 'Sortir', exact: true }).tap();
+  await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
 }
 

@@ -6,7 +6,7 @@
 // 3. le circuit du lieu, avec sa miniature ; la liste des lieux n'est plus à l'écran ;
 // 4. le départ, quand la carte en a plusieurs (lus dans sa route) ;
 // 5. les réglages : moment, météo, format (chacun dit ce qu'il rapporte), crédits des données, et
-//    « Sortir », entier, sur toute la largeur du menu, collé en bas, qui redit le format. En portrait, le
+//    « Jouer », entier, sur toute la largeur du menu, collé en bas, qui redit le format. En portrait, le
 //    dock monte de lui-même à cette étape (dock agrandi, `data-agrandir="d-office"`, src/ui/Dock.tsx) :
 //    tout se lit sans défiler, et la scène recadre le véhicule au-dessus.
 // Les étapes sont des niveaux du dock (src/state/dock.ts) : « Retour » remonte d'une étape, le fil dit
@@ -59,7 +59,7 @@ export function SortieEntree() {
   return (
     <div className="drive-entry" data-etape={etape} data-agrandir={etape === 'reglages' || etape === 'carriere' ? 'd-office' : undefined}>
       {etape === 'mode' && <EtapeMode />}
-      {/* La carrière : la fiche défile dans le panneau, « Sortir » reste dessous, hors de ce qui défile
+      {/* La carrière : la fiche défile dans le panneau, « Jouer » reste dessous, hors de ce qui défile
           (retour du 18 novembre 2026 : la fiche passait derrière le bouton, et le menu était trop bas). */}
       {etape === 'carriere' && (
         <div className="entree-carriere">

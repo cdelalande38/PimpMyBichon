@@ -1,7 +1,7 @@
 // Le menu de la sortie par étapes (vague U, retour du 18 novembre 2026, fait deux fois, téléphone en
 // paysage à l'appui) : chaque étape remplace la précédente (mode, lieu, circuit du lieu, départ,
 // réglages), le fil dit où l'on est, « Retour » remonte d'UNE étape, ce qui est choisi se relit en une
-// ligne ; « Sortir » est toujours entier, à 48 px au moins, sous le pouce, en portrait comme en paysage,
+// ligne ; « Jouer » est toujours entier, à 48 px au moins, sous le pouce, en portrait comme en paysage,
 // en texte grand et très grand, et redit le format choisi. Rouvrir l'entrée ramène aux réglages.
 // Captures de revue (chaque étape, 390 × 844 et 844 × 390) : PMB_CAPTURES_ENTREE=1, dans
 // captures/vague-u-entree/.
@@ -13,7 +13,7 @@ import { backToSections, cartesDuMenu, ENTREE_SORTIE, entreeSortie, etapePrecede
 
 const CAPTURES = Boolean(process.env.PMB_CAPTURES_ENTREE);
 const dock = (page: Page) => page.locator('footer.dock');
-const sortir = (page: Page) => dock(page).getByRole('button', { name: 'Sortir', exact: true });
+const sortir = (page: Page) => dock(page).getByRole('button', { name: 'Jouer', exact: true });
 const ici = (page: Page) => dock(page).locator('.dock-crumb-here');
 
 async function shot(page: Page, name: string): Promise<void> {
@@ -37,7 +37,7 @@ function lieux() {
 }
 
 /**
- * « Sortir » est entier à l'écran et dans le menu, rien ne le recouvre (coins et centre), à 48 px au
+ * « Jouer » est entier à l'écran et dans le menu, rien ne le recouvre (coins et centre), à 48 px au
  * moins, hors de toute rangée qui défile, et sous le pouce (en bas du menu).
  */
 async function sortirEntier(page: Page, quoi: string): Promise<void> {
@@ -115,7 +115,7 @@ async function fil(page: Page): Promise<string> {
 test.describe('menu de la sortie par étapes', () => {
   test.setTimeout(240_000);
 
-  test('portrait : une étape à la fois, le fil, « Retour » d’une étape, « Sortir » entier et qui redit le format', { tag: '@essentiel' }, async ({ page }) => {
+  test('portrait : une étape à la fois, le fil, « Retour » d’une étape, « Jouer » entier et qui redit le format', { tag: '@essentiel' }, async ({ page }) => {
     const { plusieurs, seul } = lieux();
     const multi = plusieurs[plusieurs.length - 1]!;
     await openApp(page);
@@ -184,14 +184,14 @@ test.describe('menu de la sortie par étapes', () => {
     const nomDepart = ((await departs.getByRole('button').nth(1).locator('b').textContent()) ?? '').trim();
     await departs.getByRole('button').nth(1).tap();
 
-    // 5. Les réglages : rappel en une ligne, moment, météo, format, crédits, « Sortir ».
+    // 5. Les réglages : rappel en une ligne, moment, météo, format, crédits, « Jouer ».
     await expect(entree).toHaveAttribute('data-etape', 'reglages');
     await expect(ici(page)).toHaveText(nomDepart);
     await expect(dock(page).getByRole('group', { name: 'Départ' })).toHaveCount(0);
     await expect(entree.locator('.entree-rappel')).toContainText(`${multi.lieu} › ${multi.circuit} › ${nomDepart}`);
     for (const groupe of ['Moment', 'Météo', 'Format']) await expect(dock(page).getByRole('group', { name: groupe })).toBeAttached();
     await expect(dock(page).locator(`.drive-credits[data-credits="${multi.id}"]`)).toBeAttached();
-    // Le format d'une sauvegarde neuve : la course d'un tour ; « Sortir » le redit, avec ce qu'il rapporte.
+    // Le format d'une sauvegarde neuve : la course d'un tour ; « Jouer » le redit, avec ce qu'il rapporte.
     const formats = dock(page).getByRole('group', { name: 'Format' });
     await expect(formats.getByRole('button', { name: /^Course 1 tour/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(sortir(page)).toContainText('Course 1 tour');
@@ -267,7 +267,7 @@ test.describe('menu de la sortie par étapes', () => {
     test.describe(`paysage ${vue.width} × ${vue.height}`, () => {
       test.use({ viewport: vue });
 
-      test('chaque étape seule dans la colonne ; « Sortir » entier en texte normal, grand et très grand', { tag: '@essentiel' }, async ({ page }) => {
+      test('chaque étape seule dans la colonne ; « Jouer » entier en texte normal, grand et très grand', { tag: '@essentiel' }, async ({ page }) => {
         test.setTimeout(360_000);
         const { plusieurs } = lieux();
         const multi = plusieurs[plusieurs.length - 1]!;
@@ -308,7 +308,7 @@ test.describe('menu de la sortie par étapes', () => {
     });
   }
 
-  test('portrait, texte très grand : « Sortir » entier aux réglages', async ({ page }) => {
+  test('portrait, texte très grand : « Jouer » entier aux réglages', async ({ page }) => {
     await openApp(page);
     await waitForScene(page);
     await setTextSize(page, 'Très grand');
