@@ -214,10 +214,10 @@ test.describe('format « Drift »', () => {
     // drift, la direction est libre d'office, le choix grisé dit pourquoi.
     await page.setViewportSize({ width: 844, height: 390 });
     const panneau = await ouvrirReglages(page);
-    const direction = panneau.getByRole('group', { name: 'Direction' });
-    await expect(direction.getByRole('button', { name: 'Libre', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(direction.getByRole('button', { name: 'Assistée', exact: true })).toBeDisabled();
-    await expect(panneau).toContainText('Au drift, la direction est libre');
+    const direction = panneau.getByRole('group', { name: 'Conduite assistée' });
+    await expect(direction.getByRole('button', { name: 'Non', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(direction.getByRole('button', { name: 'Oui', exact: true })).toBeDisabled();
+    await expect(panneau).toContainText('Au drift, pas de conduite assistée');
     await fermerReglages(page);
     await commencerCourse(page, { parti: true });
     const affichage = page.locator('.drive-drift');

@@ -306,7 +306,7 @@ export async function fermerReglages(page: Page): Promise<void> {
 
 /**
  * Dans les réglages, touche le choix `nom` du groupe `groupe` (« Caméra », « Météo », « Commande »,
- * « Direction »), vérifie qu'il est allumé, puis referme le panneau (sauf `garder`).
+ * « Conduite assistée »), vérifie qu'il est allumé, puis referme le panneau (sauf `garder`).
  */
 export async function reglerSortie(page: Page, groupe: string, nom: string, { garder = false }: { garder?: boolean } = {}): Promise<void> {
   const panneau = await ouvrirReglages(page);

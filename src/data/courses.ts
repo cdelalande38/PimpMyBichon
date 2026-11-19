@@ -51,7 +51,7 @@ export const AIDES_FORMAT: Readonly<Record<FormatCourse, string>> = {
   balade: 'Pour le plaisir, sans gain',
   tour1: 'Chrono, dollars et hauts faits',
   tours3: 'Chrono, plus de dollars, hauts faits',
-  drift: 'Des points à chaque glisse, direction libre',
+  drift: 'Des points à chaque glisse, sans conduite assistée',
 };
 
 /** Phrase du format grisé sur une route ouverte. */

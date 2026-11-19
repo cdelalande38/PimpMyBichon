@@ -12,6 +12,8 @@ export interface Departs {
   list: readonly MapStart[];
   /** Vrai si le parcours se referme (circuit) : les trois tours s'y courent. */
   loop: boolean;
+  /** Longueur du parcours, en mètres (0 tant qu'il n'est pas lu). */
+  length: number;
 }
 
 export function useDeparts(map: MapManifest | undefined): Departs | null {
@@ -20,13 +22,13 @@ export function useDeparts(map: MapManifest | undefined): Departs | null {
     if (!map) return;
     let alive = true;
     loadRoute(map).then(
-      (route) => alive && setStarts({ map: map.id, status: 'pret', list: route.starts, loop: route.loop }),
-      () => alive && setStarts({ map: map.id, status: 'erreur', list: [], loop: false }),
+      (route) => alive && setStarts({ map: map.id, status: 'pret', list: route.starts, loop: route.loop, length: route.length }),
+      () => alive && setStarts({ map: map.id, status: 'erreur', list: [], loop: false, length: 0 }),
     );
     return () => {
       alive = false;
     };
   }, [map]);
   if (!map) return null;
-  return starts?.map === map.id ? starts : { map: map.id, status: 'chargement', list: [], loop: false };
+  return starts?.map === map.id ? starts : { map: map.id, status: 'chargement', list: [], loop: false, length: 0 };
 }

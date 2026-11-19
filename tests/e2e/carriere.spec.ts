@@ -197,7 +197,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     }
     await expect(reglages.getByText(`imposé par le rendez-vous 1`)).toBeVisible();
     await fermerReglages(page);
-    await reglerSortie(page, 'Direction', 'Assistée');
+    await reglerSortie(page, 'Conduite assistée', 'Oui');
 
     // La course, jusqu'à la ligne.
     await commencerCourse(page, { parti: true });
@@ -275,7 +275,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     const lu = /sous (\d+):(\d\d\.\d)/.exec(objectif);
     expect(lu, objectif).not.toBeNull();
     const seuil = Number(lu?.[1]) * 60 + Number(lu?.[2]);
-    await reglerSortie(page, 'Direction', 'Assistée');
+    await reglerSortie(page, 'Conduite assistée', 'Oui');
     await commencerCourse(page, { parti: true });
     // Arrêté sur la ligne, le temps de dépasser le bronze ; puis jusqu'au bout.
     await attendreSurLaRoute(page, 'temps du bronze dépassé', () => tempsDeRoute(page), (t) => t > seuil + 3, { secondes: seuil + 30, horloge: 900_000, intervalle: 1000 });
@@ -330,7 +330,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await menuCarriere(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-carte', rdv.carte);
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
-    await reglerSortie(page, 'Direction', 'Assistée');
+    await reglerSortie(page, 'Conduite assistée', 'Oui');
     await commencerCourse(page, { parti: true });
     const lacher = await tenirLeGaz(page);
     const fin = page.locator('.fin-course');

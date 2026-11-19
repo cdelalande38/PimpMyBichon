@@ -8,6 +8,7 @@ import { circuitLabel, mapById, zoneById, zoneOf, zonesOf } from '../../../data/
 import { useDock } from '../../../state/dock.ts';
 import { useDrive } from '../../../state/drive.ts';
 import { PictoCarte } from '../../pictos/Pictos.tsx';
+import { kilometres } from '../../jeu/libelles.ts';
 import { useRevealPressed } from '../../scroll.ts';
 import { apresCircuit, apresDepart, apresLieu, LIBELLE_DEBUT, LIBELLE_LIBRE, lieuDe, MODES, niveauCarriere, niveauLieu, sansEtapeDepart } from './etapes.ts';
 import { useDeparts } from './useDeparts.ts';
@@ -156,7 +157,8 @@ export function EtapeDepart() {
             }}
           >
             <b>{item.label}</b>
-            <small>km {(item.at / 1000).toFixed(1).replace('.', ',')}</small>
+            {/* Longueur de course, pas la borne du départ : « km 0,0 » se lisait « 0 km ». */}
+            <small>{starts.loop ? `${kilometres(starts.length)} le tour` : `${kilometres(starts.length - item.at)} jusqu’à l’arrivée`}</small>
           </button>
         ))}
         {starts?.status === 'erreur' && (

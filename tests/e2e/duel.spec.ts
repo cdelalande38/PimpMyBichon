@@ -76,7 +76,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
   async function sortirEnDuel(page: Page): Promise<void> {
     await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
-    await reglerSortie(page, 'Direction', 'Assistée');
+    await reglerSortie(page, 'Conduite assistée', 'Oui');
     await commencerCourse(page);
   }
 

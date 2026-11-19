@@ -58,7 +58,7 @@ async function sortir(page: Page, format: 'Balade' | 'Course 1 tour'): Promise<v
 
 /** Mène la route à la main jusqu'au bout (direction assistée : le manche tenu vers le haut suffit) ; `attente` dit ce qu'on attend. */
 async function rouler(page: Page, quoi: string, arrive: () => Promise<boolean>): Promise<void> {
-  await reglerSortie(page, 'Direction', 'Assistée');
+  await reglerSortie(page, 'Conduite assistée', 'Oui');
   await commencerCourse(page, { parti: true });
   const zone = page.locator('.drive-mid');
   const box = await zone.boundingBox();

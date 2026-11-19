@@ -227,8 +227,8 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
           <Rubrique titre="Conduite">
             {/* En paysage, toujours la manette : le choix du manche ou des pédales vaut en portrait. */}
             {!paysage && <Choix nom="Commande" options={COMMANDES} valeur={commande} onChoix={(id) => drive().setCommande(id)} />}
-            <Choix nom="Direction" options={DIRECTIONS} valeur={direction} onChoix={(id) => drive().setDirection(id)} impose={drift} />
-            {drift && <p className="drive-impose">Au drift, la direction est libre : l'assistée tiendrait la voiture droite. Ton réglage revient après.</p>}
+            <Choix nom="Conduite assistée" options={DIRECTIONS} valeur={direction} onChoix={(id) => drive().setDirection(id)} impose={drift} />
+            {drift && <p className="drive-impose">Au drift, pas de conduite assistée : elle tiendrait la voiture droite. Ton réglage revient après.</p>}
             <ManetteBascule />
           </Rubrique>
           <Rubrique titre="Son">

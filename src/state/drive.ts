@@ -81,8 +81,8 @@ export const COMMANDES: readonly { id: DriveCommande; label: string }[] = [
 export type DriveDirection = 'libre' | 'assistee';
 
 export const DIRECTIONS: readonly { id: DriveDirection; label: string }[] = [
-  { id: 'libre', label: 'Libre' },
-  { id: 'assistee', label: 'Assistée' },
+  { id: 'libre', label: 'Non' },
+  { id: 'assistee', label: 'Oui' },
 ];
 
 /**

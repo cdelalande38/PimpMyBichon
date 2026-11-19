@@ -125,7 +125,7 @@ test.describe('courses : format, tours, écran de fin', () => {
       await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
       // Direction assistée : le manche tenu vers le haut suffit à suivre la route jusqu'au bout.
-      await reglerSortie(page, 'Direction', 'Assistée');
+      await reglerSortie(page, 'Conduite assistée', 'Oui');
       await commencerCourse(page, { parti: true });
       await expect(page.locator('.drive-chrono')).toHaveAttribute('data-tour', 'Tour 1/1');
       const zone = page.locator('.drive-mid');
