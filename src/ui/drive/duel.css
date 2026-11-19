@@ -52,16 +52,25 @@
   }
 }
 
-/* Au menu : les adversaires, un par niveau, une fois « Duel » choisi. */
-.drive-entry .duel-adversaires {
+/* Au menu, une fois « Duel » choisi : deux rangées, les adversaires puis la difficulté. */
+.drive-entry .duel-adversaires,
+.drive-entry .duel-niveaux {
   margin-top: 0.25rem;
 }
 
-.drive-entry .duel-adversaires .chip.duel-adversaire {
+.drive-entry .duel-adversaires .chip.duel-adversaire,
+.drive-entry .duel-niveaux .chip.duel-niveau {
   flex: 1 1 0;
   min-width: 6.5rem;
   min-height: 3rem;
   max-width: 100%;
+}
+
+/* Noms, véhicules et phrases passent à la ligne plutôt que de déborder d'une puce étroite. */
+.drive-entry .duel-adversaires .chip.duel-adversaire > *,
+.drive-entry .duel-niveaux .chip.duel-niveau > * {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .drive-entry .duel-adversaire i {
@@ -72,11 +81,6 @@
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 50%;
   vertical-align: -0.05rem;
-}
-
-.drive-entry .duel-adversaire .duel-phrase {
-  opacity: 0.75;
-  white-space: normal;
 }
 
 /* Écran de fin d'un duel : le verdict, sous le titre. */

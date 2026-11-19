@@ -61,10 +61,10 @@ export const TROPHEES: readonly ArticleBoutique[] = [
   { id: 'sticker-etoile-laurier', famille: 'sticker', label: 'Étoile aux lauriers', prix: null, description: 'Gagné avec l’or en drift.' },
   { id: 'sticker-couronne-laurier', famille: 'sticker', label: 'Couronne de laurier', prix: null, description: 'Gagnée en bouclant la deuxième saison de la carrière.' },
   { id: 'sticker-coupe-or', famille: 'sticker', label: 'Coupe d’or', prix: null, description: 'Gagnée avec l’or sur toute la deuxième saison.' },
-  // Le duel (vague V) : un motif d'un pack à vendre, gagné seul à la première victoire contre un niveau.
-  { id: 'sticker-sponsor-turbo-mamie', famille: 'sticker', label: 'Turbo Mamie', prix: null, description: 'Gagné en battant un adversaire de niveau bronze en duel.' },
-  { id: 'sticker-damier-dissous', famille: 'sticker', label: 'Damier dissous', prix: null, description: 'Gagné en battant un adversaire de niveau argent en duel.' },
-  { id: 'sticker-numero-bouclier-42', famille: 'sticker', label: 'Bouclier 42', prix: null, description: 'Gagné en battant un adversaire de niveau or en duel.' },
+  // Le duel (vague V) : un motif d'un pack à vendre, gagné seul à la première victoire à un niveau de difficulté.
+  { id: 'sticker-sponsor-turbo-mamie', famille: 'sticker', label: 'Turbo Mamie', prix: null, description: 'Gagné à ta première victoire en duel, en Facile.' },
+  { id: 'sticker-damier-dissous', famille: 'sticker', label: 'Damier dissous', prix: null, description: 'Gagné à ta première victoire en duel, en Normal.' },
+  { id: 'sticker-numero-bouclier-42', famille: 'sticker', label: 'Bouclier 42', prix: null, description: 'Gagné à ta première victoire en duel, en Difficile.' },
 ];
 
 /**

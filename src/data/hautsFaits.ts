@@ -46,7 +46,7 @@ export const CHAMPS = [
   'cumul.achats',
   /** La carrière (src/data/carriere.ts) : 1 quand tous ses rendez-vous sont réussis. Lu et accordé par la carrière (src/jeu/carriereCloture.ts), jamais par le lecteur des courses. */
   'carriere.bouclee',
-  /** Le duel (src/drive/adversaire/) : rang du niveau battu (1 bronze, 2 argent, 3 or). Lu et accordé par le duel (src/drive/adversaire/cloture.ts), jamais par le lecteur des courses. */
+  /** Le duel (src/drive/adversaire/) : rang du palier de gains du niveau battu (1 bronze : Facile, 2 argent : Normal, 3 or : Difficile). Lu et accordé par le duel (src/drive/adversaire/cloture.ts), jamais par le lecteur des courses. */
   'duel.niveau',
 ] as const;
 export type Champ = (typeof CHAMPS)[number];
@@ -107,10 +107,10 @@ export const HAUTS_FAITS: readonly HautFaitDef[] = [
   { id: 'drift-argent', label: 'Ça fume', description: 'Décroche l’argent ou mieux en drift.', recompense: { articles: ['sticker-graffiti-gaz'] }, quand: [egal('course.format', 'drift'), plus('course.rangMedaille', 2)] },
   { id: 'drift-or', label: 'Maître de la glisse', description: 'Décroche l’or en drift.', recompense: { articles: ['sticker-etoile-laurier'] }, quand: [egal('course.format', 'drift'), plus('course.rangMedaille', 3)] },
   // La carrière (vague U) : accordé par la carrière à son dernier rendez-vous réussi.
-  // Le duel (vague V) : accordés par le duel à la première victoire contre chaque niveau, avec sa prime.
-  { id: 'duel-bronze', label: 'Premier duel gagné', description: 'Bats un adversaire de niveau bronze en duel.', recompense: { articles: ['sticker-sponsor-turbo-mamie'] }, quand: [egal('duel.niveau', 1)] },
-  { id: 'duel-argent', label: 'Rival d’argent', description: 'Bats un adversaire de niveau argent en duel.', recompense: { articles: ['sticker-damier-dissous'] }, quand: [egal('duel.niveau', 2)] },
-  { id: 'duel-or', label: 'Plus vite que la Comète', description: 'Bats un adversaire de niveau or en duel.', recompense: { articles: ['sticker-numero-bouclier-42'] }, quand: [egal('duel.niveau', 3)] },
+  // Le duel (vague V) : accordés par le duel à la première victoire à chaque niveau de difficulté (son palier de gains), avec sa prime.
+  { id: 'duel-bronze', label: 'Premier duel gagné', description: 'Gagne un duel en Facile.', recompense: { articles: ['sticker-sponsor-turbo-mamie'] }, quand: [egal('duel.niveau', 1)] },
+  { id: 'duel-argent', label: 'Rival d’argent', description: 'Gagne un duel en Normal.', recompense: { articles: ['sticker-damier-dissous'] }, quand: [egal('duel.niveau', 2)] },
+  { id: 'duel-or', label: 'Rival redoutable', description: 'Gagne un duel en Difficile.', recompense: { articles: ['sticker-numero-bouclier-42'] }, quand: [egal('duel.niveau', 3)] },
   { id: 'carriere-bouclee', label: 'Carrière bouclée', description: 'Réussis tous les rendez-vous de la carrière.', recompense: { dollars: 100, articles: ['sticker-drapeaux-croises'] }, quand: [egal('carriere.bouclee', 1)] },
   // Les saisons (vague V) : accordés par la carrière, d'après la saison qui les déclare (public/assets/carriere/carriere.json,
   // `hautFait`, `hautFaitOr`). Des stickers plutôt que des dollars (le total des dollars des hauts faits est plafonné).

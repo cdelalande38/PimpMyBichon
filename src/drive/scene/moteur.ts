@@ -63,7 +63,7 @@ import { cleanProbePass } from '../../render/probePass.ts';
 import { aimSunShadow } from '../../render/sunShadow.ts';
 import { roueEnPlus, rouesMotrices, wheelSteer } from './roues.ts';
 import { createRig, rollWheels, TAIL_LIGHT, type DriveModel, type DriveRig } from './vehicule.tsx';
-import { allureDuel, duelDeLaSortie, liveDuel, type DuelEnCourse } from '../adversaire/course.ts';
+import { duelDeLaSortie, liveDuel, type DuelEnCourse } from '../adversaire/course.ts';
 import { useDuel } from '../adversaire/choix.ts';
 import { conclureDuel } from '../adversaire/cloture.ts';
 import { poserAdversaire, poserModeleAdversaire, type ModeleAdversaire } from './adversaire.tsx';
@@ -303,12 +303,17 @@ export class DriveEngine {
     this.rail = createRail(route);
     // Duel choisi au menu : l'adversaire (son pilote, sa course), caché de la sonde comme le joueur.
     const drive0 = useDrive.getState();
-    this.duel = duelDeLaSortie(useDuel.getState(), formatCouru(drive0.format, route.loop), drive0.rendezVous !== null, this.rail);
+    this.duel = duelDeLaSortie(useDuel.getState(), formatCouru(drive0.format, route.loop), drive0.rendezVous !== null, this.rail, vehicle.id);
     this.duelRig = this.duel ? createRig() : null;
     if (this.duelRig) {
       this.duelRig.group.name = 'sortie_adversaire';
       this.hidden.push(this.duelRig.group);
     }
+    // L'adversaire parti devant le joueur (début d'une route ouverte trop étroite pour deux) : la ligne devant lui.
+    if (this.duel) this.duel.surGrille = () => {
+      const avance = this.duel?.avanceSurLaLigne ?? 0;
+      if (avance > 0) this.lignes.poser(this.rail, this.pilot.motion.s + avance, this.rig.measure?.halfLength ?? this.halfLengthHint);
+    };
     liveDuel.current = this.duel;
     // Performances du véhicule (manifeste, préparation du build) ; le pilote est publié pour le
     // compte-tours et le son (src/state/drive.ts, livePilot).
@@ -384,13 +389,11 @@ export class DriveEngine {
     this.lignes.poser(this.rail, this.pilot.motion.s, this.rig.measure?.halfLength ?? this.halfLengthHint);
     useDrive.getState().effacerArrivee();
     if (this.duel) {
-      // Duel : l'adversaire sur la ligne, à côté du joueur, à l'allure de son niveau (src/drive/adversaire/course.ts).
+      // Duel : la grille de départ, le joueur et l'adversaire rangés côte à côte ou en quinconce (src/drive/adversaire/course.ts).
       const format = formatCouru(drive.format, this.rail.loop);
       const m = this.rig.measure;
       this.duel.pilote.pilot.setWeather(drive.weather);
-      const offset = this.duel.depart(allureDuel(this.duel.adversaire, drive.map ?? '', this.startId, format, this.vehicleId), this.pilot.motion.s, this.pilot.motion.offset, m?.halfWidth ?? 0.95, m?.halfLength ?? this.halfLengthHint, toursDuFormat(format), !drive.apercu);
-      // Rangé pour laisser la place à l'adversaire : repris par le pilote au premier pas à la main.
-      if (!drive.apercu) this.pilot.motion.offset = offset;
+      this.duel.depart(this.pilot, this.kind, this.pilot.motion.s, this.pilot.motion.offset, m?.halfWidth ?? 0.95, m?.halfLength ?? this.halfLengthHint, toursDuFormat(format), !drive.apercu);
     }
   }
 
@@ -444,6 +447,7 @@ export class DriveEngine {
       this.uniforms.pmbHeadColor.value.copy(model.headColor);
       rig.measure = withWheels(model, rig);
       this.pilot.setSize?.(rig.measure.halfWidth, rig.measure.halfLength);
+      this.duel?.mesurerJoueur(rig.measure.halfWidth, rig.measure.halfLength);
     }
   }
 
@@ -501,7 +505,7 @@ export class DriveEngine {
       else drive.noterArrivee(cleTemps(drive.map, this.startId, this.vehicleId), depart.arrivee);
       // Duel : le verdict s'ajoute au bilan (gains du duel, prime d'une première victoire, hauts faits).
       const fin = useDrive.getState().fin;
-      if (finie && fin && this.duel?.duel.verdict) useDrive.setState({ fin: conclureDuel(this.duel.adversaire, this.duel.duel.verdict, fin) });
+      if (finie && fin && this.duel?.duel.verdict) useDrive.setState({ fin: conclureDuel(this.duel.adversaire, this.duel.niveau, this.duel.duel.verdict, fin) });
     }
     feuxSon.rouges = depart.rouges;
     feuxSon.vert = depart.vert;

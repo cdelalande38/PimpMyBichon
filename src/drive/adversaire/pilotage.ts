@@ -1,29 +1,26 @@
 // Le pilotage de l'adversaire du duel (§ 5.5, jeu). Aucune conduite nouvelle : c'est le pilote de la sortie
 // (src/drive/pilote.ts), conduit comme la conduite à la main appliquée qui donne les temps de référence
 // (src/drive/simulationCourse.ts : direction assistée, plein gaz, frein à fond dès que la vitesse dépasse ce
-// que tient le prochain virage, décidé tous les dixièmes de seconde), avec une horloge ralentie.
+// que tient le prochain virage, décidé tous les dixièmes de seconde), en temps réel, avec toute la puissance
+// de son véhicule : aucune limite de vitesse de balade, aucune horloge ralentie.
 //
-// L'allure : le niveau de l'adversaire est une médaille. Le temps visé est le seuil de cette médaille pour
-// la carte, le départ, le format et le VÉHICULE DU JOUEUR (src/data/courses.ts, seuilsMedailles, au sec) ;
-// la conduite appliquée du véhicule de l'adversaire met `tempsMain` (même fichier, au sec). L'allure est
-// leur rapport, a = tempsMain ÷ temps visé, plafonnée à 1 : le pilote de référence avance de a × dt à
-// chaque image. Positions, vitesses et accélérations sont celles de la conduite appliquée, à l'échelle a
-// (a pour les vitesses, a² pour les accélérations) : il finit au temps visé, sans jamais aller au-delà de
-// ce que son véhicule tient (plafond à 1 : un adversaire dont le véhicule ne peut pas tenir le temps visé
-// roule à sa limite, plus lentement, et ne triche pas). Pas d'élastique : il ne regarde jamais le joueur
-// pour régler son allure. Sous la pluie et sur la neige, le pilote de référence freine pour l'adhérence de
-// la météo : il roule aux allures de la météo, d'autant plus lentement que les médailles s'allongent.
-//
-// L'irrégularité : d'une section de route à l'autre (`ReglagePilotage.section` m), l'allure varie de
-// ± `irregularite` (bruit déterministe tiré de l'abscisse et de l'adversaire, lissé d'une section à la
-// suivante, toujours plafonné à 1) : il soigne ou rate un peu un virage, jamais le même partout, et
-// toujours pareil d'une course à l'autre. Aucun hasard, aucune allocation par image.
+// Le niveau (src/data/adversaires.ts, au menu) règle trois choses, mesurées par tests/unit/adversaire.test.ts :
+// - l'allure a : il vise a × la vitesse que son véhicule tient en virage (adhérence visée × a²) et a × sa
+//   vitesse de pointe (au-delà, il lève le pied) ; à 1, rien ne le retient ;
+// - le freinage : la part du freinage le plus fort sur laquelle il compte pour arriver au virage (la
+//   référence compte sur 80 % ; plus bas, il freine plus tôt) ;
+// - l'irrégularité : d'une section de route à l'autre (`ReglagePilotage.section` m), son allure baisse de 0 à
+//   `irregularite` (bruit déterministe tiré de l'abscisse et de l'adversaire, lissé) : il rate un peu un
+//   virage, jamais le même partout, toujours pareil d'une course à l'autre. Jamais au-dessus de son niveau.
+// Au niveau le plus dur (allure 1, freinage 0,8, régulier), il court exactement la conduite de référence de son
+// véhicule. Pas d'élastique : il ne regarde jamais le joueur pour régler son allure. Sous la pluie et sur la
+// neige, il freine pour l'adhérence de la météo, comme la référence. Aucun hasard, aucune allocation par image.
 
 import type { DriveInput, DriveMotion, RailPose } from '../contrat.ts';
 import { PILOT, type PilotWithProfile } from '../pilote.ts';
 import { createPose } from '../rail.ts';
 import { SIMULATION, vitesseTenable } from '../simulationCourse.ts';
-import type { ReglagePilotage } from '../../data/adversaires.ts';
+import type { NiveauDuel, ReglagePilotage } from '../../data/adversaires.ts';
 
 /** Bruit d'une section, de −1 à 1, tiré d'un entier (déterministe, sans état). */
 export function bruitSection(section: number, graine: number): number {
@@ -54,23 +51,13 @@ export function variationAllure(s: number, longueurSection: number, graine: numb
   return bruitSection(a, graine) * (1 - t) + bruitSection(b, graine) * t;
 }
 
-/**
- * Allure d'un niveau : le temps de la conduite appliquée du véhicule de l'adversaire sur le temps visé,
- * plafonnée à 1 ; sans temps de référence (carte nouvelle), l'allure de repli du fichier.
- */
-export function allureDe(tempsMain: number | null | undefined, tempsVise: number | null | undefined, repli: number): number {
-  if (typeof tempsMain === 'number' && typeof tempsVise === 'number' && tempsMain > 0 && tempsVise > 0 && Number.isFinite(tempsMain) && Number.isFinite(tempsVise)) {
-    return Math.min(1, tempsMain / tempsVise);
-  }
-  return Math.min(1, Math.max(0.2, repli));
-}
-
 export interface PiloteAdversaire {
   readonly pilot: PilotWithProfile;
-  /** Allure visée (0 à 1) et allure du moment (irrégularité comprise). */
-  allure: number;
+  /** Le niveau couru. */
+  niveau: NiveauDuel;
+  /** Allure du moment (irrégularité comprise), 0 à 1. */
   allureIci: number;
-  /** Vitesse réelle (m/s) : celle du pilote de référence à l'allure du moment. */
+  /** Vitesse (m/s). */
   vitesse: number;
   /** Placement demandé : −1 bord gauche, 1 bord droit, 0 sa trajectoire (src/drive/adversaire/contact.ts). */
   lane: -1 | 0 | 1;
@@ -82,11 +69,11 @@ export interface PiloteAdversaire {
   readonly pose: RailPose;
 }
 
-export function createPiloteAdversaire(pilot: PilotWithProfile, allure: number, reglage: ReglagePilotage, graine: number): PiloteAdversaire {
+export function createPiloteAdversaire(pilot: PilotWithProfile, niveau: NiveauDuel, reglage: ReglagePilotage, graine: number): PiloteAdversaire {
   return {
     pilot,
-    allure: Math.min(1, Math.max(0.2, allure)),
-    allureIci: allure,
+    niveau,
+    allureIci: niveau.allure,
     vitesse: 0,
     lane: 0,
     graine,
@@ -114,23 +101,29 @@ export function pasAdversaire(p: PiloteAdversaire, dt: number, tenu: boolean): D
   const pilot = p.pilot;
   pilot.setHold(tenu);
   const rail = pilot.rail;
-  const sections = rail.loop ? Math.max(1, Math.round(rail.length / p.reglage.section)) : 0;
-  const a = Math.min(1, Math.max(0.2, p.allure * (1 + p.reglage.irregularite * variationAllure(pilot.motion.s, rail.loop ? rail.length / sections : p.reglage.section, p.graine, sections))));
+  const n = p.niveau;
+  let a = n.allure;
+  if (n.irregularite > 0) {
+    const sections = rail.loop ? Math.max(1, Math.round(rail.length / p.reglage.section)) : 0;
+    const v = variationAllure(pilot.motion.s, rail.loop ? rail.length / sections : p.reglage.section, p.graine, sections);
+    a *= 1 - (n.irregularite * (1 + v)) / 2;
+  }
   p.allureIci = a;
-  const pas = Math.max(0, Number.isFinite(dt) ? dt : 0) * a;
-  // La décision de la conduite appliquée, tous les dixièmes de seconde de son temps (comme l'outil des temps).
+  const pas = Math.max(0, Number.isFinite(dt) ? dt : 0);
+  // La décision de la conduite appliquée, tous les dixièmes de seconde (comme l'outil des temps).
   p.depuisDecision += pas;
   if (p.depuisDecision >= SIMULATION.dt && !tenu) {
     p.depuisDecision = 0;
     const v = pilot.motion.speed;
-    const grip = pilot.performance.grip * pilot.adherence * SIMULATION.marge;
-    const frein = PILOT.manual.brake * pilot.adherence * SIMULATION.frein;
+    const grip = pilot.performance.grip * pilot.adherence * SIMULATION.marge * a * a;
+    const frein = PILOT.manual.brake * pilot.adherence * n.freinage;
     const freine = v > vitesseTenable(pilot, pilot.motion.s, v, grip, frein, p.pose);
-    p.input.throttle = freine ? 0 : 1;
+    const pointe = a < 1 && v >= (a * pilot.performance.topKmh) / 3.6;
+    p.input.throttle = freine || pointe ? 0 : 1;
     p.input.brake = freine ? 1 : 0;
   }
   p.input.lane = p.lane;
   const motion = pilot.step(pas, p.input, pilot.performance.kind);
-  p.vitesse = motion.speed * a;
+  p.vitesse = motion.speed;
   return motion;
 }

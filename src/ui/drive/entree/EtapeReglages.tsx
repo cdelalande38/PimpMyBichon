@@ -41,6 +41,7 @@ export function EtapeReglages() {
   // Duel (src/ui/drive/Duel.tsx) : une puce de plus dans la rangée des formats, puis le choix de l'adversaire.
   const duel = useDuelChoisi();
   useDuel((state) => state.adversaire);
+  useDuel((state) => state.niveau);
 
   // Menu rouvert sur la dernière sortie : le fil finit sur le nom du départ dès que la route l'a dit, et
   // une carte à un seul départ n'a pas d'étape des départs où « Retour » s'arrêterait.

@@ -1,10 +1,12 @@
 // Les adversaires du duel (§ 5.5, jeu : le duel contre un véhicule piloté par l'app, demandé le 18 novembre
-// 2026). Ils vivent en données, dans public/assets/adversaires/adversaires.json : aucun identifiant de
-// véhicule ici. Chacun a un nom d'atelier inventé (aucun nom de marque, de pilote réel ni de personnage),
-// un véhicule du catalogue, une couleur de carrosserie et un niveau calé sur une médaille (bronze, argent,
-// or) : son allure est réglée pour finir au temps de cette médaille sur la carte, le départ et le véhicule
-// du joueur (src/drive/adversaire/allure.ts). Un fichier mal formé est refusé en entier
-// (`PROBLEMES_ADVERSAIRES`, relu par tests/unit/adversaire.test.ts) : plutôt pas de duel qu'un duel faux.
+// 2026, refait le 19 après le premier essai). Ils vivent en données, dans public/assets/adversaires/adversaires.json :
+// aucun identifiant de véhicule ici. Chacun a un nom d'atelier inventé (aucun nom de marque, de pilote réel ni
+// de personnage), un véhicule du catalogue et une couleur de carrosserie. La difficulté est à part, choisie au
+// menu : chaque niveau dit comment il court (src/drive/adversaire/pilotage.ts) — la part de ce que son véhicule
+// tient (virages et pointe), le freinage sur lequel il compte, son irrégularité — et le palier de ses gains
+// (bronze, argent, or : src/data/economie.ts, ECONOMIE_DUEL, et les trois hauts faits). Un fichier mal formé est
+// refusé en entier (`PROBLEMES_ADVERSAIRES`, relu par tests/unit/adversaire.test.ts) : plutôt pas de duel qu'un
+// duel faux.
 
 import type { Medaille } from '../jeu/contrat.ts';
 import type { VehicleManifest } from './vehicleTypes.ts';
@@ -14,22 +16,34 @@ export interface Adversaire {
   id: string;
   /** Nom d'atelier inventé, 24 signes au plus. */
   nom: string;
-  /** Une phrase tutoyée ou à la troisième personne, 60 signes au plus, sous son nom au menu. */
+  /** Une phrase tutoyée ou à la troisième personne, 60 signes au plus. */
   phrase: string;
-  niveau: Medaille;
   /** Identifiant d'un véhicule du catalogue. */
   vehicule: string;
   /** Couleur de la carrosserie (#rrggbb). */
   couleur: string;
 }
 
-export interface ReglagePilotage {
-  /** Part dont l'allure varie d'une section de route à l'autre (il soigne ou rate un peu un virage), 0 à 0,1. */
+/** Un niveau de difficulté : comment l'adversaire court, et ce que la victoire rapporte. */
+export interface NiveauDuel {
+  id: string;
+  /** 12 signes au plus. */
+  label: string;
+  /** Ce qu'il fait, 32 signes au plus, sous le libellé au menu. */
+  phrase: string;
+  /** Palier des gains et du haut fait de la première victoire (un par palier). */
+  gains: Medaille;
+  /** Part de la vitesse que son véhicule tient en virage, et de sa vitesse de pointe, 0,6 à 1. */
+  allure: number;
+  /** Part du freinage le plus fort sur laquelle il compte pour arriver au virage, 0,4 à 0,9 (bas : il freine tôt). */
+  freinage: number;
+  /** Part dont son allure baisse par endroits (il rate un peu un virage, jamais le même partout), 0 à 0,1. */
   irregularite: number;
-  /** Longueur d'une section de route, en mètres. */
+}
+
+export interface ReglagePilotage {
+  /** Longueur d'une section de route (irrégularité), en mètres. */
   section: number;
-  /** Allure (part du temps de la conduite appliquée) quand la carte n'a pas de temps de référence. */
-  sansReference: Readonly<Record<Medaille, number>>;
 }
 
 export interface ReglageContact {
@@ -45,61 +59,81 @@ export interface ReglageContact {
 
 export interface FichierAdversaires {
   adversaires: readonly Adversaire[];
+  niveaux: readonly NiveauDuel[];
+  niveauParDefaut: string;
   pilotage: ReglagePilotage;
   contact: ReglageContact;
 }
 
-export const NIVEAUX: readonly Medaille[] = ['bronze', 'argent', 'or'];
-export const NIVEAU_LABEL: Readonly<Record<Medaille, string>> = { bronze: 'Bronze', argent: 'Argent', or: 'Or' };
-
+const MEDAILLES: readonly Medaille[] = ['bronze', 'argent', 'or'];
 const ID = /^[a-z0-9-]{2,24}$/;
 const HEX = /^#[0-9a-f]{6}$/i;
 const texte = (value: unknown, max: number): value is string => typeof value === 'string' && value.trim() !== '' && value.length <= max;
 const nombre = (value: unknown, min: number, max: number): value is number => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 
-const PILOTAGE_DEFAUT: ReglagePilotage = { irregularite: 0.04, section: 140, sansReference: { bronze: 0.55, argent: 0.8, or: 0.92 } };
+const PILOTAGE_DEFAUT: ReglagePilotage = { section: 140 };
 const CONTACT_DEFAUT: ReglageContact = { garde: 0.3, approche: 6, relache: 12, ecartParSeconde: 3 };
+const objet = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 
 /** Valide le fichier des adversaires d'après le catalogue des véhicules. */
 export function lireAdversaires(raw: unknown, vehicules: readonly Pick<VehicleManifest, 'id'>[]): FichierAdversaires & { problemes: string[] } {
   const where = 'public/assets/adversaires/adversaires.json';
-  const vide = { adversaires: [], pilotage: PILOTAGE_DEFAUT, contact: CONTACT_DEFAUT };
+  const vide = { adversaires: [], niveaux: [], niveauParDefaut: '', pilotage: PILOTAGE_DEFAUT, contact: CONTACT_DEFAUT };
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { ...vide, problemes: [`${where} : ce n’est pas un objet`] };
   const source = raw as Record<string, unknown>;
   const problemes: string[] = [];
-  if (source.format !== 'pmb-adversaires' || source.version !== 1) problemes.push(`${where} : format ou version inconnus (attendu : pmb-adversaires, 1)`);
+  if (source.format !== 'pmb-adversaires' || source.version !== 2) problemes.push(`${where} : format ou version inconnus (attendu : pmb-adversaires, 2)`);
   const liste = Array.isArray(source.adversaires) ? (source.adversaires as unknown[]) : [];
   if (liste.length === 0 || liste.length > 12) problemes.push(`${where} : de 1 à 12 adversaires attendus`);
   const vus = new Set<string>();
   const adversaires: Adversaire[] = [];
   liste.slice(0, 12).forEach((item, index) => {
     const ici = `adversaire n° ${index + 1}`;
-    const a = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
+    const a = objet(item);
     const avant = problemes.length;
     if (typeof a.id !== 'string' || !ID.test(a.id) || vus.has(a.id)) problemes.push(`${ici} : id invalide ou en double`);
     else vus.add(a.id);
     if (!texte(a.nom, 24)) problemes.push(`${ici} : nom manquant (24 signes au plus)`);
     if (!texte(a.phrase, 60)) problemes.push(`${ici} : phrase manquante (60 signes au plus)`);
-    if (!NIVEAUX.includes(a.niveau as Medaille)) problemes.push(`${ici} : niveau « ${String(a.niveau)} » inconnu (bronze, argent ou or)`);
     if (!vehicules.some((v) => v.id === a.vehicule)) problemes.push(`${ici} : véhicule « ${String(a.vehicule)} » absent du catalogue`);
     if (typeof a.couleur !== 'string' || !HEX.test(a.couleur)) problemes.push(`${ici} : couleur #rrggbb attendue`);
     if (problemes.length === avant) {
-      adversaires.push({ id: a.id as string, nom: (a.nom as string).trim(), phrase: (a.phrase as string).trim(), niveau: a.niveau as Medaille, vehicule: a.vehicule as string, couleur: (a.couleur as string).toLowerCase() });
+      adversaires.push({ id: a.id as string, nom: (a.nom as string).trim(), phrase: (a.phrase as string).trim(), vehicule: a.vehicule as string, couleur: (a.couleur as string).toLowerCase() });
     }
   });
-  const p = (typeof source.pilotage === 'object' && source.pilotage !== null ? source.pilotage : {}) as Record<string, unknown>;
-  const sans = (typeof p.sansReference === 'object' && p.sansReference !== null ? p.sansReference : {}) as Record<string, unknown>;
-  if (!nombre(p.irregularite, 0, 0.1)) problemes.push(`${where} : pilotage.irregularite entre 0 et 0,1`);
+  const brutNiveaux = Array.isArray(source.niveaux) ? (source.niveaux as unknown[]) : [];
+  if (brutNiveaux.length < 2 || brutNiveaux.length > 4) problemes.push(`${where} : de 2 à 4 niveaux attendus`);
+  const niveaux: NiveauDuel[] = [];
+  const paliers = new Set<string>();
+  brutNiveaux.slice(0, 4).forEach((item, index) => {
+    const ici = `niveau n° ${index + 1}`;
+    const n = objet(item);
+    const avant = problemes.length;
+    if (typeof n.id !== 'string' || !ID.test(n.id) || niveaux.some((x) => x.id === n.id)) problemes.push(`${ici} : id invalide ou en double`);
+    if (!texte(n.label, 12)) problemes.push(`${ici} : libellé manquant (12 signes au plus)`);
+    if (!texte(n.phrase, 32)) problemes.push(`${ici} : phrase manquante (32 signes au plus)`);
+    if (!MEDAILLES.includes(n.gains as Medaille) || paliers.has(n.gains as string)) problemes.push(`${ici} : gains bronze, argent ou or, un niveau par palier`);
+    else paliers.add(n.gains as string);
+    if (!nombre(n.allure, 0.6, 1)) problemes.push(`${ici} : allure entre 0,6 et 1`);
+    if (!nombre(n.freinage, 0.4, 0.9)) problemes.push(`${ici} : freinage entre 0,4 et 0,9`);
+    if (!nombre(n.irregularite, 0, 0.1)) problemes.push(`${ici} : irregularite entre 0 et 0,1`);
+    if (problemes.length === avant) {
+      niveaux.push({ id: n.id as string, label: (n.label as string).trim(), phrase: (n.phrase as string).trim(), gains: n.gains as Medaille, allure: n.allure as number, freinage: n.freinage as number, irregularite: n.irregularite as number });
+    }
+  });
+  if (!niveaux.some((n) => n.id === source.niveauParDefaut)) problemes.push(`${where} : niveauParDefaut doit nommer un niveau`);
+  const p = objet(source.pilotage);
   if (!nombre(p.section, 30, 1000)) problemes.push(`${where} : pilotage.section entre 30 et 1 000 m`);
-  for (const n of NIVEAUX) if (!nombre(sans[n], 0.3, 1)) problemes.push(`${where} : pilotage.sansReference.${n} entre 0,3 et 1`);
-  const c = (typeof source.contact === 'object' && source.contact !== null ? source.contact : {}) as Record<string, unknown>;
+  const c = objet(source.contact);
   if (!nombre(c.garde, 0, 1.5)) problemes.push(`${where} : contact.garde entre 0 et 1,5 m`);
   if (!nombre(c.approche, 0, 40) || !nombre(c.relache, 0, 60) || (c.relache as number) < (c.approche as number)) problemes.push(`${where} : contact.approche et contact.relache (relache ≥ approche)`);
   if (!nombre(c.ecartParSeconde, 0.5, 10)) problemes.push(`${where} : contact.ecartParSeconde entre 0,5 et 10 m/s`);
   if (problemes.length > 0) return { ...vide, problemes };
   return {
     adversaires,
-    pilotage: { irregularite: p.irregularite as number, section: p.section as number, sansReference: { bronze: sans.bronze as number, argent: sans.argent as number, or: sans.or as number } },
+    niveaux,
+    niveauParDefaut: source.niveauParDefaut as string,
+    pilotage: { section: p.section as number },
     contact: { garde: c.garde as number, approche: c.approche as number, relache: c.relache as number, ecartParSeconde: c.ecartParSeconde as number },
     problemes,
   };
@@ -110,6 +144,8 @@ const LECTURE = lireAdversaires(Object.values(FICHIERS)[0] ?? null, VEHICLES);
 
 /** Les adversaires, dans l'ordre du fichier ; vide si le fichier manque ou s'il est refusé (pas de duel). */
 export const ADVERSAIRES: readonly Adversaire[] = LECTURE.adversaires;
+/** Les niveaux de difficulté, du plus facile au plus dur. */
+export const NIVEAUX_DUEL: readonly NiveauDuel[] = LECTURE.niveaux;
 export const PILOTAGE_ADVERSAIRE: ReglagePilotage = LECTURE.pilotage;
 export const CONTACT_ADVERSAIRE: ReglageContact = LECTURE.contact;
 /** Ce qui fait refuser le fichier (vide quand tout va bien). */
@@ -117,4 +153,25 @@ export const PROBLEMES_ADVERSAIRES: readonly string[] = LECTURE.problemes;
 
 export function adversaireParId(id: string | null | undefined, liste: readonly Adversaire[] = ADVERSAIRES): Adversaire | undefined {
   return id ? liste.find((a) => a.id === id) : undefined;
+}
+
+/** Le niveau `id`, sinon celui par défaut du fichier ; `undefined` si le fichier est refusé. */
+export function niveauDuel(id: string | null | undefined, liste: readonly NiveauDuel[] = NIVEAUX_DUEL, defaut: string = LECTURE.niveauParDefaut): NiveauDuel | undefined {
+  return liste.find((n) => n.id === id) ?? liste.find((n) => n.id === defaut);
+}
+
+/**
+ * Relit une sauvegarde du choix du duel (`pmb-duel`, src/drive/adversaire/choix.ts), quelle que soit sa forme.
+ * Celle d'avant les niveaux (19 novembre 2026 : l'adversaire y portait sa médaille, et son id y était écrit même
+ * sans choix) se relit sans erreur : le duel garde son état, l'adversaire repart « à ta mesure » (`null`), le
+ * niveau par défaut (`null`). Un adversaire ou un niveau inconnus : `null`.
+ */
+export function relireChoixDuel(persisted: unknown, adversaires: readonly Adversaire[] = ADVERSAIRES, niveaux: readonly NiveauDuel[] = NIVEAUX_DUEL): { actif: boolean; adversaire: string | null; niveau: string | null } {
+  const p = objet(persisted);
+  const avantNiveaux = !('niveau' in p);
+  return {
+    actif: p.actif === true && adversaires.length > 0,
+    adversaire: avantNiveaux ? null : (adversaireParId(typeof p.adversaire === 'string' ? p.adversaire : null, adversaires)?.id ?? null),
+    niveau: niveaux.find((n) => n.id === p.niveau)?.id ?? null,
+  };
 }

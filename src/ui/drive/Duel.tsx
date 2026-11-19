@@ -1,18 +1,20 @@
-// Le duel à l'écran (§ 5.5, jeu) : au menu de la sortie, le format « Duel » à côté des courses puis le choix
-// de l'adversaire ; en course, la position (1er ou 2e) et l'écart en secondes ; à l'arrivée, le verdict et
+// Le duel à l'écran (§ 5.5, jeu) : au menu de la sortie, le format « Duel » à côté des courses puis deux
+// rangées, l'adversaire (celui à ta mesure marqué, les autres « plus vif » ou « moins vif » que ton véhicule)
+// et la difficulté ; en course, la position (1er ou 2e) et l'écart en secondes ; à l'arrivée, le verdict et
 // « Revanche » à la place de « Rejouer ». Les règles sont dans src/drive/adversaire/.
 //
 // La position vit hors de React, comme le chrono : relue à chaque image (`useBoucleImage`), le texte n'est
 // réécrit que s'il change. « Moins de mouvement » : rien n'y bouge, aucune animation.
 
 import { useRef } from 'react';
-import { ADVERSAIRES, adversaireParId, NIVEAU_LABEL } from '../../data/adversaires.ts';
-import { vehicleById } from '../../data/vehicles.ts';
+import { ADVERSAIRES, adversaireParId, NIVEAUX_DUEL, niveauDuel } from '../../data/adversaires.ts';
+import { resolveVehicle, vehicleById } from '../../data/vehicles.ts';
 import { useDuel } from '../../drive/adversaire/choix.ts';
 import { verdictDuelDe } from '../../drive/adversaire/cloture.ts';
-import { liveDuel } from '../../drive/adversaire/course.ts';
+import { adversaireAMesure, duelChoisi, liveDuel, trempe } from '../../drive/adversaire/course.ts';
 import { enCourse } from '../../drive/depart.ts';
 import type { Bilan } from '../../jeu/contrat.ts';
+import { useBuilds } from '../../state/builds.ts';
 import { liveDepart, useDrive } from '../../state/drive.ts';
 import { useBoucleImage } from './CompteTours.tsx';
 import type { BoutonFin } from './FinCourseVue.tsx';
@@ -55,33 +57,62 @@ export function PuceDuel() {
   );
 }
 
-/** Une fois « Duel » choisi : l'adversaire, un par niveau (son nom, son niveau, son véhicule, sa phrase). */
+/** Écart de trempe sous lequel deux véhicules se valent (part). */
+const MEME_TREMPE = 0.03;
+
+/** Ce que le menu dit d'un adversaire face au véhicule du joueur. */
+function repere(vehiculeAdv: string, vehiculeJoueur: string, aMesure: boolean): string {
+  if (aMesure) return 'à ta mesure';
+  const ta = trempe(vehiculeAdv);
+  const tj = trempe(vehiculeJoueur);
+  if (ta === null || tj === null || Math.abs(ta - tj) <= MEME_TREMPE * tj) return 'aussi vif';
+  return ta < tj ? 'plus vif' : 'moins vif';
+}
+
+/** Une fois « Duel » choisi : deux rangées, l'adversaire (son nom, son véhicule, face au tien) puis la difficulté. */
 export function ChoixAdversaire() {
   const choisi = useDuelChoisi();
   const adversaire = useDuel((state) => state.adversaire);
+  const niveau = useDuel((state) => state.niveau);
   const choisir = useDuel((state) => state.choisir);
+  const choisirNiveau = useDuel((state) => state.choisirNiveau);
+  const vehicule = resolveVehicle(useBuilds((state) => state.current)).id;
   if (!choisi) return null;
+  const mesure = adversaireAMesure(vehicule);
+  const actuel = adversaireParId(adversaire) ?? mesure;
+  const n = niveauDuel(niveau);
   return (
-    <div className="chips duel-adversaires" role="group" aria-label="Adversaire">
-      {ADVERSAIRES.map((a) => (
-        <button key={a.id} type="button" className="chip duel-adversaire" data-adversaire={a.id} data-niveau={a.niveau} aria-pressed={a.id === adversaire} onClick={() => choisir(a.id)}>
-          <i aria-hidden="true" style={{ background: a.couleur }} />
-          <b>{a.nom}</b>
-          <small>
-            {NIVEAU_LABEL[a.niveau]} · {vehicleById(a.vehicule)?.name ?? a.vehicule}
-          </small>
-          <small className="duel-phrase">{a.phrase}</small>
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="chips duel-adversaires" role="group" aria-label="Adversaire">
+        {ADVERSAIRES.map((a) => (
+          <button key={a.id} type="button" className="chip duel-adversaire" data-adversaire={a.id} aria-pressed={a.id === actuel?.id} onClick={() => choisir(a.id)}>
+            <b>
+              <i aria-hidden="true" style={{ background: a.couleur }} />
+              {a.nom}
+            </b>
+            <small>
+              {vehicleById(a.vehicule)?.name ?? a.vehicule} · {repere(a.vehicule, vehicule, a.id === mesure?.id)}
+            </small>
+          </button>
+        ))}
+      </div>
+      <div className="chips duel-niveaux" role="group" aria-label="Difficulté">
+        {NIVEAUX_DUEL.map((x) => (
+          <button key={x.id} type="button" className="chip duel-niveau" data-niveau={x.id} aria-pressed={x.id === n?.id} onClick={() => choisirNiveau(x.id)}>
+            <b>{x.label}</b>
+            <small>{x.phrase}</small>
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
 
-/** Ce que « Sortir » redit en duel. */
+/** Ce que « Sortir » redit en duel : l'adversaire et le niveau. */
 export function reditDuel(): string | null {
   const choix = useDuel.getState();
-  const a = adversaireParId(choix.adversaire);
-  return choix.actif && a ? `Duel contre ${a.nom} : un tour, dollars en plus` : null;
+  const c = duelChoisi(choix, resolveVehicle(useBuilds.getState().current).id);
+  return choix.actif && c ? `Duel contre ${c.adversaire.nom}, ${c.niveau.label.toLowerCase()} : un tour, dollars en plus` : null;
 }
 
 /** En course : la position et l'écart, sous le chrono. */
@@ -115,12 +146,17 @@ export function PositionDuel() {
     }
   });
   const a = liveDuel.current?.adversaire;
+  const niveauCouru = liveDuel.current?.niveau;
   return (
     <div className="drive-feux-place duel-place">
       <div ref={root} className="duel-position" data-visible="non" role="status" aria-live="off" aria-label="Position dans le duel">
         <b ref={place}>1er</b>
         <span ref={ecart} />
-        {a && <small>contre {a.nom}</small>}
+        {a && (
+          <small>
+            contre {a.nom} · {niveauCouru?.label}
+          </small>
+        )}
       </div>
     </div>
   );

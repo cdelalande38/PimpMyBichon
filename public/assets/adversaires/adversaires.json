@@ -1,12 +1,11 @@
 {
   "format": "pmb-adversaires",
-  "version": 1,
+  "version": 2,
   "adversaires": [
     {
       "id": "dede",
       "nom": "Dédé Pépère",
-      "phrase": "Pas pressé, mais il ne cale jamais.",
-      "niveau": "bronze",
+      "phrase": "Sa Cox a quarante ans et pas une ride.",
       "vehicule": "cox",
       "couleur": "#e8d6a4"
     },
@@ -14,23 +13,39 @@
       "id": "lulu",
       "nom": "Lulu Poignée",
       "phrase": "Elle passe les virages en chantant.",
-      "niveau": "argent",
       "vehicule": "bobber",
       "couleur": "#2f7de1"
     },
     {
       "id": "comete",
       "nom": "La Comète",
-      "phrase": "Freine tard, ne rate presque rien.",
-      "niveau": "or",
+      "phrase": "Rouge vif, et pas que la carrosserie.",
       "vehicule": "sportive",
       "couleur": "#e0213f"
+    },
+    {
+      "id": "momo",
+      "nom": "Momo Bivouac",
+      "phrase": "Son van tient la route, et le café aussi.",
+      "vehicule": "van",
+      "couleur": "#5fae6a"
+    },
+    {
+      "id": "nova",
+      "nom": "Nova",
+      "phrase": "Elle a dessiné sa voiture elle-même.",
+      "vehicule": "concept",
+      "couleur": "#a55cff"
     }
   ],
+  "niveaux": [
+    { "id": "facile", "label": "Facile", "phrase": "Il court, mais freine tôt", "gains": "bronze", "allure": 0.7, "freinage": 0.45, "irregularite": 0.06 },
+    { "id": "normal", "label": "Normal", "phrase": "Rapide, quelques fautes", "gains": "argent", "allure": 0.87, "freinage": 0.62, "irregularite": 0.03 },
+    { "id": "difficile", "label": "Difficile", "phrase": "À fond, sans faute", "gains": "or", "allure": 1, "freinage": 0.8, "irregularite": 0 }
+  ],
+  "niveauParDefaut": "normal",
   "pilotage": {
-    "irregularite": 0.04,
-    "section": 140,
-    "sansReference": { "bronze": 0.55, "argent": 0.8, "or": 0.92 }
+    "section": 140
   },
   "contact": {
     "garde": 0.3,

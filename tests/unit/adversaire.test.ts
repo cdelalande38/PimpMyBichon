@@ -1,23 +1,28 @@
-// L'adversaire du duel (src/drive/adversaire/, src/data/adversaires.ts) : données, allure, pilotage mesuré
-// hors navigateur sur les cartes construites (il boucle sans toucher un bord, aux trois niveaux et par
-// météo ; ses temps face aux médailles ; déterministe), contact (jamais de recouvrement), écart et vainqueur.
+// L'adversaire du duel (src/drive/adversaire/, src/data/adversaires.ts) : données, niveaux mesurés hors
+// navigateur sur les cartes construites (il court : le plus dur roule la conduite de référence de son véhicule,
+// les autres en dessous mais bien au-dessus de la balade ; jamais hors de la chaussée ; déterministe), l'adversaire
+// à ta mesure, la sauvegarde relue, les gains, la grille de départ sur chaque départ (sur la chaussée, sans se
+// toucher, sans saut aux feux ni au vert), contact (jamais de recouvrement), écart et vainqueur.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ADVERSAIRES, lireAdversaires, NIVEAUX, PILOTAGE_ADVERSAIRE, PROBLEMES_ADVERSAIRES } from '../../src/data/adversaires.ts';
-import { seuilsMedailles, tempsReference } from '../../src/data/courses.ts';
+import { ADVERSAIRES, lireAdversaires, NIVEAUX_DUEL, niveauDuel, PILOTAGE_ADVERSAIRE, PROBLEMES_ADVERSAIRES, relireChoixDuel, type NiveauDuel } from '../../src/data/adversaires.ts';
+import { tempsReference } from '../../src/data/courses.ts';
+import { ECONOMIE_DUEL } from '../../src/data/economie.ts';
+import { HAUTS_FAITS } from '../../src/data/hautsFaits.ts';
 import type { MapRoute } from '../../src/data/mapTypes.ts';
 import { MAPS, validateRoute } from '../../src/data/maps.ts';
 import { vehicleById, VEHICLES } from '../../src/data/vehicles.ts';
 import type { DriveInput, Weather } from '../../src/drive/contrat.ts';
 import { armerDepart, createDepart, pasDepart } from '../../src/drive/depart.ts';
-import { createPilot, performanceDe } from '../../src/drive/pilote.ts';
-import { createRail } from '../../src/drive/rail.ts';
+import { createPilot, laneLimits, performanceDe } from '../../src/drive/pilote.ts';
+import { createPose, createRail } from '../../src/drive/rail.ts';
 import { piloteDeSimulation, simulerCourse } from '../../src/drive/simulationCourse.ts';
+import { hautFaitDuel } from '../../src/drive/adversaire/cloture.ts';
 import { createContact, devant, pasContact, recouvrement, type CorpsRoute } from '../../src/drive/adversaire/contact.ts';
-import { allureDuel, DuelEnCourse } from '../../src/drive/adversaire/course.ts';
+import { adversaireAMesure, DuelEnCourse, grilleDepart, trempe, type CorpsGrille, type Grille } from '../../src/drive/adversaire/course.ts';
 import { armerDuel, chronoA, createDuel, pasDuel, PAS_RELEVES } from '../../src/drive/adversaire/duel.ts';
-import { allureDe, bruitSection, createPiloteAdversaire, graineDe, variationAllure } from '../../src/drive/adversaire/pilotage.ts';
+import { bruitSection, createPiloteAdversaire, graineDe, variationAllure } from '../../src/drive/adversaire/pilotage.ts';
 import { simulerAdversaire } from '../../src/drive/adversaire/simulation.ts';
 
 const built = MAPS.filter((map) => existsSync(`public/assets/maps/${map.id}/${map.route}`));
@@ -30,34 +35,66 @@ const route = (id: string): MapRoute => {
   routes.set(id, r);
   return r;
 };
+const plusDur = (): NiveauDuel => NIVEAUX_DUEL.at(-1)!;
 
 describe('données des adversaires', () => {
-  it('le fichier est accepté : trois niveaux, des véhicules du catalogue, aucun problème', () => {
+  it('le fichier est accepté : un adversaire par véhicule du catalogue, des niveaux du plus facile au plus dur, un palier de gains chacun', () => {
     expect(PROBLEMES_ADVERSAIRES).toEqual([]);
-    expect(ADVERSAIRES.map((a) => a.niveau)).toEqual(['bronze', 'argent', 'or']);
     for (const a of ADVERSAIRES) expect(vehicleById(a.vehicule), a.id).toBeDefined();
+    expect(new Set(ADVERSAIRES.map((a) => a.vehicule)).size).toBe(VEHICLES.length);
+    expect(NIVEAUX_DUEL.map((n) => n.gains)).toEqual(['bronze', 'argent', 'or']);
+    for (let i = 1; i < NIVEAUX_DUEL.length; i += 1) {
+      expect(NIVEAUX_DUEL[i]!.allure).toBeGreaterThan(NIVEAUX_DUEL[i - 1]!.allure);
+      expect(NIVEAUX_DUEL[i]!.freinage).toBeGreaterThan(NIVEAUX_DUEL[i - 1]!.freinage);
+      expect(NIVEAUX_DUEL[i]!.irregularite).toBeLessThanOrEqual(NIVEAUX_DUEL[i - 1]!.irregularite);
+    }
+    // Le plus dur court la conduite de référence : pleine allure, le freinage de la référence, régulier.
+    expect(plusDur()).toMatchObject({ allure: 1, freinage: 0.8, irregularite: 0 });
+    expect(niveauDuel('inconnu')?.id).toBe(niveauDuel(null)?.id);
   });
 
   it('refuse un fichier mal formé en entier', () => {
     const ok = JSON.parse(readFileSync('public/assets/adversaires/adversaires.json', 'utf8')) as Record<string, unknown>;
     expect(lireAdversaires(ok, VEHICLES).problemes).toEqual([]);
-    const faux = { ...ok, adversaires: [{ id: 'x', nom: 'X', phrase: 'p', niveau: 'platine', vehicule: 'inconnu', couleur: 'rouge' }] };
+    const faux = { ...ok, adversaires: [{ id: 'x', nom: 'X', phrase: 'p', vehicule: 'inconnu', couleur: 'rouge' }] };
     const lu = lireAdversaires(faux, VEHICLES);
     expect(lu.adversaires).toEqual([]);
-    expect(lu.problemes.length).toBeGreaterThanOrEqual(3);
+    expect(lu.problemes.length).toBeGreaterThanOrEqual(2);
+    expect(lireAdversaires({ ...ok, niveaux: [{ id: 'a', label: 'A', phrase: 'p', gains: 'or', allure: 2, freinage: 0.5, irregularite: 0 }] }, VEHICLES).niveaux).toEqual([]);
+    expect(lireAdversaires({ ...ok, version: 1 }, VEHICLES).problemes.length).toBeGreaterThan(0);
     expect(lireAdversaires(null, VEHICLES).adversaires).toEqual([]);
+  });
+
+  it('la sauvegarde du choix se relit : celle d’avant les niveaux repart à ta mesure, au niveau par défaut ; rien d’inconnu ne passe', () => {
+    // Avant les niveaux : { actif, adversaire } (l'id y était écrit même sans choix).
+    expect(relireChoixDuel({ actif: true, adversaire: ADVERSAIRES[0]!.id })).toEqual({ actif: true, adversaire: null, niveau: null });
+    expect(relireChoixDuel({ actif: true, adversaire: ADVERSAIRES[1]!.id, niveau: NIVEAUX_DUEL[0]!.id })).toEqual({ actif: true, adversaire: ADVERSAIRES[1]!.id, niveau: NIVEAUX_DUEL[0]!.id });
+    expect(relireChoixDuel({ actif: false, adversaire: 'parti', niveau: 'platine' })).toEqual({ actif: false, adversaire: null, niveau: null });
+    expect(relireChoixDuel('n’importe quoi')).toEqual({ actif: false, adversaire: null, niveau: null });
+    expect(relireChoixDuel(null)).toEqual({ actif: false, adversaire: null, niveau: null });
+  });
+
+  it('gains par palier inchangés (victoire 15, 30, 50 $ ; première victoire 40, 80, 150 $), hauts faits gardés', () => {
+    expect(NIVEAUX_DUEL.map((n) => ECONOMIE_DUEL.victoire[n.gains])).toEqual([15, 30, 50]);
+    expect(NIVEAUX_DUEL.map((n) => ECONOMIE_DUEL.prime[n.gains])).toEqual([40, 80, 150]);
+    for (const n of NIVEAUX_DUEL) expect(HAUTS_FAITS.some((h) => h.id === hautFaitDuel(n.gains)), n.id).toBe(true);
+    // Les identifiants des hauts faits d'avant (premières victoires déjà gagnées) n'ont pas changé.
+    expect(NIVEAUX_DUEL.map((n) => hautFaitDuel(n.gains))).toEqual(['duel-bronze', 'duel-argent', 'duel-or']);
+  });
+
+  it('à ta mesure : l’adversaire au véhicule du joueur, sinon au véhicule de trempe la plus proche', () => {
+    for (const v of VEHICLES) expect(adversaireAMesure(v.id)?.vehicule, v.id).toBe(v.id);
+    for (const v of VEHICLES) {
+      const sans = ADVERSAIRES.filter((a) => a.vehicule !== v.id);
+      const choisi = adversaireAMesure(v.id, sans)!;
+      const tv = trempe(v.id)!;
+      for (const a of sans) expect(Math.abs(trempe(choisi.vehicule)! - tv)).toBeLessThanOrEqual(Math.abs(trempe(a.vehicule)! - tv) + 1e-12);
+    }
   });
 });
 
-describe('allure', () => {
-  it('temps de la conduite appliquée sur le temps visé, plafonnée à 1 ; repli sans référence', () => {
-    expect(allureDe(90, 100, 0.5)).toBeCloseTo(0.9, 9);
-    expect(allureDe(120, 100, 0.5)).toBe(1);
-    expect(allureDe(null, 100, 0.55)).toBe(0.55);
-    expect(allureDe(90, Number.NaN, 0.8)).toBe(0.8);
-  });
-
-  it('irrégularité déterministe, bornée, lissée, différente d’un adversaire à l’autre', () => {
+describe('irrégularité', () => {
+  it('déterministe, bornée, lissée, différente d’un adversaire à l’autre', () => {
     expect(bruitSection(7, 3)).toBe(bruitSection(7, 3));
     let somme = 0;
     for (let k = 0; k < 2000; k += 1) {
@@ -65,7 +102,6 @@ describe('allure', () => {
       expect(Math.abs(b)).toBeLessThanOrEqual(1);
       somme += b;
     }
-    // En moyenne nulle : l'allure moyenne reste celle du niveau.
     expect(Math.abs(somme / 2000)).toBeLessThan(0.06);
     expect(variationAllure(140, 140, 1)).toBeCloseTo(bruitSection(1, 1), 9);
     expect(Math.abs(variationAllure(139.99, 140, 1) - variationAllure(140.01, 140, 1))).toBeLessThan(1e-3);
@@ -73,78 +109,183 @@ describe('allure', () => {
   });
 });
 
-/** Le premier départ de chaque carte construite, et le plus court (moins de calcul). */
-function departs(id: string, tous: boolean) {
+/** Le départ le plus court de chaque carte construite (moins de calcul). */
+function plusCourt(id: string) {
   const r = route(id);
-  const liste = [...r.starts];
-  if (tous) return liste;
-  const ref = (s: (typeof liste)[number]) => tempsReference(id, s.id, 'tour1')?.main ?? Infinity;
-  return [liste.sort((a, b) => ref(a) - ref(b))[0]!];
+  const ref = (s: (typeof r.starts)[number]) => tempsReference(id, s.id, 'tour1')?.main ?? Infinity;
+  return [...r.starts].sort((a, b) => ref(a) - ref(b))[0]!;
 }
 
-function adversaireSimule(mapId: string, niveau: (typeof NIVEAUX)[number], joueur: string, depart: string) {
-  const a = ADVERSAIRES.find((x) => x.niveau === niveau)!;
-  const vehicule = vehicleById(a.vehicule)!;
-  const pilot = createPilot(createRail(route(mapId)), performanceDe(vehicule));
-  const allure = allureDuel(a, mapId, depart, 'tour1', joueur);
-  return { a, p: createPiloteAdversaire(pilot, allure, PILOTAGE_ADVERSAIRE, graineDe(a.id)), allure };
+function adversaireSimule(mapId: string, vehicule: string, niveau: NiveauDuel, id = 'test') {
+  const pilot = createPilot(createRail(route(mapId)), performanceDe(vehicleById(vehicule)!));
+  return createPiloteAdversaire(pilot, niveau, PILOTAGE_ADVERSAIRE, graineDe(id));
 }
 
-/** Frôlements de la limite par la conduite appliquée de référence (src/drive/simulationCourse.ts), au sec. */
-function contactsReference(mapId: string, at: number, vehicule: string): number {
-  return simulerCourse(piloteDeSimulation(route(mapId), performanceDe(vehicleById(vehicule)!)), { at, tours: 1, meteo: 'sec', conduite: 'main' }).contacts;
-}
-
-describe('pilotage mesuré hors navigateur', () => {
-  // Niveau or (le plus vif) sur chaque départ de chaque carte, au sec : il boucle sans toucher un bord, près du temps visé.
-  it.skipIf(built.length === 0)('chaque départ de chaque carte, niveau or, au sec : fini, sans toucher un bord, au temps visé', { timeout: 300_000 }, () => {
+describe('il court : niveaux mesurés hors navigateur', () => {
+  it.skipIf(built.length === 0)('le plus dur roule la conduite de référence de son véhicule, au dixième de seconde, et frôle le bord autant qu’elle', { timeout: 300_000 }, () => {
     for (const map of built) {
-      for (const start of departs(map.id, true)) {
-        const { p, a } = adversaireSimule(map.id, 'or', 'concept', start.id);
-        const sim = simulerAdversaire(p, start.at, 1, 'sec');
-        const ref = tempsReference(map.id, start.id, 'tour1', 'concept')!;
-        const vise = seuilsMedailles(ref)[a.niveau];
-        const ici = `${map.id}/${start.id}`;
-        expect(sim.temps, ici).toBeLessThan(Infinity);
+      const start = plusCourt(map.id);
+      for (const v of VEHICLES) {
+        const sim = simulerAdversaire(adversaireSimule(map.id, v.id, plusDur()), start.at, 1, 'sec');
+        const ref = simulerCourse(piloteDeSimulation(route(map.id), performanceDe(v)), { at: start.at, tours: 1, meteo: 'sec', conduite: 'main' });
+        const ici = `${map.id}/${start.id}/${v.id}`;
+        expect(sim.temps, ici).toBeCloseTo(ref.temps, 0);
         expect(sim.dehors, ici).toBe(0);
-        // Il frôle la limite de sa trajectoire (0,4 m du bord) comme la conduite appliquée de référence, pas plus.
-        expect(sim.contacts, ici).toBeLessThanOrEqual(contactsReference(map.id, start.at, a.vehicule) * 1.6 + 10);
-        // Irrégularité de ±4 % par section : le temps reste à 5 % du seuil (plafonné : jamais plus vite que sa conduite).
-        expect(sim.temps / vise, ici).toBeGreaterThan(0.95);
-        expect(sim.temps / vise, ici).toBeLessThan(1.05);
+        expect(sim.contacts, ici).toBeLessThanOrEqual(ref.contacts + 5);
       }
     }
   });
 
-  it.skipIf(built.length === 0)('trois niveaux, trois météos (départ le plus court de chaque carte) : fini, sans toucher un bord, dans l’ordre', { timeout: 300_000 }, () => {
+  it.skipIf(built.length === 0)('chaque niveau fait la course (loin de la balade), dans l’ordre, au sec et sous la météo, sans sortir de la chaussée', { timeout: 300_000 }, () => {
     for (const map of built) {
-      const start = departs(map.id, false)[0]!;
-      const temps: Record<string, number> = {};
-      for (const niveau of NIVEAUX) {
-        for (const meteo of ['sec', 'pluie', 'neige'] as Weather[]) {
-          if (meteo !== 'sec' && niveau !== 'or') continue;
-          const { p } = adversaireSimule(map.id, niveau, 'cox', start.id);
-          const sim = simulerAdversaire(p, start.at, 1, meteo);
-          const ici = `${map.id}/${start.id}/${niveau}/${meteo}`;
-          expect(sim.temps, ici).toBeLessThan(Infinity);
-          expect(sim.dehors, ici).toBe(0);
-          temps[`${niveau}/${meteo}`] = sim.temps;
+      const start = plusCourt(map.id);
+      for (const vehicule of [VEHICLES[0]!.id, VEHICLES.at(-1)!.id]) {
+        const ref = tempsReference(map.id, start.id, 'tour1', vehicule)!;
+        const temps = NIVEAUX_DUEL.map((n) => simulerAdversaire(adversaireSimule(map.id, vehicule, n), start.at, 1, 'sec'));
+        const ici = `${map.id}/${start.id}/${vehicule}`;
+        for (const t of temps) {
+          expect(t.dehors, ici).toBe(0);
+          // Même le plus facile court : bien plus vite que le pilote automatique de balade.
+          expect(t.temps / ref.auto, ici).toBeLessThan(0.75);
+          // Et pas plus vite que la conduite de référence.
+          expect(t.temps / ref.main, ici).toBeGreaterThan(0.98);
+        }
+        for (let i = 1; i < temps.length; i += 1) expect(temps[i]!.temps, ici).toBeLessThan(temps[i - 1]!.temps);
+        // Le plus facile : au plus un tiers de plus que la référence (de l'ordre de l'argent, 1,25).
+        expect(temps[0]!.temps / ref.main, ici).toBeLessThan(1.4);
+      }
+      // Pluie et neige : il freine pour l'adhérence de la météo, sans sortir.
+      const parMeteo = (['sec', 'pluie', 'neige'] as Weather[]).map((m) => simulerAdversaire(adversaireSimule(map.id, VEHICLES[0]!.id, plusDur()), start.at, 1, m));
+      for (const t of parMeteo) expect(t.dehors, map.id).toBe(0);
+      expect(parMeteo[1]!.temps).toBeGreaterThan(parMeteo[0]!.temps);
+      expect(parMeteo[2]!.temps).toBeGreaterThan(parMeteo[1]!.temps);
+    }
+  });
+
+  it.skipIf(built.length === 0)('déterministe : même course, même adversaire, même niveau, même temps', { timeout: 60_000 }, () => {
+    const map = built[0]!;
+    const start = plusCourt(map.id);
+    const n = NIVEAUX_DUEL[0]!;
+    const un = simulerAdversaire(adversaireSimule(map.id, VEHICLES[0]!.id, n, 'dede'), start.at, 1, 'sec');
+    const deux = simulerAdversaire(adversaireSimule(map.id, VEHICLES[0]!.id, n, 'dede'), start.at, 1, 'sec');
+    expect(deux.temps).toBe(un.temps);
+  });
+});
+
+// Mesures des modèles (boîtes des GLB construits) : le plus large (2,26 × 4,92 m), une voiture moyenne (1,64 ×
+// 3,82 m), une moto (0,73 × 1,95 m).
+const LARGE: CorpsGrille = { demiLargeur: 1.13, demiLongueur: 2.46, kind: 'car' };
+const MOYENNE: CorpsGrille = { demiLargeur: 0.82, demiLongueur: 1.91, kind: 'car' };
+const MOTO: CorpsGrille = { demiLargeur: 0.365, demiLongueur: 0.98, kind: 'bike' };
+const PAIRES: [string, CorpsGrille, CorpsGrille][] = [
+  ['large+large', LARGE, LARGE],
+  ['moto+large', MOTO, LARGE],
+  ['moyenne+moyenne', MOYENNE, MOYENNE],
+  ['moyenne+moto', MOYENNE, MOTO],
+];
+
+describe('la grille de départ', () => {
+  it.skipIf(built.length === 0)('chaque départ de chaque carte : sur la chaussée, sans se toucher, côte à côte quand la place y est, alignés', { timeout: 120_000 }, () => {
+    const pose = createPose();
+    const lim: [number, number] = [0, 0];
+    for (const map of built) {
+      const rail = createRail(route(map.id));
+      for (const start of route(map.id).starts) {
+        for (const [nom, J, A] of PAIRES) {
+          const ici = `${map.id}/${start.id}/${nom}`;
+          const pilot = createPilot(rail, performanceDe(VEHICLES.find((v) => v.kind === J.kind)!));
+          pilot.setSize(J.demiLargeur, J.demiLongueur);
+          pilot.reset(start.at);
+          const g: Grille = grilleDepart(rail, pilot.motion.s, pilot.motion.offset, J, A, 0.3, {} as Grille);
+          // Chacun dans ses limites (garde au bord comprise), sur toute sa longueur.
+          for (const [s, off, C] of [[g.sJoueur, g.offsetJoueur, J], [g.sAdversaire, g.offsetAdversaire, A]] as const) {
+            for (const k of [-1, 0, 1]) {
+              laneLimits(rail.poseAt(s + k * C.demiLongueur, pose), C.kind, C.demiLargeur, C.demiLongueur, lim);
+              expect(off, ici).toBeGreaterThanOrEqual(lim[0] - 0.02);
+              expect(off, ici).toBeLessThanOrEqual(lim[1] + 0.02);
+            }
+          }
+          const cj: CorpsRoute = { s: g.sJoueur, offset: g.offsetJoueur, demiLargeur: J.demiLargeur, demiLongueur: J.demiLongueur };
+          const ca: CorpsRoute = { s: g.sAdversaire, offset: g.offsetAdversaire, demiLargeur: A.demiLargeur, demiLongueur: A.demiLongueur };
+          expect(recouvrement(cj, ca, rail.length, rail.loop), ici).toBe(false);
+          const largeur = rail.poseAt(g.sJoueur, pose).width;
+          if (g.mode === 'cote') {
+            // Flancs à 30 cm au moins, avants alignés (ou l'adversaire à peine devant au tout début d'une route ouverte).
+            expect(Math.abs(g.offsetAdversaire - g.offsetJoueur) - J.demiLargeur - A.demiLargeur, ici).toBeGreaterThanOrEqual(0.3 - 1e-9);
+            if (rail.loop || g.sJoueur > 5) expect(g.sAdversaire + A.demiLongueur, ici).toBeCloseTo(g.sJoueur + J.demiLongueur, 6);
+            // Route large : le joueur au milieu de sa moitié, l'adversaire dans l'autre, au moins aussi loin de l'axe.
+            if (largeur / 4 >= Math.max(J.demiLargeur, A.demiLargeur) + 0.45 + 0.1 && rail.poseAt(g.sJoueur, pose).curvature === 0) {
+              expect(Math.abs(g.offsetJoueur), ici).toBeCloseTo(largeur / 4, 1);
+              expect(Math.sign(g.offsetAdversaire), ici).toBe(-Math.sign(g.offsetJoueur));
+              expect(Math.abs(g.offsetAdversaire), ici).toBeGreaterThanOrEqual(largeur / 4 - 0.05);
+            }
+          } else {
+            // Quinconce : seulement quand deux de front ne tiennent pas sur leur longueur ; le joueur n'a pas bougé.
+            const etroite = Math.min(...[-1, 0, 1].map((k) => rail.poseAt(g.sJoueur + k * Math.max(J.demiLongueur, A.demiLongueur), pose).width));
+            expect(etroite, ici).toBeLessThan(2 * (J.demiLargeur + A.demiLargeur) + 0.3 + 2 * 0.45 + 1.5);
+            expect(g.offsetJoueur, ici).toBe(pilot.motion.offset);
+          }
         }
       }
-      // L'or devant l'argent devant le bronze ; la pluie et la neige ralentissent.
-      expect(temps['or/sec']!).toBeLessThan(temps['argent/sec']!);
-      expect(temps['argent/sec']!).toBeLessThan(temps['bronze/sec']!);
-      expect(temps['or/pluie']!).toBeGreaterThan(temps['or/sec']!);
-      expect(temps['or/neige']!).toBeGreaterThan(temps['or/pluie']!);
     }
   });
 
-  it.skipIf(built.length === 0)('déterministe : même course, même temps', { timeout: 60_000 }, () => {
-    const map = built[0]!;
-    const start = departs(map.id, false)[0]!;
-    const un = simulerAdversaire(adversaireSimule(map.id, 'argent', 'concept', start.id).p, start.at, 1, 'sec');
-    const deux = simulerAdversaire(adversaireSimule(map.id, 'argent', 'concept', start.id).p, start.at, 1, 'sec');
-    expect(deux.temps).toBe(un.temps);
+  // Direction libre (le réglage par défaut), manche lâché : le joueur part tout droit de sa place, jusqu'à 0,8 s
+  // après le vert (au-delà, sans tenir le manche, la route tourne, il traverse et vient serrer l'adversaire contre
+  // son bord : l'adversaire recule alors d'un coup derrière lui, src/drive/adversaire/contact.ts, pas corrigé).
+  it.skipIf(built.length === 0)('apparition, feux et vert : ni saut, ni recouvrement, ni travers', { timeout: 300_000 }, () => {
+    for (const map of built) {
+      const r = route(map.id);
+      const rail = createRail(r);
+      for (const start of r.starts) {
+        for (const [nom, J, A] of [PAIRES[0]!, PAIRES[2]!]) {
+          const ici = `${map.id}/${start.id}/${nom}`;
+          const vehiculeA = VEHICLES.find((v) => v.kind === A.kind)!;
+          const duel = new DuelEnCourse(ADVERSAIRES.find((a) => a.vehicule === vehiculeA.id)!, vehiculeA, rail, plusDur());
+          duel.mesurer(A.demiLargeur, A.demiLongueur);
+          const joueur = createPilot(rail, performanceDe(VEHICLES.find((v) => v.kind === J.kind)!));
+          joueur.setSize(J.demiLargeur, J.demiLongueur);
+          joueur.reset(start.at);
+          const depart = armerDepart(createDepart(), joueur.motion.s, rail.loop, false, 1);
+          duel.depart(joueur, J.kind, joueur.motion.s, joueur.motion.offset, J.demiLargeur, J.demiLongueur, 1, true);
+          const input: DriveInput = { auto: false, throttle: 1, brake: 0, lane: 0, steer: 0 };
+          let oj = joueur.motion.offset;
+          let oa = duel.offset;
+          let sa = duel.pilote.pilot.motion.s;
+          let sautJ = 0;
+          let sautA = 0;
+          let recul = 0;
+          let recouvre = 0;
+          let travers = 0;
+          for (let t = 0; t < 30 && !(depart.phase === 'parti' && depart.depuisVert > 0.8); t += 0.1) {
+            joueur.setHold(depart.phase === 'attente' || depart.phase === 'feux');
+            const m = joueur.step(0.1, input, J.kind);
+            pasDepart(depart, 0.1, true, m.s, rail, m.finished);
+            duel.pas(0.1, joueur, depart, J.demiLargeur, J.demiLongueur);
+            // À l'apparition, aux feux et au départ (moins de 5 m/s) : aucun mouvement de côté brusque.
+            if (joueur.motion.speed < 5) sautJ = Math.max(sautJ, Math.abs(joueur.motion.offset - oj));
+            if (duel.pilote.pilot.motion.speed < 5) sautA = Math.max(sautA, Math.abs(duel.offset - oa));
+            recul = Math.max(recul, -devant(sa, duel.pilote.pilot.motion.s, rail.length, rail.loop));
+            // Le joueur, manche lâché, garde son cap quand la route tourne : seul l'adversaire est jugé après le vert.
+            if (Math.abs(duel.pilote.pilot.motion.yaw ?? 0) > 0.2 || (depart.phase !== 'parti' && Math.abs(joueur.motion.yaw ?? 0) > 0.01)) travers += 1;
+            oj = joueur.motion.offset;
+            oa = duel.offset;
+            sa = duel.pilote.pilot.motion.s;
+            const cj: CorpsRoute = { s: joueur.motion.s, offset: joueur.motion.offset, demiLargeur: J.demiLargeur, demiLongueur: J.demiLongueur };
+            const ca: CorpsRoute = { s: duel.pilote.pilot.motion.s, offset: duel.offset, demiLargeur: A.demiLargeur, demiLongueur: A.demiLongueur };
+            if (recouvrement(cj, ca, rail.length, rail.loop)) recouvre += 1;
+          }
+          expect(depart.phase, ici).toBe('parti');
+          expect(recouvre, ici).toBe(0);
+          // Au départ, au plus 30 cm de côté par dixième de seconde (le glissement d'évitement, 3 m/s au plus :
+          // contact.ecartParSeconde ; pas un saut), jamais en arrière, jamais de travers.
+          expect(sautJ, ici).toBeLessThan(0.301);
+          expect(sautA, ici).toBeLessThan(0.301);
+          expect(recul, ici).toBeLessThan(0.01);
+          expect(travers, ici).toBe(0);
+        }
+      }
+    }
   });
 });
 
@@ -176,18 +317,18 @@ describe('contact', () => {
     expect(e.cote).toBe(0);
   });
 
-  // Le joueur (pilote automatique, plus rapide) rattrape l'adversaire (bronze) et le double : jamais de recouvrement.
+  // Le joueur (plus rapide) rattrape l'adversaire (le plus facile) et le double : jamais de recouvrement.
   it.skipIf(built.length === 0)('pas de recouvrement des deux véhicules sur une course', { timeout: 120_000 }, () => {
     const map = built.find((m) => route(m.id).loop) ?? built[0]!;
     const r = route(map.id);
     const rail = createRail(r);
     const start = r.starts[0]!;
-    const a = ADVERSAIRES.find((x) => x.niveau === 'bronze')!;
-    const duel = new DuelEnCourse(a, vehicleById(a.vehicule)!, rail);
+    const a = ADVERSAIRES.find((x) => vehicleById(x.vehicule)?.kind === 'car')!;
+    const duel = new DuelEnCourse(a, vehicleById(a.vehicule)!, rail, NIVEAUX_DUEL[0]!);
     const joueur = createPilot(rail, performanceDe(vehicleById('concept')!));
     joueur.reset(start.at);
     const depart = armerDepart(createDepart(), joueur.motion.s, rail.loop, false, 1);
-    duel.depart(0.45, joueur.motion.s, joueur.motion.offset, 0.95, 2.2, 1, true);
+    duel.depart(joueur, 'car', joueur.motion.s, joueur.motion.offset, 0.95, 2.2, 1, true);
     const input: DriveInput = { auto: false, throttle: 1, brake: 0, lane: 0, assist: true };
     let recouvre = 0;
     let retenues = 0;
