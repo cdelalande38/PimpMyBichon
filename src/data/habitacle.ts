@@ -11,6 +11,7 @@
 // ('allume' ou 'eteint'), partPaints.volant (jante), partPaints.pommeau (pommeau sans zone de
 // peinture), partPaints.ciel (couleur des étoiles), tune.ciel_densite (0, 1 ou 2).
 
+import { etatNeon, neonSlot, neonZonesOf } from './neons.ts';
 import type { Build, CabinLighting, Hex, StarrySky, VehicleManifest } from './vehicleTypes.ts';
 
 export interface InteriorPiece {
@@ -195,20 +196,48 @@ export function resolveSky(vehicle: Pick<VehicleManifest, 'cabin'>, build: Build
   return { on, color: hexOf(build, INTERIOR_SLOTS.sky) ?? sky.color, density };
 }
 
+/** LED d'habitacle (zone `habitacle` des néons, src/data/neons.ts) : la lumière d'habitacle prend leur couleur, de tant plus forte. */
+const LED_LIGHT = Object.freeze({ base: 0.5, parIntensite: 0.8 });
+
+/** Les LED d'habitacle allumées de ce build, ou `null` (éteintes, ou pas de zone habitacle). */
+export function ledHabitacle(vehicle: Pick<VehicleManifest, 'neons'>, build: Pick<Build, 'parts' | 'partPaints' | 'tune'> | undefined): { color: Hex; intensity: number } | null {
+  const zone = neonZonesOf(vehicle).find((item) => item.habitacle);
+  if (!zone) return null;
+  const etat = etatNeon(zone, build);
+  return etat.on ? { color: etat.color, intensity: etat.intensity } : null;
+}
+
+/** Poste du build des LED d'habitacle (`neon_habitacle`), pour « D'origine ». */
+export function ledSlot(vehicle: Pick<VehicleManifest, 'neons'>): string | null {
+  const zone = neonZonesOf(vehicle).find((item) => item.habitacle);
+  return zone ? neonSlot(zone.id) : null;
+}
+
 /**
  * L'habitacle allumé de ce véhicule pour ce build : le ciel du manifeste à la couleur et à la
  * densité choisies (absent s'il est éteint), la lumière d'habitacle à sa couleur (plafonnier blanc
- * chaud, plus doux, ciel éteint). `undefined` : le véhicule n'allume rien.
+ * chaud, plus doux, ciel éteint ; celle des LED d'habitacle quand elles sont allumées). `undefined` :
+ * le véhicule n'allume rien.
  */
-export function cabinFor(vehicle: Pick<VehicleManifest, 'cabin'>, build: Build | undefined, catalogue: InteriorCatalogue = INTERIOR_CATALOGUE): CabinLighting | undefined {
+export function cabinFor(vehicle: Pick<VehicleManifest, 'cabin' | 'neons'>, build: Build | undefined, catalogue: InteriorCatalogue = INTERIOR_CATALOGUE): CabinLighting | undefined {
   const cabin = vehicle.cabin;
   if (!cabin) return undefined;
+  const led = ledHabitacle(vehicle, build);
+  const ledLight = (light: NonNullable<CabinLighting['light']>) => (led ? { ...light, color: led.color, intensity: light.intensity * (LED_LIGHT.base + LED_LIGHT.parIntensite * led.intensity) } : light);
   const state = resolveSky(vehicle, build, catalogue);
-  if (!state || !cabin.sky) return cabin;
+  if (!state || !cabin.sky) return cabin.light ? { ...cabin, light: ledLight(cabin.light) } : cabin;
   const factor = catalogue.sky.densities[state.density]?.factor ?? 1;
   const sky: StarrySky | undefined = state.on ? { ...cabin.sky, color: state.color, count: Math.max(1, Math.round(cabin.sky.count * factor)) } : undefined;
-  const light = cabin.light && (state.on ? { ...cabin.light, color: cabin.light.color ?? state.color } : { ...cabin.light, color: DOME_LIGHT.color, intensity: cabin.light.intensity * DOME_LIGHT.factor });
+  const light = cabin.light && ledLight(state.on ? { ...cabin.light, color: cabin.light.color ?? state.color } : { ...cabin.light, color: DOME_LIGHT.color, intensity: cabin.light.intensity * DOME_LIGHT.factor });
   return { ...cabin, sky, light };
+}
+
+/** Zones de peinture de l'habitacle d'un vrai modèle (section `interior.tints`), dans l'ordre du manifeste. */
+export function interiorTints(vehicle: Pick<VehicleManifest, 'interior' | 'zones'>): Array<{ id: string; label: string }> {
+  return (vehicle.interior?.tints ?? []).flatMap((id) => {
+    const zone = vehicle.zones.find((item) => item.id === id);
+    return zone ? [{ id: zone.id, label: zone.label }] : [];
+  });
 }
 
 /** Postes du build que l'habitacle retient (pour « D'origine »). */

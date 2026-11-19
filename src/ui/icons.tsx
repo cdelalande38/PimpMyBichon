@@ -12,6 +12,7 @@ export type IconName =
   | 'moteur'
   | 'outils'
   | 'neon'
+  | 'neons'
   | 'volant'
   | 'route'
   | 'voiture'
@@ -213,6 +214,16 @@ const SHAPES: Record<Exclude<IconName, 'radio'>, ReactNode> = {
     <>
       <path d="M13.5 2.5 7 13h5l-1.5 8.5L17 11h-5z" />
       <path d="M4 5.5l1.5 1M20 5.5l-1.5 1M3.5 17h2M18.5 17h2" />
+    </>
+  ),
+  // Voiture vue de côté, son tube sous la caisse et la lueur au sol : les néons du véhicule.
+  neons: (
+    <>
+      <path d="M3 13.5V11l2.4-3.5h8.2L17 11l3.2.8a1.6 1.6 0 0 1 1.3 1.6v.1" />
+      <circle cx="7" cy="14" r="1.8" />
+      <circle cx="17" cy="14" r="1.8" />
+      <path d="M4.5 17.3h15" />
+      <path d="M2.5 20.5h3M8 20.5h8M18.5 20.5h3" />
     </>
   ),
 };

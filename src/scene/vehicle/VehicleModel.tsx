@@ -50,6 +50,7 @@ import { finirCapot, noterFusion, preparerCapot, type CapotRig } from './capotRi
 import { useFlammesGarage } from './flammes.ts';
 import { useGabarit } from './gabarit.ts';
 import { applyLivery, createLiveryRig, disposeLivery, type LiveryRig } from './livree.ts';
+import { useNeons } from './neons.ts';
 import { separerVoyants, useVehicleLights } from './phares.ts';
 import { createMarkMaterial, mergeGround, mountWheels, preloadWheels, useBodyPose, useWheelMounts, useWheelSources, type WheelAnchor, type WheelMount, type WheelRig } from './wheels.ts';
 
@@ -618,6 +619,8 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   useFlammesGarage(prepared.root, vehicle, invalidate);
   // Capot moteur : ouvert à la pastille, vitré ou déposé, le moteur de l'établi dedans (./capot.ts).
   const capot = useCapotScene(prepared, vehicle, invalidate, bodyEnv, { garage: true, stageClass: 'stage', pieces });
+  // Néons du build : tubes dans la caisse, lueur posée au sol à côté du modèle (./neons.ts).
+  const neons = useNeons(prepared, vehicle, invalidate, { stageClass: 'stage', aim: true });
 
   // Avant la première image du véhicule : sinon elle le dessinerait avec le matériau neuf (sans
   // vernis), et compilerait pour rien une variante de plus pendant le démarrage. Rendu à la
@@ -702,6 +705,8 @@ export function VehicleModel({ vehicle, onMeasured, bodyEnv }: VehicleModelProps
   return (
     <>
       <primitive object={prepared.root} />
+      {/* Lueur des néons au sol : hors du modèle (que la sonde masque), pour que la caisse la reflète. */}
+      <primitive object={neons.sol} />
       {/* À laisser à y = 0 : surélevée, son plan de flou passe derrière sa caméra et l'ombre
           disparaît dès que le post-traitement est coupé (niveau économie). Rendue une fois,
           avec le modèle déjà en place. */}

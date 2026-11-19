@@ -18,6 +18,7 @@ import { EchappementPanel } from './echappement/EchappementPanel.tsx';
 import { EnginePanel } from './engine/EnginePanel.tsx';
 import { HabitaclePanel } from './habitacle/HabitaclePanel.tsx';
 import { MoteurPanel } from './moteur/MoteurPanel.tsx';
+import { NeonsPanel } from './neons/NeonsPanel.tsx';
 import { Icon } from './icons.tsx';
 import { PaintControls } from './paint/PaintControls.tsx';
 import { PharesPanel } from './phares/PharesPanel.tsx';
@@ -63,6 +64,7 @@ export const ENTRY_BODIES: Partial<Record<EntryId, () => ReactNode>> = {
   phares: () => <PharesPanel />,
   carrosserie: () => <PiecesGroupe groupe="carrosserie" />,
   ailerons: () => <PiecesPanel poste="aileron" />,
+  neons: () => <NeonsPanel />,
   preparation: () => <EnginePanel />,
   moteur: () => <MoteurPanel />,
   echappement: () => <EchappementPanel />,

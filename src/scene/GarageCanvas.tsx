@@ -24,7 +24,7 @@ import { useMediaQuery } from '../app/useMediaQuery.ts';
 import { ambiance as findAmbiance } from '../data/ambiances.ts';
 import { modelPresent, placeOf, resolveVehicle } from '../data/vehicles.ts';
 import type { Build, CabinLighting, InteriorView, PlaceId } from '../data/vehicleTypes.ts';
-import { cabinFor, INTERIOR_SLOTS, SKY_TUNE } from '../data/habitacle.ts';
+import { cabinFor, INTERIOR_SLOTS, ledSlot, SKY_TUNE } from '../data/habitacle.ts';
 import { GARAGE } from '../data/garage.ts';
 import { ETABLI_POLAR } from '../data/moteurs.ts';
 import { CAMERA_LAYERS } from '../render/layers.ts';
@@ -83,6 +83,7 @@ import { Etabli } from './moteur/Etabli.tsx';
 import { useEtabli, useEtabliOuvert } from './moteur/etabli.ts';
 import { SceneProbe } from './SceneProbe.tsx';
 import { useZoneFraming } from './useZoneFraming.ts';
+import { useNeonsProbeVersion } from './vehicle/neons.ts';
 import { buildPanel } from './vehicle/tableau.ts';
 import { forgetModel, VehicleModel, type VehicleMeasure } from './vehicle/VehicleModel.tsx';
 import { bodyPoint, STILL_BODY, useBodyPose } from './vehicle/wheels.ts';
@@ -397,18 +398,27 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
   const viewMode = useView((state) => state.mode);
   const setViewMode = useView((state) => state.setMode);
   // Habitacle allumé selon le build : ciel étoilé (couleur, densité, allumé ou éteint), lumière.
+  // LED d'habitacle (Custom › Néons) : la lumière d'habitacle prend leur couleur (src/data/habitacle.ts, cabinFor).
+  const led = ledSlot(vehicle);
   const skyKey = useBuilds((state) => {
     const build = state.builds[vehicle.id];
-    return JSON.stringify([build?.parts?.[INTERIOR_SLOTS.sky], build?.partPaints?.[INTERIOR_SLOTS.sky]?.color, build?.tune?.[SKY_TUNE]]);
+    const leds = led ? [build?.parts?.[led], build?.partPaints?.[led]?.color, build?.tune?.[led]] : [];
+    return JSON.stringify([build?.parts?.[INTERIOR_SLOTS.sky], build?.partPaints?.[INTERIOR_SLOTS.sky]?.color, build?.tune?.[SKY_TUNE], ...leds]);
   });
+  const neonVersion = useNeonsProbeVersion(vehicle);
   const cabin = useMemo(() => {
-    const [state, color, density] = JSON.parse(skyKey) as [string | undefined, string | undefined, number | undefined];
+    const [state, color, density, ledMode, ledColor, ledLevel] = JSON.parse(skyKey) as [string | undefined, string | undefined, number | undefined, string?, string?, number?];
     const build: Build = { paints: {} };
     if (state !== undefined) build.parts = { [INTERIOR_SLOTS.sky]: state };
     if (color !== undefined) build.partPaints = { [INTERIOR_SLOTS.sky]: { color } };
     if (density !== undefined) build.tune = { [SKY_TUNE]: density };
+    if (led && ledMode) {
+      build.parts = { ...build.parts, [led]: ledMode };
+      if (ledColor) build.partPaints = { ...build.partPaints, [led]: { color: ledColor } };
+      if (ledLevel !== undefined && ledLevel !== null) build.tune = { ...build.tune, [led]: ledLevel };
+    }
     return cabinFor(vehicle, build);
-  }, [vehicle, skyKey]);
+  }, [vehicle, skyKey, led]);
   // Caisse posée par l'assiette et les roues (src/scene/vehicle/wheels.ts) : la vue intérieure et
   // l'habitacle allumé la suivent.
   const body = useBodyPose((state) => state.poses[vehicle.id]) ?? STILL_BODY;
@@ -898,7 +908,8 @@ function Stage({ level, profile, mayRotate, photo, autoLevel, floatTargets, redu
       {/* Ce que la pièce ajoute à la scène sans toucher à ce fichier (points d'intérêt, appui sur le véhicule). */}
       <SceneExtras photo={photo} />
       {/* En photo, la sonde passe en haute résolution (src/render/photo/plan.ts). */}
-      <ReflectionProbe size={photo ? plan.probeSize : profile.probeSize} position={GARAGE.probe} version={ambiance.id} epoch={epoch} />
+      {/* Néons allumés : leur lueur au sol entre dans la sonde, qui se refait (la caisse et les jantes la reflètent). */}
+      <ReflectionProbe size={photo ? plan.probeSize : profile.probeSize} position={GARAGE.probe} version={neonVersion ? `${ambiance.id}|${neonVersion}` : ambiance.id} epoch={epoch} />
       {/* Le modèle arrive après le décor ; s'il manque (absent du build, ou première visite sans
           réseau), le garage reste et l'étiquette le dit. Un véhicule et un essai par clé : en changer
           libère l'ancien (modèle, peinture, ombre) et remet à zéro le garde-fou. */}

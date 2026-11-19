@@ -16,6 +16,7 @@
 // mode → zone → circuit → départ → réglages, ou mode → carrière. Chaque étape remplace la précédente,
 // « Retour » remonte d'une étape ; chaque niveau porte le libellé du choix qui y a mené, pour le fil.
 // Moteur et Carrosserie (même retour) : la liste des éléments, puis l'élément choisi (`kind: 'element'`).
+// Néons (vague V) de même : la liste des zones, puis la zone choisie.
 
 import { create } from 'zustand';
 import { directEntry, DOCK_MENU, type EntryId, type SectionId } from '../data/dockMenu.ts';
@@ -68,7 +69,7 @@ export type DockLevel =
  * Entrées en deux étapes (vague U, retour du 18 novembre 2026 : « séparer la sélection des éléments des
  * actions à mener dessus ») : la liste des éléments, puis l'élément choisi (un niveau `element`).
  */
-export const ENTREES_A_ELEMENT: readonly EntryId[] = ['moteur', 'carrosserie'];
+export const ENTREES_A_ELEMENT: readonly EntryId[] = ['moteur', 'carrosserie', 'neons'];
 
 /** Ce qui est sauvegardé : la taille du dock. */
 export interface DockChoices {

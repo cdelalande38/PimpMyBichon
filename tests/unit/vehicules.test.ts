@@ -153,7 +153,8 @@ describe('catalogue des véhicules', () => {
     expect(concept?.adapt?.glass?.materials).toContain('Glass');
     expect(concept?.adapt?.logoTextures?.length).toBeGreaterThan(0);
     expect(concept?.engine).toEqual({ label: 'V8 central', fuel: 'essence', feed: 'injection', boost: 'atmo', power: 480, sound: 'v8', model: 'v8' });
-    expect(concept?.zones.filter((zone) => zone.group === 'accastillage').map((zone) => zone.id)).toEqual(['jantes', 'etriers', 'sellerie']);
+    // Habitacle d'une pièce : ses teintes (sellerie, planche et contre-portes, second ton des sièges, tapis) sont des zones (vague V, néons).
+    expect(concept?.zones.filter((zone) => zone.group === 'accastillage').map((zone) => zone.id)).toEqual(['jantes', 'etriers', 'sellerie', 'planche', 'sieges_ton', 'tapis']);
   });
 
   it('trie par order, puis par identifiant', () => {

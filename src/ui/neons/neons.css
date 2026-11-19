@@ -1,0 +1,195 @@
+/* Entrée « Néons » du dock (et volet LED de l'Intérieur) : la liste des zones, puis les réglages d'une
+   zone ; rangées qui défilent, commandes de 48 px au moins, dans le tiers bas. Règles préfixées par
+   `.neons` : elles ne dépendent pas de l'ordre des feuilles dans le paquet. */
+
+.neons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.neons .neons-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Allumé / Éteint, Fixe / Respiration : deux paires côte à côte, qui passent à la ligne plutôt que de
+   rogner leurs mots (texte grand, dock étroit en paysage). */
+.neons .neons-bascule {
+  display: flex;
+  flex: 1 1 10rem;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.neons .neons-bouton {
+  display: inline-flex;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0 0.375rem;
+  border: 1px solid var(--edge);
+  border-radius: 0.5rem;
+  background: var(--panel);
+  color: var(--chrome);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.neons .neons-bouton > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.neons .neons-bouton[aria-pressed='true'] {
+  border-color: var(--ambre);
+  color: var(--ambre);
+}
+
+.neons .neons-bouton:disabled {
+  opacity: 0.45;
+}
+
+.neons .neons-verrou {
+  color: var(--ambre);
+}
+
+.neons .neons-cadenas {
+  flex: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.neons .neons-prix {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+/* Pastille d'une zone : sa couleur ; éteinte, estompée. */
+.neons .neons-pastille[data-allume='non'] {
+  opacity: 0.45;
+}
+
+.neons .neons-zone[data-verrou='ferme'] .neons-pastille {
+  opacity: 0.35;
+}
+
+/* Teintes d'un appui : des pastilles rondes de 48 px, et « + » pour le nuancier. */
+.neons .neons-teintes {
+  align-items: center;
+}
+
+.neons .neons-teinte {
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 2px solid var(--edge);
+  border-radius: 50%;
+  color: #0a0911;
+  font: inherit;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.neons .neons-teinte[aria-pressed='true'] {
+  border-color: var(--chrome);
+  outline: 2px solid var(--ambre);
+  outline-offset: 2px;
+}
+
+.neons .neons-teinte:disabled {
+  opacity: 0.35;
+}
+
+.neons .neons-teinte-libre {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 0 0 3px #fff;
+}
+
+/* « Tout en » : une rangée de teintes qui défile, sur toute la largeur ; « Tout éteindre » dessous, à droite. */
+.neons .neons-tout {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.375rem;
+}
+
+.neons .neons-tout-label {
+  flex: none;
+  color: var(--mute);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.neons .neons-eteindre {
+  flex: none;
+  align-self: flex-end;
+  min-height: var(--tap);
+  padding: 0 0.75rem;
+}
+
+.neons .neons-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.neons .neons-slider > span {
+  flex: none;
+  min-width: 4.5rem;
+}
+
+.neons .neons-slider input {
+  flex: 1;
+  min-width: 0;
+  height: var(--tap);
+  accent-color: var(--ambre);
+}
+
+.neons .neons-slider output {
+  flex: none;
+  min-width: 3.5rem;
+  color: var(--mute);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.neons .neons-message {
+  margin: 0;
+  padding: 0.375rem 0.625rem;
+  border-left: 3px solid var(--ok);
+  background: var(--panel);
+  font-size: 0.8125rem;
+}
+
+.neons .neons-vide {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.875rem;
+}
+
+/* Dock compact : les indices des zones se taisent, l'état et le prix restent. */
+footer.dock[data-taille='compact'] .neons .neons-zone small:not(.neons-prix) {
+  font-size: 0.6875rem;
+}

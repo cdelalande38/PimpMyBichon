@@ -169,5 +169,9 @@
       { "position": [-0.897, 0.862, 0.042], "direction": [-0.95, 0.32, 0], "radius": 0.018 },
       { "position": [-0.897, 0.862, -0.042], "direction": [-0.95, 0.32, 0], "radius": 0.018 }
     ]
+  },
+  "neons": {
+    "cadre": {"tubes": [[[-0.15, 0.15, 0.07], [0.35, 0.15, 0.07]], [[0.35, 0.15, -0.07], [-0.15, 0.15, -0.07]]]},
+    "roues": {"arceaux": true, "hint": "Un cercle de chaque côté de la jante"}
   }
 }

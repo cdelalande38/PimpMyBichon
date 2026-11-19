@@ -52,7 +52,7 @@ test.describe('raccourcis et dock de personnalisation', () => {
     // fin de rangée. « Peinture » ouvre ses choix, et masque à son tour les entrées.
     await tabs(page).getByRole('button', { name: 'Custom', exact: true }).tap();
     const entries = dock(page).getByRole('navigation', { name: 'Entrées · Custom' }).getByRole('button');
-    await expect(entries).toHaveText([/^Peinture$/, /^Roues$/, /^Suspension$/, /^Intérieur$/, /^Stickers$/, /^Carrosserie$/, /^Phares$/, /^Ailerons$/]);
+    await expect(entries).toHaveText([/^Peinture$/, /^Roues$/, /^Suspension$/, /^Intérieur$/, /^Stickers$/, /^Carrosserie$/, /^Phares$/, /^Ailerons$/, /^Néons$/]);
     await expect(entries.first()).toHaveAttribute('aria-current', 'true');
     await expect(entries.nth(1)).toBeEnabled();
     await expect(entries.nth(2)).toBeEnabled();
@@ -61,6 +61,7 @@ test.describe('raccourcis et dock de personnalisation', () => {
     await expect(entries.nth(5)).toBeEnabled();
     await expect(entries.nth(6)).toBeEnabled();
     await expect(entries.nth(7)).toBeEnabled();
+    await expect(entries.nth(8)).toBeEnabled();
     await expect(tabs(page)).toHaveCount(0);
     await expect(dock(page).getByRole('group', { name: 'Zones' })).toHaveCount(0);
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Custom']);

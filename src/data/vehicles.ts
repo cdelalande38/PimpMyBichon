@@ -9,6 +9,7 @@ import { BOITES_NOMMEES } from './boites.ts';
 import { FINISHES } from './finishes.ts';
 import { INTERIOR_CATALOGUE } from './habitacle.ts';
 import { checkEngineModel, checkEnginePose } from './moteurs.ts';
+import { checkNeons } from './neons.ts';
 import { checkLights } from './phares.ts';
 import { checkPieces } from './pieces.ts';
 import { WHEEL_CATALOGUE } from './wheels.ts';
@@ -346,6 +347,9 @@ function checkInteriorParts(raw: Raw, problems: string[]): void {
   if (interior.fixed !== undefined && typeof interior.fixed !== 'boolean') problems.push('interior.fixed doit valoir vrai ou faux');
   if (interior.steeringNode !== undefined && (typeof interior.steeringNode !== 'string' || interior.steeringNode.trim() === '')) problems.push('interior.steeringNode doit être un nom de nœud');
   const zones = Array.isArray(raw.zones) ? raw.zones.map((zone: unknown) => (isObject(zone) ? zone.id : undefined)) : [];
+  if (interior.tints !== undefined && !(Array.isArray(interior.tints) && interior.tints.length > 0 && interior.tints.every((zone) => typeof zone === 'string' && zones.includes(zone)))) {
+    problems.push('interior.tints doit être une liste de zones du manifeste (teintes de l’habitacle)');
+  }
   const lists = { steering: INTERIOR_CATALOGUE.steering, knob: INTERIOR_CATALOGUE.knobs, seats: INTERIOR_CATALOGUE.seats } as const;
   for (const key of ['steering', 'knob', 'seats'] as const) {
     const slot = interior[key];
@@ -452,6 +456,7 @@ export function validateManifest(raw: unknown, folder: string): VehicleManifest 
     checkWheels(raw, problems);
     checkPieces(raw, problems);
     checkExhaust(raw.exhaust, problems);
+    checkNeons(raw.neons, raw.kind, problems);
   }
   if (problems.length > 0) {
     throw new Error(`Manifeste de véhicule invalide, ${manifestPath(folder)} : ${problems.join(' ; ')}.`);

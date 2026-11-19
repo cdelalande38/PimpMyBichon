@@ -20,6 +20,7 @@ export type EntryId =
   | 'preparation'
   | 'moteur'
   | 'echappement'
+  | 'neons'
   | 'ambiance'
   | 'sortie';
 
@@ -41,6 +42,7 @@ export type MenuIcon =
   | 'moteur'
   | 'echappement'
   | 'neon'
+  | 'neons'
   | 'route';
 
 export interface DockEntry {
@@ -88,6 +90,8 @@ export const DOCK_MENU: readonly DockSection[] = [
       { id: 'carrosserie', label: 'Carrosserie', icon: 'portiere', available: true },
       { id: 'phares', label: 'Phares', icon: 'phare', available: true },
       { id: 'ailerons', label: 'Ailerons', icon: 'aileron', available: true },
+      // Néons du véhicule, zone par zone, et LED de l'habitacle (§ 5.4) : la zone, puis ses réglages.
+      { id: 'neons', label: 'Néons', icon: 'neons', available: true },
     ],
   },
   {

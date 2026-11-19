@@ -341,6 +341,11 @@ export interface VehicleInterior {
    * `steeringWheelPart`), les mains du conducteur avec lui. Un substitut a, lui, l'ancre `volant`.
    */
   steeringNode?: string;
+  /**
+   * Habitacle d'un vrai modèle (fixe) : ses zones de peinture (sellerie, planche, tapis…), que l'entrée
+   * Intérieur relie à Peinture. Elles doivent exister dans `zones`.
+   */
+  tints?: readonly string[];
   /** Volant d'origine (identifiant du catalogue). */
   steering?: { default: string };
   /** Pommeau d'origine ; `zone` : zone de peinture qui le colore (sinon sa couleur propre). */
@@ -524,6 +529,27 @@ export interface PieceLidMount extends PieceChoices {
 /** Un poste de pièce montée : sur une surface, le long d'une ligne, ou un capot. Absent du manifeste : le poste n'existe pas. */
 export type PieceMount = PieceSurfaceMount | PieceRailMount | PieceLidMount;
 
+/**
+ * Une zone de néons (Custom › Néons, src/data/neons.ts) : où passent ses tubes ou ses rubans, des lignes
+ * brisées dans le repère du véhicule (caisse au repos), et, pour la zone `roues`, des arceaux tirés des
+ * ancres de roue par l'app. L'habitacle porte aussi ses nappes de lueur sur le plancher (`pools`).
+ */
+export interface VehicleNeonZone {
+  tubes?: ReadonlyArray<readonly VehiclePoint[]>;
+  /** Zone `roues` : un arc dans chaque passage de roue (voiture), deux cercles par roue (moto). */
+  arceaux?: true;
+  /** Rayon du tube, en mètres ; absent : celui du catalogue (tube sous la caisse, ruban dans l'habitacle). */
+  radius?: number;
+  /** Habitacle : lueurs posées sur le plancher, de `from` à `to` (hauteur du plancher en y), portée `radius`. */
+  pools?: ReadonlyArray<{ from: VehiclePoint; to: VehiclePoint; radius: number }>;
+  /** Nom et ligne d'atelier propres à ce véhicule (« Dans les roues » sur une moto). */
+  label?: string;
+  hint?: string;
+}
+
+/** Néons d'un véhicule, zone par zone (identifiants du catalogue de src/data/neons.ts). */
+export type VehicleNeons = Readonly<Record<string /* id de zone */, VehicleNeonZone>>;
+
 export interface VehicleManifest {
   /** Égal au nom du dossier. */
   id: VehicleId;
@@ -577,6 +603,8 @@ export interface VehicleManifest {
   pieces?: Readonly<Record<string /* id de poste */, PieceMount>>;
   /** Sorties d'échappement (flammes, finition) ; absent : ni flammes ni finition. */
   exhaust?: ExhaustSpec;
+  /** Néons, zone par zone (Custom › Néons) ; absent : pas de néons. */
+  neons?: VehicleNeons;
 }
 
 /**

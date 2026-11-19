@@ -49,6 +49,7 @@ import { HEADLIGHT } from './materiaux.ts';
 import { routeLight } from '../../data/phares.ts';
 import { isVoyant, tintAdditive, useVehicleLights } from '../../scene/vehicle/phares.ts';
 import { useEchappementSortie } from './flammes.ts';
+import { useNeonsSortie } from './neons.ts';
 import { useHabitacle } from '../../scene/vehicle/habitacle.ts';
 import { usePieces } from '../../scene/vehicle/pieces.ts';
 import { useCapotScene } from '../../scene/vehicle/capot.ts';
@@ -434,6 +435,8 @@ export function DriveVehicle({ vehicle, rig, bodyEnv, beams, onModel }: DriveVeh
   const capot = useCapotScene(drive.prepared, vehicle, invalidate, bodyEnv, { garage: false, stageClass: DRIVE_STAGE_CLASS, pieces });
   // Échappement : finition des sorties et retour de flammes au lever de pied (./flammes.ts).
   useEchappementSortie(drive.prepared.root, vehicle, invalidate);
+  // Néons du build : tubes dans la caisse, lueur sur la chaussée la nuit (./neons.ts).
+  useNeonsSortie(drive.prepared, vehicle, rig, invalidate);
   const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins, vehicle.kind), [drive, spins, vehicle.kind]);
   // Direction d'une moto : fourche, guidon et poignées tournent avec la roue avant ; remis droits au départ.
   const steering = useMemo(() => bikeSteering(drive.prepared.root, wheels, vehicle.kind), [drive, wheels, vehicle.kind]);

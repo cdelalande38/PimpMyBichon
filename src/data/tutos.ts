@@ -161,12 +161,24 @@ export const TUTOS: readonly Tuto[] = [
     ],
   },
   {
+    id: 'neons',
+    ecrans: ['entree:neons'],
+    titre: 'Les néons',
+    but: 'Ici, tu allumes les néons de ton véhicule, zone par zone : dessous, dans les roues, dans l’habitacle.',
+    etapes: [
+      { texte: 'Touche une zone pour la régler : allumée ou éteinte, fixe ou en respiration lente, sa couleur, son intensité.', cible: 'footer.dock .neons-zones' },
+      { texte: 'L’avant d’une voiture et le cadre d’une moto sont offerts. Un cadenas et un prix : touche, puis « Acheter ».' },
+      { texte: '« Tout en » met toutes les zones allumées à la même couleur ; « Tout éteindre » les coupe d’un coup.', cible: 'footer.dock .neons-tout' },
+      { texte: 'La lueur se voit sur le sol du garage et sur la route, la nuit ; sous la pluie, elle file sur la chaussée.' },
+    ],
+  },
+  {
     id: 'habitacle',
     ecrans: ['entree:interieur'],
     titre: 'L’intérieur',
     but: 'Ici, tu garnis l’habitacle : volant, pommeau, sièges et ciel étoilé, et tu les vois de l’intérieur.',
     etapes: [
-      { texte: 'Quatre volets : Volant, Pommeau, Sièges et Ciel. Chaque volet t’assoit à la place d’où il se voit le mieux.', cible: 'footer.dock .habitacle-volets' },
+      { texte: 'Volant, Pommeau, Sièges, Ciel, LED : chaque volet t’assoit à la place d’où il se voit le mieux.', cible: 'footer.dock .habitacle-volets' },
       { texte: 'Tu préfères une autre place ? Touche Conducteur, Passager ou Arrière, juste au-dessus du menu.', cible: '.places' },
       { texte: 'Les pastilles colorent la jante du volant, le pommeau ou les étoiles. Le « + » ouvre toutes les couleurs.' },
       { texte: 'Dans Ciel, allume ou éteins les étoiles et choisis leur densité. Glisse un doigt sur l’image pour lever les yeux.' },

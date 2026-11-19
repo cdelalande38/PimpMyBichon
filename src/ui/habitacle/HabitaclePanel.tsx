@@ -1,5 +1,7 @@
-// Entrée « Intérieur » du dock (Custom) : le volant, le pommeau, les sièges avant et le ciel étoilé du
-// véhicule à l'écran. Ouvrir l'entrée fait entrer dans la vue intérieure, assis à la place d'où l'on
+// Entrée « Intérieur » du dock (Custom) : le volant, le pommeau, les sièges avant, le ciel étoilé et les
+// LED d'ambiance (zone « habitacle » des néons, mêmes réglages que dans Néons) du véhicule à l'écran. Un vrai
+// modèle à l'habitacle d'une pièce (le concept) garde son volant et ses sièges, mais ses teintes (sellerie,
+// planche, tapis : zones de peinture du manifeste, `interior.tints`), son ciel et ses LED se règlent ici. Ouvrir l'entrée fait entrer dans la vue intérieure, assis à la place d'où l'on
 // voit le mieux le volet ouvert (manifeste, volets : volant et pommeau du conducteur, le regard sur le
 // pommeau ; sièges et ciel de l'arrière) ; on change de place à la main au-dessus du dock (PlacePicker). La quitter ramène à
 // l'atelier. Quatre volets dans le même cadre, un seul à la fois : le menu garde sa hauteur, chaque
@@ -15,7 +17,10 @@ import {
   INTERIOR_SWATCHES,
   interiorKeys,
   interiorMode,
+  interiorTints,
   interiorTouched,
+  ledHabitacle,
+  ledSlot,
   resolveInterior,
   resolveSky,
   SKY_OFF,
@@ -23,23 +28,28 @@ import {
   SKY_TUNE,
   type InteriorPiece,
 } from '../../data/habitacle.ts';
+import { neonZonesOf } from '../../data/neons.ts';
 import { placeForVolet, placesOf, resolveVehicle } from '../../data/vehicles.ts';
 import type { Hex, PlaceId } from '../../data/vehicleTypes.ts';
 import { normalizeHex, resolvePaint, useBuilds } from '../../state/builds.ts';
 import { useDock } from '../../state/dock.ts';
 import { useView } from '../../state/view.ts';
 import { Icon, type IconName } from '../icons.tsx';
+import { NEON_REGARD } from '../../scene/vehicle/neons.ts';
+import { NeonZoneReglages } from '../neons/NeonsPanel.tsx';
 import { PictoEtoiles, PictoPommeau, PictoSiege, PictoVolant } from '../pictos/Pictos.tsx';
 import { useRevealPressed } from '../scroll.ts';
 import './habitacle.css';
 
-type Volet = 'volant' | 'pommeau' | 'sieges' | 'ciel';
+type Volet = 'volant' | 'pommeau' | 'sieges' | 'teintes' | 'ciel' | 'led';
 
 const VOLETS: ReadonlyArray<{ id: Volet; label: string; icon: IconName }> = [
   { id: 'volant', label: 'Volant', icon: 'volant' },
   { id: 'pommeau', label: 'Pommeau', icon: 'pommeau' },
   { id: 'sieges', label: 'Sièges', icon: 'siege' },
+  { id: 'teintes', label: 'Teintes', icon: 'bombe' },
   { id: 'ciel', label: 'Ciel', icon: 'etoiles' },
+  { id: 'led', label: 'LED', icon: 'neons' },
 ];
 
 /** Silhouette d'une pièce, selon son style ; null si le style n'a pas de dessin (le mot seul). */
@@ -132,16 +142,25 @@ export function HabitaclePanel() {
   const mode = interiorMode(vehicle);
   const interior = resolveInterior(vehicle, build);
   const sky = resolveSky(vehicle, build);
+  const tints = interiorTints(vehicle);
+  const led = neonZonesOf(vehicle).find((zone) => zone.habitacle) ?? null;
   const volets = VOLETS.filter(
-    (item) => (item.id === 'volant' && interior?.steering) || (item.id === 'pommeau' && interior?.knob) || (item.id === 'sieges' && interior?.seats) || (item.id === 'ciel' && sky),
+    (item) =>
+      (item.id === 'volant' && interior?.steering) ||
+      (item.id === 'pommeau' && interior?.knob) ||
+      (item.id === 'sieges' && interior?.seats) ||
+      (item.id === 'teintes' && tints.length > 0) ||
+      (item.id === 'ciel' && sky) ||
+      (item.id === 'led' && led),
   );
   const [chosen, setVolet] = useState<Volet>('volant');
   const volet = volets.find((item) => item.id === chosen)?.id ?? volets[0]?.id;
   const places = placesOf(vehicle);
   // Le pommeau, bas sur la console, sort du champ étroit d'un écran en hauteur : le regard le vise.
-  useInsideWhileOpen(mode !== 'aucun' && places.length > 0, vehicle.id, placeForVolet(places, volet), volet === 'pommeau' ? INTERIOR_CATALOGUE.anchors.knob : null);
+  // Les LED : le regard descend sur le pied de la planche, là où leur lueur se pose (NEON_REGARD).
+  useInsideWhileOpen(mode !== 'aucun' && places.length > 0, vehicle.id, placeForVolet(places, volet), volet === 'pommeau' ? INTERIOR_CATALOGUE.anchors.knob : volet === 'led' ? NEON_REGARD : null);
 
-  if (mode === 'fixe' || mode === 'aucun' || !volet) {
+  if (mode === 'aucun' || !volet) {
     return (
       <div className="habitacle" data-testid="habitacle">
         <p className="habitacle-empty">
@@ -172,7 +191,17 @@ export function HabitaclePanel() {
   const origin = vehicle.interior;
   const seatZone = interior?.seatZone ?? null;
   const seatZoneLabel = vehicle.zones.find((zone) => zone.id === seatZone)?.label ?? 'Sellerie';
-  const reset = () => resetKeys(vehicle.id, { ...interiorKeys(), paints: knobZone ? [knobZone] : [] });
+  // « D'origine » rend aussi les teintes de l'habitacle d'un vrai modèle et éteint ses LED.
+  const keys = interiorKeys();
+  const ledPoste = ledSlot(vehicle);
+  const reset = () =>
+    resetKeys(vehicle.id, {
+      parts: [...keys.parts, ...(ledPoste ? [ledPoste] : [])],
+      partPaints: [...keys.partPaints, ...(ledPoste ? [ledPoste] : [])],
+      tune: [...keys.tune, ...(ledPoste ? [ledPoste] : [])],
+      paints: [...(knobZone ? [knobZone] : []), ...tints.map((zone) => zone.id)],
+    });
+  const touched = interiorTouched(build, knobZone) || ledHabitacle(vehicle, build) !== null || tints.some((zone) => build?.paints[zone.id] !== undefined);
 
   return (
     <div className="habitacle" data-testid="habitacle">
@@ -185,7 +214,7 @@ export function HabitaclePanel() {
             </button>
           ))}
         </div>
-        <button type="button" className="btn habitacle-reset" disabled={!interiorTouched(build, knobZone)} onClick={reset}>
+        <button type="button" className="btn habitacle-reset" disabled={!touched} onClick={reset}>
           <Icon name="origine" />
           <span>D’origine</span>
         </button>
@@ -236,6 +265,25 @@ export function HabitaclePanel() {
           </p>
         </>
       )}
+      {volet === 'teintes' && tints.length > 0 && (
+        <>
+          <p className="habitacle-note">
+            <span>{`${vehicle.name} garde son volant et ses sièges d’origine (un vrai modèle, d’une pièce) ; leurs teintes, elles, se changent dans Peinture.`}</span>
+          </p>
+          <div className="chips habitacle-teintes" role="group" aria-label="Teintes de l’habitacle">
+            {tints.map((zone) => (
+              <button key={zone.id} type="button" className="chip chip-swatch" data-teinte-zone={zone.id} onClick={() => openEntry('peinture', zone.id)}>
+                <span className="swatch" aria-hidden="true" style={{ background: resolvePaint(vehicle, build, zone.id)?.color ?? '#141416' }} />
+                <span className="chip-text">
+                  <b>{zone.label}</b>
+                  <small>Peindre</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {volet === 'led' && led && <NeonZoneReglages vehicle={vehicle} zone={led} build={build} />}
       {volet === 'ciel' && sky && (
         <>
           <div className="habitacle-sky">

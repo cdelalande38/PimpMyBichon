@@ -15,35 +15,56 @@
       "label": "Carrosserie",
       "materials": ["Paint 1 Carmine"],
       "group": "carrosserie",
-      "paint": { "color": "#0a3a46", "finish": "metallise" }
+      "paint": {"color": "#0a3a46", "finish": "metallise"}
     },
     {
       "id": "secondaire",
       "label": "Toit et rétros",
       "materials": ["Paint 2 Carmine"],
       "group": "carrosserie",
-      "paint": { "color": "#0a3a46", "finish": "metallise" }
+      "paint": {"color": "#0a3a46", "finish": "metallise"}
     },
     {
       "id": "jantes",
       "label": "Jantes",
       "materials": ["Rim2"],
       "group": "accastillage",
-      "paint": { "color": "#d4d6dc", "finish": "chrome" }
+      "paint": {"color": "#d4d6dc", "finish": "chrome"}
     },
     {
       "id": "etriers",
       "label": "Étriers",
       "materials": ["Brake"],
       "group": "accastillage",
-      "paint": { "color": "#a6120e", "finish": "brillant" }
+      "paint": {"color": "#a6120e", "finish": "brillant"}
     },
     {
       "id": "sellerie",
       "label": "Sellerie",
       "materials": ["Interior 3 Carmine"],
       "group": "accastillage",
-      "paint": { "color": "#7f1408", "finish": "satine" }
+      "paint": {"color": "#7f1408", "finish": "satine"}
+    },
+    {
+      "id": "planche",
+      "label": "Planche et contre-portes",
+      "materials": ["Interior 1", "Panel Sides"],
+      "group": "accastillage",
+      "paint": {"color": "#0c0c0c", "finish": "satine"}
+    },
+    {
+      "id": "sieges_ton",
+      "label": "Sièges, second ton",
+      "materials": ["Interior 2"],
+      "group": "accastillage",
+      "paint": {"color": "#0c0c0c", "finish": "satine"}
+    },
+    {
+      "id": "tapis",
+      "label": "Tapis",
+      "materials": ["Floormat"],
+      "group": "accastillage",
+      "paint": {"color": "#040404", "finish": "mat"}
     }
   ],
   "engine": { "label": "V8 central", "fuel": "essence", "feed": "injection", "boost": "atmo", "power": 480, "sound": "v8",
@@ -66,8 +87,9 @@
   "performance": { "mass": 1250, "topKmh": 300, "grip": 9.5, "gearbox": "sequentielle-course", "transmission": "propulsion" },
   "interiorView": { "place": "conducteur", "label": "Conducteur", "eye": [0.12, 0.93, 0], "look": { "yaw": 0, "pitch": -10 }, "conduite": { "lift": 0.06, "ahead": 0.1, "regard": [0.03, 0.05], "horizon": [0.48, 0.44] } },
   "interiorViews": [{ "place": "passager", "label": "Passager", "eye": [-0.54, 0.99, 0.5], "look": { "yaw": -12, "pitch": -8 } }],
-  "interior": { "fixed": true, "steeringNode": "InteriorSteeringCylinder" },
+  "interior": {"fixed": true, "steeringNode": "InteriorSteeringCylinder", "tints": ["sellerie", "planche", "sieges_ton", "tapis"]},
   "cabin": {
+    "sky": {"center": [-0.38, 1.128, 0], "size": [0.42, 0.95], "count": 90, "color": "#e8f0ff", "seed": 5, "on": false},
     "panels": [
       {
         "shape": "rectangle",
@@ -77,7 +99,7 @@
         "haut": 0.241,
         "color": "#ff9a1a",
         "intensity": 0.9,
-        "instrument": { "mesure": "vitesse", "affichage": "chiffres", "barre": "regime" }
+        "instrument": {"mesure": "vitesse", "affichage": "chiffres", "barre": "regime"}
       }
     ]
   },
@@ -276,5 +298,32 @@
     "lame": {"rail": [[2.159, 0.15, 0], [2.158, 0.15, 0.05], [2.158, 0.15, 0.1], [2.157, 0.15, 0.15], [2.155, 0.15, 0.2], [2.153, 0.15, 0.25], [2.149, 0.15, 0.3], [2.145, 0.15, 0.35], [2.139, 0.15, 0.4], [2.129, 0.15, 0.45], [2.121, 0.15, 0.5], [2.114, 0.15, 0.55], [2.096, 0.15, 0.6], [2.078, 0.15, 0.65], [2.057, 0.15, 0.7], [2.031, 0.15, 0.75], [1.998, 0.15, 0.8], [1.951, 0.15, 0.85]], "rise": 0.005},
     "jupes": {"rail": [[0.72, 0.135, 1.065], [0.6, 0.135, 1.064], [0.5, 0.135, 1.061], [0.4, 0.135, 1.061], [0.3, 0.135, 1.062], [0.2, 0.135, 1.063], [0.1, 0.135, 1.066], [-0, 0.135, 1.069], [-0.1, 0.135, 1.073], [-0.2, 0.135, 1.076], [-0.3, 0.135, 1.079], [-0.4, 0.135, 1.08], [-0.5, 0.135, 1.081], [-0.6, 0.135, 1.081], [-0.7, 0.135, 1.081], [-0.8, 0.135, 1.079], [-0.9, 0.135, 1.078], [-1, 0.135, 1.077], [-1.1, 0.135, 1.077], [-1.13, 0.135, 1.077]], "rise": 0.01},
     "diffuseur": {"rail": [[-2.124, 0.185, 0], [-2.124, 0.185, 0.05], [-2.124, 0.185, 0.1], [-2.123, 0.185, 0.15], [-2.122, 0.185, 0.2], [-2.121, 0.185, 0.25], [-2.119, 0.185, 0.3], [-2.117, 0.185, 0.35], [-2.115, 0.185, 0.4], [-2.112, 0.185, 0.45], [-2.108, 0.185, 0.5], [-2.103, 0.185, 0.55], [-2.097, 0.185, 0.6], [-2.089, 0.185, 0.65]], "rise": 0.01}
+  },
+  "neons": {
+    "avant": {
+      "tubes": [
+        [[1.9, 0.12, -0.802], [1.994, 0.12, -0.67], [2.046, 0.12, -0.533], [2.07, 0.12, -0.389], [2.083, 0.12, -0.246], [2.088, 0.12, -0.099], [2.088, 0.12, 0.049], [2.085, 0.12, 0.197], [2.075, 0.12, 0.343], [2.052, 0.12, 0.49], [2.013, 0.12, 0.625], [1.943, 0.12, 0.756], [1.9, 0.12, 0.802]]
+      ]
+    },
+    "flancs": {
+      "tubes": [
+        [[0.72, 0.103, 1.005], [0.501, 0.103, 1.001], [0.299, 0.103, 1.002], [0.098, 0.103, 1.006], [-0.102, 0.103, 1.013], [-0.401, 0.103, 1.02], [-0.699, 0.103, 1.021], [-0.899, 0.103, 1.018], [-1.1, 0.103, 1.017], [-1.13, 0.103, 1.017]],
+        [[-1.13, 0.103, -1.017], [-1.1, 0.103, -1.017], [-0.899, 0.103, -1.018], [-0.699, 0.103, -1.021], [-0.401, 0.103, -1.02], [-0.102, 0.103, -1.013], [0.098, 0.103, -1.006], [0.299, 0.103, -1.002], [0.501, 0.103, -1.001], [0.72, 0.103, -1.005]]
+      ]
+    },
+    "arriere": {
+      "tubes": [
+        [[-2.02, 0.169, -0.639], [-2.038, 0.169, -0.494], [-2.047, 0.169, -0.347], [-2.052, 0.169, -0.199], [-2.054, 0.169, -0.05], [-2.054, 0.169, 0.099], [-2.051, 0.169, 0.248], [-2.045, 0.169, 0.397], [-2.033, 0.169, 0.542], [-2.02, 0.169, 0.639]]
+      ]
+    },
+    "roues": {"arceaux": true},
+    "habitacle": {
+      "tubes": [[[1.38, 0.68, -0.45], [1.38, 0.68, 0.45]], [[-0.45, 0.4, 0.775], [0.45, 0.4, 0.775]], [[0.45, 0.4, -0.775], [-0.45, 0.4, -0.775]]],
+      "pools": [
+        {"from": [0.95, 0.13, -0.35], "to": [0.95, 0.13, 0.35], "radius": 0.32},
+        {"from": [-0.4, 0.13, 0.6], "to": [0.4, 0.13, 0.6], "radius": 0.2},
+        {"from": [-0.4, 0.13, -0.6], "to": [0.4, 0.13, -0.6], "radius": 0.2}
+      ]
+    }
   }
 }
