@@ -165,6 +165,11 @@ export const STICKER_MOTIFS: readonly StickerMotif[] = Object.freeze([
     { id: 'drapeaux-croises', label: 'Drapeaux croisés', ratio: 1, symetrique: true, taille: 0.3 },
     // Jamais content (cinq records battus) : les étincelles.
     { id: 'etincelles', label: 'Étincelles', ratio: 1, taille: 0.26 },
+    // Vague V, le drift : la flèche en S (premier parcours de drift), le graffiti « Gaz » (l'argent en drift),
+    // l'étoile aux lauriers (l'or en drift).
+    { id: 'graffiti-fleche', label: 'Flèche en S', ratio: 2, taille: 0.22 },
+    { id: 'graffiti-gaz', label: 'Graffiti Gaz', ratio: 2, texte: true, taille: 0.22 },
+    { id: 'etoile-laurier', label: 'Étoile aux lauriers', ratio: 1, symetrique: true, taille: 0.26 },
   ]),
 ]);
 

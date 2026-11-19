@@ -1,0 +1,48 @@
+{
+  "format": "pmb-drift",
+  "version": 1,
+  "meteo": "sec",
+  "outil": "npm run courses:drift",
+  "departs": {
+    "ligne-droite": {
+      "score": 2240,
+      "vehicules": {
+        "bobber": 1850,
+        "concept": 2560,
+        "cox": 3590,
+        "sportive": 2240,
+        "van": 610
+      }
+    },
+    "casino": {
+      "score": 1950,
+      "vehicules": {
+        "bobber": 2410,
+        "concept": 1600,
+        "cox": 4580,
+        "sportive": 1950,
+        "van": 700
+      }
+    },
+    "tunnel": {
+      "score": 2120,
+      "vehicules": {
+        "bobber": 2120,
+        "concept": 4150,
+        "cox": 3080,
+        "sportive": 1650,
+        "van": 980
+      }
+    },
+    "port": {
+      "score": 1840,
+      "vehicules": {
+        "bobber": 1980,
+        "concept": 1840,
+        "cox": 4830,
+        "sportive": 1350,
+        "van": 790
+      }
+    }
+  }
+}

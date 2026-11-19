@@ -6,8 +6,8 @@
 // (src/jeu/bilan.ts) rend le `Bilan` (gains, hauts faits, déblocages) et l'enregistre → l'écran de fin
 // l'affiche. Ce qui se possède s'interroge par `possede` (src/jeu/bilan.ts).
 
-/** Balade : la conduite libre d'aujourd'hui, sans gain. Course : un tour, ou trois sur une carte en boucle. */
-export type FormatCourse = 'balade' | 'tour1' | 'tours3';
+/** Balade : la conduite libre d'aujourd'hui, sans gain. Course : un tour, ou trois sur une carte en boucle. Drift : un tour, au score. */
+export type FormatCourse = 'balade' | 'tour1' | 'tours3' | 'drift';
 
 export interface FormatSpec {
   id: FormatCourse;
@@ -52,6 +52,22 @@ export interface ResultatCourse {
   /** Médaille obtenue d'après les temps de référence de la carte ; `null` si aucune. */
   medaille: Medaille | null;
   stats: StatsCourse;
+  /** Format « Drift » : le score (la médaille se prend sur lui) ; absent dans les autres formats. */
+  drift?: StatsDrift;
+}
+
+/** Ce que les drifts d'une course ont rapporté (src/jeu/drift.ts). */
+export interface StatsDrift {
+  /** Score total, en points. */
+  score: number;
+  /** Le meilleur drift (multiplicateur compris), en points. */
+  meilleur: number;
+  /** Le plus long drift, en secondes. */
+  plusLong: number;
+  /** Drifts comptés. */
+  nombre: number;
+  /** Multiplicateur le plus haut atteint. */
+  multMax: number;
 }
 
 export interface LigneGain {

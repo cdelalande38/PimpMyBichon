@@ -8,6 +8,8 @@
 // - La course en 1 tour : sur une boucle, un tour depuis la ligne du départ choisi ; sur une route
 //   ouverte, un passage du départ à l'arrivée (le bout de la route).
 // - La course en 3 tours : sur une boucle seulement (`MapRoute.loop`) ; ailleurs, grisée, avec une phrase.
+// - Le drift (vague V, 18 novembre 2026) : un tour comme la course d'un tour, mais le but est le score des
+//   drifts, pas le temps (règles et paliers des médailles : src/data/drift.ts).
 //
 // Temps de référence : simulés par `npm run courses:temps` (tools/courses/temps-reference.mjs,
 // src/drive/simulationCourse.ts), au sec, depuis l'arrêt sur la ligne, sur chaque départ de chaque carte,
@@ -37,6 +39,7 @@ export const FORMATS: readonly FormatSpec[] = [
   { id: 'balade', label: 'Balade', tours: null, boucleSeulement: false },
   { id: 'tour1', label: 'Course 1 tour', tours: 1, boucleSeulement: false },
   { id: 'tours3', label: 'Course 3 tours', tours: 3, boucleSeulement: true },
+  { id: 'drift', label: 'Drift', tours: 1, boucleSeulement: false },
 ];
 
 /**
@@ -48,6 +51,7 @@ export const AIDES_FORMAT: Readonly<Record<FormatCourse, string>> = {
   balade: 'Pour le plaisir, sans gain',
   tour1: 'Chrono, dollars et hauts faits',
   tours3: 'Chrono, plus de dollars, hauts faits',
+  drift: 'Des points à chaque glisse, au frein',
 };
 
 /** Phrase du format grisé sur une route ouverte. */

@@ -85,6 +85,8 @@ function joueur(rail: Rail, perf: DrivePerformance, cruise: number, dt = DT) {
   const delay = Math.round(0.2 / dt);
   const queue = new Float64Array(delay);
   let at = 0;
+  // Un freinage commencé dure au moins 0,4 s : un coup de frein bref, braqué, lancerait une glisse (DRIFT, src/data/adherence.ts).
+  let freinage = 0;
   return (pilot: PilotWithProfile): DriveInput => {
     const m = pilot.motion;
     const v = m.speed;
@@ -111,7 +113,13 @@ function joueur(rail: Rail, perf: DrivePerformance, cruise: number, dt = DT) {
     const span = 25 + (v * v) / 6;
     for (let d = 0; d <= span; d += 4) k = Math.max(k, Math.abs(rail.poseAt(m.s + d, ahead).curvature));
     const target = Math.min(cruise, Math.sqrt((0.7 * perf.grip) / Math.max(k, 1e-6)));
-    return { auto: false, throttle: Math.min(1, Math.max(0, (target - v) * 0.5)), brake: Math.min(1, Math.max(0, (v - target) * 0.4)), lane: 0, steer };
+    let brake = Math.min(1, Math.max(0, (v - target) * 0.4));
+    if (brake > 0.05) freinage = 0.4;
+    else if (freinage > 0) {
+      freinage -= dt;
+      brake = 0.2;
+    }
+    return { auto: false, throttle: brake > 0 ? 0 : Math.min(1, Math.max(0, (target - v) * 0.5)), brake, lane: 0, steer };
   };
 }
 

@@ -10,6 +10,8 @@
 // En paysage (fincourse.css), le résultat et les boutons à gauche, toujours visibles ; la suite à droite, qui
 // défile seule : aucune moitié d'écran vide, à aucun moment du défilement.
 // Le bilan vient de `cloturerCourse` (src/jeu/bilan.ts) : vide, l'écran le dit en clair.
+// Format « Drift » (vague V) : le score à la place du temps, le palier de la médaille d'au-dessus, puis le
+// meilleur drift et le plus long à la place du record ; le temps passe dans les chiffres de la course.
 //
 // Les gains ARRIVENT un par un (vague U, 18 novembre 2026) : tant que le défilé tourne, le bloc « Gains » est une
 // liste de notifications (prime, médaille, record, chaque haut fait, chaque objet) qui s'ajoutent toutes les
@@ -22,6 +24,7 @@ import { formatChrono } from '../../drive/depart.ts';
 import type { SonInterface } from '../../data/bruitages.ts';
 import type { RendezVous } from '../../data/carriere.ts';
 import { formatSpec, indulgence, seuilsMedailles, tempsReference } from '../../data/courses.ts';
+import { paliersDrift, scoreReference } from '../../data/drift.ts';
 import { verdictDe, type VerdictRendezVous } from '../../jeu/carriereCloture.ts';
 import type { Bilan, Medaille } from '../../jeu/contrat.ts';
 import { AnnonceVocale, ListeNotifications, useDefilement } from '../jeu/NotificationsGain.tsx';
@@ -50,13 +53,22 @@ export function ligneRecord(temps: number, ancien: number | null): { texte: stri
   return { texte: `Ton record : ${formatChrono(ancien * 1000)}, ${formatEcart(temps - ancien)} plus vite.`, record: false };
 }
 
-/** Le temps à battre pour la médaille d'au-dessus ; `null` avec l'or ou sans référence. */
+/** « 12 450 points ». */
+export function formatPoints(n: number): string {
+  return `${Math.round(Number.isFinite(n) ? n : 0).toLocaleString('fr-FR')} points`;
+}
+
+/** Le temps (ou, en drift, le score) à battre pour la médaille d'au-dessus ; `null` avec l'or ou sans référence. */
 export function prochaineMedaille(bilan: Bilan): string | null {
   const r = bilan.resultat;
+  const visee = r.medaille === null ? 'bronze' : r.medaille === 'bronze' ? 'argent' : r.medaille === 'argent' ? 'or' : null;
+  if (r.format === 'drift') {
+    const ref = scoreReference(r.carte, r.depart, r.vehicule);
+    return ref === null || !visee ? null : `${POUR[visee]} : ${formatPoints(paliersDrift(ref)[visee])}.`;
+  }
   const reference = tempsReference(r.carte, r.depart, r.format, r.vehicule);
   if (reference === null) return null;
   const seuils = seuilsMedailles(reference, indulgence(r.carte, r.meteo));
-  const visee = r.medaille === null ? 'bronze' : r.medaille === 'bronze' ? 'argent' : r.medaille === 'argent' ? 'or' : null;
   if (!visee) return null;
   return `${POUR[visee]} : sous ${formatChrono(seuils[visee] * 1000)}.`;
 }
@@ -117,7 +129,10 @@ export function FinCourseVue({ bilan, onRejouer, onGarage, onCourseSuivante, ani
   const notifications = useMemo(() => notificationsDuBilan(bilan), [bilan]);
   const defilement = useDefilement({ notifications, anime, onSon });
   const defile = !defilement.fini;
-  const record = ligneRecord(r.temps, r.ancienRecord);
+  const drift = r.format === 'drift' ? (r.drift ?? { score: 0, meilleur: 0, plusLong: 0, nombre: 0, multMax: 1 }) : null;
+  const record = drift
+    ? { texte: drift.nombre > 0 ? `Meilleur drift ${formatPoints(drift.meilleur)}, le plus long ${formatEcart(drift.plusLong)}, ×${drift.multMax} au plus.` : 'Aucun drift compté : un coup de frein, braqué, puis le gaz.', record: false }
+    : ligneRecord(r.temps, r.ancienRecord);
   const meilleurTour = r.tours.length > 1 ? Math.min(...r.tours) : -1;
   const prochaine = prochaineMedaille(bilan);
   const stats = r.stats;
@@ -144,8 +159,8 @@ export function FinCourseVue({ bilan, onRejouer, onGarage, onCourseSuivante, ani
             <i aria-hidden="true" />
             {r.medaille ? MEDAILLE_LABEL[r.medaille] : 'Pas de médaille cette fois'}
           </p>
-          <p className="fin-course-temps" role="status" aria-label={`Temps total ${formatChrono(r.temps * 1000)}`}>
-            {formatChrono(r.temps * 1000)}
+          <p className="fin-course-temps" role="status" aria-label={drift ? `Score ${formatPoints(drift.score)}` : `Temps total ${formatChrono(r.temps * 1000)}`} data-score={drift?.score}>
+            {drift ? formatPoints(drift.score) : formatChrono(r.temps * 1000)}
           </p>
           {prochaine && <p className="fin-course-note">{prochaine}</p>}
           <p className="fin-course-record" data-record={record.record || undefined}>
@@ -163,6 +178,7 @@ export function FinCourseVue({ bilan, onRejouer, onGarage, onCourseSuivante, ani
               </ol>
             )}
             <p className="fin-course-stats">
+              {drift && `${formatChrono(r.temps * 1000)} · `}
               {(stats.distance / 1000).toFixed(1).replace('.', ',')} km · {Math.round(stats.vitesseMax)} km/h au plus · {stats.chocs} choc{stats.chocs > 1 ? 's' : ''} · {Math.round(stats.glisse)} m de glisse · NOS ×{stats.nos}
             </p>
           </div>

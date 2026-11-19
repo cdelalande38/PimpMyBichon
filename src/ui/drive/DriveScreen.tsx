@@ -43,6 +43,7 @@ import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
 import { MiniCarte } from './MiniCarte.tsx';
 import { AnnonceBalade } from './Balade.tsx';
+import { DriftCompteur } from './DriftCompteur.tsx';
 import { EtiquetteRendezVous } from '../carriere/EnSortie.tsx';
 import { ArriveePanneau, ChronoSortie, FeuxDepart } from './Depart.tsx';
 import { FinCourse } from './FinCourse.tsx';
@@ -801,6 +802,7 @@ export function DriveScreen() {
       <SonEtat />
       <ArriveePanneau />
       {!apercu && <AnnonceBalade />}
+      {!apercu && <DriftCompteur />}
       <FinCourse />
       {reglages.ouvert && <ReglagesPanneau paysage={paysage} fermer={reglages.fermer} />}
       <DriveLoading key={`${mapId ?? ''}-${attempt}`} />

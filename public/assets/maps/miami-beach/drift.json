@@ -1,0 +1,38 @@
+{
+  "format": "pmb-drift",
+  "version": 1,
+  "meteo": "sec",
+  "outil": "npm run courses:drift",
+  "departs": {
+    "ocean-drive": {
+      "score": 1690,
+      "vehicules": {
+        "bobber": 1100,
+        "concept": 3400,
+        "cox": 2810,
+        "sportive": 1690,
+        "van": 520
+      }
+    },
+    "collins": {
+      "score": 1250,
+      "vehicules": {
+        "bobber": 1250,
+        "concept": 4040,
+        "cox": 4440,
+        "sportive": 910,
+        "van": 190
+      }
+    },
+    "nord": {
+      "score": 360,
+      "vehicules": {
+        "bobber": 360,
+        "concept": 580,
+        "cox": 340,
+        "sportive": 540,
+        "van": 190
+      }
+    }
+  }
+}

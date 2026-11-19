@@ -76,10 +76,21 @@
 // `PerformanceRoute.preparation`), et le roulis d'une voiture. Le véhicule d'origine n'y change rien. Le
 // pilote automatique lève le pied sur de mauvais pneus, jamais plus vite sur de bons.
 //
+// Drift au frein (src/data/adherence.ts, `DRIFT` ; demande du 18 novembre 2026) : à la main, un coup de frein
+// bref (relâché avant `DRIFT.coup` s), à bonne vitesse et le manche braqué, bloque l'arrière : la caisse part du
+// côté du virage (`glisse`). La glisse se tient ensuite au gaz, tant que le véhicule tourne : la dérive suit un
+// angle visé, que le gaz ouvre selon la courbe prise (et les roues motrices, la météo) et que le manche règle
+// (braqué dans le virage au-delà de ce que demande la route, plus d'angle ; contre-braqué, moins) ; la marche,
+// elle, suit le volant dans la limite de l'avant. Gaz relâché ou virage fini, la caisse se remet droite et la
+// conduite d'avant reprend ; le bord ou un freinage tenu l'arrêtent aussi ; trop d'angle, la conduite d'avant
+// reprend la main (plein gaz : tête-à-queue). En direction assistée, l'aide tient l'angle sous le tête-à-queue. Une moto ne glisse que
+// peu, sans tête-à-queue. Un freinage tenu, ou sans braquer, freine comme avant ; le pilote automatique ne
+// drifte jamais (les temps de référence ne changent pas).
+//
 // Tout est déterministe : l'intégration se fait en sous-pas d'au plus 1/120 s, quel que soit `dt`.
 // `step` n'alloue rien.
 
-import { adherenceMeteo, FREINAGE, MOTRICITE, PREPARATION_ORIGINE, PRUDENCE_AUTO, SURVIRAGE, TRANSMISSION_PAR_DEFAUT, type PreparationRoute, type Transmission } from '../data/adherence.ts';
+import { adherenceMeteo, DRIFT, FREINAGE, MOTRICITE, PREPARATION_ORIGINE, PRUDENCE_AUTO, SURVIRAGE, TRANSMISSION_PAR_DEFAUT, type PreparationRoute, type Transmission } from '../data/adherence.ts';
 import { boiteDuVehicule, vitesseMaxBoite } from '../data/boites.ts';
 import { computePrep } from '../data/enginePrep.ts';
 import { preparationDe } from '../data/preparation.ts';
@@ -623,6 +634,8 @@ export interface PilotWithProfile extends Pilot {
   readonly weather: Weather;
   /** Part de l'adhérence du sec que gardent les pneus sous cette météo (préparation comprise). */
   readonly adherence: number;
+  /** Glisse lancée au frein (`DRIFT`) : 1 la caisse part à gauche, −1 à droite, 0 aucune. */
+  readonly glisse: number;
 }
 
 function newMotion(): DriveMotion {
@@ -921,6 +934,16 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
   let spin = 0;
   let exces = 0;
   let axLisse = 0;
+  // Drift au frein (DRIFT) : durée de l'appui en cours sur le frein (s ; −1 relâché), glisse lancée (côté : 1
+  // la caisse part à gauche, −1 à droite, 0 aucune), amorce qui reste (s), angle visé (rad, signé), gaz du sous-pas.
+  let appui = -1;
+  /** Manche le plus braqué pendant l'appui (signé) : il donne le côté de la glisse ; frein le plus appuyé. */
+  let appuiManche = 0;
+  let appuiFrein = 0;
+  let glisseCote = 0;
+  let amorce = 0;
+  let cibleGlisse = 0;
+  let gazMain = 0;
 
   function reset(s: number): void {
     const start = rail.loop ? s : Math.min(rail.length, Math.max(0, Number.isFinite(s) ? s : 0));
@@ -942,6 +965,10 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
     spin = 0;
     exces = 0;
     axLisse = 0;
+    appui = -1;
+    glisseCote = 0;
+    amorce = 0;
+    cibleGlisse = 0;
     free.offset = motion.offset;
     free.psi = 0;
     free.curvature = 0;
@@ -1052,12 +1079,18 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
     const stiff = (bike ? S.moto.raideur : S.raideur) * mu;
     if (!bike && Math.abs(drift) > S.teteAQueue) {
       // Toupie : plus rien ne tient, la caisse tourne sur elle-même en glissant.
+      glisseCote = 0;
       driftRate *= Math.exp(-h * S.amortiGlisse * 0.5);
       rearSlide = 1;
       drift += driftRate * h;
       if (drift > Math.PI) drift -= 2 * Math.PI;
       else if (drift < -Math.PI) drift += 2 * Math.PI;
       return 0;
+    }
+    if (glisseCote !== 0) {
+      // Glisse lancée au frein : la caisse suit l'angle visé, la marche suit le volant dans la limite de l'avant.
+      tenirGlisse(h, bike);
+      return v2 > 0.25 ? aF / v2 : kCmd;
     }
     const aRwant = aF + stiff * drift;
     const aR = Math.max(-capR, Math.min(capR, aRwant));
@@ -1071,6 +1104,68 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
       driftRate = 0;
     }
     return v2 > 0.25 ? (aF + aR) / 2 / v2 : kCmd;
+  }
+
+  /** Glisse lancée au frein : la dérive revient sur l'angle visé (ressort amorti, plus lent sur le mouillé). */
+  function tenirGlisse(h: number, bike: boolean): void {
+    const R = DRIFT.ressort;
+    const w = R.pulsation * Math.sqrt(Math.max(0.1, wetGrip));
+    driftRate += (w * w * (cibleGlisse - drift) - 2 * R.amortissement * w * driftRate) * h;
+    drift += driftRate * h;
+    if (bike && Math.abs(drift) > SURVIRAGE.moto.max) {
+      drift = Math.sign(drift) * SURVIRAGE.moto.max;
+      driftRate = 0;
+    }
+    rearSlide = Math.min(1, Math.abs(drift) / SURVIRAGE.glisse);
+  }
+
+  /**
+   * Drift au frein (DRIFT), à la main : l'appui sur le frein est chronométré ; franc et relâché avant `coup` s, à
+   * bonne vitesse et le manche braqué, il lance la glisse du côté du manche ; tenu plus longtemps, c'est un freinage, qui
+   * arrête la glisse. Pendant la glisse, l'angle visé : le gaz l'ouvre, le manche le règle (direction libre) :
+   * braqué au-delà de ce que demande la route ici (`kRoad`), plus d'angle ; en deçà, moins.
+   */
+  function pasCoupDeFrein(h: number, input: DriveInput, speed: number, kRoad: number, assist: boolean, bike: boolean): void {
+    const D = DRIFT;
+    const manche = Number.isFinite(input.steer) ? clampTo(input.steer as number, 1) : 0;
+    if (input.brake > 0.05) {
+      if (appui < 0) appuiManche = appuiFrein = 0;
+      appui = Math.max(0, appui) + h;
+      if (Math.abs(manche) > Math.abs(appuiManche)) appuiManche = manche;
+      // Franc : atteint d'emblée (le bouton, un coup de manche), pas au bout d'un freinage dosé.
+      if (appui <= D.montee) appuiFrein = Math.max(appuiFrein, input.brake);
+      if (appui > D.coup) glisseCote = 0;
+    } else if (appui >= 0) {
+      if (appui <= D.coup && appuiFrein >= D.franc && speed >= D.vitesseMin && Math.abs(appuiManche) >= D.braquageMin) {
+        // Manche à gauche (négatif) : virage à gauche, la caisse part à gauche (dérive positive).
+        glisseCote = appuiManche < 0 ? 1 : -1;
+        amorce = D.blocage;
+      }
+      appui = -1;
+    }
+    if (glisseCote === 0) return;
+    if (speed < D.vitesseFin || (!bike && Math.abs(drift) > D.lache)) {
+      glisseCote = 0;
+      return;
+    }
+    // Manche qui suit la route ici (inverse de `courbureVolant`) : seul ce qui le dépasse ouvre l'angle.
+    const plein = Math.min(courbureBraquage(kind0), (PILOT.free.fullGrip * Math.max(1, performance.grip)) / Math.max(PILOT.free.slowSpeed, speed) ** 2);
+    const route = glisseCote * Math.sign(kRoad) * Math.min(1, Math.abs(kRoad) / plein) ** (1 / PILOT.free.expo);
+    const dansLeVirage = assist ? 0 : clampTo(-glisseCote * volant - route, 1);
+    // Ce que la courbe prise (au dernier sous-pas) demande aux pneus, du côté de la glisse : en ligne droite, rien.
+    const virage = Math.min(1, Math.max(0, (D.virage * glisseCote * speed * speed * free.curvature) / Math.max(0.5, performance.grip * wetGrip)));
+    let cible = D.angle * D.transmission[transmission] * D.meteo[weather] * Math.pow(gazMain, D.expo) * Math.max(0, virage + D.braquage * dansLeVirage);
+    if (bike) cible *= D.moto;
+    if (assist) cible = Math.min(cible, D.assiste);
+    if (amorce > 0) {
+      amorce -= h;
+      cible = Math.max(cible, D.amorce * (bike ? D.moto : 1));
+    } else if (cible < D.fin && Math.abs(drift) < D.fin) {
+      // Plus de gaz, caisse droite : la glisse est finie, la conduite d'avant reprend.
+      glisseCote = 0;
+      return;
+    }
+    cibleGlisse = glisseCote * cible;
   }
 
   function substep(h: number, input: DriveInput, kind: 'car' | 'bike'): void {
@@ -1101,6 +1196,7 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
       const brake = Math.min(1, Math.max(0, input.brake));
       // Le NOS, c'est plein gaz.
       const throttle = nos ? 1 : Math.min(1, Math.max(0, input.throttle));
+      gazMain = throttle;
       // Motricité : ce que les roues motrices transmettent, moins ce que la courbe leur prend déjà ; au-delà,
       // elles patinent et transmettent un peu moins.
       const push = throttle * engine.thrust(v, nos, train.rpm) * cut;
@@ -1148,6 +1244,8 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
         volant = 0;
         drift = 0;
         driftRate = 0;
+        appui = -1;
+        glisseCote = 0;
         mode = 'main';
       }
       if (input.assist === true) {
@@ -1171,12 +1269,17 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
         if (Math.abs(volant) < 1e-4 && want === 0) volant = 0;
         kCmd = courbureVolant(volant, speed, performance.grip, kind);
       }
-      // Direction assistée : l'aide tient la caisse (pas de dérive), la météo borne quand même la courbe.
+      pasCoupDeFrein(h, input, speed, kRoad, input.assist === true, kind === 'bike');
+      // Direction assistée : l'aide tient la caisse (pas de dérive, sauf la glisse lancée au frein, dont elle
+      // tient l'angle), la météo borne quand même la courbe.
       const kPath = input.assist === true ? kCmd : courbeTenue(kCmd, speed, kind, driveUse, brakeUse, h);
       if (input.assist === true) {
-        drift = 0;
-        driftRate = 0;
-        rearSlide = 0;
+        if (glisseCote !== 0) tenirGlisse(h, kind === 'bike');
+        else {
+          drift = 0;
+          driftRate = 0;
+          rearSlide = 0;
+        }
         capFront = Math.max(0.5, performance.grip * wetGrip);
       }
       advance = avanceLibre(free, kPath, kRoad, speed, input.assist === true ? capFront : performance.grip * 2, h);
@@ -1214,8 +1317,10 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
         motion.speed = Math.max(0, motion.speed - (scrub + sideways) * h);
         motion.accel = (motion.speed - v) / h;
       }
-      // Au bord, la dérive se referme ; au pas, la caisse se remet dans l'axe (pas de marche arrière).
+      // Au bord, la dérive se referme (la glisse lancée au frein s'arrête) ; au pas, la caisse se remet dans
+      // l'axe (pas de marche arrière).
       if (free.contact !== 0) {
+        glisseCote = 0;
         drift *= Math.exp(-h / SURVIRAGE.bord);
         driftRate *= Math.exp(-h / SURVIRAGE.bord);
       }
@@ -1291,6 +1396,8 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
       motion.slip = (motion.slip ?? 0) * Math.max(0, 1 - h / PILOT.free.slip.tau);
       // Le pilote automatique ne glisse ni ne patine jamais.
       drift = driftRate = spin = exces = 0;
+      glisseCote = 0;
+      appui = -1;
       motion.drift = 0;
       motion.spin = 0;
       if (kind === 'bike') {
@@ -1402,6 +1509,9 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
     },
     get adherence() {
       return wetGrip;
+    },
+    get glisse() {
+      return glisseCote;
     },
     reset,
     step,

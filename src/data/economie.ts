@@ -39,11 +39,19 @@ export const ECONOMIE: Readonly<Record<FormatPaye, BaremeFormat>> = {
     sansChoc: 50,
     meteo: { sec: 0, pluie: 25, neige: 50 },
   },
+  // Drift (vague V) : l'échelle de la course d'un tour ; la médaille se prend sur le score, pas de record de temps.
+  drift: {
+    base: 40,
+    medaille: { bronze: 15, argent: 30, or: 60 },
+    record: 0,
+    sansChoc: 20,
+    meteo: { sec: 0, pluie: 10, neige: 20 },
+  },
 };
 
 /** Motifs affichés à l'écran de fin, un par ligne de gain. */
 export const MOTIFS_GAIN = {
-  base: { tour1: 'Course d’un tour finie', tours3: 'Course de trois tours finie' },
+  base: { tour1: 'Course d’un tour finie', tours3: 'Course de trois tours finie', drift: 'Parcours de drift fini' },
   medaille: { or: 'Médaille d’or', argent: 'Médaille d’argent', bronze: 'Médaille de bronze' },
   record: 'Record battu',
   sansChoc: 'Aucun choc contre le bord de la route',

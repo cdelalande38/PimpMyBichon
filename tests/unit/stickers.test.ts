@@ -59,7 +59,7 @@ describe('bibliothèque', () => {
     for (const pack of ['flammes', 'course', 'atelier', 'rue', 'tapis'] as const) expect(motifsOf(pack).length).toBeGreaterThanOrEqual(5);
     // Cahier des charges, § 5.3 : au moins 80 motifs au lancement.
     expect(STICKER_MOTIFS.length).toBeGreaterThanOrEqual(80);
-    // Un trophée par article de haut fait (l'économie : `sticker-…`) : les huit de la vague S, puis les six de la vague U.
+    // Un trophée par article de haut fait (l'économie : `sticker-…`) : les huit de la vague S, les six de la vague U, les trois du drift (vague V).
     expect(motifsOf(null).map((motif) => motif.id)).toEqual([
       ...['or', 'series', 'propre', 'vitesse', 'glisse', 'neige', 'route', 'cartes'].map((name) => `trophee-${name}`),
       'eclair-triangle',
@@ -68,6 +68,9 @@ describe('bibliothèque', () => {
       'tribal-lame',
       'drapeaux-croises',
       'etincelles',
+      'graffiti-fleche',
+      'graffiti-gaz',
+      'etoile-laurier',
     ]);
     expect(new Set(STICKER_MOTIFS.map((motif) => motif.id)).size).toBe(STICKER_MOTIFS.length);
   });
@@ -331,7 +334,7 @@ describe('rangement des 82 motifs : libre, pack à acheter ou récompense', () =
 
   it('au moins quatre motifs de plus sont offerts, et six récompenses de plus se gagnent avec des hauts faits qui ne donnaient que des dollars', () => {
     expect(motifsOf('depart').length).toBeGreaterThanOrEqual(14);
-    expect(motifsOf(null).length).toBe(14);
+    expect(motifsOf(null).length).toBe(17);
     const sansArticle = ['vitesse-160', 'sous-la-pluie', 'dix-kilometres', 'nos-vingt', 'carriere-bouclee', 'cinq-records'];
     for (const id of sansArticle) expect(HAUTS_FAITS.find((def) => def.id === id)?.recompense.articles?.length, id).toBe(1);
   });

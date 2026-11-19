@@ -13,8 +13,10 @@ import { performanceDe } from '../../src/drive/pilote.ts';
 import { piloteDeSimulation, simulerCourse } from '../../src/drive/simulationCourse.ts';
 
 describe('formats', () => {
-  it('balade, 1 tour, 3 tours ; 3 tours sur une boucle seulement, 1 tour à la place ailleurs', () => {
-    expect(FORMATS.map((f) => f.id)).toEqual(['balade', 'tour1', 'tours3']);
+  it('balade, 1 tour, 3 tours, drift ; 3 tours sur une boucle seulement, 1 tour à la place ailleurs', () => {
+    expect(FORMATS.map((f) => f.id)).toEqual(['balade', 'tour1', 'tours3', 'drift']);
+    expect(formatCouru('drift', false)).toBe('drift');
+    expect(toursDuFormat('drift')).toBe(1);
     expect(formatPossible('tours3', false)).toBe(false);
     expect(formatPossible('tours3', true)).toBe(true);
     expect(formatCouru('tours3', false)).toBe('tour1');

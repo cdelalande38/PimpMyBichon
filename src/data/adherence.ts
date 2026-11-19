@@ -120,6 +120,56 @@ export const SURVIRAGE = {
   bord: 0.35,
 } as const;
 
+/**
+ * Drift au frein, à la main seulement (demande du 18 novembre 2026 : « le bouton de freins devrait permettre
+ * de faire des drifts ») : un coup de frein bref, à bonne vitesse et le manche braqué, bloque l'arrière, qui
+ * part du côté du manche ; la glisse se tient ensuite au gaz, tant que le véhicule tourne : l'angle tenu
+ * suit le gaz et ce que la courbe demande aux pneus, et le manche le règle (braqué dans le virage au-delà de
+ * ce que demande la route, plus d'angle ; contre-braqué, moins). Sans gaz, ou en sortant du virage, la caisse
+ * se remet droite et la conduite d'avant reprend ; au-delà de `lache`, l'arrière ne se rattrape plus de
+ * lui-même (la conduite d'avant reprend la main, plein gaz : tête-à-queue). Le pilote automatique ne drifte jamais.
+ * - `coup` : un appui franc sur le frein (`franc` atteint, de 0 à 1, dans les `montee` s qui suivent le début de
+ *   l'appui) relâché avant ce temps (s) est un coup de frein à main ; plus long, c'est un freinage, comme avant
+ *   (et il arrête la glisse en cours) ; plus léger ou plus lent à venir (le manche tiré peu à peu, un freinage
+ *   dosé), aussi : pas de glisse sans le vouloir.
+ * - `vitesseMin` : vitesse (m/s) sous laquelle le coup de frein ne lance rien ; sous `vitesseFin`, la glisse s'arrête.
+ * - `braquageMin` : manche (de 0 à 1) tenu d'un côté pendant l'appui : le côté du virage.
+ * - `amorce`, `blocage` : angle visé (rad) pendant `blocage` s après le coup (l'arrière bloqué part).
+ * - `angle` : angle tenu plein gaz (rad) dans une courbe qui demande aux pneus au moins `1 / virage` de leur
+ *   limite (moins, l'angle baisse d'autant ; en ligne droite, rien) ; `braquage` : ce qu'ajoute (en part de
+ *   `angle`) le manche braqué dans le virage au-delà de ce que demande la route ; le gaz agit en puissance `expo`.
+ * - `ressort` : pulsation (rad/s) et amortissement du retour de la caisse sur l'angle visé ; la pulsation suit la
+ *   racine de l'adhérence de la météo (sur la neige, tout vient plus lentement).
+ * - `fin` : sous cet angle (rad), quand le gaz n'en demande pas plus, la glisse est finie.
+ * - `lache` : au-delà de cet angle (rad), la glisse lancée rend la main à la conduite d'avant.
+ * - `transmission` : part de l'angle que le gaz tient selon les roues motrices (une propulsion drifte, une
+ *   traction se redresse vite).
+ * - `meteo` : facteur sur l'angle tenu (sur le mouillé, l'arrière décroche plus).
+ * - `assiste` : angle le plus fort en direction assistée (rad) : l'aide tient l'angle, sous le tête-à-queue.
+ * - `moto` : part de l'angle d'une moto, bornée par `SURVIRAGE.moto.max` : une glisse courte de l'arrière.
+ */
+export const DRIFT = {
+  coup: 0.35,
+  franc: 0.6,
+  montee: 0.12,
+  vitesseMin: 9,
+  vitesseFin: 4,
+  braquageMin: 0.5,
+  amorce: 0.5,
+  blocage: 0.3,
+  angle: 0.6,
+  virage: 2.5,
+  braquage: 1.5,
+  expo: 1,
+  ressort: { pulsation: 4.5, amortissement: 0.75 },
+  fin: 0.1,
+  lache: 1,
+  transmission: { propulsion: 1, integrale: 0.75, traction: 0.3 } satisfies Record<Transmission, number>,
+  meteo: { sec: 1, pluie: 1.1, neige: 1.2 } satisfies Record<Weather, number>,
+  assiste: 0.75,
+  moto: 0.5,
+} as const;
+
 /** Adhérence d'une météo (1 au sec) ; une météo inconnue compte comme le sec. */
 export function adherenceMeteo(weather: string | undefined): AdherenceMeteo {
   return (weather !== undefined && (ADHERENCE_METEO as Record<string, AdherenceMeteo>)[weather]) || ADHERENCE_METEO.sec;

@@ -1,0 +1,48 @@
+{
+  "format": "pmb-drift",
+  "version": 1,
+  "meteo": "sec",
+  "outil": "npm run courses:drift",
+  "departs": {
+    "fontvieille": {
+      "score": 2240,
+      "vehicules": {
+        "bobber": 2240,
+        "concept": 1810,
+        "cox": 3640,
+        "sportive": 3490,
+        "van": 1060
+      }
+    },
+    "port": {
+      "score": 1870,
+      "vehicules": {
+        "bobber": 1590,
+        "concept": 2140,
+        "cox": 1870,
+        "sportive": 3330,
+        "van": 1200
+      }
+    },
+    "casino": {
+      "score": 1440,
+      "vehicules": {
+        "bobber": 1440,
+        "concept": 970,
+        "cox": 1630,
+        "sportive": 3310,
+        "van": 800
+      }
+    },
+    "bord-de-mer": {
+      "score": 1000,
+      "vehicules": {
+        "bobber": 1100,
+        "concept": 920,
+        "cox": 1000,
+        "sportive": 2480,
+        "van": 360
+      }
+    }
+  }
+}

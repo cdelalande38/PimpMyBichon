@@ -8,7 +8,9 @@
 //   décroche (dérive ≥ 0,12 rad, ≈ 7°) ;
 // - chocs : contacts avec le bord de la route ; un frottement continu n'en fait qu'un, un nouveau choc
 //   compte s'il vient au moins 0,5 s après la fin du précédent ;
-// - NOS : poussées parties (le NOS s'allume).
+// - NOS : poussées parties (le NOS s'allume) ;
+// - drifts (format « Drift », src/jeu/drift.ts) : le score des drifts, compté dans toute course, rendu à
+//   l'arrivée dans le format « Drift » seulement ; l'affichage du drift en cours le lit par `driftEnDirect`.
 //
 // Le pilote automatique ne court pas : s'il prend le volant pendant une course (réglages, « Pilote
 // automatique »), la course devient une balade (pas d'arrivée de course, pas de résultat).
@@ -16,6 +18,7 @@
 import type { FormatCourse, MeteoCourse, MomentCourse, ResultatCourse, StatsCourse } from '../jeu/contrat.ts';
 import type { DriveInput, DriveMotion } from './contrat.ts';
 import { enCourse, type EtatDepart } from './depart.ts';
+import { bilanDrift, createEtatDrift, pasDrift, remettreDrift, type EtatDrift } from '../jeu/drift.ts';
 
 export const MESURES = {
   /** Glissement des pneus (0 à 1) au-delà duquel on glisse. */
@@ -87,8 +90,11 @@ export interface ContexteCourse {
   moment: MomentCourse;
 }
 
-/** Résultat d'une course arrivée (une seule allocation, à l'arrivée) ; `null` hors course. */
-export function courseFinie(etat: EtatDepart, mesures: MesuresCourse, contexte: ContexteCourse): CourseFinie | null {
+/** Score des drifts de la course qui roule (celui de la scène publiée), pour l'affichage du drift en cours. */
+export const driftEnDirect: { current: EtatDrift | null } = { current: null };
+
+/** Résultat d'une course arrivée (une seule allocation, à l'arrivée) ; `null` hors course. `drift` : le score des drifts (format « Drift »). */
+export function courseFinie(etat: EtatDepart, mesures: MesuresCourse, contexte: ContexteCourse, drift?: EtatDrift): CourseFinie | null {
   if (!enCourse(etat) || etat.phase !== 'arrive' || etat.arrivee <= 0 || contexte.format === 'balade') return null;
   const tours: number[] = [];
   for (let i = 0; i < Math.min(etat.tours, etat.tempsTours.length); i += 1) tours.push((etat.tempsTours[i] ?? 0) / 1000);
@@ -102,6 +108,8 @@ export function courseFinie(etat: EtatDepart, mesures: MesuresCourse, contexte: 
     temps: etat.arrivee / 1000,
     tours,
     stats: { distance: mesures.distance, vitesseMax: mesures.vitesseMax, glisse: mesures.glisse, chocs: mesures.chocs, nos: mesures.nos },
+    // Sans `drift`, celui du suivi publié : la scène vient de l'avancer, dans la même image.
+    ...(contexte.format === 'drift' ? { drift: bilanDrift(drift ?? driftEnDirect.current ?? createEtatDrift()) } : {}),
   };
 }
 
@@ -111,13 +119,18 @@ export function courseFinie(etat: EtatDepart, mesures: MesuresCourse, contexte: 
  */
 export class SuiviCourse {
   readonly mesures = createMesures();
+  /** Score des drifts. */
+  readonly drift = createEtatDrift();
 
   remettre(): void {
     remettreMesures(this.mesures);
+    remettreDrift(this.drift);
   }
 
   /** Après le pas du départ : `input` du joueur, `motion` et `contact` du pilote, NOS allumé. */
   pas(etat: EtatDepart, dt: number, input: Pick<DriveInput, 'auto'>, motion: Pick<DriveMotion, 'speed' | 'slip' | 'drift'>, contact: number, nosAllume: boolean): void {
+    // Le suivi publié est celui de la scène qui roule (en mode strict de React, une scène écartée a pu le publier).
+    driftEnDirect.current = this.drift;
     if (!enCourse(etat) || etat.phase !== 'parti') return;
     if (input.auto) {
       // Le pilote automatique ne court pas : la course devient une balade.
@@ -125,5 +138,6 @@ export class SuiviCourse {
       return;
     }
     pasMesures(this.mesures, dt, motion, contact, nosAllume);
+    pasDrift(this.drift, dt, motion.drift ?? 0, motion.speed, contact);
   }
 }

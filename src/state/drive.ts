@@ -33,6 +33,7 @@ import { clampOrbit, DEFAULT_ORBIT } from '../drive/cameras.ts';
 import type { EtatDepart } from '../drive/depart.ts';
 import type { CourseFinie } from '../drive/course.ts';
 import { cleRecord, estFormat, FORMAT_PAR_DEFAUT, indulgence, medailleDe, seuilsMedailles, tempsReference } from '../data/courses.ts';
+import { medailleDrift, scoreReference } from '../data/drift.ts';
 import type { Bilan, FormatCourse, MomentCourse, ResultatCourse } from '../jeu/contrat.ts';
 import { cloturerCourse } from '../jeu/bilan.ts';
 import { conclureRendezVous } from '../jeu/carriereCloture.ts';
@@ -348,6 +349,8 @@ export function bilanVide(resultat: ResultatCourse): Bilan {
 
 /** Résultat complet d'une course finie : le record d'avant (s, depuis `meilleurs` en ms) et la médaille. */
 export function resultatDe(course: CourseFinie, meilleurs: Readonly<Record<string, number>>): ResultatCourse {
+  // Drift (src/data/drift.ts) : la médaille se prend sur le score, pas sur le temps ; pas de record de temps.
+  if (course.format === 'drift') return { ...course, ancienRecord: null, medaille: medailleDrift(course.drift?.score ?? 0, scoreReference(course.carte, course.depart, course.vehicule)) };
   const old = meilleurs[cleRecord(course.carte, course.depart, course.format)];
   const ancienRecord = typeof old === 'number' && old > 0 ? old / 1000 : null;
   const reference = tempsReference(course.carte, course.depart, course.format, course.vehicule);

@@ -56,6 +56,9 @@ export const TROPHEES: readonly ArticleBoutique[] = [
   { id: 'sticker-tribal-lame', famille: 'sticker', label: 'Lame tribale', prix: null, description: 'Gagné en lançant vingt poussées de NOS.' },
   { id: 'sticker-drapeaux-croises', famille: 'sticker', label: 'Drapeaux croisés', prix: null, description: 'Gagné en bouclant la carrière.' },
   { id: 'sticker-etincelles', famille: 'sticker', label: 'Étincelles', prix: null, description: 'Gagné en battant cinq fois tes records.' },
+  { id: 'sticker-graffiti-fleche', famille: 'sticker', label: 'Flèche en S', prix: null, description: 'Gagné en finissant un premier parcours de drift.' },
+  { id: 'sticker-graffiti-gaz', famille: 'sticker', label: 'Graffiti Gaz', prix: null, description: 'Gagné avec l’argent ou mieux en drift.' },
+  { id: 'sticker-etoile-laurier', famille: 'sticker', label: 'Étoile aux lauriers', prix: null, description: 'Gagné avec l’or en drift.' },
 ];
 
 /**
