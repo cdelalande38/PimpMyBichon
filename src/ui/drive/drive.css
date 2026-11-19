@@ -825,6 +825,86 @@ body:has(.drive-top) .tuto-aide {
   box-shadow: 0 0 18px rgba(59, 123, 255, 0.9);
 }
 
+/* Ça pousse : l'anneau s'épaissit et s'éclaircit (la réserve qui se vide se lit d'un coup d'œil), le
+   bouton bat. Moins de mouvement : il ne bat pas. */
+.drive-nos[data-nos='envoye'] {
+  background:
+    radial-gradient(circle, rgba(18, 26, 66, 0.95) 0 58%, transparent 59%),
+    conic-gradient(#8fd8ff var(--reserve, 100%), rgba(233, 230, 242, 0.14) 0);
+  animation: drive-nos-pousse 0.45s ease-in-out infinite alternate;
+}
+
+@keyframes drive-nos-pousse {
+  to {
+    box-shadow: 0 0 30px rgba(120, 170, 255, 1);
+  }
+}
+
+/* NOS à l'écran (NosEffet.tsx) : bords teintés et traits de vitesse, au-dessus de la scène, sous l'interface. */
+.drive-nos-effet {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.drive-nos-effet[hidden] {
+  display: none;
+}
+
+.drive-nos-effet .drive-nos-teinte {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 75% at 50% 46%, transparent 42%, rgba(40, 90, 255, 0.42) 76%, rgba(14, 10, 52, 0.85) 100%);
+  opacity: var(--nos-teinte, 0);
+}
+
+.drive-nos-effet .drive-nos-traits {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  opacity: var(--nos-traits, 0);
+}
+
+.drive-nos-effet .drive-nos-traits i {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 24vmax;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(190, 220, 255, 0), rgba(225, 238, 255, 0.9));
+  box-shadow: 0 1px 0 rgba(10, 20, 60, 0.35);
+  transform-origin: 0 50%;
+  animation: drive-nos-trait 0.42s linear infinite;
+}
+
+@keyframes drive-nos-trait {
+  from {
+    transform: rotate(var(--a)) translateX(14vmax) scaleX(0.4);
+    opacity: 0;
+  }
+
+  30% {
+    opacity: 1;
+  }
+
+  to {
+    transform: rotate(var(--a)) translateX(72vmax) scaleX(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drive-nos[data-nos='envoye'] {
+    animation: none;
+  }
+
+  .drive-nos-effet .drive-nos-traits {
+    display: none;
+  }
+}
+
 .drive-nos[data-nos='vide'] {
   color: var(--mute);
 }

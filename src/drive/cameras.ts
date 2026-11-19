@@ -34,6 +34,7 @@
 // passages de rapport) ; un léger tremblement à haute vitesse, fonction du temps (déterministe), coupé
 // si le téléphone demande moins de mouvement.
 
+import { liveNos } from '../data/nos.ts';
 import type { DriveEyeSpec } from '../data/vehicleTypes.ts';
 import type { CameraId, CameraShot, DriveMotion, OrbitView, Rail, RailPose, Vec3, VehicleFrame } from './contrat.ts';
 import { createPose, lateralPoint } from './rail.ts';
@@ -382,10 +383,12 @@ export function cameraShot(
   const size = Math.max(frame.halfLength, frame.halfWidth * 2);
   const F = CAMERA_FEEL;
   const boost = Math.min(1, Math.max(0, motion.boost ?? 0));
-  const extraFov = speedFov(motion.speed) + F.fovBoost * boost;
+  // NOS (src/data/nos.ts) : le champ s'ouvre d'un coup doux à l'envoi ; rien en moins de mouvement.
+  const nosFov = cameraFeel.reducedMotion ? 0 : F.fovBoost * boost + liveNos.fov;
+  const extraFov = speedFov(motion.speed) + nosFov;
   const pull = Number.isFinite(motion.pull) ? (motion.pull as number) : 0;
   // Tremblement : trois sinus de périodes premières entre elles, en mètres.
-  const shake = shakeAmplitude(motion.speed);
+  const shake = shakeAmplitude(motion.speed) + liveNos.tremble;
   const shakeY = shake * (0.6 * Math.sin(time * 31.3) + 0.4 * Math.sin(time * 17.9));
   const shakeX = shake * 0.5 * Math.sin(time * 23.7);
   followChase(frame, motion, rail, time);
@@ -401,7 +404,7 @@ export function cameraShot(
     case 'poursuite': {
       // Recul à l'accélération, rapprochement au freinage ; plus bas avec la vitesse et la poussée.
       const swing = Math.max(-F.pullFwdMax, Math.min(F.pullBackMax, pull * F.pullBack));
-      const back = frame.halfLength * 2 + 4 + swing;
+      const back = frame.halfLength * 2 + 4 + swing + liveNos.recul;
       const lower = F.speedLower * Math.min(1, motion.speed / F.fovFull) + Math.min(F.lowerMax, Math.max(0, pull) * F.lower);
       extendedPose(rail, motion.s - back, scratch);
       // En retard sur la place, puis sur le cap : le point tourne autour du véhicule de l'écart de cap.
@@ -423,7 +426,7 @@ export function cameraShot(
       turnAround(out.position, px, pz, chase.lag);
       turnAround(out.target, px, pz, chase.lag);
       // Au ras du sol, le champ ne s'ouvre qu'au NOS : ouvert avec la vitesse, il ralentirait le défilement.
-      out.fov = 62 + F.fovBoost * boost * 0.8;
+      out.fov = 62 + nosFov * 0.8;
       return out;
     }
     case 'avant': {

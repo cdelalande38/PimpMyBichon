@@ -38,7 +38,7 @@ export function forceFlamme(vie: number, regle: Pick<RetourFlammes, 'duree' | 's
   return attaque * attaque * (3 - 2 * attaque) * (1 - q) ** 1.3 * (1 - 0.25 * rang);
 }
 
-const VERTEX = /* glsl */ `
+export const VERTEX = /* glsl */ `
 uniform float uForce;
 uniform float uTemps;
 uniform float uLongueur;

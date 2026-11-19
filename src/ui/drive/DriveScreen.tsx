@@ -46,6 +46,7 @@ import { AnnonceBalade } from './Balade.tsx';
 import { DriftCompteur } from './DriftCompteur.tsx';
 import { EtiquetteRendezVous } from '../carriere/EnSortie.tsx';
 import { ArriveePanneau, ChronoSortie, FeuxDepart } from './Depart.tsx';
+import { NosEffet } from './NosEffet.tsx';
 import { FinCourse } from './FinCourse.tsx';
 import { DriveIcon } from './icones.tsx';
 import { SonEtat } from './Mixage.tsx';
@@ -805,6 +806,7 @@ export function DriveScreen() {
   return (
     <>
       <DriveTop apercu={apercu} reglages={reglages.ouvert} ouvrirReglages={reglages.ouvrir} />
+      {!apercu && <NosEffet />}
       <FonduNoir />
       <DriveGestures paysage={paysage} />
       <DriveBas apercu={apercu} paysage={paysage} />

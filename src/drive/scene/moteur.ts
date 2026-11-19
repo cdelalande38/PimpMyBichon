@@ -62,6 +62,7 @@ import { MovingProbe } from './sonde.ts';
 import { cleanProbePass } from '../../render/probePass.ts';
 import { aimSunShadow } from '../../render/sunShadow.ts';
 import { roueEnPlus, rouesMotrices, wheelSteer } from './roues.ts';
+import { liveNos, suivreNos } from '../../data/nos.ts';
 import { createRig, rollWheels, TAIL_LIGHT, type DriveModel, type DriveRig } from './vehicule.tsx';
 import { duelDeLaSortie, liveDuel, type DuelEnCourse } from '../adversaire/course.ts';
 import { useDuel } from '../adversaire/choix.ts';
@@ -557,6 +558,8 @@ export class DriveEngine {
       frame.halfWidth = rig.measure.halfWidth;
       frame.height = rig.measure.height;
     }
+    // Effet du NOS à l'image (src/data/nos.ts), lu par la caméra, les dards et l'écran.
+    suivreNos(liveNos, this.pilot.train?.nos === true, motion.boost ?? 0, dt, this.reducedMotion);
     const cameraId = drive.director ? this.director.pick(this.time, motion, pose) : drive.camera;
     const shot = cameraShot(cameraId, frame, motion, this.rail, this.time, drive.orbit, this.shot);
     // Garde au sol : jamais sous le terrain, dans un bâtiment ni derrière un talus (hors tunnel, où

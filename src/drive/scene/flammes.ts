@@ -22,6 +22,7 @@ import { useBuilds } from '../../state/builds.ts';
 import { livePilot, useDrive } from '../../state/drive.ts';
 import '../../ui/echappement/suivi.ts';
 import { DRIVE_STAGE_CLASS } from '../contrat.ts';
+import { useNosSortie } from './nos.ts';
 
 export { creerFlammes, forceFlamme, geometrieFlammes, RAYON_SORTIE, type FlammesRig } from '../../scene/vehicle/flammes.ts';
 
@@ -77,6 +78,8 @@ export function suivreFlammes(s: SuiviFlammes, charge: number, regime: number, p
  */
 export function useEchappementSortie(root: Object3D, vehicle: VehicleManifest, invalidate: () => void): void {
   useFinitionEchappement(root, vehicle, invalidate);
+  // Dards bleus et lueur du NOS aux mêmes sorties (./nos.ts).
+  useNosSortie(root, vehicle);
   const gl = useThree((state) => state.gl);
   const camera = useThree((state) => state.camera);
   const scene = useThree((state) => state.scene) as Scene;
