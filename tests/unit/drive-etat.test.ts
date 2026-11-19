@@ -27,7 +27,7 @@ beforeEach(() => {
 
 describe('préférences', () => {
   it('lecture tolérante : une valeur inconnue retombe sur l’origine', () => {
-    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ moment: 'nuit', weather: 'sec', camera: 'orbite', commande: 'manche', direction: 'libre', format: 'tour1' });
+    expect(sanitizeDrivePrefs({ weather: 'sec', camera: 'orbite' })).toEqual({ moment: 'nuit', weather: 'sec', camera: 'orbite', commande: 'manche', direction: 'assistee', format: 'tour1' });
     expect(sanitizeDrivePrefs({ moment: 'jour', weather: 'neige', camera: 'orbite', commande: 'pedales', direction: 'assistee', format: 'tours3' })).toEqual({
       moment: 'jour',
       weather: 'neige',
@@ -210,8 +210,23 @@ describe('une sortie', () => {
     expect(drive.getState()).toMatchObject({ camera: 'orbite', director: false });
   });
 
+  it('par défaut : direction assistée, passée au pilote à la prise du volant ; le format Drift la coupe sans toucher au réglage', async () => {
+    const drive = await launch();
+    expect(drive.getState().direction).toBe('assistee');
+    drive.getState().enter();
+    drive.getState().setAuto(false);
+    expect(drive.getState().input.assist).toBe(true);
+    drive.getState().setAuto(true);
+    drive.getState().setFormat('drift');
+    drive.getState().setAuto(false);
+    expect('assist' in drive.getState().input).toBe(false);
+    expect(drive.getState().direction).toBe('assistee');
+  });
+
   it('commandes : ignorées en pilote automatique, bornées à la main, relâchées au changement de mode', async () => {
     const drive = await launch();
+    // Direction libre choisie : le défaut est l'assistée depuis le 19 novembre 2026.
+    drive.getState().setDirection('libre');
     drive.getState().enter();
     drive.getState().setThrottle(1);
     expect(drive.getState().input).toEqual(AUTO_INPUT);
@@ -228,6 +243,8 @@ describe('une sortie', () => {
 
   it('manche : gaz, frein et placement d’un coup, bornés ; sans placement, retour aux bords demandés', async () => {
     const drive = await launch();
+    // Direction libre choisie : le défaut est l'assistée depuis le 19 novembre 2026.
+    drive.getState().setDirection('libre');
     drive.getState().enter();
     drive.getState().setManual({ throttle: 1, brake: 0, steer: 1 });
     expect(drive.getState().input).toEqual(AUTO_INPUT);
@@ -247,6 +264,8 @@ describe('une sortie', () => {
 
   it('à la main : poursuite et réalisateur coupé ; rien ne les remet tout seul ; direction assistée passée au pilote', async () => {
     const drive = await launch();
+    // Direction libre choisie : le défaut est l'assistée depuis le 19 novembre 2026.
+    drive.getState().setDirection('libre');
     drive.getState().enter();
     expect(drive.getState().director).toBe(true);
     drive.getState().setCamera('avant');

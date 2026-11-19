@@ -103,7 +103,9 @@ export interface DrivePrefs {
   format: FormatCourse;
 }
 
-export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ moment: MOMENT_PAR_DEFAUT, weather: 'pluie', camera: 'poursuite', commande: 'manche', direction: 'libre', format: FORMAT_PAR_DEFAUT });
+// Direction assistée par défaut (demande du 19 novembre 2026 : « activé par défaut pour les autres modes ») ; le
+// format Drift la coupe d'office (`directionDe`). Un réglage déjà sauvegardé n'est pas touché.
+export const DEFAULT_DRIVE_PREFS: Readonly<DrivePrefs> = Object.freeze({ moment: MOMENT_PAR_DEFAUT, weather: 'pluie', camera: 'poursuite', commande: 'manche', direction: 'assistee', format: FORMAT_PAR_DEFAUT });
 
 /** Caméra mise en passant « À la main ». */
 export const CAMERA_A_LA_MAIN: CameraId = 'poursuite';

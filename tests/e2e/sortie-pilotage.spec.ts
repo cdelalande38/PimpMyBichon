@@ -9,7 +9,7 @@
 // se recouvre, tout offre 48 px, le manche et le GAZ répondent en même temps. Appuis tactiles seulement
 // (aucune souris) : de vrais événements tactiles, par le protocole du navigateur.
 // Direction (vague P, demandes du 16 novembre 2026) : passer à la main met la poursuite et coupe le
-// réalisateur, et rien ne les remet au retour en pilote automatique ; en direction libre (par défaut)
+// réalisateur, et rien ne les remet au retour en pilote automatique ; en direction libre (choisie au début : le défaut est l'assistée)
 // le manche braque vraiment (le véhicule prend un cap, la caisse quitte sa place) ; en direction
 // assistée, l'ancien comportement : le manche place le véhicule, qui revient ensuite sur sa trajectoire.
 // Écart (m), cap (°) et glissement relevés sur la zone des gestes (data-ecart, data-cap, data-glisse).
@@ -243,6 +243,9 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await page.locator('.drive-top').screenshot({ path: resolve('captures', 'vague-o-manette', '01-bandeau-390.png') });
     await ouvrirReglages(page);
     await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'false');
+    // La direction assistée est le défaut depuis le 19 novembre 2026 : ce parcours commence par la libre.
+    await expect(reglagesSortie(page).getByRole('group', { name: 'Direction' }).getByRole('button', { name: 'Assistée', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await reglerSortie(page, 'Direction', 'Libre', { garder: true });
     await fermerReglages(page);
     await expect(mid).toHaveAttribute('data-commande', 'manche');
     await expect(page.locator('.drive-amorce')).toBeVisible();
@@ -308,7 +311,7 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect(page.locator('.drive-top').getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
     await expect(manche).toHaveAttribute('data-gaz', '1.00');
 
-    // Sur les côtés, la direction (libre, par défaut) : à gauche négatif, progressif ; le véhicule
+    // Sur les côtés, la direction (libre, choisie plus haut) : à gauche négatif, progressif ; le véhicule
     // braque vraiment, il prend un cap à gauche puis, de l'autre côté, à droite.
     await releves(page);
     await doigts.glisser(1, x0 - 70, y0 - 20);

@@ -5,7 +5,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, attendreSurLaRoute, DELAI_ROUTE } from './helpers.ts';
+import { attendreApercu, attendreSurLaRoute, DELAI_ROUTE, reglerSortie } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const gestes = (page: Page) => page.locator('.drive-mid');
@@ -51,6 +51,8 @@ test.describe('sortie, pilotage au clavier', () => {
     await page.keyboard.press('Enter');
     await expect(gestes(page)).toHaveAttribute('data-conduite', 'main');
     await expect(stage(page)).toHaveAttribute('data-depart', 'parti', { timeout: DELAI_ROUTE });
+    // Direction libre pour ce parcours (le défaut est l'assistée, où les côtés placent au lieu de braquer).
+    await reglerSortie(page, 'Direction', 'Libre');
 
     // La flèche du haut, tenue : la vitesse monte.
     await page.keyboard.down('ArrowUp');

@@ -104,14 +104,17 @@ export function useManettePhysique(main: boolean, manche: boolean): void {
 }
 
 /** Vrai si la touche s'adresse à un champ, à un bouton (Espace, Entrée) ou à une fenêtre ouverte : le clavier ne conduit pas. */
-function toucheAilleurs(event: KeyboardEvent): boolean {
+function toucheAilleurs(event: KeyboardEvent, enCourse = false): boolean {
   if (event.ctrlKey || event.altKey || event.metaKey) return true;
   if (document.querySelector('dialog[open]')) return true;
   const cible = event.target instanceof HTMLElement ? event.target : null;
   if (!cible) return false;
   if (cible.isContentEditable || cible.closest('input, textarea, select, [role="slider"]')) return true;
   // Espace et Entrée gardent leur rôle sur un bouton qui a le focus ; les flèches et les lettres conduisent.
-  return (event.code === 'Space' || event.code === 'Enter' || event.code === 'NumpadEnter') && cible.closest('button, a[href], [role="button"]') !== null;
+  // Sauf Espace en pleine course : un bouton cliqué à la souris garde le focus, et Espace doit rester le NOS.
+  if (cible.closest('button, a[href], [role="button"]') === null) return false;
+  if (event.code === 'Space') return !enCourse;
+  return event.code === 'Enter' || event.code === 'NumpadEnter';
 }
 
 /**
@@ -129,7 +132,7 @@ export function useClavier(main: boolean, manche: boolean): void {
   useEffect(() => {
     const e = etat.current;
     const enfoncee = (event: KeyboardEvent) => {
-      if (toucheAilleurs(event)) return;
+      if (toucheAilleurs(event, aLaMain.current && !useDrive.getState().paused)) return;
       const action = appuyer(e, event.code);
       if (action === null) {
         // Répétition d'une touche tenue : elle ne fait pas défiler la page.
@@ -139,7 +142,11 @@ export function useClavier(main: boolean, manche: boolean): void {
       event.preventDefault();
       if (action === 'nos' && aLaMain.current && !event.repeat) useDrive.getState().fireNos();
     };
-    const relachee = (event: KeyboardEvent) => relacher(e, event.code);
+    const relachee = (event: KeyboardEvent) => {
+      // Une touche de conduite relâchée n'active pas le bouton qui a le focus (Espace, au relâchement).
+      if (e.tenues.has(event.code)) event.preventDefault();
+      relacher(e, event.code);
+    };
     const lacher = () => toutRelacher(e);
     const cachee = () => {
       if (document.hidden) lacher();
