@@ -3,7 +3,8 @@
 // véhicule, à la scène, et recopie à chaque image la pose du véhicule sur le rail (cap, pente, sans le
 // roulis : elle reste à plat sur la chaussée, comme l'ombre de contact) : la sonde de réflexion, qui masque
 // le véhicule, la voit ainsi, et la caisse reflète sa propre lueur par en dessous.
-// De nuit, la lueur colore la chaussée sous la caisse et autour ; sur le mouillé, elle file vers la caméra ;
+// De nuit, la lueur colore la chaussée sous la caisse et autour, plus large et moins forte qu'au garage, et
+// s'éteint en fondu avant le bord de la chaussée ; sur le mouillé, elle file vers la caméra ;
 // de jour, elle s'efface et le tube seul reste, discret, sous le seuil du halo. Moment et météo suivent ceux
 // de la sortie (src/state/drive.ts), en fondu. Sans allocation par image.
 
@@ -13,8 +14,10 @@ import { Group, Matrix4, type Object3D, type Vector3 } from 'three';
 import type { VehicleManifest } from '../../data/vehicleTypes.ts';
 import { NEON_RENDU, useNeons, type NeonsRig } from '../../scene/vehicle/neons.ts';
 import type { Prepared } from '../../scene/vehicle/VehicleModel.tsx';
-import { useDrive } from '../../state/drive.ts';
+import { livePilot, useDrive } from '../../state/drive.ts';
 import { DRIVE_STAGE_CLASS } from '../contrat.ts';
+import { createPose } from '../rail.ts';
+import { liveVirages } from '../virages.ts';
 import type { DriveRig } from './vehicule.tsx';
 
 /** Part de la chaussée mouillée selon la météo choisie (la neige tient la lueur plus près). */
@@ -37,11 +40,31 @@ class LueurSortie {
   private published = -1;
   private stage: HTMLElement | null = null;
   private readonly neons: NeonsRig;
+  private readonly route = createPose();
 
   constructor(neons: NeonsRig) {
     this.neons = neons;
     this.holder.name = 'neons_sortie';
     this.holder.matrixAutoUpdate = false;
+    neons.poserSol(NEON_RENDU.largeurSortie, NEON_RENDU.avanceSortie);
+  }
+
+  /**
+   * Bords de la chaussée de part et d'autre du véhicule, lus sur le rail publié par la scène (les virages)
+   * et la place du pilote : la lueur s'éteint en fondu avant eux (trottoir, accotement), au lieu de s'y
+   * couper net. Sans rail publié, rien ne la coupe.
+   * shortcut: le cap propre du véhicule (changement de place) est ignoré, quelques degrés au plus.
+   */
+  private bords(): void {
+    const rail = liveVirages.current?.rail;
+    const motion = livePilot.current?.motion;
+    if (!rail || !motion) {
+      this.neons.poserSol(NEON_RENDU.largeurSortie, NEON_RENDU.avanceSortie);
+      return;
+    }
+    const demi = rail.poseAt(motion.s, this.route).width / 2;
+    // Gauche de la marche : −Z du véhicule ; l'écart latéral est positif vers la gauche.
+    this.neons.poserSol(NEON_RENDU.largeurSortie, NEON_RENDU.avanceSortie, demi - motion.offset, demi + motion.offset);
   }
 
   attach(scene: Object3D): void {
@@ -72,13 +95,14 @@ class LueurSortie {
     this.day = this.day < 0 ? dayGoal : this.day + (dayGoal - this.day) * k;
     this.wet = this.wet < 0 ? wetGoal : this.wet + (wetGoal - this.wet) * k;
     const halo = 1 - this.day;
-    this.neons.regler(halo, NEON_RENDU.tube + (NEON_RENDU.tubeJour - NEON_RENDU.tube) * this.day, NEON_RENDU.etirementSec + (NEON_RENDU.etirementMouille - NEON_RENDU.etirementSec) * this.wet);
+    this.neons.regler(halo * NEON_RENDU.forceSortie, NEON_RENDU.tube + (NEON_RENDU.tubeJour - NEON_RENDU.tube) * this.day, NEON_RENDU.etirementSec + (NEON_RENDU.etirementMouille - NEON_RENDU.etirementSec) * this.wet);
     this.holder.visible = halo > 0.01;
     if (this.neons.sol.visible && this.holder.visible) {
       this.holder.matrix.multiplyMatrices(vehicle.matrixWorld, this.lift);
       this.holder.matrixWorldNeedsUpdate = true;
       this.holder.updateMatrixWorld(true);
       this.neons.aim(this.holder, camera);
+      this.bords();
     }
     // Pour les parcours : la force de la lueur au sol, en pour cent (0 de jour ou tout éteint).
     const lueur = this.neons.sol.visible ? Math.round(halo * 100) : 0;

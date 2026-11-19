@@ -5,7 +5,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { attendreApercu, auSec, choisirCamera, ENTREE_SORTIE, openApp, openAtelier, openEntry, pickMap, quick, readBuilds, reglerSortie, reloadSaved, rentrerAuGarage, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { attendreApercu, auSec, choisirCamera, commencerCourse, ENTREE_SORTIE, openApp, openAtelier, openEntry, pickMap, quick, readBuilds, reglerSortie, reloadSaved, rentrerAuGarage, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 const CAPTURES = process.env.PMB_CAPTURES_NEONS;
 
@@ -436,3 +436,88 @@ async function sortieDeNuit(page: Page, nom: string): Promise<void> {
   await photo(page, `14-${nom}-nuit-pluie-embarquee`);
   await rentrerAuGarage(page);
 }
+
+// Vague V (lot neons2) : les arcs des passages de roue, roues à leurs extrêmes, et la lueur de la sortie,
+// aux mêmes points de vue avant et après. À la demande : PMB_CAPTURES_NEONS=<dossier> --grep "arcs et lueur".
+test.describe('néons : arcs et lueur, captures de revue', () => {
+  test.skip(!CAPTURES, 'captures de revue : PMB_CAPTURES_NEONS=<dossier>');
+  const TOUT = { 'piece-neon-flancs': true, 'piece-neon-arriere': true, 'piece-neon-roues': true, 'piece-assiette-rehaussee': true } as const;
+  const COULEURS = { avant: '#a259ff', flancs: '#ff2bd6', arriere: '#a259ff', roues: '#ff9a1a', cadre: '#a259ff' } as const;
+  const avec = (id: string, zones: readonly string[], tune: Record<string, number> = {}) => {
+    const builds = buildsAvec(id, zones);
+    const build = (builds.builds as Record<string, Record<string, unknown>>)[id] as Record<string, unknown>;
+    build.partPaints = Object.fromEntries(zones.map((zone) => [`neon_${zone}`, { color: COULEURS[zone as keyof typeof COULEURS] ?? '#18e4ff' }]));
+    build.tune = tune;
+    return builds;
+  };
+
+  test('arcs : le concept de face (sa capture), puis les cinq véhicules roues aux extrêmes', async ({ page }) => {
+    test.setTimeout(900_000);
+    await openApp(page);
+    await waitForScene(page);
+    await poserSauvegarde(page, { jeu: JEU(0, TOUT), builds: avec('concept', ['avant', 'flancs', 'arriere', 'roues']) });
+    await waitForBench(page);
+    await openEntry(page, 'Néons');
+    await dock(page).getByTestId('neons').getByRole('group', { name: 'Zones des néons' }).locator('[data-neon-zone="avant"]').tap();
+    await page.waitForTimeout(2_000);
+    await waitForStill(page);
+    await photo(page, 'a0-concept-face');
+    const voiture = ['avant', 'flancs', 'arriere', 'roues'];
+    const moto = ['cadre', 'roues'];
+    const reglages: Array<[string, string[], string, Record<string, number>]> = [
+      ['concept', voiture, 'bas', { assiette: 1 }],
+      ['concept', voiture, 'haut', { assiette: -1 }],
+      ['cox', voiture, 'grand-bas', { jante: 20, pneu_largeur: 225, pneu_hauteur: 80, assiette: 1 }],
+      ['cox', voiture, 'petit-haut', { jante: 15, pneu_largeur: 135, pneu_hauteur: 30, assiette: -1 }],
+      ['van', voiture, 'grand-bas', { jante: 20, pneu_largeur: 265, pneu_hauteur: 75, assiette: 1 }],
+      ['van', voiture, 'petit-haut', { jante: 15, pneu_largeur: 185, pneu_hauteur: 30, assiette: -1 }],
+      ['sportive', moto, 'grand-bas', { jante: 18, pneu_arriere: 200, pneu_hauteur: 80, assiette: 1 }],
+      ['sportive', moto, 'petit-haut', { jante: 16, pneu_arriere: 150, pneu_hauteur: 40, assiette: -1 }],
+      ['bobber', moto, 'grand-bas', { jante: 19, pneu_arriere: 150, pneu_hauteur: 95, assiette: 1 }],
+      ['bobber', moto, 'petit-haut', { jante: 15, pneu_arriere: 130, pneu_hauteur: 50, assiette: -1 }],
+    ];
+    for (const [rang, [id, zones, nom, tune]] of reglages.entries()) {
+      await poserSauvegarde(page, { jeu: JEU(0, TOUT), builds: avec(id, zones, tune) });
+      await expect(garage(page)).toHaveAttribute('data-vehicle', id);
+      await waitForBench(page);
+      await expect(garage(page)).not.toHaveAttribute('data-neons', 'eteints');
+      await page.waitForTimeout(1_500);
+      await waitForStill(page);
+      await photo(page, `b${rang}-${id}-${nom}`);
+    }
+  });
+
+  test('lueur : la sortie de nuit du concept en paysage, poursuite, au sec et sous la pluie, en roulant et à l’arrêt', async ({ page }) => {
+    test.setTimeout(900_000);
+    await openApp(page);
+    await waitForScene(page);
+    await poserSauvegarde(page, { jeu: JEU(0, TOUT), builds: avec('concept', ['avant', 'flancs', 'arriere', 'roues']) });
+    await waitForBench(page);
+    await page.setViewportSize({ width: 844, height: 390 });
+    await openEntry(page, ENTREE_SORTIE);
+    await pickMap(page);
+    await auSec(page);
+    await dock(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+    const stage = page.locator('.drive-stage');
+    await expect(stage).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
+    await attendreApercu(page);
+    await expect(stage).toHaveAttribute('data-neons-lueur', '100', { timeout: 30_000 });
+    await choisirCamera(page, 'Poursuite');
+    await page.waitForTimeout(6_000);
+    await photo(page, 'c0-nuit-sec-roule');
+    await choisirCamera(page, 'Bord de route');
+    await page.waitForTimeout(8_000);
+    await photo(page, 'c1-nuit-sec-bord');
+    await reglerSortie(page, 'Météo', 'Pluie');
+    await choisirCamera(page, 'Poursuite');
+    await page.waitForTimeout(8_000);
+    await photo(page, 'c2-nuit-pluie-roule');
+    // À l'arrêt : la course à la main, sur la ligne, avant le vert.
+    await commencerCourse(page);
+    await page.waitForTimeout(3_000);
+    await photo(page, 'c3-nuit-pluie-arret');
+    await reglerSortie(page, 'Météo', 'Sec');
+    await page.waitForTimeout(3_000);
+    await photo(page, 'c4-nuit-sec-arret');
+  });
+});

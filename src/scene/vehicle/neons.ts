@@ -58,8 +58,8 @@ const VEHICLE_RENDER_ORDER = -2;
 const NAPPE_RENDER_ORDER = 3;
 /** Faces d'un tube autour de sa ligne : six, un tube de 2 cm de large ne montre pas ses pans. */
 const FACES = 6;
-/** Segments d'un bout arrondi de nappe. */
-const BOUT = 6;
+/** Segments d'un bout arrondi de nappe (assez pour que la cloche n'y montre pas de facettes). */
+const BOUT = 10;
 /** Hauteur de la nappe au-dessus du sol (m) : au ras, sans scintiller contre lui. */
 const AU_SOL = 0.006;
 
@@ -77,7 +77,27 @@ export const NEON_RENDU = Object.freeze({
   etirementGarage: 0.35,
   etirementSec: 0.2,
   etirementMouille: 1.6,
+  /**
+   * Largeur des nappes (× la portée de la lueur) et force au sol en sortie : sur la chaussée noire, une
+   * nappe large au cœur moins fort se lit comme une lumière qui se diffuse ; au garage, le sol clair et
+   * brillant garde la lueur d'origine.
+   */
+  largeurGarage: 1.15,
+  largeurSortie: 1.75,
+  forceSortie: 0.55,
+  /** Fondu de la lueur avant le bord de la chaussée (m) : elle s'éteint avant le trottoir ou l'accotement. */
+  fonduBord: 0.7,
+  /**
+   * Avancée de la lueur vers l'œil en sortie (m, le long du rayon de vue : l'image ne bouge pas, seule la
+   * profondeur change). Posée à plat sur une chaussée bombée, aux tronçons droits, elle passait dessous
+   * par endroits et s'y coupait net, en lignes droites : la « plaque ». Moins que la garde au sol vue de
+   * la caméra, pour rester cachée par la caisse.
+   */
+  avanceSortie: 0.3,
 });
+
+/** Bords de la chaussée « à l'infini » : au garage, rien ne coupe la lueur. */
+const SANS_BORD = 1e4;
 
 export interface NeonUniforms {
   [name: string]: { value: unknown };
@@ -89,6 +109,10 @@ export interface NeonUniforms {
   uHalo: { value: number };
   uStretch: { value: number };
   uCamDir: { value: Vector2 };
+  uLarge: { value: number };
+  /** Distance du milieu du véhicule aux bords de la chaussée, à gauche (−Z) et à droite (+Z), en mètres. */
+  uBords: { value: Vector2 };
+  uAvance: { value: number };
 }
 
 function createUniforms(): NeonUniforms {
@@ -101,6 +125,9 @@ function createUniforms(): NeonUniforms {
     uHalo: { value: 1 },
     uStretch: { value: NEON_RENDU.etirementGarage },
     uCamDir: { value: new Vector2(1, 0) },
+    uLarge: { value: NEON_RENDU.largeurGarage },
+    uBords: { value: new Vector2(SANS_BORD, SANS_BORD) },
+    uAvance: { value: 0 },
   };
 }
 
@@ -155,35 +182,51 @@ ${ZONE_HEAD}
 uniform float uHalo;
 uniform float uStretch;
 uniform vec2 uCamDir;
+uniform float uLarge;
+uniform vec2 uBords;
+uniform float uAvance;
 attribute vec2 aOut;
 attribute float aD;
 attribute float aForce;
 varying vec3 vColor;
 varying float vD;
 varying float vFile;
+varying float vBord;
 void main() {
   vec3 color;
   float level = neonLevel( color ) * uHalo;
   vec3 p = position;
-  p.xz += aOut;
+  vec2 out2 = aOut * uLarge;
+  p.xz += out2;
   // Sur un sol qui brille, la lueur file vers qui la regarde : le bord tourné vers la caméra s'éloigne.
-  float l = length( aOut );
-  float file = l > 1e-5 ? max( dot( aOut / l, uCamDir ), 0.0 ) : 0.0;
+  float l = length( out2 );
+  float file = l > 1e-5 ? max( dot( out2 / l, uCamDir ), 0.0 ) : 0.0;
   p.xz += uCamDir * file * uStretch * l;
   vColor = color * level * aForce;
   vD = aD;
   // Part de l'étirement (0 au tube, 1 au bout du reflet) : la traînée s'éteint en s'éloignant du tube.
   vFile = file * min( uStretch, 1.0 );
-  gl_Position = level > 0.0 ? projectionMatrix * modelViewMatrix * vec4( p, 1.0 ) : vec4( 2.0, 2.0, 2.0, 1.0 );
+  // Distance au bord de la chaussée le plus proche (m) ; négative au-delà.
+  vBord = min( uBords.x + p.z, uBords.y - p.z );
+  vec4 mv = modelViewMatrix * vec4( p, 1.0 );
+  float dist = length( mv.xyz );
+  mv.xyz *= max( dist - uAvance, 0.05 ) / max( dist, 1e-4 );
+  gl_Position = level > 0.0 ? projectionMatrix * mv : vec4( 2.0, 2.0, 2.0, 1.0 );
 }`,
   fragmentShader: /* glsl */ `
 varying vec3 vColor;
 varying float vD;
 varying float vFile;
+varying float vBord;
 void main() {
-  // Cloche douce, nulle au bord de la nappe ; la traînée sur le mouillé s'éteint vers son bout.
-  float f = max( ( exp( -3.2 * vD * vD ) - 0.0408 ) / 0.9592, 0.0 );
-  f *= 1.0 - 0.6 * smoothstep( 0.0, 1.0, vFile );
+  // Cloche (1 − d²)⁴ : presque une gaussienne, éteinte bien avant le bord de la nappe et sans pente au
+  // bout, pour qu'aucun bord ne se lise, même sur une chaussée noire (l'œil, en sRGB, grossit les faibles
+  // lueurs). La traînée sur le mouillé s'éteint vers son bout ; la lueur s'éteint avant le bord de la chaussée.
+  float s = clamp( 1.0 - vD * vD, 0.0, 1.0 );
+  s *= s;
+  float f = s * s;
+  f *= 1.0 - 0.7 * smoothstep( 0.0, 1.0, vFile );
+  f *= smoothstep( 0.0, ${NEON_RENDU.fonduBord.toFixed(2)}, vBord );
   gl_FragColor = vec4( vColor * f, 1.0 );
 }`,
 };
@@ -327,8 +370,11 @@ function pushNappe(nappe: NeonNappe, buffers: NappeBuffers): void {
       const ox = (nx * Math.cos(angle) + sens * t[0] * Math.sin(angle)) * r;
       const oz = (nz * Math.cos(angle) + sens * t[1] * Math.sin(angle)) * r;
       const next = k === BOUT ? (rights[i] as number) : add(cx, cz, ox, oz, 1);
-      // Bout de fin : les triangles tournent dans l'autre sens (pas de face cachée : rien n'est éliminé).
-      buffers.index.push(center, previous, next);
+      // Face tournée vers le haut aux deux bouts : le bout de début tourne dans l'autre sens. Jusqu'au
+      // 19 novembre, il était tourné vers le bas, donc éliminé (matière à une face) : chaque nappe finissait
+      // carrée et nette à son début, la « plaque » de la sortie.
+      if (sens === 1) buffers.index.push(center, previous, next);
+      else buffers.index.push(center, next, previous);
       previous = next;
     }
   };
@@ -383,7 +429,7 @@ export function buildNeonGeometry(vehicle: Pick<VehicleManifest, 'neons' | 'kind
     const habitacle = zone.habitacle === true;
     const radius = zone.spec.radius ?? (habitacle ? NEON_TUBE.ruban : NEON_TUBE.rayon);
     const own = zone.spec.tubes ?? [];
-    const arcs = zone.spec.arceaux ? arceaux(vehicle.kind, roues) : [];
+    const arcs = zone.spec.arceaux ? arceaux(vehicle.kind, roues, zone.spec.passages, radius) : [];
     for (const line of [...own, ...arcs]) {
       pushTube(line, radius, rank, tubes);
       lines += 1;
@@ -474,6 +520,8 @@ export class NeonsRig {
   private readonly solMesh: Mesh;
   private readonly tubeMaterial: ShaderMaterial;
   private readonly nappeMaterial: ShaderMaterial;
+  /** Nappes de l'habitacle : mêmes réglages de zone, mais ni élargies ni coupées par la chaussée (même programme). */
+  private readonly cabineMaterial: ShaderMaterial;
   private readonly empty = new BufferGeometry();
   /** Zones allumées en ce moment, et zones qui respirent. */
   allumees = 0;
@@ -483,11 +531,12 @@ export class NeonsRig {
   constructor() {
     this.tubeMaterial = tubeMaterial(this.uniforms);
     this.nappeMaterial = nappeMaterial(this.uniforms);
+    this.cabineMaterial = nappeMaterial({ ...this.uniforms, uLarge: { value: 1 }, uBords: { value: new Vector2(SANS_BORD, SANS_BORD) }, uAvance: { value: 0 } });
     this.tubes = new Mesh(this.empty, this.tubeMaterial);
     this.tubes.name = 'neons_tubes';
     this.tubes.renderOrder = VEHICLE_RENDER_ORDER;
     this.tubes.frustumCulled = false;
-    this.cabine = new Mesh(this.empty, this.nappeMaterial);
+    this.cabine = new Mesh(this.empty, this.cabineMaterial);
     this.cabine.name = 'neons_habitacle';
     this.cabine.renderOrder = NAPPE_RENDER_ORDER;
     this.cabine.frustumCulled = false;
@@ -552,6 +601,16 @@ export class NeonsRig {
     this.uniforms.uStretch.value = stretch;
   }
 
+  /**
+   * Nappes au sol : largeur (× leur portée), avancée vers l'œil (m) et bords de la chaussée à gauche et à
+   * droite du véhicule (m).
+   */
+  poserSol(largeur: number, avance: number, gauche = SANS_BORD, droite = SANS_BORD): void {
+    this.uniforms.uLarge.value = largeur;
+    this.uniforms.uAvance.value = avance;
+    this.uniforms.uBords.value.set(gauche, droite);
+  }
+
   /** Zones de l'habitacle allumées ? (les nappes de l'habitacle ne se montrent qu'alors). */
   private habitacleOn(): boolean {
     const rank = NEON_ZONES.findIndex((zone) => zone.habitacle);
@@ -578,6 +637,7 @@ export class NeonsRig {
     this.empty.dispose();
     this.tubeMaterial.dispose();
     this.nappeMaterial.dispose();
+    this.cabineMaterial.dispose();
   }
 }
 
@@ -635,6 +695,7 @@ export function useNeons(prepared: Prepared, vehicle: VehicleManifest, invalidat
   const pose = useBodyPose((state) => state.poses[vehicle.id]) ?? STILL_BODY;
   useLayoutEffect(() => {
     if (!has || !lit) return;
+    // Les arcs d'une voiture sont ancrés à la caisse (manifeste), écartés du pneu posé ; les cercles d'une moto suivent ses roues.
     const roues = vehicle.neons?.roues?.arceaux ? measureWheels(prepared, pose) : [];
     rig.setGeometry(buildNeonGeometry(vehicle, roues, pose));
     const stage = gl.domElement.closest<HTMLElement>(`.${stageClass}`);

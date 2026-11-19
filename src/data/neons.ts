@@ -175,11 +175,16 @@ export function articleNeon(zone: string): string | null {
 export const NEON_TUBE = Object.freeze({ rayon: 0.011, ruban: 0.006, min: 0.003, max: 0.04 });
 
 /**
- * Arceaux des roues : une voiture a un arc au-dessus du pneu, `ecart` au-delà de son rayon, rentré de
- * `retrait` dans le passage depuis le flanc du pneu, de `de` à `a` degrés (0 : vers l'avant, 90 : en haut) ;
- * une moto a un cercle de chaque côté de la jante, à `jante` de son rayon.
+ * Arceaux des roues. Une voiture a un arc dans chaque passage de roue, ancré à la caisse (`passages` du
+ * manifeste : centre, rayon juste sous la voûte, cote du ruban juste derrière la lèvre de l'aile), de `de` à
+ * `a` degrés (0 : vers l'avant, 90 : en haut). Il ne suit pas la roue : quand un grand pneu ou une caisse
+ * posée au sol amène le pneu sous la voûte, il remonte dans l'arche, jamais dans le pneu (`jeu` : écart
+ * gardé). Une moto a un cercle de chaque côté de la jante, à `jante` de son rayon, à `cote` du flanc du pneu.
  */
-export const NEON_ARCEAUX = Object.freeze({ ecart: 0.035, retrait: 0.05, de: 25, a: 155, pas: 13, jante: 0.82, cercle: 20, cote: 0.035 });
+export const NEON_ARCEAUX = Object.freeze({ de: 20, a: 160, pas: 14, jante: 0.82, cercle: 20, cote: 0.035, jeu: 0.002 });
+
+/** Rayon et cote d'un passage de roue : bornes de la validation (m). */
+const PASSAGE = Object.freeze({ rayon: [0.15, 0.8] as const });
 
 /**
  * Lueur au sol d'un tube : portée (m) tirée de sa hauteur au-dessus du sol, entre `min` et `max`, et
@@ -226,19 +231,26 @@ export interface RoueNeon {
 }
 
 /**
- * Lignes des arceaux d'une zone « roues » : un arc au-dessus de chaque roue d'une voiture, côté flanc
- * extérieur, ou deux cercles par roue d'une moto. `cote` : signe du flanc extérieur de la roue (z).
+ * Lignes des arceaux d'une zone « roues » : sur une voiture, un arc par passage de roue déclaré, des deux
+ * côtés (`passages`, repère de la caisse au repos), écarté du pneu posé dessous (`roues`, même repère) de
+ * l'épaisseur du ruban (`ruban`) ; sur une moto, deux cercles par roue posée.
  */
-export function arceaux(kind: 'car' | 'bike', roues: readonly RoueNeon[]): VehiclePoint[][] {
+export function arceaux(kind: 'car' | 'bike', roues: readonly RoueNeon[], passages: VehicleNeonZone['passages'] = [], ruban = 0): VehiclePoint[][] {
   const A = NEON_ARCEAUX;
+  if (kind === 'car') {
+    return passages.flatMap(({ centre: [x, y, z], rayon }) =>
+      [Math.abs(z), -Math.abs(z)].map((cote) => {
+        // Le pneu sous ce passage : au plus haut de l'arc, il monte de son rayon et de la remontée de son centre.
+        const roue = roues.find((item) => Math.abs(item.centre[0] - x) < 0.5 && Math.sign(item.centre[2]) === Math.sign(cote));
+        const pneu = roue ? roue.rayon + Math.max(0, roue.centre[1] - y) + ruban + A.jeu : 0;
+        return arc([x, y, cote], Math.max(rayon, pneu), A.de, A.a, A.pas, cote);
+      }),
+    );
+  }
   return roues.flatMap((roue) => {
     const [x, y, z] = roue.centre;
-    if (kind === 'bike') {
-      const r = roue.jante * A.jante;
-      return [-1, 1].map((s) => arc([x, y, z], r, 0, 360, A.cercle, z + s * (roue.demiLargeur + A.cote)));
-    }
-    const exterieur = z >= 0 ? 1 : -1;
-    return [arc([x, y, z], roue.rayon + A.ecart, A.de, A.a, A.pas, z + exterieur * (roue.demiLargeur - A.retrait))];
+    const r = roue.jante * A.jante;
+    return [-1, 1].map((s) => arc([x, y, z], r, 0, 360, A.cercle, z + s * (roue.demiLargeur + A.cote)));
   });
 }
 
@@ -274,6 +286,12 @@ export function checkNeons(raw: unknown, kind: unknown, problems: string[]): voi
     if (value.arceaux !== undefined && value.arceaux !== true) problems.push(`${where}.arceaux doit valoir vrai`);
     if (!hasTubes && value.arceaux !== true) problems.push(`${where} : des tubes, ou des arceaux de roue`);
     if (value.arceaux === true && id !== 'roues') problems.push(`${where}.arceaux : seulement pour la zone roues`);
+    const passages = value.passages;
+    if (passages !== undefined) {
+      const ok = Array.isArray(passages) && passages.length >= 1 && passages.length <= 4 && passages.every((item) => isObject(item) && point(item.centre) && typeof item.rayon === 'number' && item.rayon >= PASSAGE.rayon[0] && item.rayon <= PASSAGE.rayon[1] && item.centre[1] > 0);
+      if (!ok) problems.push(`${where}.passages doit être une liste de passages de roue (centre : trois nombres, au-dessus du sol ; rayon de ${PASSAGE.rayon[0]} à ${PASSAGE.rayon[1]} m)`);
+      if (value.arceaux !== true || kind !== 'car') problems.push(`${where}.passages : seulement pour les arceaux d’une voiture`);
+    } else if (value.arceaux === true && kind === 'car') problems.push(`${where} : les passages de roue de la caisse (passages), où poser les arceaux`);
     if (value.radius !== undefined && !(typeof value.radius === 'number' && value.radius >= NEON_TUBE.min && value.radius <= NEON_TUBE.max)) {
       problems.push(`${where}.radius doit être un rayon de ${NEON_TUBE.min} à ${NEON_TUBE.max} m`);
     }

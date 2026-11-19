@@ -538,6 +538,12 @@ export interface VehicleNeonZone {
   tubes?: ReadonlyArray<readonly VehiclePoint[]>;
   /** Zone `roues` : un arc dans chaque passage de roue (voiture), deux cercles par roue (moto). */
   arceaux?: true;
+  /**
+   * Zone `roues` d'une voiture : les passages de roue de la caisse, un par essieu, côté droit (z > 0),
+   * recopiés en miroir à gauche : centre de l'arc et cote du ruban (en retrait de la lèvre de l'aile),
+   * rayon de l'arc (à la voûte). L'arc est ancré à la caisse : il ne suit pas la roue posée.
+   */
+  passages?: ReadonlyArray<{ centre: VehiclePoint; rayon: number }>;
   /** Rayon du tube, en mètres ; absent : celui du catalogue (tube sous la caisse, ruban dans l'habitacle). */
   radius?: number;
   /** Habitacle : lueurs posées sur le plancher, de `from` à `to` (hauteur du plancher en y), portée `radius`. */
