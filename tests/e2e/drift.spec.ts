@@ -118,7 +118,8 @@ test.describe('format « Drift »', () => {
   test.use({ serviceWorkers: 'block' });
 
   test('au bouton FREIN en paysage : la glisse part, les points s’affichent ; à l’arrivée, le score', async ({ page }) => {
-    test.setTimeout(600_000);
+    // En rendu logiciel de CI (une image par seconde), les 320 m de route passent les dix minutes : quinze.
+    test.setTimeout(900_000);
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.route('**/assets/maps/miami-beach/route.json', async (route) => {
@@ -190,7 +191,7 @@ test.describe('format « Drift »', () => {
 
     // GAZ tenu jusqu'au bout de la route : l'écran de fin, le score à la place du temps.
     const fin = page.locator('.fin-course');
-    await attendreSurLaRoute(page, 'écran de fin', () => fin.isVisible(), (vu) => vu, { secondes: 60, horloge: 420_000, intervalle: 500 });
+    await attendreSurLaRoute(page, 'écran de fin', () => fin.isVisible(), (vu) => vu, { secondes: 60, horloge: 600_000, intervalle: 500 });
     await doigts.toutLever();
     await expect(fin).toContainText('Drift');
     const score = Number(await fin.locator('.fin-course-temps').getAttribute('data-score'));

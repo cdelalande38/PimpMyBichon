@@ -130,7 +130,8 @@ test.describe('tutoriels', () => {
     const liste = page.getByRole('dialog', { name: 'Tous les tutos' });
     await expect(liste).toBeVisible();
     await expect(liste.getByRole('listitem')).toHaveCount(TUTOS.length);
-    for (const tuto of TUTOS) await expect(liste.getByRole('button', { name: tuto.titre })).toBeAttached();
+    // Le nom d'un bouton de la liste est « titre + but » : on ancre sur le titre (le but des néons cite « les roues »).
+    for (const tuto of TUTOS) await expect(liste.getByRole('button', { name: new RegExp(`^${tuto.titre.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) })).toBeAttached();
     await capture(page, '05-liste');
     await liste.getByRole('button', { name: 'La radio' }).click();
     await expect(page.getByRole('dialog', { name: 'La radio' })).toBeVisible();
