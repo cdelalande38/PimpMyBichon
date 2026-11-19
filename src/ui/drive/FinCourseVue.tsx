@@ -101,7 +101,7 @@ export function boutonsDeFin(v: VerdictRendezVous | null): BoutonFin[] {
   if (!v.reussi) return [{ acte: 'retenter', label: 'Retenter', principal: true }, preparer];
   if (v.suivant && !v.bouclee) {
     return [
-      { acte: 'suivante', label: 'Course suivante', detail: `Rendez-vous ${v.suivantNumero} · ${resumeRendezVous(v.suivant)}`, principal: true },
+      { acte: 'suivante', label: 'Course suivante', detail: `${v.suivantSaison !== v.saisonNumero ? `Saison ${v.suivantSaison} · rendez-vous` : 'Rendez-vous'} ${v.suivantNumero} · ${resumeRendezVous(v.suivant)}`, principal: true },
       { acte: 'rejouer', label: 'Rejouer', principal: false },
       preparer,
     ];
@@ -142,7 +142,7 @@ export function FinCourseVue({ bilan, onRejouer, onGarage, onCourseSuivante, ani
   const agir = (acte: BoutonFin['acte']) => {
     if (acte === 'garage') onGarage();
     else if (acte === 'suivante') {
-      if (verdict?.suivant) onCourseSuivante?.(verdict.suivant, verdict.suivantNumero, verdict.total);
+      if (verdict?.suivant) onCourseSuivante?.(verdict.suivant, verdict.suivantNumero, verdict.suivantTotal);
     } else onRejouer();
   };
   return (

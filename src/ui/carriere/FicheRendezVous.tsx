@@ -4,15 +4,18 @@
 // zone et la carte, avec la miniature du tracé, et le départ ; l'objectif (le temps du bronze pour le
 // véhicule à l'écran) et la prime ; une ligne de conseil de préparation tirée des données
 // (src/data/carriere.ts). Rien ne s'y touche.
+// Vague V : la saison (à partir de la deuxième), l'objectif d'argent ou d'or avec son temps, les
+// contraintes en puces cerclées d'ambre juste sous les conditions, et un avertissement quand le véhicule à
+// l'écran n'est pas de la famille imposée.
 
 import { useMemo } from 'react';
-import { conseilDe, CONSEILS, METEO_LABEL, MOMENT_LABEL, OBJECTIF_LABEL, type RendezVous } from '../../data/carriere.ts';
+import { conseilDe, CONSEILS, CONTRAINTE_LABEL, METEO_LABEL, MOMENT_LABEL, OBJECTIF_LABEL, placeDe, type RendezVous } from '../../data/carriere.ts';
 import { formatSpec } from '../../data/courses.ts';
 import { mapById } from '../../data/maps.ts';
-import { resolveVehicle } from '../../data/vehicles.ts';
+import { resolveVehicle, vehicleById } from '../../data/vehicles.ts';
 import { formatChrono } from '../../drive/depart.ts';
 import { possedeDans } from '../../jeu/achats.ts';
-import { seuilBronze } from '../../jeu/carriereCloture.ts';
+import { seuilObjectif } from '../../jeu/carriereCloture.ts';
 import { conseilPreparation } from '../../jeu/preparation.ts';
 import { useBuilds } from '../../state/builds.ts';
 import { useJeu } from '../../state/jeu.ts';
@@ -51,18 +54,31 @@ function useConseil(rdv: RendezVous): string {
   }, [current, builds, articles, rdv]);
 }
 
+/** « Rendez-vous 3 sur 12 », la saison devant à partir de la deuxième. */
+export function numeroRendezVous(id: string, numero: number, total: number): string {
+  const saison = (placeDe(id)?.indexSaison ?? 0) + 1;
+  return saison > 1 ? `Saison ${saison} · rendez-vous ${numero} sur ${total}` : `Rendez-vous ${numero} sur ${total}`;
+}
+
+/** La phrase d'avertissement quand le véhicule à l'écran n'est pas de la famille imposée ; `null` sinon. */
+export function avertissementFamille(rdv: Pick<RendezVous, 'contraintes'>, vehicule: string): string | null {
+  const kind = vehicleById(vehicule)?.kind;
+  if (rdv.contraintes.includes('moto') && kind !== 'bike') return 'Il faut une moto : choisis-en une au garage avant de partir.';
+  if (rdv.contraintes.includes('voiture') && kind !== 'car') return 'Il faut une voiture : choisis-en une au garage avant de partir.';
+  return null;
+}
+
 export function FicheRendezVous({ rdv, numero, total }: { rdv: RendezVous; numero: number; total: number }) {
   const conseil = useConseil(rdv);
   const map = mapById(rdv.carte);
   const zone = zoneDe(map);
   const depart = useLibelleDepart(rdv.carte, rdv.depart);
   const vehicule = useVehiculeCourant();
-  const seuil = rdv.objectif === 'bronze' ? seuilBronze({ ...rdv, vehicule }) : null;
+  const seuil = seuilObjectif(rdv.objectif, { ...rdv, vehicule });
+  const famille = avertissementFamille(rdv, vehicule);
   return (
     <div className="carriere-fiche" data-rendez-vous={rdv.id}>
-      <p className="carriere-fiche-numero">
-        Rendez-vous {numero} sur {total}
-      </p>
+      <p className="carriere-fiche-numero">{numeroRendezVous(rdv.id, numero, total)}</p>
       <h3 className="carriere-fiche-titre">{rdv.titre}</h3>
       <ul className="carriere-fiche-conditions" aria-label="Imposé par le rendez-vous">
         <li data-meteo={rdv.meteo}>
@@ -71,7 +87,17 @@ export function FicheRendezVous({ rdv, numero, total }: { rdv: RendezVous; numer
         </li>
         <li data-moment={rdv.moment}>{MOMENT_LABEL[rdv.moment]}</li>
         <li data-format={rdv.format}>{formatSpec(rdv.format).label}</li>
+        {rdv.contraintes.map((c) => (
+          <li key={c} data-contrainte={c}>
+            {CONTRAINTE_LABEL[c].court}
+          </li>
+        ))}
       </ul>
+      {famille && (
+        <p className="carriere-fiche-alerte" role="note">
+          {famille}
+        </p>
+      )}
       <div className="carriere-fiche-lieu">
         <PictoCarte id={rdv.carte} />
         <span className="carriere-fiche-lieu-texte">

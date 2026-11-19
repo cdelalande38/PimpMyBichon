@@ -3,31 +3,47 @@
 // d'une carte et le nom de son départ.
 
 import { useEffect, useState } from 'react';
-import { CARRIERE, type RendezVous } from '../../data/carriere.ts';
+import { CARRIERE, placeDe, SAISONS, type RendezVous, type Saison } from '../../data/carriere.ts';
 import { loadRoute, mapById } from '../../data/maps.ts';
 import type { MapManifest } from '../../data/mapTypes.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
-import { indexCourant, nombreReussis } from '../../jeu/carriere.ts';
+import { indexCourant, indexSaisonCourante } from '../../jeu/carriere.ts';
 import { useBuilds } from '../../state/builds.ts';
 import { useJeu } from '../../state/jeu.ts';
 
 export interface EtatCarriere {
   /** Faux tant que la sauvegarde du jeu n'est pas relue (rien à annoncer à tort). */
   hydrated: boolean;
+  /** La saison en cours (la dernière quand tout est bouclé) et son numéro (1 pour la première) ; `null` : pas de carrière. */
+  saison: Saison | null;
+  saisonNumero: number;
+  /** Rendez-vous de la saison en cours, et ceux qui y sont réussis. */
   total: number;
   reussis: number;
-  /** Le rendez-vous courant et son numéro (1 pour le premier) ; `null` : bouclée, ou pas de carrière. */
+  /** Le rendez-vous courant et son numéro dans sa saison (1 pour le premier) ; `null` : bouclée, ou pas de carrière. */
   courant: RendezVous | null;
   numero: number;
+  /** Toutes les saisons sont bouclées. */
   bouclee: boolean;
 }
 
 export function useCarriere(): EtatCarriere {
   const hydrated = useJeu((state) => state.hydrated);
   const progression = useJeu((state) => state.carriere);
-  const index = indexCourant(progression, CARRIERE);
-  const courant = CARRIERE[index] ?? null;
-  return { hydrated, total: CARRIERE.length, reussis: nombreReussis(progression, CARRIERE), courant, numero: index + 1, bouclee: CARRIERE.length > 0 && courant === null };
+  const courant = CARRIERE[indexCourant(progression, CARRIERE)] ?? null;
+  const s = indexSaisonCourante(progression, SAISONS);
+  const saison = SAISONS[s] ?? null;
+  const rendezVous = saison?.rendezVous ?? [];
+  return {
+    hydrated,
+    saison,
+    saisonNumero: s + 1,
+    total: rendezVous.length,
+    reussis: rendezVous.filter((rdv) => progression.resultats[rdv.id]?.reussi === true).length,
+    courant,
+    numero: (placeDe(courant?.id)?.rang ?? 0) + 1,
+    bouclee: CARRIERE.length > 0 && courant === null,
+  };
 }
 
 /**

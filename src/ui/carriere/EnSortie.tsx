@@ -4,11 +4,12 @@
 // - `RouteImposee`, dans les réglages (src/ui/drive/Reglages.tsx) à la place des choix du moment et de la
 //   météo : ils se lisent, grisés, sans se changer ; ça se prépare au garage, avant de partir.
 
-import { METEO_LABEL, MOMENT_LABEL, rendezVousParId } from '../../data/carriere.ts';
+import { CONTRAINTE_LABEL, METEO_LABEL, MOMENT_LABEL, rendezVousParId } from '../../data/carriere.ts';
 import { MOMENTS } from '../../data/moments.ts';
 import { formatChrono } from '../../drive/depart.ts';
-import { seuilBronze } from '../../jeu/carriereCloture.ts';
+import { seuilObjectif } from '../../jeu/carriereCloture.ts';
 import { useDrive, WEATHERS } from '../../state/drive.ts';
+import { numeroRendezVous } from './FicheRendezVous.tsx';
 import { useVehiculeCourant } from './useCarriere.ts';
 import './carriere.css';
 
@@ -17,13 +18,13 @@ export function EtiquetteRendezVous() {
   const vehicule = useVehiculeCourant();
   const rdv = rendezVousParId(enCours?.id);
   if (!enCours || !rdv) return null;
-  const seuil = rdv.objectif === 'bronze' ? seuilBronze({ ...rdv, vehicule }) : null;
+  const seuil = seuilObjectif(rdv.objectif, { ...rdv, vehicule });
+  // Les identifiants des objectifs sont des mots : « Objectif : or, sous 1:05.7 ».
+  const objectif = `Objectif : ${rdv.objectif}${seuil !== null ? `, sous ${formatChrono(seuil * 1000)}` : ''}`;
   return (
     <span className="drive-rendez-vous" data-objectif={rdv.objectif}>
-      <b>
-        Rendez-vous {enCours.numero} sur {enCours.total}
-      </b>
-      <small>{rdv.objectif === 'finir' ? 'Objectif : finir' : seuil !== null ? `Objectif : bronze, sous ${formatChrono(seuil * 1000)}` : 'Objectif : bronze'}</small>
+      <b>{numeroRendezVous(rdv.id, enCours.numero, enCours.total)}</b>
+      <small>{[objectif, ...rdv.contraintes.map((c) => CONTRAINTE_LABEL[c].court.charAt(0).toLowerCase() + CONTRAINTE_LABEL[c].court.slice(1))].join(' · ')}</small>
     </span>
   );
 }

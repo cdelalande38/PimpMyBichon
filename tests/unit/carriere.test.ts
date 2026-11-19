@@ -10,7 +10,7 @@ import { createStore, get, set } from 'idb-keyval';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { CARRIERE, conseilDe, lireCarriere, PRIME_MAX, PRIME_MIN, PROBLEMES_CARRIERE, type RendezVous } from '../../src/data/carriere.ts';
+import { CARRIERE, conseilDe, lireCarriere, PRIME_MAX, PRIME_MIN, PROBLEMES_CARRIERE, SAISONS, type RendezVous } from '../../src/data/carriere.ts';
 import type { FichierCourses } from '../../src/data/courses.ts';
 import { MAPS } from '../../src/data/maps.ts';
 import { carriereBouclee, enregistrerCourse, indexCourant, jugerRendezVous, nettoyerProgression, primeDue, progressionVide, rendezVousCourant } from '../../src/jeu/carriere.ts';
@@ -19,7 +19,7 @@ import type { Bilan, ResultatCourse } from '../../src/jeu/contrat.ts';
 const db = () => createStore('pimpmybichon', 'kv');
 
 /** Un rendez-vous fabriqué, pour les règles. */
-const rdv = (id: string, objectif: RendezVous['objectif'] = 'finir', prime = 50): RendezVous => ({ id, titre: id, carte: 'carte-a', depart: 'ligne', format: 'tour1', meteo: 'pluie', moment: 'nuit', objectif, prime });
+const rdv = (id: string, objectif: RendezVous['objectif'] = 'finir', prime = 50): RendezVous => ({ id, titre: id, carte: 'carte-a', depart: 'ligne', format: 'tour1', meteo: 'pluie', moment: 'nuit', objectif, prime, contraintes: [] });
 
 const resultat = (temps: number, medaille: ResultatCourse['medaille'] = null, autre: Partial<ResultatCourse> = {}): ResultatCourse => ({
   carte: 'carte-a',
@@ -47,9 +47,10 @@ describe('le fichier de la carrière (public/assets/carriere/carriere.json)', ()
     }
   });
 
-  it('la difficulté monte : sec et jour d’abord ; pluie, nuit, neige et trois tours ensuite ; le bronze sur les derniers', () => {
-    const premier = (test: (r: RendezVous) => boolean) => CARRIERE.findIndex(test);
-    const [a, b] = CARRIERE;
+  it('saison 1 : la difficulté monte : sec et jour d’abord ; pluie, nuit, neige et trois tours ensuite ; le bronze sur les derniers', () => {
+    const S1 = SAISONS[0]!.rendezVous;
+    const premier = (test: (r: RendezVous) => boolean) => S1.findIndex(test);
+    const [a, b] = S1;
     expect(a).toMatchObject({ meteo: 'sec', moment: 'jour', objectif: 'finir', format: 'tour1' });
     expect(b).toMatchObject({ meteo: 'sec', moment: 'jour', objectif: 'finir' });
     const pluie = premier((r) => r.meteo === 'pluie');
@@ -61,10 +62,10 @@ describe('le fichier de la carrière (public/assets/carriere/carriere.json)', ()
     expect(nuit).toBeGreaterThan(pluie);
     expect(neige).toBeGreaterThan(nuit);
     expect(trois).toBeGreaterThan(neige);
-    expect(bronze).toBeGreaterThan(CARRIERE.length / 2);
+    expect(bronze).toBeGreaterThan(S1.length / 2);
     // Une fois le bronze exigé, il l'est jusqu'au bout ; les primes ne baissent jamais.
-    expect(CARRIERE.slice(bronze).every((r) => r.objectif === 'bronze')).toBe(true);
-    for (let i = 1; i < CARRIERE.length; i += 1) expect(CARRIERE[i]!.prime).toBeGreaterThanOrEqual(CARRIERE[i - 1]!.prime);
+    expect(S1.slice(bronze).every((r) => r.objectif === 'bronze')).toBe(true);
+    for (let i = 1; i < S1.length; i += 1) expect(S1[i]!.prime).toBeGreaterThanOrEqual(S1[i - 1]!.prime);
   });
 
   it('chaque départ existe dans la carte (sources versionnées, et route fabriquée quand elle est là) ; trois tours sur une boucle seulement', () => {
@@ -93,7 +94,7 @@ describe('le contrôle refuse ce qui ne se court pas', () => {
   };
   const contexte = { cartes: [{ id: 'boucle' }, { id: 'route' }, { id: 'sans-temps' }], references };
   const bon = { id: 'un', titre: 'Un', carte: 'boucle', depart: 'ligne', format: 'tours3', meteo: 'pluie', moment: 'nuit', objectif: 'bronze', prime: 100 };
-  const lire = (...rendezVous: unknown[]) => lireCarriere({ format: 'pmb-carriere', version: 1, rendezVous }, contexte);
+  const lire = (...rendezVous: unknown[]) => lireCarriere({ format: 'pmb-carriere', version: 2, saisons: [{ id: 'une', titre: 'Une', sousTitre: 'La seule.', rendezVous }] }, contexte);
 
   it('accepte un fichier bien formé', () => {
     const lu = lire(bon, { ...bon, id: 'deux', carte: 'route', depart: 'debut', format: 'tour1', objectif: 'finir' });
@@ -109,9 +110,12 @@ describe('le contrôle refuse ce qui ne se court pas', () => {
     ['trois tours sur une route ouverte', { carte: 'route', depart: 'debut', format: 'tours3' }, /ne se court pas/],
     ['une météo inconnue', { meteo: 'grele' }, /météo « grele » inconnue/],
     ['un moment inconnu', { moment: 'aube' }, /moment « aube » inconnu/],
-    ['un objectif inconnu', { objectif: 'or' }, /objectif « or » inconnu/],
-    ['une prime trop forte', { prime: 400 }, /prime entre 40 et 150/],
-    ['une prime trop faible', { prime: 10 }, /prime entre 40 et 150/],
+    ['un objectif inconnu', { objectif: 'platine' }, /objectif « platine » inconnu/],
+    ['une prime trop forte', { prime: 400 }, /prime entre 40 et 250/],
+    ['une prime trop faible', { prime: 10 }, /prime entre 40 et 250/],
+    ['une contrainte inconnue', { contraintes: ['sans-volant'] }, /contrainte « sans-volant » inconnue/],
+    ['trois contraintes', { contraintes: ['sans-nos', 'sans-choc', 'moto'] }, /deux au plus/],
+    ['des contraintes contradictoires', { contraintes: ['moto', 'voiture'] }, /contradictoires/],
   ])('refuse %s, et toute la carrière avec', (_nom, change, motif) => {
     const lu = lire({ ...bon, id: 'zero', carte: 'route', depart: 'debut', format: 'tour1' }, { ...bon, ...change });
     expect(lu.rendezVous).toEqual([]);
@@ -198,7 +202,8 @@ describe('sauvegarde, clôture d’une course de carrière, sortie imposée', ()
     const cloture = await import('../../src/jeu/carriereCloture.ts');
     const donnees = await import('../../src/data/carriere.ts');
     await vi.waitFor(() => expect(jeu.useJeu.getState().hydrated && drive.useDrive.getState().hydrated).toBe(true));
-    return { ...jeu, ...drive, ...cloture, ...donnees };
+    // La suite éprouvée ici est la saison 1 : numéros et totaux sont ceux de sa saison (vague V).
+    return { ...jeu, ...drive, ...cloture, ...donnees, CARRIERE: donnees.SAISONS[0]!.rendezVous };
   }
 
   async function sauvegarde(cle: string): Promise<Record<string, unknown> | null> {
@@ -285,15 +290,15 @@ describe('sauvegarde, clôture d’une course de carrière, sortie imposée', ()
     expect(useJeu.getState().carriere.resultats[bronze.id]).toMatchObject({ reussi: false, essais: 1 });
   });
 
-  it('le dernier rendez-vous réussi boucle la carrière et accorde son haut fait', async () => {
-    const { useDrive, useJeu, verdictDe, CARRIERE: suite } = await lancer();
+  it('le dernier rendez-vous réussi boucle la saison 1, accorde son haut fait et ouvre la saison 2', async () => {
+    const { useDrive, useJeu, verdictDe, CARRIERE: suite, SAISONS: saisons } = await lancer();
     const dernier = suite.at(-1)!;
     useJeu.setState({ carriere: { resultats: Object.fromEntries(suite.slice(0, -1).map((x) => [x.id, { reussi: true, essais: 1, meilleurTemps: 60, medaille: null }])) } });
     useDrive.getState().lancerRendezVous(dernier, suite.length, suite.length);
     // Un temps de 1 s décroche forcément la médaille (référence de la carte), donc le bronze.
     useDrive.getState().terminerCourse(courseDe(dernier, 1));
     const fin = useDrive.getState().fin!;
-    expect(verdictDe(fin)).toMatchObject({ reussi: true, bouclee: true, suivant: null });
+    expect(verdictDe(fin)).toMatchObject({ reussi: true, saisonBouclee: true, bouclee: false, suivant: saisons[1]!.rendezVous[0], suivantNumero: 1, suivantSaison: 2 });
     expect(fin.hautsFaits.map((h) => h.id)).toContain('carriere-bouclee');
     expect(useJeu.getState().hautsFaits['carriere-bouclee']).toBe(true);
     expect(carriereBouclee(useJeu.getState().carriere, suite)).toBe(true);

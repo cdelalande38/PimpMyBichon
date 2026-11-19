@@ -29,6 +29,8 @@ export const MODES: readonly { id: 'libre' | 'carriere'; label: string; aide: st
 /** Étape à l'écran d'après la pile du dock (un niveau d'une autre entrée ne compte pas). */
 export function etapeDe(levels: readonly DockLevel[]): Etape {
   const top = levels.at(-1);
+  // Carrière (vague V) : la saison, puis le rendez-vous choisis sont des niveaux `element` sous l'étape.
+  if (top?.kind === 'element' && levels[0]?.kind === 'sortie' && levels[0].etape === 'carriere') return 'carriere';
   return top?.kind === 'sortie' ? top.etape : 'mode';
 }
 

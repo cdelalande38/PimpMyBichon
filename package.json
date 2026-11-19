@@ -29,6 +29,7 @@
     "maps:check": "node tools/maps/check.mjs",
     "courses:temps": "node tools/courses/temps-reference.mjs",
     "courses:drift": "node tools/courses/paliers-drift.mjs",
+    "courses:faisabilite": "node tools/courses/faisabilite.mjs",
     "radio:pack": "node tools/radio/pack.mjs",
     "radio:accueil": "node tools/radio/accueil.mjs",
     "sons:ecoute": "node tools/sons/ecoute.mjs",

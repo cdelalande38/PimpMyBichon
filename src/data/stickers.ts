@@ -170,6 +170,10 @@ export const STICKER_MOTIFS: readonly StickerMotif[] = Object.freeze([
     { id: 'graffiti-fleche', label: 'Flèche en S', ratio: 2, taille: 0.22 },
     { id: 'graffiti-gaz', label: 'Graffiti Gaz', ratio: 2, texte: true, taille: 0.22 },
     { id: 'etoile-laurier', label: 'Étoile aux lauriers', ratio: 1, symetrique: true, taille: 0.26 },
+    // Vague V, les saisons de la carrière (dessinés pour le projet, à la main) : la saison 2 bouclée, une
+    // couronne de laurier et deux barres ; la saison 2 tout en or, la coupe.
+    { id: 'couronne-laurier', label: 'Couronne de laurier', ratio: 1, symetrique: true, taille: 0.3 },
+    { id: 'coupe-or', label: 'Coupe d’or', ratio: 1, symetrique: true, taille: 0.3 },
   ]),
 ]);
 

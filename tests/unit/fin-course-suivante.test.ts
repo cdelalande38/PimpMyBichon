@@ -21,7 +21,8 @@ async function lancer() {
   const vue = await import('../../src/ui/drive/FinCourseVue.tsx');
   const actions = await import('../../src/ui/carriere/actions.ts');
   await vi.waitFor(() => expect(jeu.useJeu.getState().hydrated && drive.useDrive.getState().hydrated).toBe(true));
-  return { ...jeu, ...drive, ...cloture, ...donnees, ...vue, ...actions };
+  // La suite éprouvée ici est la saison 1 : numéros et totaux sont ceux de sa saison (vague V).
+  return { ...jeu, ...drive, ...cloture, ...donnees, ...vue, ...actions, CARRIERE: donnees.SAISONS[0]!.rendezVous };
 }
 
 /** La course d'un rendez-vous, telle que la sortie la rend, avec le temps donné. */
@@ -43,10 +44,10 @@ describe('écran de fin : un seul jeu de boutons, « Course suivante » en carri
   });
 
   it('boutonsDeFin : libre, réussi avec un suivant, manqué, carrière bouclée', async () => {
-    const { boutonsDeFin, CARRIERE: suite } = await lancer();
+    const { boutonsDeFin, CARRIERE: suite, SAISONS } = await lancer();
     const [premier, second] = suite;
     if (!premier || !second) throw new Error('carrière vide');
-    const base: VerdictRendezVous = { reussi: true, raison: 'fini', seuil: null, ecart: null, ecarts: [], rendezVous: premier, numero: 1, total: suite.length, dejaReussi: false, prime: premier.prime, suivant: second, suivantNumero: 2, bouclee: false };
+    const base: VerdictRendezVous = { reussi: true, raison: 'fini', seuil: null, ecart: null, ecarts: [], manquees: [], rendezVous: premier, numero: 1, total: suite.length, saisonNumero: 1, saison: SAISONS[0]!, dejaReussi: false, prime: premier.prime, suivant: second, suivantNumero: 2, suivantTotal: suite.length, suivantSaison: 1, saisonBouclee: false, bouclee: false };
     const resume = (v: VerdictRendezVous | null) => boutonsDeFin(v).map((b) => `${b.principal ? '*' : ''}${b.label}${b.detail ? ` (${b.detail})` : ''}`);
     expect(resume(null)).toEqual(['*Rejouer', 'Rentrer au garage']);
     const reussi = boutonsDeFin(base);

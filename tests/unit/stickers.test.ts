@@ -71,6 +71,8 @@ describe('bibliothèque', () => {
       'graffiti-fleche',
       'graffiti-gaz',
       'etoile-laurier',
+      'couronne-laurier',
+      'coupe-or',
     ]);
     expect(new Set(STICKER_MOTIFS.map((motif) => motif.id)).size).toBe(STICKER_MOTIFS.length);
   });
@@ -334,7 +336,8 @@ describe('rangement des 82 motifs : libre, pack à acheter ou récompense', () =
 
   it('au moins quatre motifs de plus sont offerts, et six récompenses de plus se gagnent avec des hauts faits qui ne donnaient que des dollars', () => {
     expect(motifsOf('depart').length).toBeGreaterThanOrEqual(14);
-    expect(motifsOf(null).length).toBe(17);
+    // Quatorze jusqu'à la vague U ; vague V : trois pour le drift, deux pour les saisons de la carrière.
+    expect(motifsOf(null).length).toBe(19);
     const sansArticle = ['vitesse-160', 'sous-la-pluie', 'dix-kilometres', 'nos-vingt', 'carriere-bouclee', 'cinq-records'];
     for (const id of sansArticle) expect(HAUTS_FAITS.find((def) => def.id === id)?.recompense.articles?.length, id).toBe(1);
   });

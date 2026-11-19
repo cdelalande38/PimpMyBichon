@@ -36,7 +36,9 @@ interface Rdv {
   prime: number;
 }
 
-const SUITE = (JSON.parse(readFileSync(resolve('public/assets/carriere/carriere.json'), 'utf8')) as { rendezVous: Rdv[] }).rendezVous;
+// Vague V : la carrière est une liste de saisons ; ces parcours éprouvent la première (ses numéros, son total).
+const SAISONS = (JSON.parse(readFileSync(resolve('public/assets/carriere/carriere.json'), 'utf8')) as { saisons: { id: string; titre: string; rendezVous: Rdv[] }[] }).saisons;
+const SUITE = SAISONS[0]!.rendezVous;
 const CAPTURES = process.env.PMB_CAPTURES_CARRIERE;
 const PAYSAGE = { width: 844, height: 390 } as const;
 const PORTRAIT = { width: 390, height: 844 } as const;
@@ -388,6 +390,89 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await expect(stage(page)).toHaveCount(0);
     expect(new URL(page.url()).hash).toBe('');
     await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${i + 2} sur ${SUITE.length}`));
+    expect(errors).toEqual([]);
+  });
+});
+
+// Vague V, les saisons : une sauvegarde d'avant les saisons (les douze rendez-vous bouclés, comme celle du
+// commanditaire) retrouve sa saison 1 bouclée, médailles et records compris, et démarre la saison 2.
+// L'annonce de fin de saison n'a pas de parcours : les deux finales de saison sont des courses de trois tours
+// sur une boucle (le départ ne s'y rapproche pas du bout) ; elle est éprouvée sans navigateur
+// (tests/unit/carriere-saisons.test.ts).
+test.describe('carrière : les saisons', () => {
+  test.use({ serviceWorkers: 'block' });
+
+  test('saison 1 bouclée : la saison 2 s’ouvre, sa fiche dit l’objectif et la contrainte, la saison 1 se revoit, la sortie impose tout', async ({ page }) => {
+    test.setTimeout(600_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const S2 = SAISONS[1]?.rendezVous ?? [];
+    const premier = S2[0];
+    if (!premier) throw new Error('pas de saison 2');
+    await openApp(page);
+    await waitForScene(page);
+    const medailles = ['or', 'argent', 'bronze', null] as const;
+    const resultats = Object.fromEntries(SUITE.map((r, i) => [r.id, { reussi: true, essais: 2, meilleurTemps: 40 + i, medaille: medailles[i % 4] }]));
+    await poserJeu(page, { solde: 900, articles: {}, hautsFaits: { 'carriere-bouclee': true }, cumuls: {}, carriere: { resultats } });
+
+    // Au garage, le bouton rond annonce le premier rendez-vous de la saison 2.
+    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`^Carrière : prochain rendez-vous 1 sur ${S2.length} de la saison 2, ${premier.titre}`));
+    await pastille(page).tap();
+    const panneau = menuCarriere(page);
+    await expect(panneau.locator('.carriere-surtitre')).toHaveText(`Saison 2 · 1 sur ${S2.length}`);
+    const fiche = panneau.locator(`.carriere-fiche[data-rendez-vous="${premier.id}"]`);
+    await expect(fiche).toContainText(`Saison 2 · rendez-vous 1 sur ${S2.length}`);
+    await expect(fiche.locator('[data-contrainte]')).toHaveText(['Sans NOS']);
+    await expect(fiche).toContainText(/L’argent au moins : sous \d+:\d\d\.\d/);
+    const sortir = panneau.getByRole('button', { name: 'Sortir', exact: true });
+    await entiere(page, sortir, 'Sortir (saison 2, portrait)');
+    await photo(page, '10-saison2-fiche-portrait');
+    await page.setViewportSize(PAYSAGE);
+    await entiere(page, sortir, 'Sortir (saison 2, paysage)');
+    await photo(page, '11-saison2-fiche-paysage');
+    // La liste des saisons, sous la fiche : la saison 1 bouclée, la 2 en cours.
+    const saisons = panneau.getByRole('region', { name: 'Les saisons' });
+    await saisons.scrollIntoViewIfNeeded();
+    await expect(saisons.locator('[data-etat="bouclee"]')).toContainText('Saison 1 · L’échauffement');
+    await expect(saisons.locator('[data-etat="en-cours"]')).toContainText(`Saison 2 · ${SAISONS[1]!.titre}`);
+    await photo(page, '12-saisons-paysage');
+    await page.setViewportSize(PORTRAIT);
+    await saisons.scrollIntoViewIfNeeded();
+    await photo(page, '13-saisons-portrait');
+
+    // Revoir la saison 1 : la saison, puis un rendez-vous, puis sa fiche et « Rejouer ».
+    await saisons.getByRole('button', { name: /Saison 1/ }).tap();
+    const vueSaison = page.locator('footer.dock').getByRole('region', { name: 'Carrière, saison 1' });
+    await expect(vueSaison.locator('.carriere-ligne[data-etat="reussi"]')).toHaveCount(SUITE.length);
+    await expect(vueSaison.locator('[data-medaille="or"]')).toHaveCount(3);
+    await entiere(page, vueSaison.locator('.carriere-ligne').first(), 'rangée d’un rendez-vous');
+    await photo(page, '14-saison1-bouclee-portrait');
+    await page.setViewportSize(PAYSAGE);
+    await photo(page, '15-saison1-bouclee-paysage');
+    await page.setViewportSize(PORTRAIT);
+    await vueSaison.locator(`[data-rendez-vous="${SUITE[0]!.id}"]`).tap();
+    await expect(vueSaison.locator('.carriere-resultat')).toContainText('Réussi, or');
+    await entiere(page, vueSaison.getByRole('button', { name: 'Rejouer', exact: true }), 'Rejouer');
+    // « Retour » remonte d'un niveau à la fois : la saison, puis l'accueil de la carrière.
+    await page.locator('footer.dock .dock-back').tap();
+    await expect(vueSaison.locator('.carriere-ligne')).toHaveCount(SUITE.length);
+    await page.locator('footer.dock .dock-back').tap();
+    await expect(panneau.locator('.carriere-surtitre')).toHaveText(`Saison 2 · 1 sur ${S2.length}`);
+
+    // La sortie du premier rendez-vous de la saison 2 : tout imposé, la contrainte rappelée sur la route.
+    await panneau.getByRole('button', { name: 'Sortir', exact: true }).tap();
+    await expect(stage(page)).toHaveAttribute('data-carte', premier.carte);
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
+    await expect(stage(page)).toHaveAttribute('data-meteo', premier.meteo);
+    const etiquette = page.locator('.drive-rendez-vous');
+    await expect(etiquette).toContainText(`Saison 2 · rendez-vous 1 sur ${S2.length}`);
+    await expect(etiquette).toContainText(/Objectif : argent, sous \d+:\d\d\.\d · sans NOS/);
+    const reglages = await ouvrirReglages(page);
+    for (const groupe of ['Météo', 'Moment']) await expect(reglages.getByRole('group', { name: groupe }).getByRole('button').first()).toBeDisabled();
+    await expect(reglages.getByText('imposé par le rendez-vous 1')).toBeVisible();
+    await fermerReglages(page);
+    await rentrerAuGarage(page);
+    await expect(stage(page)).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 });

@@ -106,4 +106,8 @@ export const HAUTS_FAITS: readonly HautFaitDef[] = [
   { id: 'drift-or', label: 'Maître de la glisse', description: 'Décroche l’or en drift.', recompense: { articles: ['sticker-etoile-laurier'] }, quand: [egal('course.format', 'drift'), plus('course.rangMedaille', 3)] },
   // La carrière (vague U) : accordé par la carrière à son dernier rendez-vous réussi.
   { id: 'carriere-bouclee', label: 'Carrière bouclée', description: 'Réussis tous les rendez-vous de la carrière.', recompense: { dollars: 100, articles: ['sticker-drapeaux-croises'] }, quand: [egal('carriere.bouclee', 1)] },
+  // Les saisons (vague V) : accordés par la carrière, d'après la saison qui les déclare (public/assets/carriere/carriere.json,
+  // `hautFait`, `hautFaitOr`). Des stickers plutôt que des dollars (le total des dollars des hauts faits est plafonné).
+  { id: 'saison-2-bouclee', label: 'Les choses sérieuses', description: 'Boucle la deuxième saison de la carrière.', recompense: { articles: ['sticker-couronne-laurier'] }, quand: [egal('carriere.bouclee', 1)] },
+  { id: 'saison-2-en-or', label: 'Une saison en or', description: 'Décroche l’or sur les douze épreuves de la deuxième saison.', recompense: { articles: ['sticker-coupe-or'] }, quand: [egal('carriere.bouclee', 1)] },
 ];

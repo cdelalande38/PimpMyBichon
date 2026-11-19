@@ -1,18 +1,47 @@
 {
   "format": "pmb-carriere",
-  "version": 1,
-  "rendezVous": [
-    { "id": "premiers-tours", "titre": "Premiers tours de roue", "carte": "miami-beach", "depart": "nord", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "finir", "prime": 40 },
-    { "id": "entree-la-mure", "titre": "L’entrée de La Mure", "carte": "plateau-matheysin", "depart": "la-mure", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "finir", "prime": 45 },
-    { "id": "bord-de-mer", "titre": "Le bord de mer", "carte": "monaco-ville", "depart": "bord-de-mer", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "finir", "prime": 50 },
-    { "id": "tour-du-port", "titre": "Un tour du port", "carte": "monaco-circuit", "depart": "ligne-droite", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "finir", "prime": 60 },
-    { "id": "averse-collins", "titre": "Averse sur Collins", "carte": "miami-beach", "depart": "collins", "format": "tour1", "meteo": "pluie", "moment": "jour", "objectif": "finir", "prime": 60 },
-    { "id": "pluie-plateau", "titre": "La pluie sur les lacs", "carte": "plateau-matheysin", "depart": "pierre-chatel", "format": "tour1", "meteo": "pluie", "moment": "jour", "objectif": "finir", "prime": 70 },
-    { "id": "casino-de-nuit", "titre": "Le Casino de nuit", "carte": "monaco-ville", "depart": "casino", "format": "tour1", "meteo": "sec", "moment": "nuit", "objectif": "finir", "prime": 70 },
-    { "id": "tunnel-pluie-nuit", "titre": "Le tunnel sous la pluie", "carte": "monaco-circuit", "depart": "tunnel", "format": "tour1", "meteo": "pluie", "moment": "nuit", "objectif": "finir", "prime": 80 },
-    { "id": "sprint-de-nuit", "titre": "Sprint de nuit", "carte": "miami-beach", "depart": "nord", "format": "tour1", "meteo": "sec", "moment": "nuit", "objectif": "bronze", "prime": 90 },
-    { "id": "premieres-neiges", "titre": "Premières neiges", "carte": "plateau-matheysin", "depart": "petichet", "format": "tour1", "meteo": "neige", "moment": "jour", "objectif": "bronze", "prime": 110 },
-    { "id": "trois-tours-soleil", "titre": "Trois tours au soleil", "carte": "monaco-circuit", "depart": "casino", "format": "tours3", "meteo": "sec", "moment": "jour", "objectif": "bronze", "prime": 130 },
-    { "id": "dernier-rendez-vous", "titre": "Le dernier rendez-vous", "carte": "monaco-circuit", "depart": "port", "format": "tours3", "meteo": "pluie", "moment": "nuit", "objectif": "bronze", "prime": 150 }
+  "version": 2,
+  "saisons": [
+    {
+      "id": "echauffement",
+      "titre": "L’échauffement",
+      "sousTitre": "Douze épreuves pour se faire la main, une condition à la fois.",
+      "hautFait": "carriere-bouclee",
+      "rendezVous": [
+        { "id": "premiers-tours", "titre": "Premiers tours de roue", "carte": "miami-beach", "depart": "nord", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "finir", "prime": 40 },
+        { "id": "entree-la-mure", "titre": "L’entrée de La Mure", "carte": "plateau-matheysin", "depart": "la-mure", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "finir", "prime": 45 },
+        { "id": "bord-de-mer", "titre": "Le bord de mer", "carte": "monaco-ville", "depart": "bord-de-mer", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "finir", "prime": 50 },
+        { "id": "tour-du-port", "titre": "Un tour du port", "carte": "monaco-circuit", "depart": "ligne-droite", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "finir", "prime": 60 },
+        { "id": "averse-collins", "titre": "Averse sur Collins", "carte": "miami-beach", "depart": "collins", "format": "tour1", "meteo": "pluie", "moment": "jour", "objectif": "finir", "prime": 60 },
+        { "id": "pluie-plateau", "titre": "La pluie sur les lacs", "carte": "plateau-matheysin", "depart": "pierre-chatel", "format": "tour1", "meteo": "pluie", "moment": "jour", "objectif": "finir", "prime": 70 },
+        { "id": "casino-de-nuit", "titre": "Le Casino de nuit", "carte": "monaco-ville", "depart": "casino", "format": "tour1", "meteo": "sec", "moment": "nuit", "objectif": "finir", "prime": 70 },
+        { "id": "tunnel-pluie-nuit", "titre": "Le tunnel sous la pluie", "carte": "monaco-circuit", "depart": "tunnel", "format": "tour1", "meteo": "pluie", "moment": "nuit", "objectif": "finir", "prime": 80 },
+        { "id": "sprint-de-nuit", "titre": "Sprint de nuit", "carte": "miami-beach", "depart": "nord", "format": "tour1", "meteo": "sec", "moment": "nuit", "objectif": "bronze", "prime": 90 },
+        { "id": "premieres-neiges", "titre": "Premières neiges", "carte": "plateau-matheysin", "depart": "petichet", "format": "tour1", "meteo": "neige", "moment": "jour", "objectif": "bronze", "prime": 110 },
+        { "id": "trois-tours-soleil", "titre": "Trois tours au soleil", "carte": "monaco-circuit", "depart": "casino", "format": "tours3", "meteo": "sec", "moment": "jour", "objectif": "bronze", "prime": 130 },
+        { "id": "dernier-rendez-vous", "titre": "Le dernier rendez-vous", "carte": "monaco-circuit", "depart": "port", "format": "tours3", "meteo": "pluie", "moment": "nuit", "objectif": "bronze", "prime": 150 }
+      ]
+    },
+    {
+      "id": "choses-serieuses",
+      "titre": "Les choses sérieuses",
+      "sousTitre": "L’argent, puis l’or, sous la pluie, la neige et la nuit, avec des contraintes.",
+      "hautFait": "saison-2-bouclee",
+      "hautFaitOr": "saison-2-en-or",
+      "rendezVous": [
+        { "id": "argent-sans-nos", "titre": "L’argent, sans NOS", "carte": "miami-beach", "depart": "nord", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "argent", "prime": 80, "contraintes": ["sans-nos"] },
+        { "id": "casino-en-argent", "titre": "Le Casino en argent", "carte": "monaco-ville", "depart": "casino", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "argent", "prime": 90 },
+        { "id": "la-mure-a-moto", "titre": "La Mure à moto, de nuit", "carte": "plateau-matheysin", "depart": "la-mure", "format": "tour1", "meteo": "sec", "moment": "nuit", "objectif": "argent", "prime": 100, "contraintes": ["moto"] },
+        { "id": "tunnel-sans-egratignure", "titre": "Le tunnel sans une égratignure", "carte": "monaco-circuit", "depart": "tunnel", "format": "tour1", "meteo": "pluie", "moment": "jour", "objectif": "bronze", "prime": 110, "contraintes": ["sans-choc"] },
+        { "id": "collins-sous-l-averse", "titre": "Collins, la nuit, sous l’averse", "carte": "miami-beach", "depart": "collins", "format": "tour1", "meteo": "pluie", "moment": "nuit", "objectif": "argent", "prime": 120, "contraintes": ["voiture"] },
+        { "id": "les-lacs-sous-la-neige", "titre": "Les lacs sous la neige", "carte": "plateau-matheysin", "depart": "pierre-chatel", "format": "tour1", "meteo": "neige", "moment": "jour", "objectif": "argent", "prime": 130 },
+        { "id": "l-or-au-bord-de-mer", "titre": "L’or au bord de mer", "carte": "monaco-ville", "depart": "bord-de-mer", "format": "tour1", "meteo": "sec", "moment": "jour", "objectif": "or", "prime": 140 },
+        { "id": "trois-tours-sans-nos", "titre": "Trois tours de nuit, sans NOS", "carte": "monaco-circuit", "depart": "casino", "format": "tours3", "meteo": "sec", "moment": "nuit", "objectif": "argent", "prime": 160, "contraintes": ["sans-nos"] },
+        { "id": "neige-sur-la-plage", "titre": "De la neige sur la plage", "carte": "miami-beach", "depart": "nord", "format": "tour1", "meteo": "neige", "moment": "nuit", "objectif": "or", "prime": 180, "contraintes": ["moto"] },
+        { "id": "le-port-sous-l-orage", "titre": "Le port sous l’orage", "carte": "monaco-ville", "depart": "port", "format": "tour1", "meteo": "pluie", "moment": "nuit", "objectif": "or", "prime": 200, "contraintes": ["voiture"] },
+        { "id": "la-mure-dans-le-blizzard", "titre": "La Mure dans le blizzard", "carte": "plateau-matheysin", "depart": "la-mure", "format": "tour1", "meteo": "neige", "moment": "nuit", "objectif": "or", "prime": 220, "contraintes": ["sans-nos"] },
+        { "id": "la-grande-finale", "titre": "La grande finale", "carte": "monaco-circuit", "depart": "port", "format": "tours3", "meteo": "pluie", "moment": "nuit", "objectif": "or", "prime": 250, "contraintes": ["sans-nos"] }
+      ]
+    }
   ]
 }

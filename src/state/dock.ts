@@ -99,7 +99,7 @@ function sanitizeSortieLevel(level: Record<string, unknown>): DockLevel | null {
   return { kind: 'sortie', etape, libelle: level.libelle };
 }
 
-/** Une pile de la sortie n'est valable que dans l'ordre des étapes : carrière seule, ou zone, circuit, départ, réglages (sauts permis). */
+/** Une pile de la sortie n'est valable que dans l'ordre des étapes : carrière (puis sa saison et son rendez-vous), ou zone, circuit, départ, réglages (sauts permis). */
 function sanitizeSortieLevels(raw: readonly unknown[]): DockLevel[] {
   const levels: DockLevel[] = [];
   let rank = -1;
@@ -111,7 +111,15 @@ function sanitizeSortieLevels(raw: readonly unknown[]): DockLevel[] {
     if (levels.length === 0 ? level.etape !== 'zone' && level.etape !== 'carriere' : level.etape === 'carriere' || next <= rank) break;
     levels.push(level);
     rank = next;
-    if (level.etape === 'carriere') break;
+    if (level.etape === 'carriere') {
+      // Carrière (vague V) : la saison choisie, puis le rendez-vous choisi, chacun un niveau `element`.
+      for (const sous of raw.slice(1, 3)) {
+        const { kind, element, libelle } = (typeof sous === 'object' && sous !== null ? sous : {}) as Record<string, unknown>;
+        if (kind !== 'element' || typeof element !== 'string' || !/^[a-z0-9][a-z0-9-]{0,47}$/.test(element) || typeof libelle !== 'string' || libelle.length > 120) break;
+        levels.push({ kind, element, libelle });
+      }
+      break;
+    }
   }
   return levels;
 }

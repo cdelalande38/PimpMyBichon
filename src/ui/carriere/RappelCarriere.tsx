@@ -18,7 +18,8 @@ import './carriere.css';
 export function RappelCarriere() {
   const carriere = useCarriere();
   if (!carriere.hydrated || carriere.total === 0) return null;
-  const { courant, numero, total, bouclee } = carriere;
+  const { courant, numero, total, bouclee, saisonNumero } = carriere;
+  const saison = saisonNumero > 1 ? ` (saison ${saisonNumero})` : '';
   return (
     <section className="carriere-rappel" aria-label="Rappel de la carrière" data-bouclee={bouclee || undefined}>
       <div className="carriere-rappel-tete">
@@ -26,8 +27,8 @@ export function RappelCarriere() {
           <h3 id="carriere-rappel-titre">Carrière</h3>
           <p>
             {courant
-              ? `Prochain rendez-vous : ${numero} sur ${total}, ${courant.titre}. ${resumeRendezVous(courant)}.`
-              : `Bouclée : les ${total} rendez-vous sont réussis.`}
+              ? `Prochain rendez-vous : ${numero} sur ${total}${saison}, ${courant.titre}. ${resumeRendezVous(courant)}.`
+              : 'Bouclée : toutes les saisons sont réussies. Une suite viendra.'}
           </p>
         </div>
         <button type="button" className="btn carriere-rappel-voir" aria-label="Voir la carrière" onClick={ouvrirCarriere}>
@@ -39,7 +40,7 @@ export function RappelCarriere() {
 }
 
 export function PastilleCarriere() {
-  const { hydrated, courant, numero, total } = useCarriere();
+  const { hydrated, courant, numero, total, saisonNumero } = useCarriere();
   // En vue intérieure, la colonne laisse la place aux sièges : la carrière attend le retour à l'atelier.
   const interieur = useView((state) => state.mode === 'interieur');
   if (!hydrated || !courant || interieur) return null;
@@ -47,8 +48,8 @@ export function PastilleCarriere() {
     <button
       type="button"
       className="quick-btn carriere-rond"
-      aria-label={`Carrière : prochain rendez-vous ${numero} sur ${total}, ${courant.titre}, ${resumeRendezVous(courant)}. Ouvrir la carrière`}
-      title={`Carrière : rendez-vous ${numero} sur ${total}, ${resumeRendezVous(courant)}`}
+      aria-label={`Carrière : prochain rendez-vous ${numero} sur ${total}${saisonNumero > 1 ? ` de la saison ${saisonNumero}` : ''}, ${courant.titre}, ${resumeRendezVous(courant)}. Ouvrir la carrière`}
+      title={`Carrière : saison ${saisonNumero}, rendez-vous ${numero} sur ${total}, ${resumeRendezVous(courant)}`}
       onClick={ouvrirCarriere}
     >
       <DriveIcon name={iconeMeteo(courant)} />

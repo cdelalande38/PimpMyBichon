@@ -142,6 +142,155 @@
   font-size: 0.875rem;
 }
 
+/* ───────────── Saisons (vague V) ───────────── */
+
+.carriere-saison-nom {
+  margin: 0;
+  color: var(--mute);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+}
+
+.carriere-saison-nom b,
+.carriere-saison-titre {
+  color: var(--chrome);
+  font-family: var(--display);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.carriere-saison-titre {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.15;
+}
+
+.carriere-sous-titre {
+  margin: 0.5rem 0 0.25rem;
+  color: var(--ambre);
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.carriere .carriere-lignes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Une rangée : saison ou rendez-vous, 48 px au doigt au moins. */
+.carriere .carriere-ligne {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: rgba(16, 14, 26, 0.6);
+  color: var(--chrome);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.carriere .carriere-ligne[data-etat='courant'],
+.carriere .carriere-ligne[data-etat='en-cours'] {
+  border-color: var(--ambre);
+}
+
+.carriere .carriere-ligne:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.carriere-ligne-numero {
+  flex: none;
+  min-width: 1.5rem;
+  color: var(--ambre);
+  font-family: var(--display);
+  font-size: 0.9375rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.carriere-ligne-texte {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.carriere-ligne-texte b {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+
+.carriere-ligne-texte small {
+  color: var(--mute);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.carriere-ligne-fleche {
+  flex: none;
+  color: var(--ambre);
+  font-size: 1.25rem;
+}
+
+.carriere .carriere-cadenas {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Médaille d'un rendez-vous : pastille aux couleurs du métal. */
+.carriere-medaille {
+  flex: none;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.carriere-medaille[data-medaille='or'] {
+  border-color: #ffc93c;
+  color: #ffc93c;
+}
+
+.carriere-medaille[data-medaille='argent'] {
+  border-color: #c9d1dc;
+  color: #c9d1dc;
+}
+
+.carriere-medaille[data-medaille='bronze'] {
+  border-color: #d08a4e;
+  color: #d08a4e;
+}
+
+.carriere-resultat {
+  margin: 0;
+  color: var(--ambre);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+/* Paysage : la colonne est basse ; le nom de la saison se lit déjà en tête (« Saison 2 · 1 sur 12 ») et dans
+   la liste des saisons : on le tait, l'objectif de la fiche remonte sous le pouce. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .carriere .carriere-saison-nom {
+    display: none;
+  }
+}
+
 /* ───────────── Fiche d'un rendez-vous ───────────── */
 
 .carriere-fiche {
@@ -231,6 +380,19 @@
 .carriere-fiche-conditions li[data-meteo='pluie'],
 .carriere-fiche-conditions li[data-meteo='neige'] {
   border-color: rgba(59, 123, 255, 0.6);
+}
+
+.carriere-fiche-conditions li[data-contrainte] {
+  border-color: var(--ambre);
+  color: var(--ambre);
+}
+
+.carriere-fiche-alerte {
+  margin: 0;
+  color: var(--rouge);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .carriere-fiche-enjeu {

@@ -59,6 +59,8 @@ export const TROPHEES: readonly ArticleBoutique[] = [
   { id: 'sticker-graffiti-fleche', famille: 'sticker', label: 'Flèche en S', prix: null, description: 'Gagné en finissant un premier parcours de drift.' },
   { id: 'sticker-graffiti-gaz', famille: 'sticker', label: 'Graffiti Gaz', prix: null, description: 'Gagné avec l’argent ou mieux en drift.' },
   { id: 'sticker-etoile-laurier', famille: 'sticker', label: 'Étoile aux lauriers', prix: null, description: 'Gagné avec l’or en drift.' },
+  { id: 'sticker-couronne-laurier', famille: 'sticker', label: 'Couronne de laurier', prix: null, description: 'Gagnée en bouclant la deuxième saison de la carrière.' },
+  { id: 'sticker-coupe-or', famille: 'sticker', label: 'Coupe d’or', prix: null, description: 'Gagnée avec l’or sur toute la deuxième saison.' },
 ];
 
 /**
