@@ -221,6 +221,18 @@ test('stickers : la zone cadrée, poser, déplacer, colorer, revenir à la vue d
   expect(after[0]?.x).toBeCloseTo(kept?.x ?? 0, 5);
   await openEntry(page, 'Stickers');
   await expect(dock(page).locator('.stk-layer[data-calque="0"]')).toBeVisible();
+
+  // Tous les gestes se voient sans faire défiler de côté (« Supprimer » était hors de l'écran), et
+  // « Supprimer » retire le sticker.
+  await dock(page).locator('.stk-layer[data-calque="0"]').tap();
+  const gestes = dock(page).getByRole('group', { name: 'Gestes sur le sticker' });
+  await gestes.scrollIntoViewIfNeeded();
+  for (const nom of ['Retourner', 'Dupliquer', 'Devant', 'Derrière', 'Supprimer', 'Curseurs']) {
+    await expect(gestes.getByRole('button', { name: nom, exact: true })).toBeInViewport({ ratio: 1 });
+  }
+  await page.screenshot({ path: resolve(dir, '04-gestes.png') });
+  await gestes.getByRole('button', { name: 'Supprimer', exact: true }).tap();
+  await expect.poll(async () => (await savedLayers(page, vehicle!, zone!)).length).toBe(0);
 });
 
 test('stickers : chaque zone d’une voiture et d’une moto cadrée, pack acheté sur place, trophée gagné', async ({ page }) => {

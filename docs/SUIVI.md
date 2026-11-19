@@ -2,15 +2,26 @@
 
 Document de passation, tenu à jour à chaque étape. Il dit, pour quelqu'un qui arrive à froid : ce que le commanditaire a demandé (avec ses mots), ce qui est en ligne, ce qui reste faux dans ce qui est livré, et ce qui vient. Le détail technique de chaque lot est dans le message de son commit ; les règles de travail sont dans `CLAUDE.md` ; le périmètre est dans `CAHIER_DES_CHARGES.md` (§ 5.5 pour la sortie, § 11 pour ce que la publication attend) ; les substituts et ce qui manque sont dans `TODO_ASSETS.md`.
 
-Dernière mise à jour : 19 novembre 2026, 18 h.
+Dernière mise à jour : 19 novembre 2026, 19 h 30.
 
 ## 1. Où on en est
 
-- **En ligne** : la version `6f20f20` (vérifiée sur le site le 19 novembre à 16 h 12).
-- **Prêt en local, pas publié** : `9daa1d9` (le bouton « Sortir » du menu renommé « Jouer ») et ce document. À publier sur accord du commanditaire.
-- **Aucun lot en cours.** La suite attend son choix de priorités (§ 4).
+- **En ligne** : `4f71f0c` (« Jouer » et ce document), poussé le 19 novembre à 18 h 39 avec son accord (« tu peux publier »).
+- **Prêt en local** : `59b38d2` (longueur de course sur les départs, « Conduite assistée ») et le correctif des stickers, validés ; publication à 19 h 40.
+- **En cours** : « duel3 » (restes du duel) et « nos2 » (restes du NOS), agents Opus lancés à 18 h 46 ; « prepa » (préparation payante), agent Sonnet lancé à 19 h. En file : « fonds » (Opus).
 
 ## 2. Journal des demandes
+
+### Soir du 19 novembre
+
+| Demande (ses mots) | Ce qui a été livré | Commit |
+|---|---|---|
+| « Direction à renommer en conduite assistée » | Le réglage s'appelle « Conduite assistée », choix « Oui » et « Non » | `59b38d2` |
+| « il faudra revoir les distances de circuit annoncés dans les menu ca affiche 0km parfois c'est juste pas possible » | Chaque départ affichait sa borne kilométrique (« km 0,0 » pour le premier) : il dit maintenant la distance jusqu'à l'arrivée, ou la longueur du tour sur un circuit | `59b38d2` |
+| « un élément à fixer ca sera pour la configuration des stickers j'ai l'impression qu'on a pas toutes les options visibles par exemple je peux pas en supprimer » | Les gestes du sticker (dont « Supprimer » et « Curseurs ») étaient au bout d'une rangée qui défilait de côté, hors de l'écran : ils ont leur propre rangée, qui passe à la ligne | (ce commit) |
+| « les préparation moteur ca doit etre payant » | Lot « prepa » en cours : chaque option de la fiche devient un article (Stage 1 à 3 : 120, 220, 350 $ ; carburation : 80, 160, 260 $ ; nitro : 100, 200, 320 $) ; une option déjà montée le reste | — |
+| « pour les écrans de chargement il faudra générer des fonds (fond général de chargement de l'application, fond pour chaque lieux de courses) » | Source choisie par lui : des rendus de nos propres scènes par le jeu. Lot « fonds » prêt, lancé quand une place se libère ; images montrées avant d'être versées | — |
+| « traite les reste du del en prio puis NOS puis rodéo puis cartes puis vehicules » | Ordre de la file (§ 4) ; lots « duel3 » et « nos2 » en cours | — |
 
 ### Soirée et nuit du 18 au 19 novembre : six lots publiés dans la nuit
 
@@ -66,23 +77,21 @@ Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : t
 
 ## 4. Lots à venir
 
-Ordre conseillé, à faire valider par le commanditaire. « Gros » : un lot d'agent complet avec validation ; « petit » : une retouche de la boucle principale.
+Ordre fixé par le commanditaire le 19 novembre au soir : restes du duel, NOS, rodéo, cartes, véhicules. Le reste de la liste vient après. « Gros » : un lot d'agent complet avec validation ; « petit » : une retouche de la boucle principale.
 
-1. **Rodéo** (gros) : duel d'accélération en ligne droite, NOS et passages de rapport au bon moment. Réutilise l'adversaire du duel (`DuelEnCourse`). Dernier des quatre chantiers de jeu ouverts le 18 novembre.
-2. **Restes du duel et du NOS** (moyen) : le saut de l'adversaire, le dépassement, les sorties d'échappement du concept et du van, la poussée trop faible de la Cox.
-3. **Sourcing de modèles 3D** (petit, recherche seule) : une liste de modèles existants de voitures et de camions sous licence ouverte vérifiée (CC0 ou CC-BY), sans constructeur réel, découpables en pièces ; rien n'est téléchargé avant son choix. Un modèle acheté ne peut vivre que dans le dépôt privé des assets.
+1. **Restes du duel et du NOS** (moyen) : le saut de l'adversaire, le dépassement, les sorties d'échappement du concept et du van, la poussée trop faible de la Cox.
+2. **Rodéo** (gros) : duel d'accélération en ligne droite, NOS et passages de rapport au bon moment. Réutilise l'adversaire du duel (`DuelEnCourse`). Dernier des quatre chantiers de jeu ouverts le 18 novembre.
+3. **Cartes** (gros, une par lot ; données téléchargées par la boucle principale, licence notée dans `CREDITS.md`) : Paris le long de la Seine d'abord ; puis l'Italie (Rome, Pise, Milan), des circuits connus (nommés par leur ville), Moscou, Tokyo, la muraille de Chine, l'Australie, la route 66. Hors de France : OpenStreetMap ; la source du relief est à vérifier pays par pays. Des départs dédiés au drift sur les cartes actuelles (Monaco, la ville, vers 1 800 m ; le plateau vers 6 050 m) sont un petit lot.
 4. **Véhicules** (gros, un par lot) : buggy, hot rod, gros 4x4 ; puis un camion à cabine personnalisable. Un convoi avec remorque articulée est un chantier à part (conduite, caméra, grille).
-5. **Cartes** (gros, une par lot ; données téléchargées par la boucle principale, licence notée dans `CREDITS.md`) : Paris le long de la Seine d'abord ; puis l'Italie (Rome, Pise, Milan), des circuits connus (nommés par leur ville), Moscou, Tokyo, la muraille de Chine, l'Australie, la route 66. Hors de France : OpenStreetMap ; la source du relief est à vérifier pays par pays. Des départs dédiés au drift sur les cartes actuelles (Monaco, la ville, vers 1 800 m ; le plateau vers 6 050 m) sont un petit lot.
+5. **Sourcing de modèles 3D** (petit, recherche seule) : une liste de modèles existants de voitures et de camions sous licence ouverte vérifiée (CC0 ou CC-BY), sans constructeur réel, découpables en pièces ; rien n'est téléchargé avant son choix. Un modèle acheté ne peut vivre que dans le dépôt privé des assets.
 6. **Carrière, saison 3** (moyen) : des rendez-vous au score (drift) et contre l'adversaire (duel) ; le format des rendez-vous doit recevoir un objectif de score et un objectif « devant ».
 7. **Textures des cartes** (demande de fond) et les points ouverts du § 3.
 
 ## 5. Décisions qui attendent le commanditaire
 
-- Publier `9daa1d9` (« Jouer ») et ce document.
-- L'ordre des lots du § 4.
-- Renommer ou non le réglage « Direction » en « Conduite assistée » ; renommer ou non le « Sortir » de la vue intérieure et l'entrée « Sortie » du menu.
-- L'arc de néon du van : baisser `wheels.gap` (les grandes jantes et l'assiette basse du van en pâtiraient) ou laisser.
-- Les prix et les gains posés sans lui, à juger à l'usage : néons 90 à 180 $ par zone ; capot vitré 240 $, sans capot 140 $ ; primes de la saison 2 de 80 à 250 $ ; duel : victoire 15, 30, 50 $ et première victoire 40, 80, 150 $.
+Tranché le 19 novembre au soir : publier (fait), l'ordre des lots, « Conduite assistée », l'arc de néon du van laissé tel quel, les prix et les gains posés sans lui gardés.
+
+- Renommer ou non le « Sortir » de la vue intérieure et l'entrée « Sortie » du menu.
 - Toujours en attente de son jugement : les sons de gain et des lignes d'échappement à l'oreille ; la taille du compte-tours en paysage ; le « D'origine » du moteur qui efface aussi les niveaux d'optimisation ; le bouton rond « Carrière » à garder ou non.
 
 ## 6. Reprendre le travail

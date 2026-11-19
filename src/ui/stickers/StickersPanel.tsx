@@ -576,7 +576,9 @@ export function StickersPanel() {
             </div>
           </div>
 
-          {/* Une seule rangée sous le plan : les calques, l'ajout, puis les gestes du calque choisi. */}
+          {/* Sous le plan : les calques et l'ajout (rangée qui défile), puis les gestes du calque choisi,
+              sur leur propre rangée qui passe à la ligne : rangés au bout de la première, « Supprimer »
+              et « Curseurs » sortaient de l'écran sur un téléphone. */}
           <div className="chips stk-tools">
             <div className="stk-row stk-layers" role="group" aria-label="Calques">
               {layers.map((item, index) => (
@@ -604,78 +606,78 @@ export function StickersPanel() {
                 <span aria-hidden="true">+</span> Ajouter
               </button>
             </div>
-            {layer && selected !== null && (
-              <div
-                className="stk-row stk-actions"
-                role="group"
-                aria-label="Gestes sur le sticker"
-              >
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => patch({ flip: !layer.flip })}
-                >
-                  Retourner
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={layers.length >= MAX_LAYERS}
-                  onClick={() => {
-                    const next = duplicateLayer(layers, selected);
-                    if (next) {
-                      commit(next);
-                      setSelected(selected + 1);
-                    }
-                  }}
-                >
-                  Dupliquer
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={selected === layers.length - 1}
-                  onClick={() => {
-                    const moved = moveLayer(layers, selected, 1);
-                    commit(moved.layers);
-                    setSelected(moved.index);
-                  }}
-                >
-                  Devant
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  disabled={selected === 0}
-                  onClick={() => {
-                    const moved = moveLayer(layers, selected, -1);
-                    commit(moved.layers);
-                    setSelected(moved.index);
-                  }}
-                >
-                  Derrière
-                </button>
-                <button
-                  type="button"
-                  className="btn stk-delete"
-                  onClick={() => {
-                    commit(removeLayer(layers, selected));
-                    setSelected(null);
-                  }}
-                >
-                  Supprimer
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  aria-pressed={fine}
-                  onClick={() => setFine(!fine)}
-                >
-                  Curseurs
-                </button>
-              </div>
-            )}
           </div>
+          {layer && selected !== null && (
+            <div
+              className="stk-row stk-actions"
+              role="group"
+              aria-label="Gestes sur le sticker"
+            >
+              <button
+                type="button"
+                className="btn"
+                onClick={() => patch({ flip: !layer.flip })}
+              >
+                Retourner
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={layers.length >= MAX_LAYERS}
+                onClick={() => {
+                  const next = duplicateLayer(layers, selected);
+                  if (next) {
+                    commit(next);
+                    setSelected(selected + 1);
+                  }
+                }}
+              >
+                Dupliquer
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={selected === layers.length - 1}
+                onClick={() => {
+                  const moved = moveLayer(layers, selected, 1);
+                  commit(moved.layers);
+                  setSelected(moved.index);
+                }}
+              >
+                Devant
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={selected === 0}
+                onClick={() => {
+                  const moved = moveLayer(layers, selected, -1);
+                  commit(moved.layers);
+                  setSelected(moved.index);
+                }}
+              >
+                Derrière
+              </button>
+              <button
+                type="button"
+                className="btn stk-delete"
+                onClick={() => {
+                  commit(removeLayer(layers, selected));
+                  setSelected(null);
+                }}
+              >
+                Supprimer
+              </button>
+              <button
+                type="button"
+                className="btn"
+                aria-pressed={fine}
+                onClick={() => setFine(!fine)}
+              >
+                Curseurs
+              </button>
+            </div>
+          )}
 
           {layer && selected !== null && (
             <div className="stk-edit" data-calque-choisi={selected}>
