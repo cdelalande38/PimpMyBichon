@@ -2,13 +2,13 @@
 
 Document de passation, tenu à jour à chaque étape. Il dit, pour quelqu'un qui arrive à froid : ce que le commanditaire a demandé (avec ses mots), ce qui est en ligne, ce qui reste faux dans ce qui est livré, et ce qui vient. Le détail technique de chaque lot est dans le message de son commit ; les règles de travail sont dans `CLAUDE.md` ; le périmètre est dans `CAHIER_DES_CHARGES.md` (§ 5.5 pour la sortie, § 11 pour ce que la publication attend) ; les substituts et ce qui manque sont dans `TODO_ASSETS.md`.
 
-Dernière mise à jour : 19 novembre 2026, 19 h 45.
+Dernière mise à jour : 19 novembre 2026, 22 h 25.
 
 ## 1. Où on en est
 
-- **En ligne** : `4f71f0c` (vérifié sur le site à 19 h 45). Poussé à 19 h 41 : `7b4f566` (départs, « Conduite assistée », stickers), CI en cours.
-- **Prêt en local, validé** : le lot « prepa » (préparation moteur payante) ; publication à 20 h 41 au plus tôt.
-- **En cours** : « duel3 » (restes du duel) et « nos2 » (restes du NOS), agents Opus lancés à 18 h 46 ; « fonds » (fonds des écrans de chargement), agent Opus lancé à 19 h 40.
+- **En ligne** : `215b80d` (préparation payante), publié à 20 h 42. Poussés à 22 h 25 : le NOS (`65b28a9`) et le duel (ce commit), validés.
+- **Rendu, pas versé** : le lot « fonds » (fonds des écrans de chargement, rendus par le jeu) ; planche montrée au commanditaire, j'attends son accord pour verser les images.
+- **Aucun agent en vol.** Quota de la semaine à 92 % (retour le 25 novembre à 4 h) : plus de nouveau lot d'ici là.
 
 ## 2. Journal des demandes
 
@@ -19,9 +19,10 @@ Dernière mise à jour : 19 novembre 2026, 19 h 45.
 | « Direction à renommer en conduite assistée » | Le réglage s'appelle « Conduite assistée », choix « Oui » et « Non » | `59b38d2` |
 | « il faudra revoir les distances de circuit annoncés dans les menu ca affiche 0km parfois c'est juste pas possible » | Chaque départ affichait sa borne kilométrique (« km 0,0 » pour le premier) : il dit maintenant la distance jusqu'à l'arrivée, ou la longueur du tour sur un circuit | `59b38d2` |
 | « un élément à fixer ca sera pour la configuration des stickers j'ai l'impression qu'on a pas toutes les options visibles par exemple je peux pas en supprimer » | Les gestes du sticker (dont « Supprimer » et « Curseurs ») étaient au bout d'une rangée qui défilait de côté, hors de l'écran : ils ont leur propre rangée, qui passe à la ligne | `7b4f566` |
-| « les préparation moteur ca doit etre payant » | Chaque option de la fiche de préparation (hors « Origine ») est un article, valable pour tous les véhicules : Stage 1 à 3 à 120, 220, 350 $ ; carburation à 80, 160, 260 $ ; nitro à 100, 200, 320 $. Une option déjà montée dans une sauvegarde reste montée et agit ; elle garde son cadenas (règle commune des panneaux) | (ce commit) |
+| « les préparation moteur ca doit etre payant » | Chaque option de la fiche de préparation (hors « Origine ») est un article, valable pour tous les véhicules : Stage 1 à 3 à 120, 220, 350 $ ; carburation à 80, 160, 260 $ ; nitro à 100, 200, 320 $. Une option déjà montée dans une sauvegarde reste montée et agit ; elle garde son cadenas (règle commune des panneaux) | `215b80d` |
 | « pour les écrans de chargement il faudra générer des fonds (fond général de chargement de l'application, fond pour chaque lieux de courses) » | Source choisie par lui : des rendus de nos propres scènes par le jeu. Lot « fonds » prêt, lancé quand une place se libère ; images montrées avant d'être versées | — |
-| « traite les reste du del en prio puis NOS puis rodéo puis cartes puis vehicules » | Ordre de la file (§ 4) ; lots « duel3 » et « nos2 » en cours | — |
+| « traite les reste du del en prio puis NOS puis rodéo puis cartes puis vehicules » | Duel : plus de saut au contact, on double partout où il y a la place, l'adversaire a le son de son moteur (spatialisé) et envoie son NOS en Normal et Difficile | (ce commit) |
+| (même demande) | NOS : flammes pour le concept et le van, un vrai dard vu de dos, des traits de vitesse lisibles de jour, une poussée qui se sent sur chaque véhicule (la Cox 60 → 92 km/h en 3 s) | `65b28a9` |
 
 ### Soirée et nuit du 18 au 19 novembre : six lots publiés dans la nuit
 
@@ -64,9 +65,9 @@ Les demandes plus anciennes (menu par étapes, carrière, gains, préparation, v
 
 Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : tout a été vérifié en rendu logiciel.
 
-- **Duel** : l'adversaire serré contre son bord saute d'un coup derrière le joueur (`src/drive/adversaire/contact.ts`) ; le dépassement n'est pas retravaillé ; il est muet et n'a pas de NOS ; la grille en quinconce (deux véhicules larges sur route étroite) est mesurée, pas photographiée ; coût : environ 25 appels de dessin de plus, non mesuré sous la pluie.
+- **Duel** : le moteur de l'adversaire n'a jamais été écouté (seuls les gains sont testés) ; ses flammes de NOS n'ont pas été capturées ; au départ côte à côte il part contre son bord ; quand le contact cesse, le joueur repoussé revient vers sa trajectoire à 3 m/s au plus ; sur route étroite, les caisses peuvent se chevaucher de quelques centimètres pendant que l'une cède ; le Difficile semble battable plein gaz sans freiner sur Ocean Drive (10 s d'avance après 43 s) : à mesurer ; en portrait, la quinconce cache l'adversaire derrière le van.
 - **Drift** : sans coup sec sur le frein, seul le concept glisse, et sous la pluie seulement ; les paliers des médailles ont bougé de −39 % à +59 % au dernier recalcul et l'or reste calé sur un pilote simulé ; Monaco est étroit pour glisser ; en portrait la ligne d'aide touche la mini-carte ; pas de record de score par carte.
-- **NOS** : pas de flammes sur le concept ni le van (aucune sortie d'échappement déclarée dans leur manifeste) ; vues de dos les flammes sont deux gerbes plutôt qu'un dard ; de jour les traits de vitesse se voient peu ; la Cox gagne à peine en vitesse pendant la poussée (réglage de la poussée, hors du lot de rendu) ; temps d'image non mesuré.
+- **NOS** : le concept et le van n'ont pas d'embout d'échappement modelé (le dard sort de sous le bouclier) et le van a deux sorties ; vu de dos en paysage, le dard reste petit ; de jour contre le ciel, les traits restent discrets ; la poussée plus forte rend un record au NOS plus facile, et sous NOS les roues patinent un peu plus au départ par temps de pluie ou de neige.
 - **Néons** : les arcs des roues sont un liseré fin, presque caché quand le pneu remplit l'arche ; celui du van se voit à peine (sa voûte modelée est plus basse que le jeu déclaré : réglage `wheels.gap` à décider) ; les cercles des motos ne braquent pas avec la fourche ; la lueur reste à plat et n'a pas été vue contre un trottoir de ville ; LED d'habitacle invisibles en caméra embarquée ; ciel étoilé du concept jamais vu à l'image ; pulsation sur la musique (§ 5.4) pas faite.
 - **Carrière** : « sans NOS » n'est jugé qu'à l'arrivée et le bouton reste à l'écran ; on peut partir avec la mauvaise famille de véhicule (la fiche avertit seulement) ; l'annonce de fin de saison n'a ni parcours ni capture ; la finale dure environ neuf minutes ; le haut fait de la saison 1 garde son ancienne description.
 - **Capot** : la Cox seulement (le van n'a pas de modèle de moteur, le pivot du capot du concept n'est pas à la charnière, les motos ont leur moteur dans leur carrosserie) ; de dos, la vitre montre peu le moteur ; pas d'ouverture en pause pendant une sortie.

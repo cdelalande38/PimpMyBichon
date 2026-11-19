@@ -26,7 +26,7 @@ import type { Pilot, Rail, RailPose } from '../contrat.ts';
 import { tenuSurLaLigne, type EtatDepart } from '../depart.ts';
 import { createPilot, laneLimits, performanceDe, PILOT } from '../pilote.ts';
 import { createPose } from '../rail.ts';
-import { abscisseRetenue, createContact, devant, laneDuCote, pasContact, remettreContact, type CorpsRoute, type Retenue } from './contact.ts';
+import { createContact, devant, laneDuCote, pasContact, reculer, remettreContact, type CorpsRoute, type Retenue } from './contact.ts';
 import { armerDuel, createDuel, pasDuel, type EtatDuel } from './duel.ts';
 import { createPiloteAdversaire, graineDe, pasAdversaire, remettreAdversaire, type PiloteAdversaire } from './pilotage.ts';
 
@@ -157,6 +157,7 @@ export class DuelEnCourse {
   private readonly reglage: ReglageContact;
   private readonly rail: Rail;
   private readonly limites: [number, number] = [0, 0];
+  private readonly limitesJ: [number, number] = [0, 0];
   private readonly corpsJ: CorpsRoute = { s: 0, offset: 0, demiLargeur: 0.95, demiLongueur: 2.2 };
   private readonly corpsA: CorpsRoute = { s: 0, offset: 0, demiLargeur: 0.95, demiLongueur: 2.2 };
   /** Écart à l'axe montré (son pilote, plus le décalage d'évitement), m. */
@@ -261,9 +262,10 @@ export class DuelEnCourse {
 
   /**
    * Une image, après le pas du joueur et de son départ : l'adversaire avance (tenu tant que les feux ne sont
-   * pas au vert), le contact le range ou retient celui de derrière, la course se mesure.
+   * pas au vert), le contact les gêne l'un l'autre, la course se mesure. `auto` : le joueur en pilote
+   * automatique (son pilote garde son écart d'une image à l'autre : on ne le pousse pas de côté).
    */
-  pas(dt: number, joueur: Pilot, departJoueur: EtatDepart, demiLargeurJoueur: number, demiLongueurJoueur: number): void {
+  pas(dt: number, joueur: Pilot, departJoueur: EtatDepart, demiLargeurJoueur: number, demiLongueurJoueur: number, auto = false): void {
     if (!this.enPiste) return;
     const rail = this.rail;
     const tenu = tenuSurLaLigne(departJoueur);
@@ -276,6 +278,10 @@ export class DuelEnCourse {
     this.corpsGA.demiLargeur = this.corpsA.demiLargeur;
     this.corpsGA.demiLongueur = this.corpsA.demiLongueur;
     limitesSurLaLongueur(rail, motion.s, this.corpsGA, this.limites);
+    this.corpsGJ.demiLargeur = demiLargeurJoueur;
+    this.corpsGJ.demiLongueur = demiLongueurJoueur;
+    limitesSurLaLongueur(rail, joueur.motion.s, this.corpsGJ, this.limitesJ);
+    if (auto) this.limitesJ[0] = this.limitesJ[1] = joueur.motion.offset;
     const j = this.corpsJ;
     j.s = joueur.motion.s;
     j.offset = joueur.motion.offset;
@@ -284,17 +290,27 @@ export class DuelEnCourse {
     const a = this.corpsA;
     a.s = motion.s;
     a.offset = motion.offset;
-    const retenue = pasContact(this.contact, j, a, this.limites[0], this.limites[1], this.reglage, dt, rail.length, rail.loop);
-    this.pilote.lane = laneDuCote(this.contact.cote);
-    const longueurs = j.demiLongueur + a.demiLongueur;
-    if (retenue === 'joueur') {
-      joueur.motion.s = abscisseRetenue(motion.s, longueurs, rail.length, rail.loop);
-      joueur.motion.speed = Math.min(joueur.motion.speed, this.pilote.vitesse);
-    } else if (retenue === 'adversaire') {
-      motion.s = abscisseRetenue(joueur.motion.s, longueurs, rail.length, rail.loop);
-      motion.speed = Math.min(motion.speed, joueur.motion.speed);
-      this.pilote.vitesse = motion.speed;
+    const c = this.contact;
+    const retenue = pasContact(c, j, a, this.limites[0], this.limites[1], this.limitesJ[0], this.limitesJ[1], this.reglage, dt, rail.length, rail.loop);
+    this.pilote.lane = laneDuCote(c.cote);
+    // La poussée du joueur s'ajoute à l'écart de son pilote (reprise à chaque image, elle retombe sans contact).
+    joueur.motion.offset += c.pousse;
+    if (c.frotte) {
+      // Flanc contre flanc : les deux perdent de la vitesse.
+      const perte = this.reglage.frottement * Math.max(0, Number.isFinite(dt) ? dt : 0);
+      joueur.motion.speed = Math.max(0, joueur.motion.speed - perte);
+      motion.speed = Math.max(0, motion.speed - perte);
     }
+    // Celui de derrière s'arrête contre celui de devant (quelques centimètres par pas, jamais un saut).
+    if (retenue === 'joueur') {
+      joueur.motion.s = reculer(joueur.motion.s, c.recul, rail.length, rail.loop);
+      joueur.motion.speed = Math.min(joueur.motion.speed, motion.speed);
+    } else if (retenue === 'adversaire') {
+      motion.s = reculer(motion.s, c.recul, rail.length, rail.loop);
+      motion.speed = Math.min(motion.speed, joueur.motion.speed);
+    }
+    this.pilote.vitesse = motion.speed;
+    this.pilote.sAvant = motion.s;
     this.retenue = retenue;
     this.offset = motion.offset + this.contact.ecart;
     pasDuel(this.duel, departJoueur, dt, motion.s, rail, motion.finished);

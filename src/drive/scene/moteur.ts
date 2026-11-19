@@ -64,6 +64,7 @@ import { aimSunShadow } from '../../render/sunShadow.ts';
 import { roueEnPlus, rouesMotrices, wheelSteer } from './roues.ts';
 import { liveNos, suivreNos } from '../../data/nos.ts';
 import { createRig, rollWheels, TAIL_LIGHT, type DriveModel, type DriveRig } from './vehicule.tsx';
+import { devant } from '../adversaire/contact.ts';
 import { duelDeLaSortie, liveDuel, type DuelEnCourse } from '../adversaire/course.ts';
 import { useDuel } from '../adversaire/choix.ts';
 import { conclureDuel } from '../adversaire/cloture.ts';
@@ -497,7 +498,7 @@ export class DriveEngine {
     // Duel : l'adversaire avance avec le joueur ; le contact le range ou retient celui de derrière.
     if (this.duel) {
       this.duel.pilote.pilot.setWeather(drive.weather);
-      this.duel.pas(dt, this.pilot, depart, this.rig.measure?.halfWidth ?? 0.95, this.rig.measure?.halfLength ?? this.halfLengthHint);
+      this.duel.pas(dt, this.pilot, depart, this.rig.measure?.halfWidth ?? 0.95, this.rig.measure?.halfLength ?? this.halfLengthHint, drive.input.auto);
     }
     if (!arrived && depart.phase === 'arrive' && drive.map && !depart.lance) {
       const format = formatCouru(drive.format, this.rail.loop);
@@ -790,6 +791,11 @@ export class DriveEngine {
         putData(stage, 'duelEcart', String(Math.round(d.ecart * 10)));
         putData(stage, 'duelS', String(Math.round(this.duel.pilote.pilot.motion.s)));
         putData(stage, 'duelVerdict', d.verdict ? (d.verdict.gagne ? 'gagne' : 'perdu') : 'non');
+        // Son NOS (ses flammes brûlent), la grille, et où il est par rapport au joueur (m, au dixième : devant, à gauche).
+        putData(stage, 'duelNos', this.duel.pilote.pilot.train.nos ? 'oui' : 'non');
+        putData(stage, 'duelGrille', this.duel.grille.mode);
+        putData(stage, 'duelDevant', String(Math.round(devant(motion.s, this.duel.pilote.pilot.motion.s, this.rail.length, this.rail.loop) * 10) / 10));
+        putData(stage, 'duelCote', String(Math.round((this.duel.offset - motion.offset) * 10) / 10));
       }
     }
   }

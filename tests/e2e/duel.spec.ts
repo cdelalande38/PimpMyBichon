@@ -6,13 +6,14 @@
 // sur demande seulement, photographie la grille sur une route large et sur une route étroite.
 // Une course entière est trop longue en rendu logiciel : comme tests/e2e/carriere.spec.ts, le parcours sert
 // lui-même la route de la première carte avec ses départs posés 160 m avant le bout (au seul test).
-// Captures de revue à la demande : PMB_CAPTURES_DUEL=<dossier>.
+// Captures de revue à la demande : PMB_CAPTURES_DUEL=<dossier>. Vague W, à la demande aussi : la grille en
+// quinconce (deux vans sur la route étroite), un dépassement en cours et l'adversaire qui envoie son NOS.
 
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreSurLaRoute, auSec, cartesDuMenu, choisirCarte, choisirDepart, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, pickMap, reglerSortie, waitForScene } from './helpers.ts';
+import { attendreSurLaRoute, auSec, cartesDuMenu, choisirCarte, choisirDepart, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, pickMap, reglerSortie, reloadSaved, tempsDeRoute, waitForBench, waitForScene } from './helpers.ts';
 
 const CAPTURES = process.env.PMB_CAPTURES_DUEL;
 const PAYSAGE = { width: 844, height: 390 } as const;
@@ -23,6 +24,28 @@ async function photo(page: Page, nom: string): Promise<void> {
   if (!CAPTURES) return;
   mkdirSync(CAPTURES, { recursive: true });
   await page.screenshot({ path: resolve(CAPTURES, `${nom}.png`) });
+}
+
+/** Le véhicule du joueur, posé par la sauvegarde des builds, l'app relancée. */
+async function prendreVehicule(page: Page, vehicule: string): Promise<void> {
+  await page.evaluate(
+    (value) =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open('pimpmybichon');
+        open.onupgradeneeded = () => open.result.createObjectStore('kv');
+        open.onerror = () => fail(open.error);
+        open.onsuccess = () => {
+          const transaction = open.result.transaction('kv', 'readwrite');
+          transaction.objectStore('kv').put(JSON.stringify({ state: { current: value, builds: { [value]: { paints: {} } }, recents: [value] }, version: 1 }), 'pmb-builds');
+          transaction.oncomplete = () => done();
+          transaction.onerror = () => fail(transaction.error);
+        };
+      }),
+    vehicule,
+  );
+  await reloadSaved(page);
+  await waitForScene(page);
+  await waitForBench(page);
 }
 
 /** Le manche tenu vers le haut (direction assistée) ; rend de quoi le lâcher. */
@@ -194,4 +217,83 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
       await photo(page, `09-grille-${nom}-portrait`);
     });
   }
+
+  // Vague W, sur demande (PMB_CAPTURES_DUEL) : deux vans sur la route étroite (5 m) partent en quinconce.
+  test('grille en quinconce : deux vans sur la route étroite, en paysage', async ({ page }) => {
+    test.skip(!CAPTURES, 'captures de revue sur demande (PMB_CAPTURES_DUEL)');
+    test.setTimeout(400_000);
+    await openApp(page);
+    await waitForScene(page);
+    await prendreVehicule(page, 'van');
+    await openEntry(page, ENTREE_SORTIE);
+    await choisirCarte(page, /Monaco, la ville/);
+    await choisirDepart(page, /Place du Casino/);
+    await auSec(page);
+    await choisirDuel(page, 'momo', 'normal');
+    await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
+    await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
+    await commencerCourse(page);
+    await expect(stage(page)).toHaveAttribute('data-duel-grille', 'quinconce', { timeout: DELAI_ROUTE });
+    await page.setViewportSize(PAYSAGE);
+    await page.waitForTimeout(3000);
+    await photo(page, '10-quinconce-paysage');
+    await page.setViewportSize(PORTRAIT);
+    await page.waitForTimeout(3000);
+    await photo(page, '14-quinconce-portrait');
+  });
+
+  // Vague W, sur demande : la sportive du joueur contre la Comète (la même) en Difficile sur la route large, plein
+  // gaz jusqu'à 25 m d'avance, puis un filet de gaz : la Comète revient et le double (côte à côte) ; enfin, le
+  // joueur la suit de près (gaz dosé) et elle envoie son NOS assez près pour qu'on voie ses flammes. Si l'un des
+  // moments ne vient pas, la capture porte « -manque ».
+  test('dépassement en cours et NOS de l’adversaire, en paysage', async ({ page }) => {
+    test.skip(!CAPTURES, 'captures de revue sur demande (PMB_CAPTURES_DUEL)');
+    test.setTimeout(900_000);
+    await openApp(page);
+    await waitForScene(page);
+    await prendreVehicule(page, 'sportive');
+    await openEntry(page, ENTREE_SORTIE);
+    await choisirCarte(page, /Miami/);
+    await choisirDepart(page, /Ocean Drive/);
+    await auSec(page);
+    await choisirDuel(page, 'comete', 'difficile');
+    await page.setViewportSize(PAYSAGE);
+    await sortirEnDuel(page);
+    await expect(stage(page)).toHaveAttribute('data-depart', 'parti', { timeout: DELAI_ROUTE });
+    const lacher = await tenirLeGaz(page);
+    const lire = () => stage(page).evaluate((el) => ({ devant: Number(el.dataset.duelDevant), cote: Number(el.dataset.duelCote), nos: el.dataset.duelNos, chrono: Number(el.dataset.chrono) / 10 }));
+    const moment = async (nom: string, ok: (v: Awaited<ReturnType<typeof lire>>) => boolean, secondes: number) => {
+      try {
+        await attendreSurLaRoute(page, nom, lire, ok, { secondes, horloge: 240_000, intervalle: 200 });
+        await photo(page, nom);
+      } catch {
+        await photo(page, `${nom}-manque`);
+      }
+    };
+    const zone = (await page.locator('.drive-mid').boundingBox())!;
+    const gaz = (px: number) => page.mouse.move(zone.x + zone.width / 2, zone.y + zone.height * 0.6 - px, { steps: 2 });
+    await attendreSurLaRoute(page, 'joueur devant', lire, (v) => v.devant <= -25, { secondes: 40, horloge: 240_000, intervalle: 200 }).catch(() => undefined);
+    await gaz(22);
+    // Côte à côte en course : elle le passe.
+    await moment('11-depassement-paysage', (v) => Math.abs(v.devant) <= 3 && Math.abs(v.cote) >= 0.8, 40);
+    // Puis le joueur la suit de 8 à 25 m (le gaz dosé) jusqu'à ce qu'elle envoie son NOS.
+    const debut = await tempsDeRoute(page);
+    const horloge = Date.now();
+    let vu = false;
+    while ((await tempsDeRoute(page)) - debut < 70 && Date.now() - horloge < 150_000) {
+      const v = await lire();
+      if (v.nos === 'oui' && v.devant > 0 && v.devant <= 45) {
+        await photo(page, '12-adversaire-nos-paysage');
+        vu = true;
+        break;
+      }
+      await gaz(v.devant < 8 ? 15 : v.devant > 25 ? 60 : 35);
+      await page.waitForTimeout(200);
+    }
+    if (!vu) await photo(page, '12-adversaire-nos-paysage-manque');
+    await page.setViewportSize(PORTRAIT);
+    await page.waitForTimeout(500);
+    await photo(page, '13-course-portrait');
+    await lacher();
+  });
 });

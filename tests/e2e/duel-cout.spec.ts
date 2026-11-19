@@ -3,6 +3,8 @@
 // ligne, caméra de poursuite), relève par image les appels de dessin et les triangles de TOUTES les passes
 // (sonde, reflet, ombres comprises : un crochet sur WebGL posé avant l'app) et la durée d'image, sans
 // adversaire puis avec. En rendu logiciel, la durée d'image ne vaut que pour comparer les deux.
+// PMB_MESURE_DUEL_METEO=pluie (vague W) : la même mesure sous la pluie (au sec sinon). PMB_MESURE_DUEL_PAYSAGE=1 :
+// téléphone couché (844 × 390) ; en portrait, l'adversaire à côté du joueur sort du champ et n'est pas dessiné.
 
 import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
@@ -10,6 +12,8 @@ import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
 import { auSec, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, pickMap, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 const SORTIE = process.env.PMB_MESURE_DUEL;
+const PLUIE = process.env.PMB_MESURE_DUEL_METEO === 'pluie';
+const PAYSAGE = process.env.PMB_MESURE_DUEL_PAYSAGE === '1';
 
 interface Releve {
   calls: number;
@@ -35,7 +39,11 @@ async function relever(page: Page, images: number): Promise<{ calls: number; tri
 async function sortieEnFeux(page: Page, duel: boolean): Promise<void> {
   await openEntry(page, ENTREE_SORTIE);
   await pickMap(page);
-  await auSec(page);
+  if (PLUIE) {
+    const pluie = page.locator('footer.dock').getByRole('group', { name: 'Météo' }).getByRole('button', { name: 'Pluie', exact: true });
+    await pluie.tap();
+    await expect(pluie).toHaveAttribute('aria-pressed', 'true');
+  } else await auSec(page);
   const formats = page.locator('footer.dock').getByRole('group', { name: 'Format' });
   await formats.locator(duel ? '[data-format="duel"]' : '[data-format="tour1"]').tap();
   if (duel) {
@@ -85,6 +93,7 @@ test.describe('coût du duel', () => {
         };
       }
     });
+    if (PAYSAGE) await page.setViewportSize({ width: 844, height: 390 });
     await openApp(page);
     await waitForScene(page);
     await sortieEnFeux(page, false);
@@ -92,6 +101,6 @@ test.describe('coût du duel', () => {
     await rentrerAuGarage(page);
     await sortieEnFeux(page, true);
     const avec = await relever(page, 12);
-    writeFileSync(SORTIE!, JSON.stringify({ carte: 'première du menu', moment: 'défaut', sans, avec }, null, 2));
+    writeFileSync(SORTIE!, JSON.stringify({ carte: 'première du menu', moment: 'défaut', meteo: PLUIE ? 'pluie' : 'sec', ecran: PAYSAGE ? '844 × 390' : '390 × 844', sans, avec }, null, 2));
   });
 });

@@ -33,6 +33,7 @@ import { useBuilds } from '../state/builds.ts';
 import { livePilot, useDrive } from '../state/drive.ts';
 import { soundFamilyOf, useEngineSound, useEngineSoundPrefs } from '../state/engineSound.ts';
 import { useMixage } from '../state/mixage.ts';
+import { brancherSonAdversaire } from './adversaire/son.ts';
 import { etatInitial, pasBoite, regimeJoue, type EtatBoite } from './boite.ts';
 import { chargeDe, etatAffiche, lisserAccel, melangeSortie, moteurVoulu, RAMPE_RADIO, type ConditionsSon, type EtatSonSortie } from './mixage.ts';
 
@@ -119,6 +120,8 @@ export function brancherSonSortie(): () => void {
   // Ce que les bruitages écoutent, réécrit sur place à chaque relecture.
   const etatRoute: EtatRoute = { vitesseKmh: 0, pluie: 0, neige: 0, mouille: 0, abri: 0, nos: false };
   const instant = instantRepos();
+  // Duel : le moteur de l'adversaire, quand celui du joueur tourne (src/drive/adversaire/son.ts).
+  const sonAdversaire = brancherSonAdversaire();
 
   const conditions = (): ConditionsSon => {
     const drive = useDrive.getState();
@@ -207,6 +210,7 @@ export function brancherSonSortie(): () => void {
       etatRoute.abri = 0;
     }
     lecteur.mettreAJour(moteur.audio(), actif, route, etatRoute, instant, familleCourante);
+    sonAdversaire.maj(actif && !useDrive.getState().paused, Math.max(0, niveau));
   }
 
   /** Une mesure : la boîte avance, le lecteur glisse vers le nouveau régime. */
@@ -298,6 +302,7 @@ export function brancherSonSortie(): () => void {
     offMixage();
     retirerGeste();
     lecteur.couper();
+    sonAdversaire.couper();
     meteoSon.posee = false;
     // Au garage, la radio reprend son volume.
     baisserRadio(1, RAMPE_RADIO);

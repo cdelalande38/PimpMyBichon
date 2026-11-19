@@ -39,18 +39,28 @@
     }
   ],
   "niveaux": [
-    { "id": "facile", "label": "Facile", "phrase": "Il court, mais freine tôt", "gains": "bronze", "allure": 0.7, "freinage": 0.45, "irregularite": 0.06 },
-    { "id": "normal", "label": "Normal", "phrase": "Rapide, quelques fautes", "gains": "argent", "allure": 0.87, "freinage": 0.62, "irregularite": 0.03 },
-    { "id": "difficile", "label": "Difficile", "phrase": "À fond, sans faute", "gains": "or", "allure": 1, "freinage": 0.8, "irregularite": 0 }
+    { "id": "facile", "label": "Facile", "phrase": "Il court, mais freine tôt", "gains": "bronze", "allure": 0.7, "freinage": 0.45, "irregularite": 0.06, "nos": 0 },
+    { "id": "normal", "label": "Normal", "phrase": "Rapide, quelques fautes", "gains": "argent", "allure": 0.87, "freinage": 0.62, "irregularite": 0.03, "nos": 300 },
+    { "id": "difficile", "label": "Difficile", "phrase": "À fond, sans faute", "gains": "or", "allure": 1, "freinage": 0.8, "irregularite": 0, "nos": 180 }
   ],
   "niveauParDefaut": "normal",
   "pilotage": {
-    "section": 140
+    "section": 140,
+    "nosRayon": 250,
+    "nosDepart": 150
   },
   "contact": {
     "garde": 0.3,
     "approche": 6,
     "relache": 12,
-    "ecartParSeconde": 3
+    "ecartParSeconde": 3,
+    "frottement": 2,
+    "cedeParSeconde": 6
+  },
+  "son": {
+    "niveau": 0.5,
+    "proche": 6,
+    "portee": 150,
+    "derriere": 1800
   }
 }

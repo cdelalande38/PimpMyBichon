@@ -9,6 +9,11 @@
 // glissé)` (le régime glisse vers la cible en `glissé` secondes, entre deux mesures espacées),
 // `setLevel(volume)` (volume d'ensemble, en rampe, sans toucher à la hauteur), démarrage sans le
 // démarreur enregistré (véhicule déjà lancé).
+//
+// Second moteur (l'adversaire du duel, src/drive/adversaire/son.ts) : un lecteur « invité » (`hote`) joue dans
+// le contexte du moteur du joueur et sort par son limiteur, sans ligne d'échappement ; son bus passe par une
+// coupure des aigus et un placement gauche-droite (`placer`). Il ne suspend ni ne ferme jamais le contexte
+// qu'il emprunte. Ses sons sont téléchargés et décodés pour lui (son propre cache).
 
 import { brancherEchappement, type ChaineEchappement } from './echappement.ts';
 import { dbToGain, loadGain, loopLevels, rpmRange, stepRpm } from './mix.ts';
@@ -68,10 +73,16 @@ export class EngineSoundPlayer {
 
   private readonly onState: (state: EngineState) => void;
   private readonly base: string;
+  /** Lecteur invité : le contexte et la sortie du moteur du joueur (null tant qu'il n'est pas né). */
+  private readonly hote: (() => { ctx: AudioContext; sortie: AudioNode } | null) | null;
+  /** Invité : coupure des aigus et placement gauche-droite, entre son bus et la sortie de l'hôte. */
+  private voile: BiquadFilterNode | null = null;
+  private place: StereoPannerNode | null = null;
 
-  constructor(onState: (state: EngineState) => void, base: string = import.meta.env.BASE_URL) {
+  constructor(onState: (state: EngineState) => void, base: string = import.meta.env.BASE_URL, hote: (() => { ctx: AudioContext; sortie: AudioNode } | null) | null = null) {
     this.onState = onState;
     this.base = base;
+    this.hote = hote;
   }
 
   get engineState(): EngineState {
@@ -86,6 +97,20 @@ export class EngineSoundPlayer {
 
   /** Contexte audio, créé au premier geste (le navigateur l'exige), repris s'il dormait. */
   private context(): AudioContext {
+    const hote = this.ctx ? null : this.hote?.();
+    if (hote) {
+      const bus = hote.ctx.createGain();
+      bus.gain.value = BUS_GAIN * this.level;
+      const voile = hote.ctx.createBiquadFilter();
+      voile.type = 'lowpass';
+      voile.frequency.value = 20000;
+      const place = hote.ctx.createStereoPanner();
+      bus.connect(voile).connect(place).connect(hote.sortie);
+      this.ctx = hote.ctx;
+      this.bus = bus;
+      this.voile = voile;
+      this.place = place;
+    }
     if (!this.ctx) {
       const ctx = new AudioContext({ latencyHint: 'interactive' });
       const limiter = ctx.createDynamicsCompressor();
@@ -156,10 +181,12 @@ export class EngineSoundPlayer {
    */
   async start(famille: string, options: { demarreur?: boolean } = {}): Promise<'ok' | 'echec' | 'annule'> {
     if (this.state !== 'coupe') return 'ok';
+    // Invité sans hôte né : muet.
+    if (this.hote && !this.ctx && !this.hote()) return 'echec';
     const ctx = this.context();
     const run = ++this.run;
     this.setState('demarrage');
-    void ctx.resume();
+    if (!this.hote) void ctx.resume();
     let loaded: Loaded | null;
     try {
       loaded = await this.load(famille);
@@ -171,7 +198,7 @@ export class EngineSoundPlayer {
       this.cleanup();
       return 'echec';
     }
-    await ctx.resume().catch(() => undefined);
+    if (!this.hote) await ctx.resume().catch(() => undefined);
     if (run !== this.run) return 'annule';
     this.current = loaded;
     const { manifest, buffers } = loaded;
@@ -267,6 +294,18 @@ export class EngineSoundPlayer {
     bus.gain.linearRampToValueAtTime(BUS_GAIN * this.level, now + Math.max(0.01, ramp));
   }
 
+  /**
+   * Invité : placement gauche-droite (`pan`, de −1 à gauche à 1 à droite) et coupure des aigus (`coupure`, Hz),
+   * en rampe de `ramp` secondes. Sans effet sur le moteur du joueur.
+   */
+  placer(pan: number, coupure: number, ramp = 0.1): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.place || !this.voile) return;
+    const tau = Math.max(0.01, ramp) / 3;
+    this.place.pan.setTargetAtTime(Number.isFinite(pan) ? Math.min(1, Math.max(-1, pan)) : 0, ctx.currentTime, tau);
+    this.voile.frequency.setTargetAtTime(Number.isFinite(coupure) ? Math.min(20000, Math.max(100, coupure)) : 20000, ctx.currentTime, tau);
+  }
+
   /** Plage de régime jouable du jeu chargé (ralenti, plus haute boucle + 25 %), ou null. */
   get range(): { min: number; max: number } | null {
     const manifest = this.current?.manifest;
@@ -351,8 +390,8 @@ export class EngineSoundPlayer {
     this.pressed = false;
     this.external = null;
     this.revUntil = 0;
-    if (ctx && live) {
-      // Suspendu après le fondu, sauf si l'on a redémarré entre-temps.
+    if (ctx && live && !this.hote) {
+      // Suspendu après le fondu, sauf si l'on a redémarré entre-temps (jamais le contexte emprunté d'un invité).
       const run = this.run;
       this.later(() => {
         if (run === this.run && this.ctx === ctx && ctx.state === 'running') void ctx.suspend();
@@ -364,7 +403,14 @@ export class EngineSoundPlayer {
   /** Libère le contexte (fin de vie de l'app ou des tests). */
   dispose(): void {
     this.cleanup();
-    void this.ctx?.close();
+    if (this.hote) {
+      // Invité : on se débranche de l'hôte, son contexte reste à lui.
+      this.bus?.disconnect();
+      this.voile?.disconnect();
+      this.place?.disconnect();
+      this.voile = null;
+      this.place = null;
+    } else void this.ctx?.close();
     this.ctx = null;
     this.bus = null;
     this.master = null;

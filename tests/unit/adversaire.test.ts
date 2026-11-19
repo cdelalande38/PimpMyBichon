@@ -4,7 +4,7 @@
 // à ta mesure, la sauvegarde relue, les gains, la grille de départ sur chaque départ (sur la chaussée, sans se
 // toucher, sans saut aux feux ni au vert), contact (jamais de recouvrement), écart et vainqueur.
 
-import { existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ADVERSAIRES, lireAdversaires, NIVEAUX_DUEL, niveauDuel, PILOTAGE_ADVERSAIRE, PROBLEMES_ADVERSAIRES, relireChoixDuel, type NiveauDuel } from '../../src/data/adversaires.ts';
 import { tempsReference } from '../../src/data/courses.ts';
@@ -19,10 +19,10 @@ import { createPilot, laneLimits, performanceDe } from '../../src/drive/pilote.t
 import { createPose, createRail } from '../../src/drive/rail.ts';
 import { piloteDeSimulation, simulerCourse } from '../../src/drive/simulationCourse.ts';
 import { hautFaitDuel } from '../../src/drive/adversaire/cloture.ts';
-import { createContact, devant, pasContact, recouvrement, type CorpsRoute } from '../../src/drive/adversaire/contact.ts';
+import { coteLibre, createContact, devant, pasContact, recouvrement, type CorpsRoute } from '../../src/drive/adversaire/contact.ts';
 import { adversaireAMesure, DuelEnCourse, grilleDepart, trempe, type CorpsGrille, type Grille } from '../../src/drive/adversaire/course.ts';
 import { armerDuel, chronoA, createDuel, pasDuel, PAS_RELEVES } from '../../src/drive/adversaire/duel.ts';
-import { bruitSection, createPiloteAdversaire, graineDe, variationAllure } from '../../src/drive/adversaire/pilotage.ts';
+import { bruitSection, createPiloteAdversaire, graineDe, pasAdversaire, remettreAdversaire, variationAllure } from '../../src/drive/adversaire/pilotage.ts';
 import { simulerAdversaire } from '../../src/drive/adversaire/simulation.ts';
 
 const built = MAPS.filter((map) => existsSync(`public/assets/maps/${map.id}/${map.route}`));
@@ -122,11 +122,11 @@ function adversaireSimule(mapId: string, vehicule: string, niveau: NiveauDuel, i
 }
 
 describe('il court : niveaux mesurés hors navigateur', () => {
-  it.skipIf(built.length === 0)('le plus dur roule la conduite de référence de son véhicule, au dixième de seconde, et frôle le bord autant qu’elle', { timeout: 300_000 }, () => {
+  it.skipIf(built.length === 0)('le plus dur, sans son NOS, roule la conduite de référence de son véhicule, au dixième de seconde, et frôle le bord autant qu’elle', { timeout: 300_000 }, () => {
     for (const map of built) {
       const start = plusCourt(map.id);
       for (const v of VEHICLES) {
-        const sim = simulerAdversaire(adversaireSimule(map.id, v.id, plusDur()), start.at, 1, 'sec');
+        const sim = simulerAdversaire(adversaireSimule(map.id, v.id, { ...plusDur(), nos: 0 }), start.at, 1, 'sec');
         const ref = simulerCourse(piloteDeSimulation(route(map.id), performanceDe(v)), { at: start.at, tours: 1, meteo: 'sec', conduite: 'main' });
         const ici = `${map.id}/${start.id}/${v.id}`;
         expect(sim.temps, ici).toBeCloseTo(ref.temps, 0);
@@ -147,8 +147,8 @@ describe('il court : niveaux mesurés hors navigateur', () => {
           expect(t.dehors, ici).toBe(0);
           // Même le plus facile court : bien plus vite que le pilote automatique de balade.
           expect(t.temps / ref.auto, ici).toBeLessThan(0.75);
-          // Et pas plus vite que la conduite de référence.
-          expect(t.temps / ref.main, ici).toBeGreaterThan(0.98);
+          // Et guère plus vite que la conduite de référence (son NOS lui fait gagner 2 % au plus).
+          expect(t.temps / ref.main, ici).toBeGreaterThan(0.97);
         }
         for (let i = 1; i < temps.length; i += 1) expect(temps[i]!.temps, ici).toBeLessThan(temps[i - 1]!.temps);
         // Le plus facile : au plus un tiers de plus que la référence (de l'ordre de l'argent, 1,25).
@@ -162,13 +162,46 @@ describe('il court : niveaux mesurés hors navigateur', () => {
     }
   });
 
+  it.skipIf(built.length === 0)('NOS : jamais en Facile ; en Normal et Difficile, en sortie de virage, au début des lignes droites, jamais au départ arrêté ; toujours aux mêmes endroits', { timeout: 120_000 }, () => {
+    expect(NIVEAUX_DUEL[0]!.nos).toBe(0);
+    for (const n of NIVEAUX_DUEL.slice(1)) expect(n.nos).toBeGreaterThan(0);
+    for (const map of built) {
+      const start = plusCourt(map.id);
+      const envois = NIVEAUX_DUEL.map((n) => {
+        const p = adversaireSimule(map.id, 'sportive', n);
+        // Où il appuie : chaque appui tombe sur un point fixé d'avance, après nosDepart m de chemin.
+        const appuis: number[] = [];
+        const step = p.pilot.step.bind(p.pilot);
+        let vu = 0;
+        p.pilot.step = (dt, input, kind) => {
+          const m = step(dt, input, kind);
+          if ((input.nos ?? 0) !== vu) {
+            vu = input.nos ?? 0;
+            appuis.push(p.parcouru);
+          }
+          return m;
+        };
+        simulerAdversaire(p, start.at, 1, 'sec');
+        for (const a of appuis) expect(a, map.id).toBeGreaterThanOrEqual(PILOTAGE_ADVERSAIRE.nosDepart);
+        if (n.nos > 0) for (const x of p.nosPoints) expect(Math.abs(p.pilot.line.curvature[Math.round(x / p.pilot.line.step) % p.pilot.line.curvature.length]!)).toBeLessThan(1 / PILOTAGE_ADVERSAIRE.nosRayon);
+        return p.nosEnvois;
+      });
+      expect(envois[0], map.id).toBe(0);
+    }
+    // Les points sont ceux de la carte, pas du hasard : deux fois les mêmes.
+    const a = adversaireSimule(built[0]!.id, 'sportive', plusDur()).nosPoints;
+    expect([...adversaireSimule(built[0]!.id, 'sportive', plusDur()).nosPoints]).toEqual([...a]);
+    expect(a.length).toBeGreaterThan(0);
+  });
+
   it.skipIf(built.length === 0)('déterministe : même course, même adversaire, même niveau, même temps', { timeout: 60_000 }, () => {
     const map = built[0]!;
     const start = plusCourt(map.id);
-    const n = NIVEAUX_DUEL[0]!;
-    const un = simulerAdversaire(adversaireSimule(map.id, VEHICLES[0]!.id, n, 'dede'), start.at, 1, 'sec');
-    const deux = simulerAdversaire(adversaireSimule(map.id, VEHICLES[0]!.id, n, 'dede'), start.at, 1, 'sec');
-    expect(deux.temps).toBe(un.temps);
+    for (const n of [NIVEAUX_DUEL[0]!, plusDur()]) {
+      const un = simulerAdversaire(adversaireSimule(map.id, VEHICLES[0]!.id, n, 'dede'), start.at, 1, 'sec');
+      const deux = simulerAdversaire(adversaireSimule(map.id, VEHICLES[0]!.id, n, 'dede'), start.at, 1, 'sec');
+      expect(deux.temps).toBe(un.temps);
+    }
   });
 });
 
@@ -290,7 +323,7 @@ describe('la grille de départ', () => {
 });
 
 describe('contact', () => {
-  const reglage = { garde: 0.3, approche: 6, relache: 12, ecartParSeconde: 3 };
+  const reglage = { garde: 0.3, approche: 6, relache: 12, ecartParSeconde: 3, frottement: 2, cedeParSeconde: 6 };
 
   it('devant, replié sur une boucle', () => {
     expect(devant(10, 30, 1000, false)).toBe(20);
@@ -298,23 +331,42 @@ describe('contact', () => {
     expect(devant(10, 990, 1000, true)).toBe(-20);
   });
 
-  it('côte à côte : l’adversaire s’écarte ; trop étroit : celui de derrière est retenu', () => {
+  it('côte à côte : l’adversaire s’écarte ; flanc contre flanc : ils se poussent et frottent ; trop étroit : celui de derrière cède peu à peu', () => {
     const c = createContact();
     const j: CorpsRoute = { s: 100, offset: 0, demiLargeur: 0.95, demiLongueur: 2.2 };
     const a: CorpsRoute = { s: 101, offset: 0.5, demiLargeur: 0.95, demiLongueur: 2.2 };
     // Large : il prend sa gauche et s'écarte peu à peu, sans sortir de [lo, hi].
-    for (let i = 0; i < 30; i += 1) pasContact(c, j, a, -3, 3, reglage, 0.1, 1000, false);
+    for (let i = 0; i < 30; i += 1) pasContact(c, j, a, -3, 3, -3, 3, reglage, 0.1, 1000, false);
     expect(c.cote).toBe(1);
     expect(a.offset + c.ecart).toBeGreaterThanOrEqual(j.demiLargeur + a.demiLargeur + reglage.garde - 1e-9);
     expect(a.offset + c.ecart).toBeLessThanOrEqual(3);
-    // Étroit : impossible de passer à deux. À sa hauteur (1 m), l'adversaire cède ; nettement derrière (3 m), le joueur est retenu.
+    // Flanc contre flanc, l'adversaire au bord : le joueur est repoussé de côté (poussée), aucun des deux retenu.
+    const f = createContact();
+    expect(pasContact(f, j, { ...a, offset: 1.5 }, 1.5, 1.5, -3, 3, reglage, 0.1, 1000, false)).toBeNull();
+    expect(f.frotte).toBe(true);
+    expect(f.pousse).toBeCloseTo(-(1.9 - 1.5) - 1e-3, 6);
+    // Étroit : impossible de passer à deux. À sa hauteur (1 m), l'adversaire cède, de cedeParSeconde × dt au plus ;
+    // nettement derrière (3 m), le joueur cède.
     const d = createContact();
-    expect(pasContact(d, j, { ...a }, -0.6, 0.6, reglage, 0.1, 1000, false)).toBe('adversaire');
-    expect(pasContact(createContact(), j, { ...a, s: 103 }, -0.6, 0.6, reglage, 0.1, 1000, false)).toBe('joueur');
+    expect(pasContact(d, j, { ...a }, -0.6, 0.6, -0.6, 0.6, reglage, 0.1, 1000, false)).toBe('adversaire');
+    expect(d.recul).toBeCloseTo(0.6, 9);
+    expect(pasContact(createContact(), j, { ...a, s: 103 }, -0.6, 0.6, -0.6, 0.6, reglage, 0.1, 1000, false)).toBe('joueur');
+    // Nez contre pare-chocs : celui de derrière est arrêté contre celui de devant (de ce qui dépasse, quelques centimètres).
+    const n = createContact();
+    expect(pasContact(n, j, { ...a, s: 104.3, offset: 0 }, 0, 0, 0, 0, reglage, 0.1, 1000, false)).toBe('joueur');
+    expect(n.recul).toBeCloseTo(0.12, 9);
     // Loin : rien.
     const e = createContact();
-    expect(pasContact(e, j, { ...a, s: 200 }, -0.6, 0.6, reglage, 0.1, 1000, false)).toBeNull();
+    expect(pasContact(e, j, { ...a, s: 200 }, -0.6, 0.6, -0.6, 0.6, reglage, 0.1, 1000, false)).toBeNull();
     expect(e.cote).toBe(0);
+  });
+
+  it('derrière le joueur, il prend le côté où la chaussée a la place de passer ; devant, il garde le sien', () => {
+    // Le joueur à gauche de l'axe (1 m) : à gauche, plus la place ; il double par la droite.
+    expect(coteLibre(-8, 1.2, 1, 2.2, -2.5, 2.5)).toBe(-1);
+    // Devant ou à sa hauteur : il garde son côté (le joueur double de l'autre).
+    expect(coteLibre(2, 1.2, 1, 2.2, -2.5, 2.5)).toBe(1);
+    expect(coteLibre(-8, -1, 0, 2.2, -2.5, 2.5)).toBe(-1);
   });
 
   // Le joueur (plus rapide) rattrape l'adversaire (le plus facile) et le double : jamais de recouvrement.
@@ -350,6 +402,172 @@ describe('contact', () => {
     expect(recouvre).toBe(0);
     expect(doubles).toBe(true);
     expect(retenues).toBeLessThan(100);
+  });
+});
+
+// Un duel hors navigateur, le joueur simulé par la conduite appliquée de référence (src/drive/simulationCourse.ts,
+// via le pilote de l'adversaire, à son niveau) : quand il rattrape l'adversaire, il demande le côté libre ; sinon
+// il garde sa trajectoire. Mesure les dépassements, les blocages, les recouvrements et les sauts.
+interface MesureDuel {
+  depassementsJoueur: number;
+  depassementsAdversaire: number;
+  /** Épisodes d'au moins 1 s où le plus rapide est retenu derrière l'autre. */
+  blocages: number;
+  /** Pas où les deux caisses se recouvrent de plus de 2 cm. */
+  recouvrements: number;
+  /** Pas où l'un des deux recule ou avance plus que sa vitesse ne le permet, ou est déplacé de côté de plus de 0,6 m au-delà de ce que fait son pilote. */
+  sauts: number;
+  /** NOS envoyés par l'adversaire, et sa vitesse la plus haute (m/s). */
+  nos: number;
+  temps: number;
+}
+
+function duelSimule(o: { map: string; start: string; vJ: string; nJ: NiveauDuel; adversaire: string; nA: NiveauDuel; avanceJoueur: number; avanceAdversaire: number; dims?: CorpsGrille; max?: number; steerJoueur?: (t: number, cote: number) => number | undefined }): MesureDuel {
+  const r = route(o.map);
+  const rail = createRail(r);
+  const start = r.starts.find((x) => x.id === o.start)!;
+  const adv = ADVERSAIRES.find((x) => x.id === o.adversaire)!;
+  const duel = new DuelEnCourse(adv, vehicleById(adv.vehicule)!, rail, o.nA);
+  const dims = o.dims ?? { demiLargeur: 0.95, demiLongueur: 2.2, kind: 'car' };
+  duel.mesurer(dims.demiLargeur, dims.demiLongueur);
+  const pj = createPiloteAdversaire(createPilot(rail, performanceDe(vehicleById(o.vJ)!)), { ...o.nJ, nos: 0 }, PILOTAGE_ADVERSAIRE, 7);
+  const joueur = pj.pilot;
+  joueur.setSize(dims.demiLargeur, dims.demiLongueur);
+  joueur.reset(start.at);
+  remettreAdversaire(pj, start.at, joueur.motion.offset);
+  const depart = armerDepart(createDepart(), joueur.motion.s, rail.loop, false, 1);
+  duel.depart(joueur, dims.kind, joueur.motion.s, joueur.motion.offset, dims.demiLargeur, dims.demiLongueur, 1, true);
+  if (o.avanceJoueur > 0) remettreAdversaire(pj, start.at + o.avanceJoueur, duel.grille.offsetJoueur);
+  if (o.avanceAdversaire > 0) remettreAdversaire(duel.pilote, duel.grille.sAdversaire + o.avanceAdversaire, duel.grille.offsetAdversaire);
+  depart.phase = 'parti';
+  depart.vert = true;
+  depart.depuisVert = Infinity;
+  const longueurs = 2 * dims.demiLongueur;
+  const out: MesureDuel = { depassementsJoueur: 0, depassementsAdversaire: 0, blocages: 0, recouvrements: 0, sauts: 0, nos: 0, temps: 0 };
+  const dt = 0.1;
+  let etat = Math.sign(devant(joueur.motion.s, duel.pilote.pilot.motion.s, rail.length, rail.loop));
+  let retenu = 0;
+  let sJ = joueur.motion.s;
+  let sA = duel.pilote.pilot.motion.s;
+  // Chacun va de côté où son pilote le met (`lJ`, `lA`) : seul ce que le contact ajoute compte.
+  let oJ = joueur.motion.offset;
+  let lJ = oJ;
+  let oA = duel.offset;
+  let lA = duel.pilote.pilot.motion.offset;
+  let nosAvant = false;
+  const plusRapide = o.nJ.allure >= o.nA.allure ? 'joueur' : 'adversaire';
+  for (let t = 0; t < (o.max ?? 150) && !joueur.motion.finished && !duel.pilote.pilot.motion.finished; t += dt) {
+    const d = devant(joueur.motion.s, duel.pilote.pilot.motion.s, rail.length, rail.loop);
+    // Le joueur qui rattrape demande le côté libre (celui où l'adversaire n'est pas) ; sinon sa trajectoire.
+    pj.lane = d > 0 && d < longueurs + 20 ? (duel.offset >= joueur.motion.offset ? 1 : -1) : d > -longueurs ? pj.lane : 0;
+    pj.input.steer = o.steerJoueur?.(t, duel.offset >= joueur.motion.offset ? 1 : -1);
+    pj.input.assist = pj.input.steer === undefined;
+    pasAdversaire(pj, dt, false);
+    pasDepart(depart, dt, true, joueur.motion.s, rail, joueur.motion.finished);
+    duel.pas(dt, joueur, depart, dims.demiLargeur, dims.demiLongueur);
+    const nd = devant(joueur.motion.s, duel.pilote.pilot.motion.s, rail.length, rail.loop);
+    // Dépassement : de franchement derrière à franchement devant.
+    if (nd > longueurs) {
+      if (etat < 0) out.depassementsAdversaire += 1;
+      etat = 1;
+    } else if (nd < -longueurs) {
+      if (etat > 0) out.depassementsJoueur += 1;
+      etat = -1;
+    }
+    if (duel.retenue === plusRapide) retenu += dt;
+    else {
+      if (retenu >= 1) out.blocages += 1;
+      retenu = 0;
+    }
+    const cj: CorpsRoute = { s: joueur.motion.s, offset: joueur.motion.offset, demiLargeur: dims.demiLargeur - 0.01, demiLongueur: dims.demiLongueur - 0.01 };
+    const ca: CorpsRoute = { s: duel.pilote.pilot.motion.s, offset: duel.offset, demiLargeur: dims.demiLargeur - 0.01, demiLongueur: dims.demiLongueur - 0.01 };
+    if (recouvrement(cj, ca, rail.length, rail.loop)) out.recouvrements += 1;
+    const pasJ = devant(sJ, joueur.motion.s, rail.length, rail.loop);
+    const pasA = devant(sA, duel.pilote.pilot.motion.s, rail.length, rail.loop);
+    if (pasJ < -0.05 || pasJ > 95 * dt || pasA < -0.05 || pasA > 95 * dt || Math.abs(joueur.motion.offset - oJ) - Math.abs(joueur.motion.offset - duel.contact.pousse - lJ) > 0.6 || Math.abs(duel.offset - oA) - Math.abs(duel.pilote.pilot.motion.offset - lA) > 0.6) out.sauts += 1;
+    sJ = joueur.motion.s;
+    sA = duel.pilote.pilot.motion.s;
+    oJ = joueur.motion.offset;
+    lJ = joueur.motion.offset - duel.contact.pousse;
+    oA = duel.offset;
+    lA = duel.pilote.pilot.motion.offset;
+    const brule = duel.pilote.pilot.train.nos;
+    if (brule && !nosAvant) out.nos += 1;
+    nosAvant = brule;
+    out.temps = t;
+  }
+  if (retenu >= 1) out.blocages += 1;
+  return out;
+}
+
+describe('le contact en course : plus de saut, on double', () => {
+  // Le saut d'avant : l'adversaire serré contre son bord par le joueur à sa hauteur reculait d'un coup derrière lui.
+  // On le provoque en braquant vers lui juste après le départ (direction libre), sur chaque carte construite.
+  it.skipIf(built.length === 0)('serré contre son bord par le joueur à sa hauteur, l’adversaire ne saute plus ; ils frottent, ne se traversent pas', { timeout: 120_000 }, () => {
+    for (const map of built) {
+      const start = plusCourt(map.id);
+      for (const steer of [0.35, 1]) {
+        const m = duelSimule({ map: map.id, start: start.id, vJ: 'sportive', nJ: plusDur(), adversaire: 'comete', nA: plusDur(), avanceJoueur: 0, avanceAdversaire: 0, max: 12, steerJoueur: (t, cote) => (t < 6 ? -cote * steer : undefined) });
+        const ici = `${map.id}/${start.id}/braque ${steer}`;
+        expect(m.sauts, ici).toBe(0);
+        expect(m.recouvrements, ici).toBe(0);
+      }
+    }
+  });
+});
+
+// Dépassements mesurés (rendu de la vague W) : une route large (miami-beach, deux voitures moyennes) et une route
+// étroite (monaco-ville, deux vans), chaque départ, le plus rapide parti 40 m derrière l'autre (le plus rapide
+// court la conduite de référence, l'autre le niveau Facile).
+const CAS_DEPASSEMENT = [
+  { map: 'miami-beach', vehicule: 'cox', adversaire: 'dede', dims: MOYENNE },
+  { map: 'monaco-ville', vehicule: 'van', adversaire: 'momo', dims: LARGE },
+] as const;
+
+function mesurerDepassements(cas: (typeof CAS_DEPASSEMENT)[number], plusRapide: 'joueur' | 'adversaire') {
+  const total = { departs: 0, depassements: 0, blocages: 0, recouvrements: 0, sauts: 0, nos: 0 };
+  const lent = NIVEAUX_DUEL[0]!;
+  for (const start of route(cas.map).starts) {
+    const m = duelSimule({
+      map: cas.map,
+      start: start.id,
+      vJ: cas.vehicule,
+      nJ: plusRapide === 'joueur' ? plusDur() : lent,
+      adversaire: cas.adversaire,
+      nA: plusRapide === 'joueur' ? lent : plusDur(),
+      avanceJoueur: plusRapide === 'joueur' ? 0 : 40,
+      avanceAdversaire: plusRapide === 'joueur' ? 40 : 0,
+      dims: cas.dims,
+      max: 150,
+    });
+    total.departs += 1;
+    total.depassements += plusRapide === 'joueur' ? m.depassementsJoueur : m.depassementsAdversaire;
+    total.blocages += m.blocages;
+    total.recouvrements += m.recouvrements;
+    total.sauts += m.sauts;
+    total.nos += m.nos;
+    // Le tableau du rendu : PMB_MESURES_DUEL=<fichier> (une ligne par départ).
+    if (process.env.PMB_MESURES_DUEL) appendFileSync(process.env.PMB_MESURES_DUEL, `| ${cas.map}/${start.id} | ${cas.vehicule} | plus rapide : ${plusRapide} | dépassements ${plusRapide === 'joueur' ? m.depassementsJoueur : m.depassementsAdversaire} (l'autre : ${plusRapide === 'joueur' ? m.depassementsAdversaire : m.depassementsJoueur}) | blocages ${m.blocages} | recouvrements ${m.recouvrements} | sauts ${m.sauts} | NOS ${m.nos} | ${m.temps.toFixed(0)} s |\n`);
+  }
+  return total;
+}
+
+describe('on double', () => {
+  it.skipIf(!CAS_DEPASSEMENT.every((c) => built.some((m) => m.id === c.map)))('route large : le plus rapide double, joueur ou adversaire ; route étroite : on attend la place ; jamais de recouvrement ni de saut', { timeout: 300_000 }, () => {
+    const [large, etroite] = CAS_DEPASSEMENT;
+    for (const plusRapide of ['joueur', 'adversaire'] as const) {
+      const l = mesurerDepassements(large, plusRapide);
+      const e = mesurerDepassements(etroite, plusRapide);
+      const ici = `plus rapide : ${plusRapide}`;
+      // Sur la route large, il double à chaque départ.
+      expect(l.depassements, ici).toBe(l.departs);
+      for (const t of [l, e]) {
+        expect(t.recouvrements, ici).toBe(0);
+        expect(t.sauts, ici).toBe(0);
+      }
+      // Sur la route étroite, il est retenu plus souvent qu'il ne passe (pas de passage magique).
+      expect(e.blocages, ici).toBeGreaterThan(0);
+    }
   });
 });
 

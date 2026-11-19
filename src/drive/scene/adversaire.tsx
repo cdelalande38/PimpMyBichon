@@ -7,22 +7,29 @@
 // habitacle posé, sans conducteur, sans pièces montées, sans néons, sans flammes, sans capot ouvert ; une
 // ombre de contact rendue une fois (pas d'ombre portée par le soleil) ; caché de la sonde de reflets. De
 // nuit, ses feux arrière luisent (plus fort au freinage) et ses phares éblouissent de face (lueurs sans
-// lumière réelle : aucune lumière de plus dans la scène, aucune matière recompilée). Muet : aucun son.
+// lumière réelle : aucune lumière de plus dans la scène, aucune matière recompilée). Son moteur : src/drive/adversaire/son.ts.
+//
+// NOS : quand il pousse (src/drive/adversaire/pilotage.ts), ses flammes bleues sortent de ses échappements et une
+// lueur bleue passe sur la chaussée derrière lui, par le rendu du NOS du joueur (src/drive/scene/nos.ts,
+// `creerDard`, `creerLueur`) : deux maillages de plus, cachés hors poussée (aucun appel de dessin), compilés à la pose.
 
 import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
-import { Group, Mesh, type MeshStandardMaterial, type Scene, type WebGLRenderer } from 'three';
+import { Group, Mesh, Vector3, type MeshStandardMaterial, type Scene, type WebGLRenderer } from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { BASIS_TRANSCODER_DIR } from '../../data/bench.ts';
 import { modelUrl } from '../../data/vehicles.ts';
 import type { Paint, VehicleManifest } from '../../data/vehicleTypes.ts';
+import { NOS_RENDU, NOS_SEUIL } from '../../data/nos.ts';
 import { ATMOSPHERE_LAYER } from '../../render/layers.ts';
 import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
+import { compileHidden } from '../../scene/vehicle/flammes.ts';
 import { disposePrepared, paintZones, useVehicleWheels } from '../../scene/vehicle/VehicleModel.tsx';
 import type { DuelEnCourse } from '../adversaire/course.ts';
 import type { RailPose } from '../contrat.ts';
 import { createGlare } from './ciel.ts';
+import { AU_DESSUS_DU_RAIL, creerDard, creerLueur } from './nos.ts';
 import { rollingWheels, wheelSteer, type Wheel } from './roues.ts';
 import { prepareForDrive, rollWheels, type DriveRig } from './vehicule.tsx';
 
@@ -102,6 +109,7 @@ interface Props {
 export function DriveAdversaire({ duel, rig, bodyEnv, onModel }: Props) {
   const gl = useThree((state) => state.gl);
   const scene = useThree((state) => state.scene) as Scene;
+  const camera = useThree((state) => state.camera);
   const invalidate = useThree((state) => state.invalidate);
   const vehicle = duel.vehicule;
   const gltf = useLoader(AdversaireGLTFLoader, modelUrl(vehicle), (loader) => {
@@ -179,6 +187,54 @@ export function DriveAdversaire({ duel, rig, bodyEnv, onModel }: Props) {
     pending.current = false;
     shadow.render(gl, drive.prepared.root, scene);
   });
+
+  // NOS : le dard dans sa caisse, la lueur dans son groupe posé sur la route, derrière ses sorties.
+  const outlets = vehicle.exhaust?.outlets;
+  const nos = useMemo(() => (outlets && outlets.length > 0 ? { dard: creerDard(outlets), lueur: creerLueur() } : null), [outlets]);
+  useEffect(
+    () => () => {
+      if (!nos) return;
+      for (const m of [nos.dard.mesh, nos.lueur.mesh]) {
+        m.geometry.dispose();
+        m.material.dispose();
+      }
+    },
+    [nos],
+  );
+  // Ce que l'image relit et réécrit (posé par l'effet : l'image ne touche pas au mémo).
+  const nosVivant = useRef<typeof nos>(null);
+  useLayoutEffect(() => {
+    if (!nos || !outlets) return undefined;
+    const caisse = drive.prepared.root.getObjectByName('caisse') ?? drive.prepared.root;
+    caisse.add(nos.dard.mesh);
+    rig.group.updateWorldMatrix(true, true);
+    const p = new Vector3();
+    const centre = new Vector3();
+    for (const o of outlets) centre.add(rig.group.worldToLocal(caisse.localToWorld(p.set(o.position[0], o.position[1], o.position[2]))));
+    centre.divideScalar(outlets.length);
+    nos.lueur.mesh.position.set(centre.x - NOS_RENDU.lueur.recul, AU_DESSUS_DU_RAIL, centre.z);
+    rig.group.add(nos.lueur.mesh);
+    compileHidden(nos.dard.mesh, gl, camera, scene);
+    compileHidden(nos.lueur.mesh, gl, camera, scene);
+    nosVivant.current = nos;
+    return () => {
+      nosVivant.current = null;
+      nos.dard.mesh.removeFromParent();
+      nos.lueur.mesh.removeFromParent();
+    };
+  }, [nos, outlets, drive, rig, gl, camera, scene]);
+  useFrame((state) => {
+    const nos = nosVivant.current;
+    if (!nos) return;
+    const force = duel.pilote.pilot.motion.boost ?? 0;
+    const allume = rig.group.visible && force > NOS_SEUIL;
+    nos.dard.mesh.visible = allume;
+    nos.lueur.mesh.visible = allume;
+    if (!allume) return;
+    nos.dard.uniforms.uForce.value = force;
+    nos.dard.uniforms.uTemps.value = state.clock.elapsedTime;
+    nos.lueur.uniforms.uForce.value = force * NOS_RENDU.lueur.force;
+  }, 0.5);
 
   useLayoutEffect(() => {
     onModel({ wheels, tails: drive.tails, measure: { halfLength, halfWidth, height } });
