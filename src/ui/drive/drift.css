@@ -70,6 +70,23 @@
   font-size: 0.9375rem;
 }
 
+/* Le geste, jusqu'au premier drift compté : une ligne courte, sur deux au plus en portrait. */
+.drive-drift .drive-drift-aide {
+  max-width: min(20rem, calc(100vw - 2rem));
+  margin-top: 0.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  background: rgba(10, 9, 17, 0.6);
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  white-space: normal;
+  text-shadow: none;
+}
+
+.drive-drift[data-aide='non'] .drive-drift-aide {
+  display: none;
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
   /* Sous le chrono, tout en haut au milieu : le point de fuite de la route reste dégagé. */
   .drive-drift {

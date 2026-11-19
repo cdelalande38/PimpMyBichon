@@ -100,7 +100,8 @@ export const FREINAGE = { avant: 0.85, arriere: 0.45 } as const;
  * - `moto` : dérive la plus forte d'une moto (rad) et raideur de son retour : la roue arrière glisse un
  *   peu, jamais de tête-à-queue.
  * - `glisse` : dérive qui fait un glissement plein pour le son de dérapage (rad).
- * - `bord` : au contact du bord, la dérive se referme en `bord` s.
+ * - `bord` : au contact du bord, la dérive se referme en `bord` s, et encore `bordTenu` s après (sans quoi le
+ *   coin, dégagé, revient toucher au sous-pas suivant : la caisse tremblait le long du trottoir).
  */
 export const SURVIRAGE = {
   equilibre: 1.08,
@@ -118,6 +119,7 @@ export const SURVIRAGE = {
   moto: { max: 0.3, raideur: 14 },
   glisse: 0.35,
   bord: 0.35,
+  bordTenu: 0.15,
 } as const;
 
 /**

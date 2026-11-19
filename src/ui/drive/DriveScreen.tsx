@@ -37,7 +37,7 @@ import { resolveVehicle } from '../../data/vehicles.ts';
 import { DRIVE_STAGE_CLASS } from '../../drive/contrat.ts';
 import { brancherSonSortie } from '../../drive/son.ts';
 import { useBuilds } from '../../state/builds.ts';
-import { useDrive } from '../../state/drive.ts';
+import { directionDe, useDrive } from '../../state/drive.ts';
 import { RadioButton } from '../radio/RadioButton.tsx';
 import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
@@ -182,7 +182,8 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
   const brake = useDrive((state) => state.input.brake);
   const lane = useDrive((state) => state.input.lane);
   const commande = useDrive((state) => state.commande);
-  const libre = useDrive((state) => state.direction === 'libre');
+  // Au format Drift, libre d'office (src/state/drive.ts, `directionDe`).
+  const libre = useDrive((state) => directionDe(state) === 'libre');
   const slow = useDrive((state) => state.slow);
   const finished = useDrive((state) => state.telemetry.finished);
   const zone = useRef<HTMLDivElement>(null);

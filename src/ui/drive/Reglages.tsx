@@ -15,7 +15,7 @@ import { basculerMoteur, useSonSortie } from '../../drive/son.ts';
 import { MOMENTS } from '../../data/moments.ts';
 import { REGARDS } from '../../data/regard.ts';
 import { enCourse } from '../../drive/depart.ts';
-import { CAMERA_LABELS, COMMANDES, DIRECTIONS, liveDepart, useDrive, WEATHERS } from '../../state/drive.ts';
+import { CAMERA_LABELS, COMMANDES, directionDe, DIRECTIONS, liveDepart, useDrive, WEATHERS } from '../../state/drive.ts';
 import { useEngineSoundPrefs } from '../../state/engineSound.ts';
 import { PREVENIR_BALADE } from './baladeAnnonce.ts';
 import { DriveIcon, type DriveIconName } from './icones.tsx';
@@ -52,7 +52,7 @@ interface Option<T extends string> {
 }
 
 /** Un choix parmi quelques-uns : des puces côte à côte, celle choisie allumée. */
-function Choix<T extends string>({ nom, options, valeur, onChoix }: { nom: string; options: readonly Option<T>[]; valeur: T | null; onChoix: (id: T) => void }) {
+function Choix<T extends string>({ nom, options, valeur, onChoix, impose = false }: { nom: string; options: readonly Option<T>[]; valeur: T | null; onChoix: (id: T) => void; impose?: boolean }) {
   return (
     <div className="drive-choix" role="group" aria-label={nom}>
       <span className="drive-choix-nom" aria-hidden="true">
@@ -60,7 +60,7 @@ function Choix<T extends string>({ nom, options, valeur, onChoix }: { nom: strin
       </span>
       <div className="drive-choix-puces">
         {options.map((option) => (
-          <button key={option.id} type="button" className="drive-puce" aria-pressed={option.id === valeur} onClick={() => onChoix(option.id)}>
+          <button key={option.id} type="button" className="drive-puce" aria-pressed={option.id === valeur} disabled={impose} onClick={() => onChoix(option.id)}>
             {option.label}
           </button>
         ))}
@@ -161,7 +161,8 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
   const weather = useDrive((state) => state.weather);
   const moment = useDrive((state) => state.moment);
   const commande = useDrive((state) => state.commande);
-  const direction = useDrive((state) => state.direction);
+  const direction = useDrive((state) => directionDe(state));
+  const drift = useDrive((state) => state.format === 'drift');
   // Rendez-vous de carrière : le moment et la météo sont imposés (src/ui/carriere/EnSortie.tsx).
   const impose = useDrive((state) => state.rendezVous !== null);
   const regard = useDrive((state) => state.regard);
@@ -226,7 +227,8 @@ export function ReglagesPanneau({ paysage, fermer }: { paysage: boolean; fermer:
           <Rubrique titre="Conduite">
             {/* En paysage, toujours la manette : le choix du manche ou des pédales vaut en portrait. */}
             {!paysage && <Choix nom="Commande" options={COMMANDES} valeur={commande} onChoix={(id) => drive().setCommande(id)} />}
-            <Choix nom="Direction" options={DIRECTIONS} valeur={direction} onChoix={(id) => drive().setDirection(id)} />
+            <Choix nom="Direction" options={DIRECTIONS} valeur={direction} onChoix={(id) => drive().setDirection(id)} impose={drift} />
+            {drift && <p className="drive-impose">Au drift, la direction est libre : l'assistée tiendrait la voiture droite. Ton réglage revient après.</p>}
             <ManetteBascule />
           </Rubrique>
           <Rubrique titre="Son">

@@ -15,6 +15,7 @@ import { createPilot, performanceDe, type PilotWithProfile } from '../../src/dri
 import { createPose, createRail } from '../../src/drive/rail.ts';
 import { mancheVersAxe } from '../../src/drive/simulationDrift.ts';
 import { trouverVirages } from '../../src/drive/virages.ts';
+import { createEtatDrift, pasDrift } from '../../src/jeu/drift.ts';
 
 const DT = 1 / 60;
 const deg = (rad: number) => ((rad * 180) / Math.PI).toFixed(0);
@@ -281,5 +282,49 @@ describe.skipIf(!existsSync(fichierCarte(CARTES.lacet)) || !existsSync(fichierCa
     }
     relever(lignes.join('\n'));
     expect(lignes.length).toBe(8);
+  });
+});
+
+// Le compteur qui clignotait (retour du 19 novembre 2026 : « le score oscille souvent en 0, 2 et perdu », et la voiture
+// tremble) : Monaco-ville sous la pluie, direction libre, gaz tenu (lâché au-dessus de 70 km/h), manche poussé deux fois
+// plus que l'axe ne le demande (à fond dans les virages : la caisse frôle le trottoir), une minute, image par image.
+// Avant correction (concept) : 577 drifts commencés et 574 perdus par minute, l'affichage changeait 1 156 fois ; au
+// trottoir, la caisse faisait des allers-retours d'une image à l'autre (contact, dérive refermée, plus de contact…).
+describe.skipIf(!existsSync(fichierCarte('monaco-ville')))('drift : le long du trottoir, ni clignotement ni tremblement', () => {
+  it('Monaco-ville, pluie, concept, une minute à fond dans les virages', () => {
+    const r = JSON.parse(readFileSync(fichierCarte('monaco-ville'), 'utf8')) as MapRoute;
+    const { pilot, kind } = pilotOf('concept', 'pluie', r);
+    pilot.reset(300);
+    const e = createEtatDrift();
+    let commences = 0;
+    let perdus = 0;
+    let bord = 0;
+    let allersRetours = 0;
+    let cote = 0;
+    let fins = 0;
+    let cap = [0, 0];
+    for (let t = 0; t < 60; t += DT) {
+      input.throttle = pilot.motion.speed * 3.6 > 70 ? 0 : 1;
+      input.brake = 0;
+      input.assist = false;
+      input.steer = Math.max(-1, Math.min(1, 2 * mancheVersAxe(pilot, pilot.rail.poseAt(pilot.motion.s, pose).curvature)));
+      const m = pilot.step(DT, input, kind);
+      if (pilot.contact !== 0) bord += DT;
+      pasDrift(e, DT, m.drift ?? 0, m.speed, pilot.contact);
+      if (cote === 0 && e.cote !== 0) commences += 1;
+      if (e.fins !== fins && e.dernier < 0) perdus += 1;
+      cote = e.cote;
+      fins = e.fins;
+      // Aller-retour du cap d'une image à l'autre (plus de 0,3° dans un sens puis dans l'autre), au bord.
+      const y = m.yaw ?? 0;
+      const d1 = y - cap[0]!;
+      const d0 = cap[0]! - cap[1]!;
+      if (t > 0.1 && pilot.contact !== 0 && d1 * d0 < 0 && Math.min(Math.abs(d1), Math.abs(d0)) > (0.3 * Math.PI) / 180) allersRetours += 1;
+      cap = [y, cap[0]!];
+    }
+    relever(`Monaco-ville, pluie, concept, 1 min à fond dans les virages : ${commences} drifts commencés, ${e.nombre} comptés, ${perdus} perdus, ${bord.toFixed(1)} s au bord, ${allersRetours} allers-retours du cap au bord, score ${e.total}`);
+    expect(commences).toBeLessThan(30);
+    expect(perdus).toBeLessThan(15);
+    expect(allersRetours).toBeLessThan(3);
   });
 });

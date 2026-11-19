@@ -28,10 +28,12 @@ export interface EtatDrift {
   dernier: number;
   /** Drifts finis ou perdus depuis le départ (l'affichage voit qu'un vient de finir). */
   fins: number;
+  /** Contact avec le bord, cumulé (s, jusqu'à `bordMax`) : monte au contact, redescend deux fois moins vite dégagé. */
+  bord: number;
 }
 
 export function createEtatDrift(): EtatDrift {
-  return { cote: 0, points: 0, duree: 0, droit: 0, mult: 1, depuis: Infinity, total: 0, meilleur: 0, plusLong: 0, nombre: 0, multMax: 1, dernier: 0, fins: 0 };
+  return { cote: 0, points: 0, duree: 0, droit: 0, mult: 1, depuis: Infinity, total: 0, meilleur: 0, plusLong: 0, nombre: 0, multMax: 1, dernier: 0, fins: 0, bord: 0 };
 }
 
 export function remettreDrift(e: EtatDrift): EtatDrift {
@@ -48,6 +50,7 @@ export function remettreDrift(e: EtatDrift): EtatDrift {
   e.multMax = 1;
   e.dernier = 0;
   e.fins = 0;
+  e.bord = 0;
   return e;
 }
 
@@ -101,11 +104,18 @@ export function pasDrift(e: EtatDrift, dt: number, angle: number, vitesse: numbe
   if (!(Number.isFinite(dt) && dt > 0)) return e;
   const a = Number.isFinite(angle) ? angle : 0;
   const v = Number.isFinite(vitesse) ? vitesse : 0;
-  if (e.cote !== 0 && ((contact !== 0 && Number.isFinite(contact)) || Math.abs(a) > P.toupie)) {
+  const touche = contact !== 0 && Number.isFinite(contact);
+  const toupie = Math.abs(a) > P.toupie;
+  e.bord = touche ? Math.min(P.bordMax, e.bord + dt) : Math.max(0, e.bord - dt / 2);
+  // Un frôlement ne perd rien ; un contact qui dure (`bordMax`), ou la toupie, perd le drift.
+  if (e.cote !== 0 && (toupie || e.bord >= P.bordMax)) {
     perdreDrift(e);
     return e;
   }
-  const glisse = Math.abs(a) >= P.angleMin && v >= P.vitesseMin;
+  // Au bord ou en toupie, pas de points ; un nouveau drift attend que le contact soit oublié (`bord` à 0) : relancé
+  // aussitôt, il était perdu à l'image suivante (le compteur clignotait entre 0, 2 et « Perdu » tout le long d'un
+  // trottoir, retour du 19 novembre 2026).
+  const glisse = Math.abs(a) >= P.angleMin && v >= P.vitesseMin && !touche && !toupie && (e.cote !== 0 || e.bord === 0);
   const cote = a > 0 ? 1 : -1;
   // Changement de côté sans se remettre droit : le drift compte, le suivant s'enchaîne aussitôt.
   if (glisse && e.cote !== 0 && cote !== e.cote) compterDrift(e);

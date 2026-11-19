@@ -84,13 +84,13 @@ describe('score des drifts', () => {
     expect(e.multMax).toBe(4);
   });
 
-  it('toucher le bord ou partir en tête-à-queue perd le drift en cours et la chaîne', () => {
+  it('rester au bord ou partir en tête-à-queue perd le drift en cours et la chaîne', () => {
     const e = createEtatDrift();
     rouler(e, 1.5, 0.5);
     rouler(e, 0.6, 0);
     const avant = e.total;
     rouler(e, 1, 0.5);
-    rouler(e, DT, 0.5, 15, -1);
+    rouler(e, POINTS_DRIFT.bordMax + DT, 0.5, 15, -1);
     expect(e.total).toBe(avant);
     expect(e.dernier).toBeLessThan(0);
     expect(e.mult).toBe(1);
@@ -98,6 +98,42 @@ describe('score des drifts', () => {
     rouler(e, DT, POINTS_DRIFT.toupie + 0.1);
     expect(e.total).toBe(avant);
     expect(e.cote).toBe(0);
+  });
+
+  it('un frôlement du bord ne perd rien ; le long d’un trottoir, un seul drift perdu, sans clignoter (retour du 19 novembre 2026)', () => {
+    const e = createEtatDrift();
+    rouler(e, 1, 0.5);
+    const pts = e.points;
+    rouler(e, 3 * DT, 0.5, 15, 1);
+    expect(e.cote).toBe(1);
+    expect(e.points).toBe(pts);
+    rouler(e, 1, 0.5);
+    expect(e.points).toBeGreaterThan(pts);
+    expect(e.fins).toBe(0);
+    // Caisse en travers contre le trottoir pendant 2 s, contact franc ou haché d'une image à l'autre : un seul
+    // drift perdu, et aucun ne recommence tant que le contact n'est pas oublié.
+    for (const hache of [false, true]) {
+      const f = createEtatDrift();
+      rouler(f, 1, 0.5);
+      let commences = 0;
+      for (let i = 0; i < 2 / DT; i += 1) {
+        const avant = f.cote;
+        pasDrift(f, DT, 0.5, 15, hache && i % 2 === 1 ? 0 : -1);
+        if (avant === 0 && f.cote !== 0) commences += 1;
+      }
+      expect(f.fins).toBe(1);
+      expect(f.dernier).toBeLessThan(0);
+      expect(commences).toBe(0);
+      // Dégagé, toujours en travers : un nouveau drift repart, une fois le contact oublié.
+      rouler(f, 2, 0.5);
+      expect(f.cote).toBe(1);
+    }
+    // En toupie : perdu une fois, rien ne recommence tant qu'elle dure.
+    const g = createEtatDrift();
+    rouler(g, 1, 0.5);
+    rouler(g, 1, POINTS_DRIFT.toupie + 0.2);
+    expect(g.fins).toBe(1);
+    expect(g.cote).toBe(0);
   });
 
   it('à l’arrivée, le drift en cours compte', () => {

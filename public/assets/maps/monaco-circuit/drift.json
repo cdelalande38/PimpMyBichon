@@ -5,43 +5,43 @@
   "outil": "npm run courses:drift",
   "departs": {
     "ligne-droite": {
-      "score": 2240,
+      "score": 1360,
       "vehicules": {
-        "bobber": 1850,
-        "concept": 2560,
-        "cox": 3590,
-        "sportive": 2240,
-        "van": 610
+        "bobber": 960,
+        "concept": 3470,
+        "cox": 6410,
+        "sportive": 1360,
+        "van": 820
       }
     },
     "casino": {
-      "score": 1950,
+      "score": 1910,
       "vehicules": {
-        "bobber": 2410,
-        "concept": 1600,
-        "cox": 4580,
-        "sportive": 1950,
-        "van": 700
+        "bobber": 1480,
+        "concept": 3640,
+        "cox": 6580,
+        "sportive": 1910,
+        "van": 830
       }
     },
     "tunnel": {
-      "score": 2120,
+      "score": 1280,
       "vehicules": {
-        "bobber": 2120,
-        "concept": 4150,
-        "cox": 3080,
-        "sportive": 1650,
-        "van": 980
+        "bobber": 1280,
+        "concept": 3610,
+        "cox": 4390,
+        "sportive": 910,
+        "van": 750
       }
     },
     "port": {
-      "score": 1840,
+      "score": 1750,
       "vehicules": {
-        "bobber": 1980,
-        "concept": 1840,
-        "cox": 4830,
-        "sportive": 1350,
-        "van": 790
+        "bobber": 1750,
+        "concept": 3830,
+        "cox": 4020,
+        "sportive": 1200,
+        "van": 1170
       }
     }
   }

@@ -7,8 +7,10 @@
 // `angleMax`) et de la vitesse (jusqu'à `vitesseMax`) : l'angle, la vitesse et la durée comptent. Il finit
 // quand la caisse reste droite `tolerance` s ; plus court que `dureeMin`, il ne compte pas. Un drift qui
 // commence moins de `enchainement` s après le précédent (ou qui change de côté sans se remettre droit)
-// monte le multiplicateur d'un cran, jusqu'à `multMax`. Toucher le bord, ou partir en tête-à-queue
-// (au-delà de `toupie`), perd le drift en cours et remet le multiplicateur à 1.
+// monte le multiplicateur d'un cran, jusqu'à `multMax`. Rester au bord (`bordMax` s de contact cumulé : un
+// frôlement ne coûte que les points de l'instant), ou partir en tête-à-queue (au-delà de `toupie`), perd le
+// drift en cours et remet le multiplicateur à 1 ; tant qu'on y est, aucun drift ne commence. Le compteur ne
+// montre un drift (en cours, compté ou perdu) qu'à partir de `affichage` points : pas de « 2 » qui clignote.
 //
 // Paliers des médailles : simulés par `npm run courses:drift` (tools/courses/paliers-drift.mjs,
 // src/drive/simulationDrift.ts) sur chaque départ de chaque carte, avec chaque véhicule du catalogue, au
@@ -35,7 +37,15 @@ export const POINTS_DRIFT = {
   enchainement: 1.5,
   multMax: 5,
   toupie: SURVIRAGE.teteAQueue,
+  bordMax: 0.3,
+  affichage: 15,
 } as const;
+
+/**
+ * Ligne d'aide du format, au départ et jusqu'au premier drift compté (retour du 19 novembre 2026 : « j'ai pas
+ * compris comment ») : le geste qui fait glisser en direction libre (src/data/adherence.ts, `DRIFT`).
+ */
+export const AIDE_DRIFT = 'En virage\u00a0: braque, un coup sec sur FREIN, puis plein gaz\u00a0: l’arrière glisse.';
 
 /** Part du score de référence (conduite simulée) qu'il faut pour chaque médaille, de la plus haute à la plus basse. */
 export const MEDAILLES_DRIFT: readonly { id: Medaille; part: number }[] = [

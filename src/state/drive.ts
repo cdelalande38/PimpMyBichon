@@ -85,6 +85,14 @@ export const DIRECTIONS: readonly { id: DriveDirection; label: string }[] = [
   { id: 'assistee', label: 'Assistée' },
 ];
 
+/**
+ * Direction de la sortie : libre d'office au format Drift (retour du 19 novembre 2026 : en assistée, l'aide
+ * tient la caisse droite et rien ne glisse), la préférence sinon ; la préférence gardée ne change pas.
+ */
+export function directionDe(state: { direction: DriveDirection; format: FormatCourse }): DriveDirection {
+  return state.format === 'drift' ? 'libre' : state.direction;
+}
+
 /** Ce qui est sauvegardé : le moment (nuit, jour), la météo, la caméra, la commande, la direction et le format préférés. */
 export interface DrivePrefs {
   moment: Moment;
@@ -391,7 +399,7 @@ export const useDrive = create<DriveState>()(
         set((state) => {
           if (state.map === null) return state;
           const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
-          const input: DriveInput = { auto: false, throttle: 0, brake: 0, lane: 0, ...(state.direction === 'assistee' ? { assist: true } : {}), ...nos };
+          const input: DriveInput = { auto: false, throttle: 0, brake: 0, lane: 0, ...(directionDe(state) === 'assistee' ? { assist: true } : {}), ...nos };
           return { apercu: false, fondu: 'non', fin: null, course: state.course + 1, input, camera: CAMERA_A_LA_MAIN, director: false, slow: false, paused: false };
         }),
       laisserConduire: () =>
@@ -446,7 +454,7 @@ export const useDrive = create<DriveState>()(
         set((state) => {
           const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
           if (auto) return { input: { ...AUTO_INPUT, ...nos } };
-          const input: DriveInput = { auto: false, throttle: 0, brake: 0, lane: 0, ...(state.direction === 'assistee' ? { assist: true } : {}), ...nos };
+          const input: DriveInput = { auto: false, throttle: 0, brake: 0, lane: 0, ...(directionDe(state) === 'assistee' ? { assist: true } : {}), ...nos };
           // On prend le volant : caméra de poursuite, réalisateur coupé (une seule fois, au passage).
           return state.input.auto ? { input, camera: CAMERA_A_LA_MAIN, director: false } : { input };
         }),
@@ -455,7 +463,7 @@ export const useDrive = create<DriveState>()(
           if (!DIRECTIONS.some((item) => item.id === direction) || state.direction === direction) return state;
           if (state.input.auto) return { direction };
           const input: DriveInput = { ...state.input };
-          if (direction === 'assistee') input.assist = true;
+          if (directionDe({ direction, format: state.format }) === 'assistee') input.assist = true;
           else delete input.assist;
           return { direction, input };
         }),

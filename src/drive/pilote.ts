@@ -944,6 +944,8 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
   let amorce = 0;
   let cibleGlisse = 0;
   let gazMain = 0;
+  /** Temps (s) pendant lequel la dérive se referme encore après un contact avec le bord (`SURVIRAGE.bordTenu`). */
+  let bordTenu = 0;
 
   function reset(s: number): void {
     const start = rail.loop ? s : Math.min(rail.length, Math.max(0, Number.isFinite(s) ? s : 0));
@@ -969,6 +971,7 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
     glisseCote = 0;
     amorce = 0;
     cibleGlisse = 0;
+    bordTenu = 0;
     free.offset = motion.offset;
     free.psi = 0;
     free.curvature = 0;
@@ -1317,9 +1320,11 @@ export function createPilot(rail: Rail, performance: PerformanceRoute = DEFAULT_
         motion.speed = Math.max(0, motion.speed - (scrub + sideways) * h);
         motion.accel = (motion.speed - v) / h;
       }
-      // Au bord, la dérive se referme (la glisse lancée au frein s'arrête) ; au pas, la caisse se remet dans
-      // l'axe (pas de marche arrière).
-      if (free.contact !== 0) {
+      // Au bord, la dérive se referme, un peu au-delà du contact (la glisse lancée au frein s'arrête) ; au pas, la
+      // caisse se remet dans l'axe (pas de marche arrière).
+      if (free.contact !== 0) bordTenu = SURVIRAGE.bordTenu;
+      if (bordTenu > 0) {
+        bordTenu -= h;
         glisseCote = 0;
         drift *= Math.exp(-h / SURVIRAGE.bord);
         driftRate *= Math.exp(-h / SURVIRAGE.bord);
