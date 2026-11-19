@@ -1092,6 +1092,21 @@ body:has(.drive-top) .tuto-aide {
   white-space: nowrap;
 }
 
+/* Le clavier ne se dit que là où il y en a un : écran à souris (ordinateur), jamais sur un téléphone. */
+.drive-amorce .drive-amorce-clavier {
+  display: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .drive-amorce .drive-amorce-clavier {
+    display: block;
+  }
+
+  .drive-invite:not([data-manette])::after {
+    content: ' · au clavier : Entrée';
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .drive-manche {
     transition: none;
@@ -1197,12 +1212,20 @@ body:has(.drive-top) .tuto-aide {
     background: rgba(57, 217, 138, 0.34);
   }
 
-  /* L'amorce sous le pouce gauche, à droite de la mini-carte. */
+  /* L'amorce en bas à gauche, là où le pouce gauche se pose de lui-même (retour du 19 novembre 2026 :
+     « déplacer le joystick de départ en bas à gauche, c'est plus naturel ») ; la mini-carte est en haut. */
   .drive-amorce {
-    top: 50%;
-    bottom: auto;
-    left: 34%;
-    transform: translate(-50%, -50%);
+    bottom: calc(0.75rem + var(--safe-b));
+    /* La zone des gestes commence déjà à l'écart du bord de l'écran : le rond se cale contre son bord. */
+    left: 0.25rem;
+    align-items: flex-start;
+    transform: none;
+    text-align: left;
+  }
+
+  /* Bloc étroit (le texte passe sur deux lignes) : le rond reste près du bord, sous le pouce. */
+  .drive-mid[data-commande='manche'] .drive-amorce {
+    max-width: 10.5rem;
   }
 
   /* La mini-carte juste sous le nom de la carte, dans la grille du bandeau : relevée, elle laisse le

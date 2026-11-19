@@ -238,7 +238,9 @@ describe('sauvegarde', () => {
 });
 
 describe('zones de livrée des manifestes', () => {
-  const vehicles = readdirSync(VEHICLES, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  // « zz-essai-<pid> » : le véhicule que tests/unit/vehicules.test.ts pose et retire pendant qu'il tourne ; lu ici au
+  // mauvais moment, il faisait échouer ce fichier une fois de temps en temps (19 novembre 2026).
+  const vehicles = readdirSync(VEHICLES, { withFileTypes: true }).filter((entry) => entry.isDirectory() && !entry.name.startsWith('zz-essai-'));
   for (const entry of vehicles) {
     it(`${entry.name} : chaque cadre vise des zones de peinture du véhicule, une face, une taille, un jumeau existant`, () => {
       const manifest = JSON.parse(readFileSync(new URL(`${entry.name}/vehicle.json`, VEHICLES), 'utf8')) as VehicleManifest;

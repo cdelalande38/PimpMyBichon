@@ -61,7 +61,9 @@ import {
   poserManche,
   useAppui,
   useBoutonManette,
+  useClavier,
   useManettePhysique,
+  useToucheLancement,
   type MancheTenu,
 } from './Manche.tsx';
 import { axeManche } from './manche.ts';
@@ -197,6 +199,8 @@ function DriveGestures({ paysage }: { paysage: boolean }) {
   const steers = manche || libre;
   // Une manette branchée se lit aussi, à la main (gâchettes, manche gauche, NOS).
   useManettePhysique(!auto && !finished, steers);
+  // Sur un ordinateur, le clavier aussi : flèches ou Z Q S D, Espace pour le NOS.
+  useClavier(!auto && !finished, steers);
   // Pour les parcours : écart à l'axe (m), cap relatif (°, positif à gauche) et glissement (0 à 1) du
   // véhicule, posés sur la zone des gestes à chaque image quand ils changent (sans rendu React).
   const shown = useRef({ ecart: '', cap: '', glisse: '' });
@@ -760,11 +764,14 @@ export function DriveScreen() {
   const prete = useDrive((state) => state.telemetry.ready && !state.telemetry.failed && !state.telemetry.finished);
   // Une manette physique fait comme l'appui sur la route : un bouton de face ou Start lance la course
   // depuis l'aperçu, ou rend le volant sous le pilote automatique.
-  useBoutonManette(auto && prete && !reglages.ouvert, () => {
+  const reprendre = () => {
     const drive = useDrive.getState();
     if (drive.apercu) drive.commencer();
     else drive.setAuto(false);
-  });
+  };
+  useBoutonManette(auto && prete && !reglages.ouvert, reprendre);
+  // Au clavier : Entrée, Espace ou la touche des gaz.
+  useToucheLancement(auto && prete && !reglages.ouvert, reprendre);
   // Le son du moteur suit la sortie tant que l'écran est là ; il se coupe au retour au garage.
   useEffect(() => brancherSonSortie(), []);
   // En rentrant au garage, le mode manette s'arrête : verrou levé, plein écran quitté.

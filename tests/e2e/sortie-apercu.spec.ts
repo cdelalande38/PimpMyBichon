@@ -205,6 +205,9 @@ test.describe('sortie de nuit : l’aperçu, puis la course', () => {
     await expect(page.locator('.drive-pause')).toHaveAttribute('aria-pressed', 'true');
     await expect(panneau.getByRole('button', { name: 'Commencer la course' })).toHaveCount(0);
     await expect(panneau.getByRole('button', { name: 'Pilote automatique' })).toBeVisible();
+    // La pause prend à l'image suivante : on laisse passer les images déjà en vol avant de relever le chrono
+    // (sous charge, deux dixièmes passaient encore après un relevé trop tôt ; 19 novembre 2026).
+    await page.waitForTimeout(800);
     const fige = await attr(page, 'data-chrono');
     await page.waitForTimeout(2000);
     expect(await attr(page, 'data-chrono')).toBe(fige);
