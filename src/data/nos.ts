@@ -8,15 +8,31 @@
 // lisent. « Moins de mouvement » : ni champ, ni recul, ni tremblement, ni traits ; dards, lueur et une
 // teinte discrète seulement. Sans allocation.
 
+import type { Moment } from './moments.ts';
+
 export const NOS_RENDU = {
-  /** Dard à chaque sortie : longueur et largeur au plus fort (m), gerbe vue dans l'axe, éclat, voile. */
-  dard: { longueur: 1.3, largeur: 0.14, disque: 0.4, eclat: 3, voile: 1.1 },
+  /**
+   * Dard à chaque sortie : longueur et demi-largeur au plus fort (m, serré à la bouche), longueur apparente
+   * gardée vu dans l'axe (en largeurs ; le dard s'allonge le long de son axe, trois fois au plus), éclat du corps bleu, éclat du cœur blanc, voile sur le fond.
+   */
+  dard: { longueur: 2.2, largeur: 0.12, etire: 6, eclat: 2.4, coeur: 2, voile: 1.4 },
   /** Lueur sur la chaussée derrière les sorties : longueur et largeur (m), recul de son centre (m), force. */
-  lueur: { longueur: 3.2, largeur: 2, recul: 1.1, force: 0.9 },
+  lueur: { longueur: 3.2, largeur: 2, recul: 1.1, force: 0.6 },
   /** Caméra : champ ajouté à l'envoi (°) et sa retombée (s), recul (m), tremblement (m) et sa retombée (s). */
   camera: { coup: 6, coupTau: 0.45, recul: 0.9, tremble: 0.05, trembleTau: 0.35 },
-  /** Écran : teinte des bords au plus fort (0 à 1), la même en « moins de mouvement ». */
-  ecran: { teinte: 0.85, teinteReduite: 0.35 },
+  /**
+   * Écran : teinte des bords au plus fort (0 à 1), la même en « moins de mouvement » ; traits de vitesse
+   * selon le moment (couleur du trait, liseré qui le détache du fond, épaisseur en px) : clairs de nuit,
+   * bleu soutenu cerné de sombre de jour, sur un ciel et une route clairs.
+   */
+  ecran: {
+    teinte: 0.85,
+    teinteReduite: 0.35,
+    traits: {
+      nuit: { couleur: 'rgba(225, 238, 255, 0.9)', ombre: 'rgba(10, 20, 60, 0.35)', epaisseur: 3 },
+      jour: { couleur: 'rgba(28, 72, 240, 0.95)', ombre: 'rgba(4, 10, 48, 0.6)', epaisseur: 5 },
+    } satisfies Record<Moment, { couleur: string; ombre: string; epaisseur: number }>,
+  },
 } as const;
 
 /** Sous cette poussée, rien n'est dessiné ni calculé. */

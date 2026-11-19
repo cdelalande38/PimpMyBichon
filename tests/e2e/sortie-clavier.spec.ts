@@ -52,7 +52,7 @@ test.describe('sortie, pilotage au clavier', () => {
     await expect(gestes(page)).toHaveAttribute('data-conduite', 'main');
     await expect(stage(page)).toHaveAttribute('data-depart', 'parti', { timeout: DELAI_ROUTE });
     // Direction libre pour ce parcours (le défaut est l'assistée, où les côtés placent au lieu de braquer).
-    await reglerSortie(page, 'Direction', 'Libre');
+    await reglerSortie(page, 'Conduite assistée', 'Non');
 
     // La flèche du haut, tenue : la vitesse monte.
     await page.keyboard.down('ArrowUp');

@@ -244,8 +244,8 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await ouvrirReglages(page);
     await expect(realisateur(page)).toHaveAttribute('aria-pressed', 'false');
     // La direction assistée est le défaut depuis le 19 novembre 2026 : ce parcours commence par la libre.
-    await expect(reglagesSortie(page).getByRole('group', { name: 'Direction' }).getByRole('button', { name: 'Assistée', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await reglerSortie(page, 'Direction', 'Libre', { garder: true });
+    await expect(reglagesSortie(page).getByRole('group', { name: 'Conduite assistée' }).getByRole('button', { name: 'Oui', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await reglerSortie(page, 'Conduite assistée', 'Non', { garder: true });
     await fermerReglages(page);
     await expect(mid).toHaveAttribute('data-commande', 'manche');
     await expect(page.locator('.drive-amorce')).toBeVisible();
@@ -344,11 +344,11 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     // Direction assistée, dans les réglages : l'ancien comportement. Manche à gauche, la place glisse à
     // gauche ; lâché sur le côté, elle tient puis revient sur la trajectoire. Puis retour à la direction libre.
     const reglages = await ouvrirReglages(page);
-    await expect(reglages.getByRole('group', { name: 'Direction' }).getByRole('button', { name: 'Libre', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(reglages.getByRole('group', { name: 'Conduite assistée' }).getByRole('button', { name: 'Non', exact: true })).toHaveAttribute('aria-pressed', 'true');
     // Les réglages ouverts mettent la course en pause.
     await expect(page.locator('.drive-pause')).toHaveAttribute('aria-pressed', 'true');
     await shot(page, 'portrait-reglages-direction', 'vague-p-direction');
-    await reglerSortie(page, 'Direction', 'Assistée');
+    await reglerSortie(page, 'Conduite assistée', 'Oui');
     await expect(page.locator('.drive-pause')).toHaveAttribute('aria-pressed', 'false');
     await doigts.poser(1, x0, y0);
     await doigts.glisser(1, x0, y0 - 50);
@@ -364,7 +364,7 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     // d'une machine à une image par seconde (CI du 18 novembre 2026 : 0,7 m → 0,2 m en 150 s d'horloge).
     await attendreSurLaRoute(page, 'direction assistée : retour vers la trajectoire', () => ecart(page), (valeur) => valeur < loin - 0.3, { secondes: 25, horloge: 300_000 });
     await doigts.toutLever();
-    await reglerSortie(page, 'Direction', 'Libre');
+    await reglerSortie(page, 'Conduite assistée', 'Non');
 
     // Les réglages rangent aussi « Rentrer au garage » ; les pédales, au choix, et le retour au manche.
     await ouvrirReglages(page);

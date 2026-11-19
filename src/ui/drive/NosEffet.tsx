@@ -2,11 +2,13 @@
 // s'assombrissent, et des traits de vitesse fins filent du point de fuite vers les bords. Sous la
 // scène et l'interface rien n'est dessiné hors poussée (`hidden` : les animations s'arrêtent). Lu à
 // chaque image sur `liveNos`, sans rendu React ; réécrit seulement quand la valeur change d'un cran.
-// « Moins de mouvement » : la teinte discrète seulement (drive.css coupe aussi les traits).
+// « Moins de mouvement » : la teinte discrète seulement (drive.css coupe aussi les traits). Les traits
+// suivent le moment de la sortie (NOS_RENDU.ecran.traits) : clairs de nuit, bleu soutenu de jour.
 // L'élément publie `data-nos-effet` (« oui » tant que l'effet est posé) pour les parcours.
 
 import { useRef, type CSSProperties } from 'react';
-import { liveNos, NOS_SEUIL } from '../../data/nos.ts';
+import { liveNos, NOS_RENDU, NOS_SEUIL } from '../../data/nos.ts';
+import { useDrive } from '../../state/drive.ts';
 import { useBoucleImage } from './CompteTours.tsx';
 
 /** Angles des traits (°) autour du point de fuite et leur décalage (s) : fixes, pas de hasard. */
@@ -31,6 +33,8 @@ const CRAN = 40;
 
 export function NosEffet() {
   const ref = useRef<HTMLDivElement>(null);
+  const moment = useDrive((state) => state.moment);
+  const trait = NOS_RENDU.ecran.traits[moment] ?? NOS_RENDU.ecran.traits.nuit;
   const shown = useRef({ teinte: -1, traits: -1, pose: false });
   useBoucleImage(() => {
     const el = ref.current;
@@ -49,7 +53,15 @@ export function NosEffet() {
     if (traits !== s.traits) el.style.setProperty('--nos-traits', String((s.traits = traits) / CRAN));
   });
   return (
-    <div ref={ref} className="drive-nos-effet" aria-hidden="true" data-nos-effet="non" hidden>
+    <div
+      ref={ref}
+      className="drive-nos-effet"
+      aria-hidden="true"
+      data-nos-effet="non"
+      data-moment={moment}
+      style={{ '--nos-trait': trait.couleur, '--nos-trait-ombre': trait.ombre, '--nos-trait-epaisseur': `${trait.epaisseur}px` } as CSSProperties}
+      hidden
+    >
       <i className="drive-nos-teinte" />
       <span className="drive-nos-traits">
         {TRAITS.map(([angle, decalage]) => (

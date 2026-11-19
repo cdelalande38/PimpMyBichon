@@ -128,7 +128,8 @@ test.describe('Mécanique · Échappement', () => {
     await expect(lignes(page).getByRole('button', { name: /^Libre/ })).not.toHaveAttribute('data-verrou', 'ferme');
     // 300 − 260, plus 25 $ du haut fait « Premier achat ».
     await expect(page.getByRole('button', { name: /Ton solde : 65 dollars/ })).toBeVisible();
-    await expect(panneau(page).locator('[data-flammes="sans-sortie"]')).toBeVisible();
+    // Ses sorties sont déclarées sous le bouclier (sans embout au modèle) : la ligne libre y crache.
+    await expect(panneau(page).locator('[data-flammes="oui"]')).toBeVisible();
     await expect.poll(async () => ((await readBuilds(page))?.builds.concept as { parts?: Record<string, string> } | undefined)?.parts?.echappement).toBe('libre');
     // La sport reste verrouillée ; l'origine se remet d'un appui, gratuitement.
     await expect(lignes(page).getByRole('button', { name: 'Sport, verrouillée, 140 dollars' })).toBeVisible();

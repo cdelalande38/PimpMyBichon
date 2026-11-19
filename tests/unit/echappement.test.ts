@@ -322,9 +322,10 @@ describe('manifestes : sorties d’échappement', () => {
     expect(() => validateManifest({ ...bobber, exhaust: { outlets: bobber.exhaust!.outlets, nodes: [''] } }, 'bobber')).toThrow(/exhaust\.nodes/);
   });
 
-  // Les véhicules qui déclarent des sorties : chaque bouche est au bout d'un tuyau du modèle préparé
-  // (le métal des nœuds déclarés, à 3 cm près), et ce métal prend la finition choisie.
-  const avecSorties = VEHICLES.filter((v) => v.exhaust && existsSync(new URL(`../../public/assets/vehicles/${v.id}/${v.glb}`, import.meta.url)) && !v.adapt);
+  // Les véhicules dont les sorties sont des pièces du modèle (`exhaust.nodes`) : chaque bouche est au bout d'un
+  // tuyau du modèle préparé (le métal des nœuds déclarés, à 3 cm près), et ce métal prend la finition choisie.
+  // Le concept et le van déclarent des sorties sans embout modelé (TODO_ASSETS.md) : pas de tuyau à viser.
+  const avecSorties = VEHICLES.filter((v) => v.exhaust?.nodes?.length && existsSync(new URL(`../../public/assets/vehicles/${v.id}/${v.glb}`, import.meta.url)) && !v.adapt);
   it('au moins le bobber, la sportive et la Cox ont des sorties déclarées', () => {
     expect(avecSorties.map((v) => v.id).sort()).toEqual(expect.arrayContaining(['bobber', 'cox', 'sportive']));
   });

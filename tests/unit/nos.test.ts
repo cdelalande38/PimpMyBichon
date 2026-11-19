@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { MapRoute } from '../../src/data/mapTypes.ts';
 import { effetNosRepos, NOS_RENDU, suivreNos } from '../../src/data/nos.ts';
+import { VEHICLES } from '../../src/data/vehicles.ts';
+import type { DriveInput } from '../../src/drive/contrat.ts';
+import { createPilot, engineModel, performanceDe, PILOT } from '../../src/drive/pilote.ts';
+import { createRail } from '../../src/drive/rail.ts';
 
 describe('effet du NOS à l’image', () => {
   it('rien hors poussée : tout à zéro, aucun temps compté', () => {
@@ -51,5 +56,63 @@ describe('effet du NOS à l’image', () => {
     expect(e.force).toBe(0);
     suivreNos(e, true, 3, 1 / 60, false);
     expect(e.force).toBe(1);
+  });
+});
+
+describe('tous les véhicules crachent', () => {
+  it('chaque véhicule du catalogue déclare au moins une sortie d’échappement, vers l’arrière', () => {
+    for (const vehicle of VEHICLES) {
+      expect(vehicle.exhaust?.outlets.length ?? 0, vehicle.id).toBeGreaterThan(0);
+      for (const outlet of vehicle.exhaust!.outlets) expect(outlet.direction[0], vehicle.id).toBeLessThan(0);
+    }
+  });
+
+  it('les traits de vitesse ont un réglage pour chaque moment, plus épais et plus soutenus de jour', () => {
+    const { nuit, jour } = NOS_RENDU.ecran.traits;
+    expect(jour.epaisseur).toBeGreaterThan(nuit.epaisseur);
+    expect(jour.couleur).not.toBe(nuit.couleur);
+  });
+});
+
+// La poussée (src/drive/pilote.ts, PILOT.nos) : une part de la puissance, ou au moins `pousseeMin` de plus.
+describe('le NOS se sent sur chaque véhicule', () => {
+  const longueur = 2000;
+  const rail: number[] = [];
+  for (let x = 0; x <= longueur; x += 2) rail.push(x, 0, 0);
+  const droite = { format: 'pmb-carte', version: 1, id: 'essai', loop: false, length: longueur, step: 2, rail, sections: [{ from: 0, to: longueur, ground: 'sol', urban: false, lanes: 2, width: 7 }], chunks: [], starts: [], far: null } as MapRoute;
+
+  /** Plein gaz à la main jusqu'à `depart` km/h, puis 3 s avec ou sans NOS : vitesse au bout (km/h). */
+  function auBout(vehicle: (typeof VEHICLES)[number], depart: number, nos: boolean): number {
+    const performance = performanceDe(vehicle);
+    const pilot = createPilot(createRail(droite), performance);
+    pilot.setHold(false);
+    pilot.reset(10);
+    const input: DriveInput = { auto: false, throttle: 1, brake: 0, lane: 0, nos: 0, assist: true };
+    for (let t = 0; pilot.motion.speed * 3.6 < depart && t < 60; t += 0.1) pilot.step(0.1, input, performance.kind);
+    if (nos) input.nos = 1;
+    for (let i = 0; i < 30; i += 1) pilot.step(0.1, input, performance.kind);
+    return pilot.motion.speed * 3.6;
+  }
+
+  for (const vehicle of VEHICLES) {
+    it(`${vehicle.id} : depuis 60 et 100 km/h, au moins 12 km/h de plus en 3 s qu’à plein gaz sans NOS, au plus 30`, () => {
+      for (const depart of [60, 100]) {
+        const gain = auBout(vehicle, depart, true) - auBout(vehicle, depart, false);
+        expect(gain, `depuis ${depart} km/h`).toBeGreaterThan(12);
+        expect(gain, `depuis ${depart} km/h`).toBeLessThan(30);
+      }
+    });
+  }
+
+  it('sans NOS, rien ne change ; avec, au moins `pousseeMin` de plus sous le limiteur, et le kit nitro ajoute encore', () => {
+    const cox = VEHICLES.find((v) => v.id === 'cox')!;
+    const base = performanceDe(cox);
+    const moteur = engineModel(base);
+    const avecKit = engineModel({ ...base, nosBoost: 1 });
+    for (const v of [5, 15, 25]) {
+      expect(moteur.thrust(v, true, 5000)).toBeGreaterThanOrEqual(moteur.thrust(v, false, 5000) + PILOT.nos.pousseeMin - 1e-9);
+      expect(avecKit.thrust(v, false, 5000)).toBe(moteur.thrust(v, false, 5000));
+      expect(avecKit.thrust(v, true, 5000)).toBeGreaterThan(moteur.thrust(v, true, 5000));
+    }
   });
 });

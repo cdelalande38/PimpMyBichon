@@ -134,7 +134,7 @@ async function reglagesComplets(page: Page, { paysage }: { paysage: boolean }): 
   const panneau = reglagesSortie(page);
   await expect(panneau.getByRole('group', { name: 'Caméra' }).getByRole('button')).toHaveCount(6);
   await expect(panneau.getByRole('group', { name: 'Météo' }).getByRole('button')).toHaveCount(3);
-  await expect(panneau.getByRole('group', { name: 'Direction' }).getByRole('button')).toHaveCount(2);
+  await expect(panneau.getByRole('group', { name: 'Conduite assistée' }).getByRole('button')).toHaveCount(2);
   await expect(panneau.getByRole('group', { name: 'Commande' })).toHaveCount(paysage ? 0 : 1);
   for (const nom of ['Réalisateur', 'Ralenti', 'Son du moteur', 'Rentrer au garage']) await expect(panneau.getByRole('button', { name: nom, exact: true }), nom).toBeVisible();
   await expect(panneau.getByRole('group', { name: 'Son de la sortie' }).getByRole('slider')).toHaveCount(3);

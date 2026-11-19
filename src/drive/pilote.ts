@@ -157,11 +157,12 @@ export const PILOT = {
    */
   engine: { efficiency: 0.88, launch: { car: 8.5, bike: 8.4 }, dragMargin: 1.06, rolling: 0.12, cut: 0.12, limiter: 0.02 },
   /**
-   * NOS : puissance ajoutée (part de la puissance), vitesse de pointe relevée (facteur), durée d'une
-   * poussée (s), réserve vidée par seconde de poussée, rechargée par seconde, réserve minimale pour
+   * NOS : puissance ajoutée (part de la puissance), poussée ajoutée au moins (m/s², pour qu'il se sente
+   * aussi sur une petite cylindrée : 45 % de 50 ch, c'est peu), vitesse de pointe relevée (facteur), durée
+   * d'une poussée (s), réserve vidée par seconde de poussée, rechargée par seconde, réserve minimale pour
    * partir, temps de montée de l'effet (s).
    */
-  nos: { boost: 0.45, topRatio: 1.1, duration: 3, drain: 1 / 6.5, recharge: 1 / 50, minReserve: 0.12, ramp: 0.25 },
+  nos: { boost: 0.45, pousseeMin: 2.2, topRatio: 1.1, duration: 3, drain: 1 / 6.5, recharge: 1 / 50, minReserve: 0.12, ramp: 0.25 },
   /**
    * Placement latéral : pulsation du ressort (rad/s), vitesse latérale la plus forte (m/s, et en
    * part de la vitesse), avance de la visée (s), retrait d'un placement demandé au bord (m), garde
@@ -679,9 +680,14 @@ export function engineModel(performance: DrivePerformance): EngineModel {
     cap,
     resist: (v) => Math.max(0, drag) * v * v + (v > 0.05 ? E.rolling : 0),
     thrust(v, nos, rpm) {
-      const share = rpm === undefined ? 1 : powerShare(rpm, box);
-      const power = watts * share * (nos ? 1 + (performance.nosBoost ?? PILOT.nos.boost) : 1);
-      let a = Math.min(launch * (nos ? 1.08 : 1), power / (mass * Math.max(v, 0.5)));
+      const parPuissance = (watts * (rpm === undefined ? 1 : powerShare(rpm, box))) / (mass * Math.max(v, 0.5));
+      let a = Math.min(launch, parPuissance);
+      if (nos) {
+        // NOS : sa part de puissance (et un départ un peu plus fort) ; ou, si c'est plus, `pousseeMin` de plus
+        // que sans lui, plus ce qu'un kit nitro ajoute au-delà de la part de base. Limiteur et motricité bornent.
+        const part = performance.nosBoost ?? PILOT.nos.boost;
+        a = Math.max(Math.min(launch * 1.08, parPuissance * (1 + part)), a + PILOT.nos.pousseeMin + parPuissance * Math.max(0, part - PILOT.nos.boost));
+      }
       // Limiteur : la poussée s'éteint en approchant de la vitesse de pointe.
       const limit = cap(nos);
       const band = limit * E.limiter;
