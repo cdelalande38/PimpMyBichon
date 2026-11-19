@@ -1,0 +1,101 @@
+/* Le duel (src/ui/drive/Duel.tsx). En course, la position et l'écart se posent sous le chrono, dans la même
+   place que lui (.drive-feux-place : au pied du compte-tours en portrait, en haut au milieu en paysage). */
+
+.drive-top .duel-position {
+  position: absolute;
+  top: 2.35rem;
+  left: 50%;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  justify-items: center;
+  column-gap: 0.4rem;
+  padding: 0.15rem 0.7rem 0.2rem;
+  border-radius: 0.75rem;
+  background: rgba(10, 9, 17, 0.7);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  color: var(--chrome);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.drive-top .duel-position[data-visible='non'] {
+  display: none;
+}
+
+.drive-top .duel-position b {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: #7dffb4;
+}
+
+.drive-top .duel-position[data-position='2'] b {
+  color: #ff8a6b;
+}
+
+.drive-top .duel-position span {
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.drive-top .duel-position small {
+  grid-column: 1 / -1;
+  color: rgba(236, 233, 244, 0.72);
+  font-size: 0.6875rem;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .drive-top .duel-position {
+    top: 1.9rem;
+  }
+}
+
+/* Au menu : les adversaires, un par niveau, une fois « Duel » choisi. */
+.drive-entry .duel-adversaires {
+  margin-top: 0.25rem;
+}
+
+.drive-entry .duel-adversaires .chip.duel-adversaire {
+  flex: 1 1 0;
+  min-width: 6.5rem;
+  min-height: 3rem;
+  max-width: 100%;
+}
+
+.drive-entry .duel-adversaire i {
+  display: inline-block;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-right: 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  vertical-align: -0.05rem;
+}
+
+.drive-entry .duel-adversaire .duel-phrase {
+  opacity: 0.75;
+  white-space: normal;
+}
+
+/* Écran de fin d'un duel : le verdict, sous le titre. */
+.fin-course .duel-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.fin-course .duel-verdict b {
+  color: #7dffb4;
+  font-size: 1.25rem;
+}
+
+.fin-course .duel-verdict[data-duel='perdu'] b {
+  color: var(--ambre);
+}
+
+.fin-course .duel-verdict span {
+  font-size: 0.9375rem;
+}

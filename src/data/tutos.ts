@@ -290,7 +290,7 @@ export const TUTOS: readonly Tuto[] = [
       { texte: '« Libre », tu choisis tout. « Carrière », des épreuves par saisons : la deuxième vise l’argent puis l’or, avec des contraintes.', cible: 'footer.dock [aria-label="Mode"][role="group"]' },
       { texte: 'En libre : le lieu, puis son circuit, puis ton départ. Chaque choix remplace le précédent ; « Retour » remonte d’une étape.', cible: 'footer.dock .dock-back' },
       { texte: 'Dernière étape : nuit ou jour, la météo, le format. La balade ne rapporte rien ; la course, des dollars et des hauts faits.' },
-      { texte: 'Format « Drift » : un coup de frein bref en tournant fait glisser l’arrière, le gaz tient la glisse, chaque drift rapporte des points.', cible: 'footer.dock .drive-formats [data-format="drift"]' },
+      { texte: '« Drift » : un coup de frein bref en virage fait glisser, des points à la clé. « Duel » : un adversaire part avec toi aux feux.', cible: 'footer.dock .drive-formats [data-format="drift"]' },
       { texte: 'Touche « Sortir » : la porte se lève et c’est parti. La fois suivante, le menu se rouvre sur ces réglages.' },
     ],
   },

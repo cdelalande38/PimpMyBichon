@@ -15,6 +15,8 @@ import { useRevealPressed } from '../../scroll.ts';
 import { DriveIcon } from '../icones.tsx';
 import { apresDepart, LIBELLE_DEBUT, LIBELLE_LIBRE, niveauLieu, rappel, sansEtapeDepart } from './etapes.ts';
 import { useDeparts } from './useDeparts.ts';
+import { useDuel } from '../../../drive/adversaire/choix.ts';
+import { ChoixAdversaire, PuceDuel, reditDuel, useDuelChoisi } from '../Duel.tsx';
 
 export function EtapeReglages() {
   const map = mapById(useDrive((state) => state.choice.map));
@@ -36,6 +38,9 @@ export function EtapeReglages() {
   const formatRow = useRevealPressed<HTMLDivElement>(couru);
   const ready = starts?.status === 'pret' ? starts.list : null;
   const libelle = starts?.status === 'erreur' ? LIBELLE_DEBUT : start?.label;
+  // Duel (src/ui/drive/Duel.tsx) : une puce de plus dans la rangée des formats, puis le choix de l'adversaire.
+  const duel = useDuelChoisi();
+  useDuel((state) => state.adversaire);
 
   // Menu rouvert sur la dernière sortie : le fil finit sur le nom du départ dès que la route l'a dit, et
   // une carte à un seul départ n'a pas d'étape des départs où « Retour » s'arrêterait.
@@ -60,7 +65,7 @@ export function EtapeReglages() {
   };
   // « Sortir » redit le format et ce qu'il rapporte : « Course 1 tour : chrono, dollars et hauts faits ».
   const aide = AIDES_FORMAT[couru];
-  const redit = `${formatSpec(couru).label} : ${aide.charAt(0).toLowerCase()}${aide.slice(1)}`;
+  const redit = (duel ? reditDuel() : null) ?? `${formatSpec(couru).label} : ${aide.charAt(0).toLowerCase()}${aide.slice(1)}`;
 
   return (
     <>
@@ -99,17 +104,22 @@ export function EtapeReglages() {
                 type="button"
                 className="chip"
                 data-format={item.id}
-                aria-pressed={item.id === couru}
+                aria-pressed={item.id === couru && !duel}
                 disabled={!possible}
                 aria-describedby={possible ? undefined : 'sortie-format-phrase'}
-                onClick={() => setFormat(item.id)}
+                onClick={() => {
+                  setFormat(item.id);
+                  useDuel.getState().setActif(false);
+                }}
               >
                 <b>{item.label}</b>
                 <small>{AIDES_FORMAT[item.id]}</small>
               </button>
             );
           })}
+          <PuceDuel />
         </div>
+        <ChoixAdversaire />
         {!boucle && starts?.status !== 'chargement' && FORMATS.some((item) => !formatPossible(item.id, false)) && (
           <p id="sortie-format-phrase" className="drive-note drive-format-phrase">
             {PHRASE_SANS_BOUCLE}
@@ -119,7 +129,7 @@ export function EtapeReglages() {
           Données de la carte : {map.credits.map(creditLine).join(' ; ')}.
         </p>
       </div>
-      <button type="button" className="btn cta drive-go" aria-label="Sortir" aria-describedby="sortie-go-format" data-format={couru} onClick={go}>
+      <button type="button" className="btn cta drive-go" aria-label="Sortir" aria-describedby="sortie-go-format" data-format={duel ? 'duel' : couru} onClick={go}>
         <span>Sortir</span>
         <small id="sortie-go-format" className="drive-go-format">
           {redit}

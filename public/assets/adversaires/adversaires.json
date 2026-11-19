@@ -1,0 +1,41 @@
+{
+  "format": "pmb-adversaires",
+  "version": 1,
+  "adversaires": [
+    {
+      "id": "dede",
+      "nom": "Dédé Pépère",
+      "phrase": "Pas pressé, mais il ne cale jamais.",
+      "niveau": "bronze",
+      "vehicule": "cox",
+      "couleur": "#e8d6a4"
+    },
+    {
+      "id": "lulu",
+      "nom": "Lulu Poignée",
+      "phrase": "Elle passe les virages en chantant.",
+      "niveau": "argent",
+      "vehicule": "bobber",
+      "couleur": "#2f7de1"
+    },
+    {
+      "id": "comete",
+      "nom": "La Comète",
+      "phrase": "Freine tard, ne rate presque rien.",
+      "niveau": "or",
+      "vehicule": "sportive",
+      "couleur": "#e0213f"
+    }
+  ],
+  "pilotage": {
+    "irregularite": 0.04,
+    "section": 140,
+    "sansReference": { "bronze": 0.55, "argent": 0.8, "or": 0.92 }
+  },
+  "contact": {
+    "garde": 0.3,
+    "approche": 6,
+    "relache": 12,
+    "ecartParSeconde": 3
+  }
+}

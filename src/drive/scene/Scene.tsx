@@ -21,6 +21,7 @@ import { driveDebug } from './debug.ts';
 import { DriveEngine } from './moteur.ts';
 import { bodyEnvOf, sortieAmbiance } from './nuit.ts';
 import { DriveVehicle, type DriveModel } from './vehicule.tsx';
+import { DriveAdversaire, type ModeleAdversaire } from './adversaire.tsx';
 
 export interface DriveSceneProps {
   map: MapManifest;
@@ -122,6 +123,9 @@ export function DriveScene({ map, vehicle, level, floatTargets, stage }: DriveSc
 
   const onModel = useCallback((model: DriveModel | null) => engine?.setModel(model), [engine]);
   const onVehicleFail = useCallback(() => engine?.vehicleFailedNow(), [engine]);
+  // Duel : un modèle d'adversaire tombé ne bloque pas la course (il court, invisible).
+  const onAdversaire = useCallback((model: ModeleAdversaire | null) => engine?.setAdversaire(model), [engine]);
+  const onAdversaireFail = useCallback(() => engine?.adversaireAbsent(), [engine]);
 
   // Temps arrêté (diagnostic) : l'image est rendue, rien ne bouge.
   const frozenAt = useRef(-1);
@@ -155,6 +159,13 @@ export function DriveScene({ map, vehicle, level, floatTargets, stage }: DriveSc
         <SceneBoundary key={vehicle.id} onFail={onVehicleFail}>
           <Suspense fallback={null}>
             <DriveVehicle vehicle={vehicle} rig={engine.rig} bodyEnv={bodyEnv} beams={engine.profile.beams} onModel={onModel} />
+          </Suspense>
+        </SceneBoundary>
+      )}
+      {engine?.duel && engine.duelRig && (
+        <SceneBoundary key={`adversaire-${engine.duel.adversaire.id}`} onFail={onAdversaireFail}>
+          <Suspense fallback={null}>
+            <DriveAdversaire duel={engine.duel} rig={engine.duelRig} bodyEnv={bodyEnv} onModel={onAdversaire} />
           </Suspense>
         </SceneBoundary>
       )}

@@ -68,6 +68,7 @@ import { axeManche } from './manche.ts';
 import { entrerManette, quitterManette, useManette, useManetteBranchee } from './manette.ts';
 import { ReglagesPanneau, useReglages } from './Reglages.tsx';
 import './drive.css';
+import { PositionDuel } from './Duel.tsx';
 
 /** Écran plus large que haut, à hauteur de téléphone couché : la disposition manette (drive.css). */
 const PAYSAGE = '(orientation: landscape) and (max-height: 540px)';
@@ -110,6 +111,7 @@ function DriveTop({ apercu, reglages, ouvrirReglages }: { apercu: boolean; regla
       {!apercu && <CompteTours />}
       {!apercu && <FeuxDepart />}
       {!apercu && <ChronoSortie />}
+      {!apercu && <PositionDuel />}
       <div className="drive-top-droite">
         <button type="button" className="drive-round drive-reglages-btn" aria-label="Réglages de la sortie" aria-haspopup="dialog" aria-expanded={reglages} {...ouvrir}>
           <DriveIcon name="reglages" />

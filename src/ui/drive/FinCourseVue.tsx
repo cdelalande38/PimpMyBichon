@@ -32,6 +32,7 @@ import { FAMILLES_ARTICLE, notificationsDuBilan } from '../jeu/notifications.ts'
 import { DriveIcon, type DriveIconName } from './icones.tsx';
 import { resumeRendezVous } from '../carriere/FicheRendezVous.tsx';
 import { ProchainRendezVous } from '../carriere/ProchainRendezVous.tsx';
+import { boutonsDuel, VerdictDuelFin } from './Duel.tsx';
 
 const MEDAILLE_LABEL: Readonly<Record<Medaille, string>> = { or: 'Médaille d’or', argent: 'Médaille d’argent', bronze: 'Médaille de bronze' };
 
@@ -138,7 +139,8 @@ export function FinCourseVue({ bilan, onRejouer, onGarage, onCourseSuivante, ani
   const stats = r.stats;
   const rien = bilan.hautsFaits.length === 0 && bilan.deblocages.length === 0;
   const verdict = verdictDe(bilan);
-  const boutons = boutonsDeFin(verdict);
+  // Duel (src/ui/drive/Duel.tsx) : « Revanche » en principal.
+  const boutons = boutonsDuel(boutonsDeFin(verdict), bilan);
   const agir = (acte: BoutonFin['acte']) => {
     if (acte === 'garage') onGarage();
     else if (acte === 'suivante') {
@@ -155,6 +157,7 @@ export function FinCourseVue({ bilan, onRejouer, onGarage, onCourseSuivante, ani
             <h2 id="fin-course-titre">Arrivée</h2>
             <span className="fin-course-format">{formatSpec(r.format).label}</span>
           </header>
+          <VerdictDuelFin bilan={bilan} />
           <p className="fin-course-medaille" data-medaille={r.medaille ?? 'aucune'}>
             <i aria-hidden="true" />
             {r.medaille ? MEDAILLE_LABEL[r.medaille] : 'Pas de médaille cette fois'}

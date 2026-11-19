@@ -55,7 +55,7 @@ export function piloteDeSimulation(route: MapRoute, performance: DrivePerformanc
 }
 
 /** Vitesse (m/s) au-delà de laquelle la conduite à la main freine : le prochain virage la limite. */
-function vitesseTenable(pilot: PilotWithProfile, s: number, v: number, grip: number, frein: number, pose: ReturnType<typeof createPose>): number {
+export function vitesseTenable(pilot: PilotWithProfile, s: number, v: number, grip: number, frein: number, pose: ReturnType<typeof createPose>): number {
   const rail = pilot.rail;
   const portee = (v * v) / (2 * frein) + v * SIMULATION.reaction + 10;
   let tenable = Infinity;

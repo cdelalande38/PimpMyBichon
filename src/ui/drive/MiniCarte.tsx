@@ -18,6 +18,8 @@ import { REGLAGES_VIRAGES } from '../../data/virages.ts';
 import { createPose } from '../../drive/rail.ts';
 import { annonceActive, couleurDuCran, liveVirages, situationNeuve, situer } from '../../drive/virages.ts';
 import { liveDepart, livePilot } from '../../state/drive.ts';
+import { liveDuel } from '../../drive/adversaire/course.ts';
+import { devant } from '../../drive/adversaire/contact.ts';
 import './minicarte.css';
 
 /** Côté du cadre, en pixels CSS. */
@@ -71,7 +73,7 @@ export function MiniCarte() {
     const hauteurUtile = cy - CARTE.marge;
     let portee: number = CARTE.porteeMin;
     // Valeurs affichées (n'écrire le DOM que si elles changent).
-    const memo = { visible: '', virage: '', index: '', cran: '', dedans: '', annonce: '', sens: '', couleur: '' };
+    const memo = { adversaire: '', visible: '', virage: '', index: '', cran: '', dedans: '', annonce: '', sens: '', couleur: '' };
 
     const ecrire = (cle: keyof typeof memo, attribut: string, valeur: string) => {
       if (memo[cle] === valeur) return;
@@ -203,6 +205,24 @@ export function MiniCarte() {
           }
           ctx.restore();
         }
+      }
+
+      // Duel : l'adversaire, un point de sa couleur sur le tracé, quand il est dans le cadre.
+      const duel = liveDuel.current;
+      if (duel && duel.enPiste) {
+        const d = devant(s, duel.pilote.pilot.motion.s, longueur, rail.loop);
+        if (d > -derriere && d < portee) {
+          rail.poseAt(s + d, pose);
+          projeter(0, px, pz, fx, fz, k);
+          ctx.beginPath();
+          ctx.arc(xs[0]!, ys[0]!, 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = duel.adversaire.couleur;
+          ctx.strokeStyle = '#f4f1e6';
+          ctx.lineWidth = 1.5;
+          ctx.fill();
+          ctx.stroke();
+        }
+        ecrire('adversaire', 'data-adversaire', d > -derriere && d < portee ? 'cadre' : 'hors');
       }
 
       // Le véhicule : une pointe claire, fixe, vers le haut.

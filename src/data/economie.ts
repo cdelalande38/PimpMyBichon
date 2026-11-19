@@ -57,3 +57,18 @@ export const MOTIFS_GAIN = {
   sansChoc: 'Aucun choc contre le bord de la route',
   meteo: { sec: '', pluie: 'Course sous la pluie', neige: 'Course sous la neige' },
 } as const;
+
+/**
+ * Le duel (§ 5.5, jeu ; src/drive/adversaire/cloture.ts) : la course compte comme une course d'un tour (lignes
+ * ci-dessus), et la victoire rapporte en plus, selon le niveau de l'adversaire ; battre un niveau pour la
+ * première fois verse une prime, une seule fois (son haut fait, src/data/hautsFaits.ts, le retient).
+ */
+export const ECONOMIE_DUEL: Readonly<{ victoire: Readonly<Record<Medaille, number>>; prime: Readonly<Record<Medaille, number>> }> = {
+  victoire: { bronze: 15, argent: 30, or: 50 },
+  prime: { bronze: 40, argent: 80, or: 150 },
+};
+
+export const MOTIFS_DUEL = {
+  victoire: 'Duel gagné',
+  prime: 'Première victoire à ce niveau',
+} as const;

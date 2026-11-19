@@ -63,6 +63,10 @@ import { cleanProbePass } from '../../render/probePass.ts';
 import { aimSunShadow } from '../../render/sunShadow.ts';
 import { roueEnPlus, rouesMotrices, wheelSteer } from './roues.ts';
 import { createRig, rollWheels, TAIL_LIGHT, type DriveModel, type DriveRig } from './vehicule.tsx';
+import { allureDuel, duelDeLaSortie, liveDuel, type DuelEnCourse } from '../adversaire/course.ts';
+import { useDuel } from '../adversaire/choix.ts';
+import { conclureDuel } from '../adversaire/cloture.ts';
+import { poserAdversaire, poserModeleAdversaire, type ModeleAdversaire } from './adversaire.tsx';
 
 /** Intensité des vraies lumières des lampadaires, en candelas : même éclairement que la flaque calculée (PMB_LAMP_DIFFUSE de la chaussée × 64 × π). */
 const LAMP_CANDELA = 380;
@@ -272,6 +276,10 @@ export class DriveEngine {
   private readonly slowDeltas = new Float32Array(60);
   private degraded = false;
   private onDegrade: (() => void) | null = null;
+  /** Duel (src/drive/adversaire/) : l'adversaire et son véhicule ; `null` sans duel (rien de plus n'est calculé). */
+  readonly duel: DuelEnCourse | null;
+  readonly duelRig: DriveRig | null;
+  private readonly duelPose: RailPose = { s: 0, position: [0, 0, 0], tangent: [1, 0, 0], heading: 0, pitch: 0, curvature: 0, ground: 'sol', urban: false, lanes: 2, width: 7 };
 
   constructor(base: string, route: MapRoute, level: QualityLevel, vehicle: VehicleManifest) {
     this.route = route;
@@ -293,6 +301,15 @@ export class DriveEngine {
     this.hidden = [this.rig.group];
     this.frameOf = { kind: vehicle.kind, position: [0, 0, 0], heading: 0, pitch: 0, roll: 0, halfLength: vehicle.halfLengthHint, halfWidth: 0.9, height: 1.4 };
     this.rail = createRail(route);
+    // Duel choisi au menu : l'adversaire (son pilote, sa course), caché de la sonde comme le joueur.
+    const drive0 = useDrive.getState();
+    this.duel = duelDeLaSortie(useDuel.getState(), formatCouru(drive0.format, route.loop), drive0.rendezVous !== null, this.rail);
+    this.duelRig = this.duel ? createRig() : null;
+    if (this.duelRig) {
+      this.duelRig.group.name = 'sortie_adversaire';
+      this.hidden.push(this.duelRig.group);
+    }
+    liveDuel.current = this.duel;
     // Performances du véhicule (manifeste, préparation du build) ; le pilote est publié pour le
     // compte-tours et le son (src/state/drive.ts, livePilot).
     this.pilot = createPilot(this.rail, performanceDe(vehicle, useBuilds.getState().builds[vehicle.id]));
@@ -366,6 +383,15 @@ export class DriveEngine {
     this.pilot.setHold?.(true);
     this.lignes.poser(this.rail, this.pilot.motion.s, this.rig.measure?.halfLength ?? this.halfLengthHint);
     useDrive.getState().effacerArrivee();
+    if (this.duel) {
+      // Duel : l'adversaire sur la ligne, à côté du joueur, à l'allure de son niveau (src/drive/adversaire/course.ts).
+      const format = formatCouru(drive.format, this.rail.loop);
+      const m = this.rig.measure;
+      this.duel.pilote.pilot.setWeather(drive.weather);
+      const offset = this.duel.depart(allureDuel(this.duel.adversaire, drive.map ?? '', this.startId, format, this.vehicleId), this.pilot.motion.s, this.pilot.motion.offset, m?.halfWidth ?? 0.95, m?.halfLength ?? this.halfLengthHint, toursDuFormat(format), !drive.apercu);
+      // Rangé pour laisser la place à l'adversaire : repris par le pilote au premier pas à la main.
+      if (!drive.apercu) this.pilot.motion.offset = offset;
+    }
   }
 
   /** Début du fondu au noir de fin d'aperçu (performance.now, ms), -1 hors fondu. */
@@ -421,6 +447,15 @@ export class DriveEngine {
     }
   }
 
+  /** Duel : le modèle de l'adversaire posé (ou retiré) ; tombé, la course se court sans lui. */
+  setAdversaire(model: ModeleAdversaire | null): void {
+    if (this.duel && this.duelRig) poserModeleAdversaire(this.duelRig, this.duel, model);
+  }
+
+  adversaireAbsent(): void {
+    if (this.duel) this.duel.modele = 'absent';
+  }
+
   vehicleFailedNow(): void {
     this.vehicleFailed = true;
   }
@@ -453,12 +488,20 @@ export class DriveEngine {
     const motion = this.pilot.step(dt, drive.input, this.kind);
     const arrived = depart.phase === 'arrive';
     this.suivi.pas(depart, dt, drive.input, motion, (this.pilot as { contact?: number }).contact ?? 0, this.pilot.train?.nos === true);
-    pasDepart(depart, dt, this.vehicleReady && !this.vehicleFailed && decor.status.loaded > 0 && this.frames > 2, motion.s, this.rail, motion.finished);
+    pasDepart(depart, dt, this.vehicleReady && !this.vehicleFailed && decor.status.loaded > 0 && this.frames > 2 && (this.duel?.pret ?? true), motion.s, this.rail, motion.finished);
+    // Duel : l'adversaire avance avec le joueur ; le contact le range ou retient celui de derrière.
+    if (this.duel) {
+      this.duel.pilote.pilot.setWeather(drive.weather);
+      this.duel.pas(dt, this.pilot, depart, this.rig.measure?.halfWidth ?? 0.95, this.rig.measure?.halfLength ?? this.halfLengthHint);
+    }
     if (!arrived && depart.phase === 'arrive' && drive.map && !depart.lance) {
       const format = formatCouru(drive.format, this.rail.loop);
       const finie = enCourse(depart) ? courseFinie(depart, this.suivi.mesures, { carte: drive.map, depart: this.startId, vehicule: this.vehicleId, format, meteo: drive.weather, moment: drive.moment }) : null;
       if (finie) drive.terminerCourse(finie);
       else drive.noterArrivee(cleTemps(drive.map, this.startId, this.vehicleId), depart.arrivee);
+      // Duel : le verdict s'ajoute au bilan (gains du duel, prime d'une première victoire, hauts faits).
+      const fin = useDrive.getState().fin;
+      if (finie && fin && this.duel?.duel.verdict) useDrive.setState({ fin: conclureDuel(this.duel.adversaire, this.duel.duel.verdict, fin) });
     }
     feuxSon.rouges = depart.rouges;
     feuxSon.vert = depart.vert;
@@ -495,6 +538,7 @@ export class DriveEngine {
       rig.tailLight.intensity = ((motion.braking ? TAIL_CANDELA.brake : TAIL_CANDELA.rest) + boost * NOS_GLOW.candela) * this.moment.etat.phares;
     }
     rig.group.updateMatrixWorld();
+    if (this.duel && this.duelRig) poserAdversaire(this.duelRig, this.duel, this.duelPose, dt, this.moment.etat.phares);
 
     // Plan de la caméra.
     const frame = this.frameOf;
@@ -732,6 +776,14 @@ export class DriveEngine {
       // Virage : braquage montré des roues avant et roulis de la caisse, en degrés arrondis.
       putData(stage, 'braquage', String(Math.round((steer * 180) / Math.PI)));
       putData(stage, 'roulis', String(Math.round((motion.roll * 180) / Math.PI)));
+      if (this.duel) {
+        // Duel, pour les parcours : position, écart (dixièmes de s), abscisse de l'adversaire, verdict.
+        const d = this.duel.duel;
+        putData(stage, 'duelPosition', String(d.position));
+        putData(stage, 'duelEcart', String(Math.round(d.ecart * 10)));
+        putData(stage, 'duelS', String(Math.round(this.duel.pilote.pilot.motion.s)));
+        putData(stage, 'duelVerdict', d.verdict ? (d.verdict.gagne ? 'gagne' : 'perdu') : 'non');
+      }
     }
   }
 
@@ -915,6 +967,7 @@ export class DriveEngine {
 
   dispose(): void {
     if (livePilot.current === this.pilot) livePilot.current = null;
+    if (liveDuel.current === this.duel) liveDuel.current = null;
     if (liveDepart.current === this.depart) liveDepart.current = null;
     feuxSon.rouges = 0;
     feuxSon.vert = false;
