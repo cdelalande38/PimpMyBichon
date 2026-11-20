@@ -1,20 +1,27 @@
 // Le pilotage de l'adversaire du duel (§ 5.5, jeu). Aucune conduite nouvelle : c'est le pilote de la sortie
-// (src/drive/pilote.ts), conduit comme la conduite à la main appliquée qui donne les temps de référence
-// (src/drive/simulationCourse.ts : direction assistée, plein gaz, frein à fond dès que la vitesse dépasse ce
-// que tient le prochain virage, décidé tous les dixièmes de seconde), en temps réel, avec toute la puissance
-// de son véhicule : aucune limite de vitesse de balade, aucune horloge ralentie.
+// (src/drive/pilote.ts), conduit comme la conduite à la main appliquée des temps de référence
+// (src/drive/simulationCourse.ts : direction assistée, plein gaz, frein dès que la vitesse dépasse ce que tient
+// le prochain virage, décidé tous les dixièmes de seconde), en temps réel, avec toute la puissance de son
+// véhicule. Deux différences (vague W, 20 novembre 2026 : « au premier virage elle a freiné tellement que je
+// l'ai dépassée ») :
+// - la vitesse de passage se lit sur la courbure de SA trajectoire, plus douce que la route dessinée, et jamais
+//   sous celle de la conduite de référence (`vitesseTenableLigne`) ;
+// - l'audace : dans la sortie, le bord frotté ralentit bien plus fort qu'un frein (src/drive/pilote.ts,
+//   `bordLibre`), si bien qu'un joueur qui ne freine jamais passe un angle droit d'Ocean Drive à 117 km/h quand
+//   des pneus tenus le passent à 30. L'adversaire vise √audace fois la vitesse de ses pneus et laisse le bord
+//   faire le reste, comme le joueur.
 //
-// Le niveau (src/data/adversaires.ts, au menu) règle trois choses, mesurées par tests/unit/adversaire.test.ts :
-// - l'allure a : il vise a × la vitesse que son véhicule tient en virage (adhérence visée × a²) et a × sa
-//   vitesse de pointe (au-delà, il lève le pied) ; à 1, rien ne le retient ;
-// - le freinage : la part du freinage le plus fort sur laquelle il compte pour arriver au virage (la
-//   référence compte sur 80 % ; plus bas, il freine plus tôt) ;
+// Le niveau (src/data/adversaires.ts, au menu) règle, mesuré par tests/unit/adversaire.test.ts :
+// - l'allure a : il vise a × la vitesse que ses pneus tiennent sur sa trajectoire (adhérence × a² × audace) et
+//   a × sa vitesse de pointe (au-delà, il lève le pied) ; jamais moins, en virage, que la référence ;
+// - le freinage : la part du freinage le plus fort qu'il prévoit et qu'il applique (bas : il freine tôt, en
+//   douceur) ;
+// - l'audace (voir plus haut) : 1, il freine pour ses pneus ; 100, il ne freine pour aucun virage ;
 // - l'irrégularité : d'une section de route à l'autre (`ReglagePilotage.section` m), son allure baisse de 0 à
 //   `irregularite` (bruit déterministe tiré de l'abscisse et de l'adversaire, lissé) : il rate un peu un
 //   virage, jamais le même partout, toujours pareil d'une course à l'autre. Jamais au-dessus de son niveau.
-// Au niveau le plus dur (allure 1, freinage 0,8, régulier), il court exactement la conduite de référence de son
-// véhicule. Pas d'élastique : il ne regarde jamais le joueur pour régler son allure. Sous la pluie et sur la
-// neige, il freine pour l'adhérence de la météo, comme la référence. Aucun hasard, aucune allocation par image.
+// Pas d'élastique : il ne regarde jamais le joueur pour régler son allure. Sous la pluie et sur la neige, il
+// freine pour l'adhérence de la météo, comme la référence. Aucun hasard, aucune allocation par image.
 //
 // NOS (niveau `nos` > 0 : Normal et Difficile) : la même poussée que le joueur, par la même entrée du pilote
 // (`DriveInput.nos`, sa propre réserve), envoyée en sortie de virage, au début de chaque ligne droite de sa
@@ -23,7 +30,7 @@
 // réserve se vide et se recharge comme celle du joueur : il n'en a pas pour toutes les lignes droites.
 
 import type { DriveInput, DriveMotion, RailPose } from '../contrat.ts';
-import { PILOT, type PilotWithProfile } from '../pilote.ts';
+import { PILOT, sampleLine, type PilotWithProfile } from '../pilote.ts';
 import { createPose } from '../rail.ts';
 import { SIMULATION, vitesseTenable } from '../simulationCourse.ts';
 import type { NiveauDuel, ReglagePilotage } from '../../data/adversaires.ts';
@@ -91,6 +98,26 @@ export function variationAllure(s: number, longueurSection: number, graine: numb
   const a = sections > 0 ? k % sections : k;
   const b = sections > 0 ? (k + 1) % sections : k + 1;
   return bruitSection(a, graine) * (1 - t) + bruitSection(b, graine) * t;
+}
+
+/**
+ * Comme `vitesseTenable` (src/drive/simulationCourse.ts), sur la courbure de SA trajectoire (`pilot.line`) au lieu
+ * de celle de la route : la route dessinée a des cassures (carrefours, cordes de 4 m) que la trajectoire efface.
+ */
+export function vitesseTenableLigne(pilot: PilotWithProfile, s: number, v: number, grip: number, frein: number): number {
+  const { rail, line } = pilot;
+  const portee = (v * v) / (2 * frein) + v * SIMULATION.reaction + 10;
+  let tenable = Infinity;
+  for (let d = 0; d <= portee; d += SIMULATION.regard) {
+    let at = s + d;
+    if (rail.loop) at = ((at % rail.length) + rail.length) % rail.length;
+    else if (at > rail.length) break;
+    const k = Math.abs(sampleLine(line.curvature, line, at));
+    if (k < 1e-5) continue;
+    const vIci = Math.sqrt(grip / k + 2 * frein * Math.max(0, d - v * SIMULATION.reaction));
+    if (vIci < tenable) tenable = vIci;
+  }
+  return tenable;
 }
 
 export interface PiloteAdversaire {
@@ -173,11 +200,21 @@ export function pasAdversaire(p: PiloteAdversaire, dt: number, tenu: boolean): D
   if (p.depuisDecision >= SIMULATION.dt && !tenu) {
     p.depuisDecision = 0;
     const v = pilot.motion.speed;
-    const grip = pilot.performance.grip * pilot.adherence * SIMULATION.marge * a * a;
-    const frein = PILOT.manual.brake * pilot.adherence * n.freinage;
-    const freine = v > vitesseTenable(pilot, pilot.motion.s, v, grip, frein, p.pose);
+    const s = pilot.motion.s;
+    const grip = pilot.performance.grip * pilot.adherence * SIMULATION.marge;
+    const frein = PILOT.manual.brake * pilot.adherence;
+    // Il freine le plus tard possible : seulement si la conduite de référence freinerait ici, ET si sa
+    // trajectoire, à son allure et à son audace, l'exige (la plus haute des deux vitesses tenables).
+    // À côté du joueur (un côté choisi, src/drive/adversaire/contact.ts), il ne joue pas avec le bord.
+    const audace = p.lane === 0 ? n.audace : Math.min(1, n.audace);
+    const route = vitesseTenable(pilot, s, v, grip, frein * SIMULATION.frein, p.pose);
+    const tenable = audace > 0 ? Math.max(route, vitesseTenableLigne(pilot, s, v, grip * audace, frein * n.freinage)) : route;
+    const freine = v > tenable;
     const pointe = a < 1 && v >= (a * pilot.performance.topKmh) / 3.6;
-    p.input.throttle = freine || pointe ? 0 : 1;
+    // Sous son allure, il accélère moins fort (le gaz à a).
+    p.input.throttle = freine || pointe ? 0 : a;
+    // À fond quand il freine, comme la référence (le frein monte en une demi-seconde : à coups d'un dixième, il
+    // ne mord qu'en partie ; la vitesse de passage de la référence, c'est ce qu'elle roule ainsi).
     p.input.brake = freine ? 1 : 0;
   }
   p.input.lane = p.lane;

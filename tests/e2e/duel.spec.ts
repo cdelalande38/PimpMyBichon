@@ -242,6 +242,68 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
     await photo(page, '14-quinconce-portrait');
   });
 
+  // Vague W (duel4), sur demande : le pilote de l'adversaire, de près, aux feux, en paysage : la moto de Lulu puis la
+  // Cox de Dédé, côte à côte sur la route large.
+  for (const adversaire of ['lulu', 'dede'] as const) {
+    test(`pilote de l'adversaire (${adversaire}), de près, en paysage`, async ({ page }) => {
+      test.skip(!CAPTURES, 'captures de revue sur demande (PMB_CAPTURES_DUEL)');
+      test.setTimeout(400_000);
+      await openApp(page);
+      await waitForScene(page);
+      await openEntry(page, ENTREE_SORTIE);
+      await choisirCarte(page, /Miami/);
+      await choisirDepart(page, /41e rue/);
+      await auSec(page);
+      await choisirDuel(page, adversaire, 'normal');
+      await page.setViewportSize(PAYSAGE);
+      await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
+      await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
+      await commencerCourse(page);
+      await expect(stage(page)).toHaveAttribute('data-duel-verdict', 'non', { timeout: DELAI_ROUTE });
+      await page.waitForTimeout(4000);
+      await photo(page, `15-pilote-${adversaire}-paysage`);
+    });
+  }
+
+  // Vague W (duel4), sur demande : la moto de Lulu en Normal au premier angle droit d'Ocean Drive (vers 1 175 m),
+  // suivie de près par la sportive du joueur (gaz dosé) ; sa vitesse est dans le nom de la capture.
+  test('la moto de l’adversaire au premier angle droit, en paysage', async ({ page }) => {
+    test.skip(!CAPTURES, 'captures de revue sur demande (PMB_CAPTURES_DUEL)');
+    test.setTimeout(600_000);
+    await openApp(page);
+    await waitForScene(page);
+    await prendreVehicule(page, 'sportive');
+    await openEntry(page, ENTREE_SORTIE);
+    await choisirCarte(page, /Miami/);
+    await choisirDepart(page, /Ocean Drive/);
+    await auSec(page);
+    await choisirDuel(page, 'lulu', 'normal');
+    await page.setViewportSize(PAYSAGE);
+    await sortirEnDuel(page);
+    await expect(stage(page)).toHaveAttribute('data-depart', 'parti', { timeout: DELAI_ROUTE });
+    const lacher = await tenirLeGaz(page);
+    const zone = (await page.locator('.drive-mid').boundingBox())!;
+    const gaz = (px: number) => page.mouse.move(zone.x + zone.width / 2, zone.y + zone.height * 0.6 - px, { steps: 2 });
+    const lire = () => stage(page).evaluate((el) => ({ devant: Number(el.dataset.duelDevant), s: Number(el.dataset.duelS), v: Number(el.dataset.duelVitesse) }));
+    const debut = await tempsDeRoute(page);
+    const horloge = Date.now();
+    let vu = 0;
+    while ((await tempsDeRoute(page)) - debut < 90 && Date.now() - horloge < 400_000 && vu < 2) {
+      const v = await lire();
+      if (v.s >= 1150 + vu * 25 && v.s <= 1200 && v.devant > 0) {
+        await photo(page, `16-moto-virage-${vu + 1}-${v.v}kmh-paysage`);
+        vu += 1;
+        continue;
+      }
+      if (v.s > 1200) break;
+      // Trop près ou devant elle : un filet de frein ; loin : plein gaz.
+      await gaz(v.devant < 6 ? -25 : v.devant < 12 ? 0 : v.devant > 25 ? 70 : 35);
+      await page.waitForTimeout(150);
+    }
+    if (vu === 0) await photo(page, '16-moto-virage-paysage-manque');
+    await lacher();
+  });
+
   // Vague W, sur demande : la sportive du joueur contre la Comète (la même) en Difficile sur la route large, plein
   // gaz jusqu'à 25 m d'avance, puis un filet de gaz : la Comète revient et le double (côte à côte) ; enfin, le
   // joueur la suit de près (gaz dosé) et elle envoie son NOS assez près pour qu'on voie ses flammes. Si l'un des

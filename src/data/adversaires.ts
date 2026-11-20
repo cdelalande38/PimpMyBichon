@@ -41,6 +41,12 @@ export interface NiveauDuel {
   irregularite: number;
   /** NOS : il l'envoie en sortie de virage, au début de chaque ligne droite d'au moins tant de mètres ; 0 : jamais. */
   nos: number;
+  /**
+   * Combien il s'appuie sur le bord en virage, 1 à 100 : il vise √audace fois la vitesse que tiennent ses pneus, et
+   * le bord frotté fait le reste, comme le joueur qui ne freine pas (src/drive/pilote.ts). 1 : il freine pour ses
+   * pneus ; 100 : il ne freine pour aucun virage.
+   */
+  audace: number;
 }
 
 export interface ReglagePilotage {
@@ -78,6 +84,12 @@ export interface ReglageSon {
   derriere: number;
 }
 
+/** Son pilote (src/drive/scene/adversaire.tsx) : le conducteur du joueur, une passe de sa tenue teintée de sa couleur. */
+export interface ReglagePilote {
+  /** Passe du conducteur (catalogue, public/assets/shared/conducteur/catalogue.json) teintée ; `null` : aucune. */
+  passe: string | null;
+}
+
 export interface FichierAdversaires {
   adversaires: readonly Adversaire[];
   niveaux: readonly NiveauDuel[];
@@ -85,6 +97,7 @@ export interface FichierAdversaires {
   pilotage: ReglagePilotage;
   contact: ReglageContact;
   son: ReglageSon;
+  pilote: ReglagePilote;
 }
 
 const MEDAILLES: readonly Medaille[] = ['bronze', 'argent', 'or'];
@@ -96,12 +109,13 @@ const nombre = (value: unknown, min: number, max: number): value is number => ty
 const PILOTAGE_DEFAUT: ReglagePilotage = { section: 140, nosRayon: 250, nosDepart: 150 };
 const CONTACT_DEFAUT: ReglageContact = { garde: 0.3, approche: 6, relache: 12, ecartParSeconde: 3, frottement: 2, cedeParSeconde: 6 };
 const SON_DEFAUT: ReglageSon = { niveau: 0.5, proche: 6, portee: 150, derriere: 1800 };
+const PILOTE_DEFAUT: ReglagePilote = { passe: null };
 const objet = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 
 /** Valide le fichier des adversaires d'après le catalogue des véhicules. */
 export function lireAdversaires(raw: unknown, vehicules: readonly Pick<VehicleManifest, 'id'>[]): FichierAdversaires & { problemes: string[] } {
   const where = 'public/assets/adversaires/adversaires.json';
-  const vide = { adversaires: [], niveaux: [], niveauParDefaut: '', pilotage: PILOTAGE_DEFAUT, contact: CONTACT_DEFAUT, son: SON_DEFAUT };
+  const vide = { adversaires: [], niveaux: [], niveauParDefaut: '', pilotage: PILOTAGE_DEFAUT, contact: CONTACT_DEFAUT, son: SON_DEFAUT, pilote: PILOTE_DEFAUT };
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { ...vide, problemes: [`${where} : ce n’est pas un objet`] };
   const source = raw as Record<string, unknown>;
   const problemes: string[] = [];
@@ -141,8 +155,9 @@ export function lireAdversaires(raw: unknown, vehicules: readonly Pick<VehicleMa
     if (!nombre(n.freinage, 0.4, 0.9)) problemes.push(`${ici} : freinage entre 0,4 et 0,9`);
     if (!nombre(n.irregularite, 0, 0.1)) problemes.push(`${ici} : irregularite entre 0 et 0,1`);
     if (n.nos !== 0 && !nombre(n.nos, 50, 3000)) problemes.push(`${ici} : nos 0 (jamais) ou entre 50 et 3 000 m`);
+    if (!nombre(n.audace, 0, 100)) problemes.push(`${ici} : audace entre 0 et 100`);
     if (problemes.length === avant) {
-      niveaux.push({ id: n.id as string, label: (n.label as string).trim(), phrase: (n.phrase as string).trim(), gains: n.gains as Medaille, allure: n.allure as number, freinage: n.freinage as number, irregularite: n.irregularite as number, nos: n.nos as number });
+      niveaux.push({ id: n.id as string, label: (n.label as string).trim(), phrase: (n.phrase as string).trim(), gains: n.gains as Medaille, allure: n.allure as number, freinage: n.freinage as number, irregularite: n.irregularite as number, nos: n.nos as number, audace: n.audace as number });
     }
   });
   if (!niveaux.some((n) => n.id === source.niveauParDefaut)) problemes.push(`${where} : niveauParDefaut doit nommer un niveau`);
@@ -156,6 +171,8 @@ export function lireAdversaires(raw: unknown, vehicules: readonly Pick<VehicleMa
   if (!nombre(c.frottement, 0, 10) || !nombre(c.cedeParSeconde, 0.5, 20)) problemes.push(`${where} : contact.frottement (0 à 10 m/s²) et contact.cedeParSeconde (0,5 à 20 m/s)`);
   const son = objet(source.son);
   if (!nombre(son.niveau, 0, 1) || !nombre(son.proche, 1, 50) || !nombre(son.portee, 20, 1000) || (son.portee as number) <= (son.proche as number) || !nombre(son.derriere, 300, 20000)) problemes.push(`${where} : son.niveau (0 à 1), son.proche (1 à 50 m), son.portee (20 à 1 000 m, au-delà de proche), son.derriere (300 à 20 000 Hz)`);
+  const pilote = objet(source.pilote);
+  if (pilote.passe !== undefined && (typeof pilote.passe !== 'string' || !/^[a-z]{2,24}$/.test(pilote.passe))) problemes.push(`${where} : pilote.passe, l'id d'une passe du conducteur`);
   if (problemes.length > 0) return { ...vide, problemes };
   return {
     adversaires,
@@ -164,6 +181,7 @@ export function lireAdversaires(raw: unknown, vehicules: readonly Pick<VehicleMa
     pilotage: { section: p.section as number, nosRayon: p.nosRayon as number, nosDepart: p.nosDepart as number },
     contact: { garde: c.garde as number, approche: c.approche as number, relache: c.relache as number, ecartParSeconde: c.ecartParSeconde as number, frottement: c.frottement as number, cedeParSeconde: c.cedeParSeconde as number },
     son: { niveau: son.niveau as number, proche: son.proche as number, portee: son.portee as number, derriere: son.derriere as number },
+    pilote: { passe: typeof pilote.passe === 'string' ? pilote.passe : null },
     problemes,
   };
 }
@@ -178,6 +196,7 @@ export const NIVEAUX_DUEL: readonly NiveauDuel[] = LECTURE.niveaux;
 export const PILOTAGE_ADVERSAIRE: ReglagePilotage = LECTURE.pilotage;
 export const CONTACT_ADVERSAIRE: ReglageContact = LECTURE.contact;
 export const SON_ADVERSAIRE: ReglageSon = LECTURE.son;
+export const PILOTE_ADVERSAIRE: ReglagePilote = LECTURE.pilote;
 /** Ce qui fait refuser le fichier (vide quand tout va bien). */
 export const PROBLEMES_ADVERSAIRES: readonly string[] = LECTURE.problemes;
 

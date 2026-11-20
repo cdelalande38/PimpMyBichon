@@ -15,15 +15,17 @@ import { MAPS, validateRoute } from '../../src/data/maps.ts';
 import { vehicleById, VEHICLES } from '../../src/data/vehicles.ts';
 import type { DriveInput, Weather } from '../../src/drive/contrat.ts';
 import { armerDepart, createDepart, pasDepart } from '../../src/drive/depart.ts';
-import { createPilot, laneLimits, performanceDe } from '../../src/drive/pilote.ts';
+import { createPilot, laneLimits, performanceDe, PILOT, type PilotWithProfile } from '../../src/drive/pilote.ts';
 import { createPose, createRail } from '../../src/drive/rail.ts';
-import { piloteDeSimulation, simulerCourse } from '../../src/drive/simulationCourse.ts';
+import { piloteDeSimulation, SIMULATION, simulerCourse } from '../../src/drive/simulationCourse.ts';
 import { hautFaitDuel } from '../../src/drive/adversaire/cloture.ts';
 import { coteLibre, createContact, devant, pasContact, recouvrement, type CorpsRoute } from '../../src/drive/adversaire/contact.ts';
 import { adversaireAMesure, DuelEnCourse, grilleDepart, trempe, type CorpsGrille, type Grille } from '../../src/drive/adversaire/course.ts';
 import { armerDuel, chronoA, createDuel, pasDuel, PAS_RELEVES } from '../../src/drive/adversaire/duel.ts';
 import { bruitSection, createPiloteAdversaire, graineDe, pasAdversaire, remettreAdversaire, variationAllure } from '../../src/drive/adversaire/pilotage.ts';
 import { simulerAdversaire } from '../../src/drive/adversaire/simulation.ts';
+import { measureSeating } from '../../src/scene/vehicle/conducteur.ts';
+import { storedModel } from './places-modeles.ts';
 
 const built = MAPS.filter((map) => existsSync(`public/assets/maps/${map.id}/${map.route}`));
 const routes = new Map<string, MapRoute>();
@@ -47,6 +49,7 @@ describe('données des adversaires', () => {
       expect(NIVEAUX_DUEL[i]!.allure).toBeGreaterThan(NIVEAUX_DUEL[i - 1]!.allure);
       expect(NIVEAUX_DUEL[i]!.freinage).toBeGreaterThan(NIVEAUX_DUEL[i - 1]!.freinage);
       expect(NIVEAUX_DUEL[i]!.irregularite).toBeLessThanOrEqual(NIVEAUX_DUEL[i - 1]!.irregularite);
+      expect(NIVEAUX_DUEL[i]!.audace).toBeGreaterThanOrEqual(NIVEAUX_DUEL[i - 1]!.audace);
     }
     // Le plus dur court la conduite de référence : pleine allure, le freinage de la référence, régulier.
     expect(plusDur()).toMatchObject({ allure: 1, freinage: 0.8, irregularite: 0 });
@@ -122,16 +125,16 @@ function adversaireSimule(mapId: string, vehicule: string, niveau: NiveauDuel, i
 }
 
 describe('il court : niveaux mesurés hors navigateur', () => {
-  it.skipIf(built.length === 0)('le plus dur, sans son NOS, roule la conduite de référence de son véhicule, au dixième de seconde, et frôle le bord autant qu’elle', { timeout: 300_000 }, () => {
+  it.skipIf(built.length === 0)('le plus dur, sans son NOS, jamais plus lent que la conduite de référence de son véhicule, jamais hors de la chaussée', { timeout: 300_000 }, () => {
     for (const map of built) {
       const start = plusCourt(map.id);
       for (const v of VEHICLES) {
         const sim = simulerAdversaire(adversaireSimule(map.id, v.id, { ...plusDur(), nos: 0 }), start.at, 1, 'sec');
         const ref = simulerCourse(piloteDeSimulation(route(map.id), performanceDe(v)), { at: start.at, tours: 1, meteo: 'sec', conduite: 'main' });
         const ici = `${map.id}/${start.id}/${v.id}`;
-        expect(sim.temps, ici).toBeCloseTo(ref.temps, 0);
+        // Il ne freine que là où elle freinerait, et seulement si sa trajectoire l'exige ; il frotte le bord à dessein.
+        expect(sim.temps, ici).toBeLessThanOrEqual(ref.temps + 0.1);
         expect(sim.dehors, ici).toBe(0);
-        expect(sim.contacts, ici).toBeLessThanOrEqual(ref.contacts + 5);
       }
     }
   });
@@ -147,9 +150,9 @@ describe('il court : niveaux mesurés hors navigateur', () => {
           expect(t.dehors, ici).toBe(0);
           // Même le plus facile court : bien plus vite que le pilote automatique de balade.
           expect(t.temps / ref.auto, ici).toBeLessThan(0.75);
-          // Et guère plus vite que la conduite de référence (son NOS lui fait gagner 2 % au plus).
-          expect(t.temps / ref.main, ici).toBeGreaterThan(0.97);
         }
+        // Le plus facile se bat en conduisant proprement : plus lent que la conduite de référence.
+        expect(temps[0]!.temps, ici).toBeGreaterThan(ref.main);
         for (let i = 1; i < temps.length; i += 1) expect(temps[i]!.temps, ici).toBeLessThan(temps[i - 1]!.temps);
         // Le plus facile : au plus un tiers de plus que la référence (de l'ordre de l'argent, 1,25).
         expect(temps[0]!.temps / ref.main, ici).toBeLessThan(1.4);
@@ -203,6 +206,123 @@ describe('il court : niveaux mesurés hors navigateur', () => {
       expect(deux.temps).toBe(un.temps);
     }
   });
+});
+
+// Vague W, 20 novembre 2026 : « au premier virage elle a freiné tellement que je l'ai dépassée sans souci ».
+/** Vitesse (m/s), chemin fait (m) et frein, pas à pas, de ce que `pilot` roule pendant `courir`. */
+function releve(pilot: PilotWithProfile, courir: () => void): { d: number[]; v: number[]; frein: number[] } {
+  const out = { d: [] as number[], v: [] as number[], frein: [] as number[] };
+  const step = pilot.step.bind(pilot);
+  let fait = 0;
+  pilot.step = (dt, input, kind) => {
+    const m = step(dt, input, kind);
+    fait += m.speed * dt;
+    out.d.push(fait);
+    out.v.push(m.speed);
+    out.frein.push(input.brake);
+    return m;
+  };
+  courir();
+  return out;
+}
+
+/** Les `n` premiers virages où la conduite de référence ralentit : chemin fait (m) et vitesse de passage (m/s). */
+function premiersVirages(r: { d: number[]; v: number[] }, n: number): { d: number; v: number }[] {
+  const out: { d: number; v: number }[] = [];
+  let haut = 0;
+  for (let i = 1; i < r.v.length - 1 && out.length < n; i += 1) {
+    haut = Math.max(haut, r.v[i]!);
+    if (r.v[i]! <= r.v[i - 1]! && r.v[i]! < r.v[i + 1]! && r.v[i]! < 0.92 * haut) {
+      out.push({ d: r.d[i]!, v: r.v[i]! });
+      haut = 0;
+    }
+  }
+  return out;
+}
+
+/** Le joueur qui ne freine jamais : direction assistée, plein gaz, sans NOS ; temps du vert à l'arrivée (s). */
+function pleinGaz(pilot: PilotWithProfile, at: number): number {
+  pilot.setWeather('sec');
+  pilot.setHold(false);
+  pilot.reset(at);
+  const etat = armerDepart(createDepart(), pilot.motion.s, pilot.rail.loop, false, 1);
+  etat.phase = 'parti';
+  etat.vert = true;
+  etat.depuisVert = Infinity;
+  const input: DriveInput = { auto: false, throttle: 1, brake: 0, lane: 0, assist: true };
+  for (let t = 0; t < 3600 && (etat.phase as string) !== 'arrive'; t += SIMULATION.dt) {
+    const m = pilot.step(SIMULATION.dt, input, pilot.performance.kind);
+    pasDepart(etat, SIMULATION.dt, true, m.s, pilot.rail, m.finished);
+  }
+  return (etat.phase as string) === 'arrive' ? etat.arrivee / 1000 : Infinity;
+}
+
+describe('il freine juste', () => {
+  it.skipIf(built.length === 0)('aux deux premiers virages de chaque carte, la moto ne freine jamais sous la vitesse de passage de la conduite de référence ; en Difficile, elle n’y freine pas', { timeout: 300_000 }, () => {
+    // Normal et Difficile : à un dixième de seconde de frein à fond près (le pas des décisions, celui de la référence).
+    const tolerance = PILOT.manual.brake * SIMULATION.dt;
+    for (const map of built) {
+      const start = route(map.id).starts[0]!;
+      for (const v of VEHICLES.filter((x) => x.kind === 'bike')) {
+        const pilot = piloteDeSimulation(route(map.id), performanceDe(v));
+        const ref = releve(pilot, () => simulerCourse(pilot, { at: start.at, tours: 1, meteo: 'sec', conduite: 'main', max: 90 }));
+        const virages = premiersVirages(ref, 2);
+        expect(virages.length, map.id).toBe(2);
+        for (const n of NIVEAUX_DUEL) {
+          const p = adversaireSimule(map.id, v.id, n);
+          const adv = releve(p.pilot, () => simulerAdversaire(p, start.at, 1, 'sec', 0.1, 90));
+          virages.forEach((virage, k) => {
+            // Son approche : 150 m avant, sans remonter au virage d'avant ; au-delà, il freine pour le suivant.
+            const debut = Math.max(virage.d - 150, k > 0 ? virages[k - 1]!.d : -Infinity);
+            const ici = `${map.id}/${start.id}/${v.id}/${n.id} à ${virage.d.toFixed(0)} m`;
+            // Vitesse la plus basse au virage, et au sortir d'un coup de frein dans son approche.
+            let min = Infinity;
+            let minFrein = Infinity;
+            for (let i = 0; i < adv.d.length; i += 1) {
+              const d = adv.d[i]!;
+              if (Math.abs(d - virage.d) <= 30) min = Math.min(min, adv.v[i]!);
+              if (d > debut && d <= virage.d && adv.frein[i]! > 0) minFrein = Math.min(minFrein, adv.v[i]!);
+            }
+            if (process.env.PMB_MESURES_VIRAGES) appendFileSync(process.env.PMB_MESURES_VIRAGES, `| ${ici} | réf ${(virage.v * 3.6).toFixed(0)} km/h | ${(min * 3.6).toFixed(0)} km/h | ${Number.isFinite(minFrein) ? `freine jusqu'à ${(minFrein * 3.6).toFixed(0)} km/h` : 'ne freine pas'} |\n`);
+            // Plus lent que la référence sans freiner (gaz et pointe de son allure, côte) : ce n'est pas son frein.
+            // Le Facile lit la route comme la référence, avec moins de gaz : il arrive moins vite, son frein mord
+            // mieux (il monte en une demi-seconde) ; à 10 % près.
+            expect(minFrein, ici).toBeGreaterThanOrEqual(n === NIVEAUX_DUEL[0] ? 0.9 * virage.v : virage.v - tolerance);
+            if (n === plusDur()) {
+              expect(minFrein, ici).toBe(Infinity);
+              expect(min, ici).toBeGreaterThanOrEqual(virage.v);
+            }
+          });
+        }
+      }
+    }
+  });
+
+  const OCEAN = { map: 'miami-beach', start: 'ocean-drive' };
+  it.skipIf(!built.some((m) => m.id === OCEAN.map))('en Difficile, il bat le joueur qui ne freine jamais sur Ocean Drive, à chaque véhicule ; le Facile reste derrière la conduite de référence', { timeout: 300_000 }, () => {
+    const at = route(OCEAN.map).starts.find((s) => s.id === OCEAN.start)!.at;
+    for (const v of VEHICLES) {
+      const joueur = pleinGaz(piloteDeSimulation(route(OCEAN.map), performanceDe(v)), at);
+      const difficile = simulerAdversaire(adversaireSimule(OCEAN.map, v.id, plusDur()), at, 1, 'sec');
+      const facile = simulerAdversaire(adversaireSimule(OCEAN.map, v.id, NIVEAUX_DUEL[0]!), at, 1, 'sec');
+      const ref = tempsReference(OCEAN.map, OCEAN.start, 'tour1', v.id)!;
+      if (process.env.PMB_MESURES_VIRAGES) appendFileSync(process.env.PMB_MESURES_VIRAGES, `| ocean-drive/${v.id} | plein gaz ${joueur.toFixed(1)} s | Difficile ${difficile.temps.toFixed(1)} s | Facile ${facile.temps.toFixed(1)} s | référence ${ref.main.toFixed(1)} s |\n`);
+      expect(difficile.temps, v.id).toBeLessThan(joueur);
+      expect(difficile.dehors, v.id).toBe(0);
+      expect(facile.temps, v.id).toBeGreaterThan(ref.main);
+    }
+  });
+});
+
+describe('son pilote', () => {
+  it.skipIf(!VEHICLES.every((v) => existsSync(`public/assets/vehicles/${v.id}/body.glb`)))('s’assoit sur chaque véhicule du catalogue sans habitacle posé (siège et jante par défaut sur les ancres)', async () => {
+    for (const v of VEHICLES) {
+      const model = await storedModel(v.id);
+      const { seating, pending } = measureSeating(model, model, v, true);
+      expect(pending, v.id).toBe(false);
+      expect(seating?.kind, v.id).toBe(v.kind);
+    }
+  }, 30_000); // cinq modèles chargés : plus de 5 s sur une machine chargée
 });
 
 // Mesures des modèles (boîtes des GLB construits) : le plus large (2,26 × 4,92 m), une voiture moyenne (1,64 ×

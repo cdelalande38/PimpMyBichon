@@ -4,10 +4,16 @@
 //
 // Allègement (budget du § 8 : un second véhicule ne double pas la scène) : le modèle du catalogue préparé
 // comme celui du joueur (roues à part pour tourner, feux arrière à lui), peint de sa couleur, sans
-// habitacle posé, sans conducteur, sans pièces montées, sans néons, sans flammes, sans capot ouvert ; une
+// habitacle posé, sans pièces montées, sans néons, sans flammes, sans capot ouvert ; une
 // ombre de contact rendue une fois (pas d'ombre portée par le soleil) ; caché de la sonde de reflets. De
 // nuit, ses feux arrière luisent (plus fort au freinage) et ses phares éblouissent de face (lueurs sans
 // lumière réelle : aucune lumière de plus dans la scène, aucune matière recompilée). Son moteur : src/drive/adversaire/son.ts.
+//
+// Son pilote (vague W, 20 novembre 2026 : « il manque un personnage sur les véhicules de duel ») : le conducteur du
+// joueur (src/scene/vehicle/conducteur.ts, même tenue, même pose au repos, moto comprise), assis sur les ancres de
+// son véhicule sans habitacle (siège et jante par défaut), une passe de sa tenue teintée de sa couleur
+// (`PILOTE_ADVERSAIRE.passe`). Figé : seule la caisse le penche et le roule. Deux à quatre appels de dessin (une
+// passe de matières chacun), rien par image une fois assis.
 //
 // NOS : quand il pousse (src/drive/adversaire/pilotage.ts), ses flammes bleues sortent de ses échappements et une
 // lueur bleue passe sur la chaussée derrière lui, par le rendu du NOS du joueur (src/drive/scene/nos.ts,
@@ -24,8 +30,10 @@ import type { Paint, VehicleManifest } from '../../data/vehicleTypes.ts';
 import { NOS_RENDU, NOS_SEUIL } from '../../data/nos.ts';
 import { ATMOSPHERE_LAYER } from '../../render/layers.ts';
 import { shadowSize, VehicleShadowRig } from '../../render/vehicleShadow.ts';
+import { PILOTE_ADVERSAIRE } from '../../data/adversaires.ts';
+import { measureSeating, mountDriver, seatDriver, unmountDriver, useDriverRig } from '../../scene/vehicle/conducteur.ts';
 import { compileHidden } from '../../scene/vehicle/flammes.ts';
-import { disposePrepared, paintZones, useVehicleWheels } from '../../scene/vehicle/VehicleModel.tsx';
+import { disposePrepared, paintZones, useVehicleWheels, type Prepared } from '../../scene/vehicle/VehicleModel.tsx';
 import type { DuelEnCourse } from '../adversaire/course.ts';
 import type { RailPose } from '../contrat.ts';
 import { createGlare } from './ciel.ts';
@@ -78,6 +86,32 @@ export function poserAdversaire(rig: DriveRig, duel: DuelEnCourse, pose: RailPos
   for (let i = 0; i < rig.tails.length; i += 1) (rig.tails[i] as { emissiveIntensity: number }).emissiveIntensity = rig.tailBase * k;
   rig.glareGain.value = phares;
   rig.group.updateMatrixWorld();
+}
+
+/** Le pilote de l'adversaire (voir l'en-tête), assis dès que son véhicule est mesuré ; `tenue` : sa couleur. */
+function usePiloteAdversaire(prepared: Prepared, vehicle: VehicleManifest, tenue: string): void {
+  const rig = useDriverRig(vehicle, true);
+  const essais = useRef(0);
+  useLayoutEffect(() => {
+    if (!rig) return undefined;
+    essais.current = 0;
+    const passe = rig.meshes.find((m) => m.name === `conducteur_${PILOTE_ADVERSAIRE.passe}`);
+    if (passe) (passe.material as MeshStandardMaterial).color.set(tenue);
+    return () => unmountDriver(rig);
+  }, [rig, prepared, tenue]);
+  useFrame(() => {
+    // Assis (ou renoncé après six essais espacés) : plus rien à faire.
+    if (!rig || rig.root.parent || essais.current > 60) return;
+    essais.current += 1;
+    if (essais.current % 10 !== 1) return;
+    const caisse = prepared.root.getObjectByName('caisse');
+    if (!caisse) return;
+    const started = performance.now();
+    const { seating } = measureSeating(prepared.root, caisse, vehicle, true);
+    if (!seating) return;
+    seatDriver(rig, seating);
+    mountDriver(rig, caisse, Math.round(performance.now() - started));
+  });
 }
 
 /** Ce que le modèle posé donne au moteur de la scène (moteur.ts, `setAdversaire`). */
@@ -143,6 +177,7 @@ export function DriveAdversaire({ duel, rig, bodyEnv, onModel }: Props) {
     [gltf, vehicle],
   );
   const peintures = useMemo(() => peinturesAdversaire(vehicle, duel.adversaire.couleur), [vehicle, duel.adversaire.couleur]);
+  usePiloteAdversaire(drive.prepared, vehicle, duel.adversaire.couleur);
   useLayoutEffect(() => paintZones(drive.prepared.zones, peintures, bodyEnv), [drive, peintures, bodyEnv]);
   const { stamp, spins } = useVehicleWheels(drive.prepared, vehicle, invalidate, { merge: false });
   const wheels = useMemo(() => rollingWheels(drive.prepared.root, spins, vehicle.kind), [drive, spins, vehicle.kind]);

@@ -2,13 +2,12 @@
 
 Document de passation, tenu à jour à chaque étape. Il dit, pour quelqu'un qui arrive à froid : ce que le commanditaire a demandé (avec ses mots), ce qui est en ligne, ce qui reste faux dans ce qui est livré, et ce qui vient. Le détail technique de chaque lot est dans le message de son commit ; les règles de travail sont dans `CLAUDE.md` ; le périmètre est dans `CAHIER_DES_CHARGES.md` (§ 5.5 pour la sortie, § 11 pour ce que la publication attend) ; les substituts et ce qui manque sont dans `TODO_ASSETS.md`.
 
-Dernière mise à jour : 20 novembre 2026, 7 h 30.
+Dernière mise à jour : 20 novembre 2026, 9 h.
 
 ## 1. Où on en est
 
-- **En ligne** : le NOS et le duel (`47be627`), vérifiés sur le site le 19 novembre à 22 h 54 ; poussés le 20 novembre à 7 h 30 : les fonds des écrans de chargement (ce commit), validés.
-- **En cours** : « duel4 » (agent Opus, lancé le 20 novembre à 7 h 25) : le freinage de l'adversaire au premier virage et son pilote.
-- Quota de la semaine à 93 % (retour le 25 novembre à 4 h) : « duel4 » est le dernier lot d'ici là.
+- **En ligne** : les fonds (`0dd9a7c`, publiés le 20 novembre à 7 h 30) ; poussé le 20 novembre à 9 h : « duel4 » (ce commit), validé.
+- **Aucun agent en vol.** Quota de la semaine à 94 % (retour le 25 novembre à 4 h) : plus aucun lot d'ici là. La file reprend au § 4 (rodéo, cartes, véhicules).
 
 ## 2. Journal des demandes
 
@@ -18,9 +17,10 @@ Dernière mise à jour : 20 novembre 2026, 7 h 30.
 |---|---|---|
 | « Direction à renommer en conduite assistée » | Le réglage s'appelle « Conduite assistée », choix « Oui » et « Non » | `59b38d2` |
 | « il faudra revoir les distances de circuit annoncés dans les menu ca affiche 0km parfois c'est juste pas possible » | Chaque départ affichait sa borne kilométrique (« km 0,0 » pour le premier) : il dit maintenant la distance jusqu'à l'arrivée, ou la longueur du tour sur un circuit | `59b38d2` |
+| « au premier virage elle a freiné tellement que je l'ai dépassée sans souci. J'ai même cru qu'elle était à l'arrêt. Aussi il manque un personnage sur les véhicules de duel » (20 novembre, après essai) | L'adversaire ne freine plus avant la conduite de référence ; nouveau réglage « audace » par niveau (Difficile : il ne lève pas le pied, comme un joueur plein gaz) ; il a un pilote, du même modèle que le joueur, à la tenue teintée de sa couleur | (ce commit) |
 | « un élément à fixer ca sera pour la configuration des stickers j'ai l'impression qu'on a pas toutes les options visibles par exemple je peux pas en supprimer » | Les gestes du sticker (dont « Supprimer » et « Curseurs ») étaient au bout d'une rangée qui défilait de côté, hors de l'écran : ils ont leur propre rangée, qui passe à la ligne | `7b4f566` |
 | « les préparation moteur ca doit etre payant » | Chaque option de la fiche de préparation (hors « Origine ») est un article, valable pour tous les véhicules : Stage 1 à 3 à 120, 220, 350 $ ; carburation à 80, 160, 260 $ ; nitro à 100, 200, 320 $. Une option déjà montée dans une sauvegarde reste montée et agit ; elle garde son cadenas (règle commune des panneaux) | `215b80d` |
-| « pour les écrans de chargement il faudra générer des fonds (fond général de chargement de l'application, fond pour chaque lieux de courses) » | Des rendus de nos propres scènes par le jeu (son choix), de nuit, chaussée mouillée : le garage néon au lancement, une vue par carte au chargement de la sortie, en portrait et en paysage ; outil `npm run fonds:build` ; versés après son accord (« Envoi », 20 novembre) | (ce commit) |
+| « pour les écrans de chargement il faudra générer des fonds (fond général de chargement de l'application, fond pour chaque lieux de courses) » | Des rendus de nos propres scènes par le jeu (son choix), de nuit, chaussée mouillée : le garage néon au lancement, une vue par carte au chargement de la sortie, en portrait et en paysage ; outil `npm run fonds:build` ; versés après son accord (« Envoi », 20 novembre) | `0dd9a7c` |
 | « traite les reste du del en prio puis NOS puis rodéo puis cartes puis vehicules » | Duel : plus de saut au contact, on double partout où il y a la place, l'adversaire a le son de son moteur (spatialisé) et envoie son NOS en Normal et Difficile | `47be627` |
 | (même demande) | NOS : flammes pour le concept et le van, un vrai dard vu de dos, des traits de vitesse lisibles de jour, une poussée qui se sent sur chaque véhicule (la Cox 60 → 92 km/h en 3 s) | `65b28a9` |
 
@@ -65,7 +65,7 @@ Les demandes plus anciennes (menu par étapes, carrière, gains, préparation, v
 
 Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : tout a été vérifié en rendu logiciel.
 
-- **Duel** : le moteur de l'adversaire n'a jamais été écouté (seuls les gains sont testés) ; ses flammes de NOS n'ont pas été capturées ; au départ côte à côte il part contre son bord ; quand le contact cesse, le joueur repoussé revient vers sa trajectoire à 3 m/s au plus ; sur route étroite, les caisses peuvent se chevaucher de quelques centimètres pendant que l'une cède ; le Difficile semble battable plein gaz sans freiner sur Ocean Drive (10 s d'avance après 43 s) : à mesurer ; en portrait, la quinconce cache l'adversaire derrière le van.
+- **Duel** : le moteur de l'adversaire n'a jamais été écouté (seuls les gains sont testés) ; ses flammes de NOS n'ont pas été capturées ; au départ côte à côte il part contre son bord ; quand le contact cesse, le joueur repoussé revient vers sa trajectoire à 3 m/s au plus ; sur route étroite, les caisses peuvent se chevaucher de quelques centimètres pendant que l'une cède ; le Difficile semble battable plein gaz sans freiner sur Ocean Drive (10 s d'avance après 43 s) : à mesurer ; en portrait, la quinconce cache l'adversaire derrière le van. Trouvé le 20 novembre : frotter le bord ralentit le joueur d'environ 10 g (`bordLibre`, src/drive/pilote.ts), plus fort qu'un frein, donc ne jamais freiner est la meilleure conduite ; le Difficile ne bat le joueur plein gaz que de 0,7 s en sportive sur Ocean Drive (grâce à son NOS) : à trancher, durcir le bord ou laisser ; le Normal est plus dur qu'avant (0,8 à 0,99 fois la référence) ; le pilote de l'adversaire est figé (le guidon braque sous des mains immobiles) et se voit mal dans la Cox.
 - **Drift** : sans coup sec sur le frein, seul le concept glisse, et sous la pluie seulement ; les paliers des médailles ont bougé de −39 % à +59 % au dernier recalcul et l'or reste calé sur un pilote simulé ; Monaco est étroit pour glisser ; en portrait la ligne d'aide touche la mini-carte ; pas de record de score par carte.
 - **NOS** : le concept et le van n'ont pas d'embout d'échappement modelé (le dard sort de sous le bouclier) et le van a deux sorties ; vu de dos en paysage, le dard reste petit ; de jour contre le ciel, les traits restent discrets ; la poussée plus forte rend un record au NOS plus facile, et sous NOS les roues patinent un peu plus au départ par temps de pluie ou de neige.
 - **Néons** : les arcs des roues sont un liseré fin, presque caché quand le pneu remplit l'arche ; celui du van se voit à peine (sa voûte modelée est plus basse que le jeu déclaré : réglage `wheels.gap` à décider) ; les cercles des motos ne braquent pas avec la fourche ; la lueur reste à plat et n'a pas été vue contre un trottoir de ville ; LED d'habitacle invisibles en caméra embarquée ; ciel étoilé du concept jamais vu à l'image ; pulsation sur la musique (§ 5.4) pas faite.

@@ -796,6 +796,7 @@ export class DriveEngine {
         putData(stage, 'duelGrille', this.duel.grille.mode);
         putData(stage, 'duelDevant', String(Math.round(devant(motion.s, this.duel.pilote.pilot.motion.s, this.rail.length, this.rail.loop) * 10) / 10));
         putData(stage, 'duelCote', String(Math.round((this.duel.offset - motion.offset) * 10) / 10));
+        putData(stage, 'duelVitesse', String(Math.round(this.duel.pilote.vitesse * 3.6)));
       }
     }
   }

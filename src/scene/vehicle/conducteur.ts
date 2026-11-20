@@ -338,8 +338,10 @@ function room(cast: Cast, seat: Vec3, floor: number): { toeBoard: [number, numbe
 /**
  * Où s'assoit le conducteur, mesuré dans le modèle posé (`model` : le véhicule ; `frame` : la caisse,
  * repère du véhicule au repos). `pending` : une pièce attendue (siège, volant) n'est pas encore posée.
+ * `sansHabitacle` (l'adversaire du duel, src/drive/scene/adversaire.tsx) : rien ne sera posé ; siège et jante
+ * par défaut sur les ancres.
  */
-export function measureSeating(model: Object3D, frame: Object3D, vehicle: VehicleManifest): { seating: Seating | null; pending: boolean } {
+export function measureSeating(model: Object3D, frame: Object3D, vehicle: VehicleManifest, sansHabitacle = false): { seating: Seating | null; pending: boolean } {
   model.updateWorldMatrix(true, true);
   const toWorld = (p: Vector3) => p.clone().applyMatrix4(frame.matrixWorld);
   const turn = frame.getWorldQuaternion(new Quaternion());
@@ -379,25 +381,25 @@ export function measureSeating(model: Object3D, frame: Object3D, vehicle: Vehicl
   if (view.seat && seatAnchor && steeringAnchor) {
     const seatPose = seatAnchor.children.find((child) => child.name === POSED);
     const wheelPose = steeringAnchor.children.find((child) => child.name === POSED);
-    if (!seatPose || !wheelPose) return { seating: null, pending: true };
+    if ((!seatPose || !wheelPose) && !sansHabitacle) return { seating: null, pending: true };
     const at = inFrame(seatAnchor, frame).at;
     // Mesure du siège posé (comme l'œil de la vue intérieure).
     const box = new Box3();
     const inverse = new Matrix4().copy(frame.matrixWorld).invert();
     const v = new Vector3();
-    seatPose.updateWorldMatrix(true, true);
-    seatPose.traverse((object) => {
+    seatPose?.updateWorldMatrix(true, true);
+    seatPose?.traverse((object) => {
       if (!(object instanceof Mesh)) return;
       const position = (object.geometry as BufferGeometry).getAttribute('position');
       const m = new Matrix4().multiplyMatrices(inverse, object.matrixWorld);
       for (let i = 0; i < position.count; i += 1) box.expandByPoint(v.fromBufferAttribute(position, i).applyMatrix4(m).sub(at));
     });
-    const metrics = box.isEmpty()
+    const metrics = box.isEmpty() || !seatPose
       ? DEFAULT_SEAT
       : seatMetrics((origin, direction) => cast(new Vector3(at.x + origin[0], at.y + origin[1], at.z + origin[2]), new Vector3(...direction), [seatPose], () => false), { min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] }, view.seat.up);
     const seat: Vec3 = [at.x + metrics.backFront + P.seatAhead, at.y + metrics.cushion - 0.005, at.z];
     const wheel = inFrame(steeringAnchor, frame);
-    const radius = rimRadius(wheelPose, steeringAnchor);
+    const radius = wheelPose ? rimRadius(wheelPose, steeringAnchor) : DRIVER_POSE.carWithoutAnchors.wheel.radius;
     const floor = vehicle.interior?.clearance?.floor ?? (() => {
       const d = cast(new Vector3(seat[0] + 0.45, seat[1], seat[2]), new Vector3(0, -1, 0));
       return d === null ? 0 : seat[1] - d;
