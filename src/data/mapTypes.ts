@@ -54,6 +54,20 @@ export type MapManifest = {
   /** Fichier de la route, produit par tools/maps/, relatif au dossier de la carte : « route.json ». */
   route: string;
   credits: MapCredit[];
+  /**
+   * Fond de l'écran de chargement de la sortie : un rendu de la carte par le jeu lui-même (npm run
+   * fonds:build, tools/fonds/), un fichier par orientation, relatif au dossier de la carte. Absent,
+   * l'écran garde son fond uni.
+   */
+  fond?: MapBackdrop;
+};
+
+/** Fond d'un écran de chargement, une image par orientation (WebP, 250 Kio au plus). */
+export type MapBackdrop = {
+  /** Téléphone couché : 1920 × 1080. */
+  paysage: string;
+  /** Téléphone debout : 1080 × 1920. */
+  portrait: string;
 };
 
 /** Ce qui porte la chaussée sur une section du parcours. */

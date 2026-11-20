@@ -24,6 +24,43 @@
   opacity: 0;
 }
 
+/* Fond rendu par le jeu (FondChargement, tools/fonds/) : sous le texte (z-index négatif dans la pile de
+   l'écran), il arrive en fondu une fois chargé. Un voile de nuit monte du bas et devient presque opaque
+   à --voile (depuis le haut de l'écran), un peu au-dessus du texte : contraste de 4,5 pour 1 au moins,
+   mesuré par tests/e2e/fonds.spec.ts. Aucun mouvement de l'image. */
+.fond-chargement {
+  --voile: 60%;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 500ms ease-out;
+}
+
+.fond-chargement[data-vu] {
+  opacity: 1;
+}
+
+.fond-chargement img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fond-chargement::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgb(10 9 17 / 10%) 0%,
+    rgb(10 9 17 / 25%) calc(var(--voile) - 18%),
+    rgb(10 9 17 / 92%) var(--voile),
+    var(--night) 100%
+  );
+}
+
 .tuto-chargement-bas {
   display: flex;
   flex-direction: column;
@@ -172,6 +209,13 @@
 
   .tuto-marque b {
     font-size: 2.25rem;
+  }
+}
+
+/* Paysage, garage à l'écran : le texte du lancement est centré (src/app/paysage.css), le voile aussi. */
+@media (orientation: landscape) and (max-height: 540px) {
+  body:has(.app > .dock) .tuto-chargement .fond-chargement::after {
+    background: radial-gradient(ellipse 45% 40% at 50% 48%, rgb(10 9 17 / 92%) 75%, rgb(10 9 17 / 15%) 100%);
   }
 }
 
@@ -443,6 +487,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tuto-chargement,
+  .fond-chargement,
   .tuto-barre i {
     transition: none;
   }

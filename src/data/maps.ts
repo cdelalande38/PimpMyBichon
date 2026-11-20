@@ -17,6 +17,8 @@ const GROUNDS: readonly RailGround[] = ['sol', 'pont', 'tunnel'];
 const DATE = /^\d{4}-\d{2}$/;
 /** Nom de fichier relatif au dossier de la carte : ni « .. », ni chemin absolu, ni adresse. */
 const FILE = /^(?!.*\.\.)(?![/\\])[a-zA-Z0-9_./-]{1,128}$/;
+/** Image d'un fond d'écran de chargement. */
+const IMAGE = /\.(webp|avif)$/;
 
 type Raw = Record<string, unknown>;
 
@@ -56,6 +58,11 @@ export function validateMapManifest(raw: unknown, folder: string): MapManifest {
     }
   }
   if (typeof raw.route !== 'string' || !FILE.test(raw.route)) problems.push('route doit être un nom de fichier relatif au dossier de la carte');
+  if (raw.fond !== undefined) {
+    const fond = raw.fond;
+    const image = (value: unknown) => typeof value === 'string' && FILE.test(value) && IMAGE.test(value);
+    if (!isObject(fond) || !image(fond.paysage) || !image(fond.portrait)) problems.push('fond doit être { paysage, portrait } : deux images (.webp ou .avif) du dossier de la carte');
+  }
   if (!Array.isArray(raw.credits) || raw.credits.length === 0) {
     problems.push('credits : au moins une source à créditer (obligation de licence)');
   } else {

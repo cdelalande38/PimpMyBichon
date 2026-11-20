@@ -6,6 +6,7 @@
   "order": 4,
   "zone": { "id": "miami", "label": "Miami", "circuit": "Le front de mer" },
   "route": "route.json",
+  "fond": { "paysage": "fond-paysage-9b6c56ed.webp", "portrait": "fond-portrait-e97832c8.webp" },
   "credits": [
     { "source": "© les contributeurs d’OpenStreetMap (routes, bâtiments, eau, trait de côte, végétation, mobilier urbain, nature des commerces)", "licence": "ODbL 1.0", "date": "2026-11" }
   ]

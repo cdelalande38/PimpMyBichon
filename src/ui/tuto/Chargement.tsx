@@ -26,6 +26,37 @@ export const PATIENCE_MS = 10_000;
 export const GRACE_VEHICULE_MS = 3_000;
 const FONDU_MS = 450;
 
+/** Fond du lancement : le garage néon, rendu par le jeu lui-même (npm run fonds:build, tools/fonds/). */
+const FOND_GARAGE = {
+  paysage: `${import.meta.env.BASE_URL}assets/fonds/garage-paysage.webp`,
+  portrait: `${import.meta.env.BASE_URL}assets/fonds/garage-portrait.webp`,
+};
+
+/**
+ * Fond d'un écran de chargement (lancement, sortie) : une image par orientation, chargée en parallèle,
+ * qui arrive en fondu une fois là ; tant qu'elle manque, ou si elle ne vient pas, l'écran garde son
+ * fond uni. Un voile de nuit monte du bas sous le texte (tuto.css).
+ */
+export function FondChargement({ paysage, portrait }: { paysage: string; portrait: string }) {
+  // L'orientation choisie ici plutôt que par <picture> : React pose `src` avant d'insérer l'image, qui
+  // partirait chercher le paysage avant la source du portrait.
+  const debout = useMediaQuery('(orientation: portrait)');
+  const [vu, setVu] = useState(false);
+  const [rate, setRate] = useState(false);
+  if (rate) return null;
+  return (
+    <div className="fond-chargement" data-vu={vu || undefined}>
+      <img
+        src={debout ? portrait : paysage}
+        alt=""
+        // Décodée avant le fondu : sinon le fondu passerait sur une image pas encore peinte.
+        onLoad={(event) => void event.currentTarget.decode().then(() => setVu(true), () => setVu(true))}
+        onError={() => setRate(true)}
+      />
+    </div>
+  );
+}
+
 const ETAPES = [
   { nom: 'L’atelier', enCours: 'L’atelier se prépare' },
   { nom: 'Le garage', enCours: 'Le garage s’allume' },
@@ -116,6 +147,7 @@ export function Chargement({ sceneFailed }: { sceneFailed: boolean }) {
       aria-valuetext={faites >= ETAPES.length ? 'Tout est prêt' : `${courante.enCours}, étape ${faites + 1} sur ${ETAPES.length}`}
       aria-hidden={fini || undefined}
     >
+      <FondChargement {...FOND_GARAGE} />
       <div className="tuto-chargement-bas">
         <p className="tuto-marque">
           <span>Pimp my</span>

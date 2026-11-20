@@ -85,6 +85,8 @@ export async function sceneBand(page: Page): Promise<Buffer> {
 
 /** Une scène rendue a du relief : un canvas vide ou uni a un écart-type quasi nul. */
 async function sceneLooksRendered(page: Page): Promise<boolean> {
+  // L'écran de chargement du lancement porte un fond rendu (vague W) : la bande lirait son image.
+  if ((await page.locator('.tuto-chargement:not([data-fini])').count()) > 0) return false;
   const { channels } = await sharp(await sceneBand(page)).stats();
   return channels.slice(0, 3).some((channel) => channel.stdev > 6);
 }

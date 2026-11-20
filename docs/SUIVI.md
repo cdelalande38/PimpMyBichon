@@ -2,13 +2,13 @@
 
 Document de passation, tenu à jour à chaque étape. Il dit, pour quelqu'un qui arrive à froid : ce que le commanditaire a demandé (avec ses mots), ce qui est en ligne, ce qui reste faux dans ce qui est livré, et ce qui vient. Le détail technique de chaque lot est dans le message de son commit ; les règles de travail sont dans `CLAUDE.md` ; le périmètre est dans `CAHIER_DES_CHARGES.md` (§ 5.5 pour la sortie, § 11 pour ce que la publication attend) ; les substituts et ce qui manque sont dans `TODO_ASSETS.md`.
 
-Dernière mise à jour : 19 novembre 2026, 22 h 25.
+Dernière mise à jour : 20 novembre 2026, 7 h 30.
 
 ## 1. Où on en est
 
-- **En ligne** : `215b80d` (préparation payante), publié à 20 h 42. Poussés à 22 h 25 : le NOS (`65b28a9`) et le duel (ce commit), validés.
-- **Rendu, pas versé** : le lot « fonds » (fonds des écrans de chargement, rendus par le jeu) ; planche montrée au commanditaire, j'attends son accord pour verser les images.
-- **Aucun agent en vol.** Quota de la semaine à 92 % (retour le 25 novembre à 4 h) : plus de nouveau lot d'ici là.
+- **En ligne** : le NOS et le duel (`47be627`), vérifiés sur le site le 19 novembre à 22 h 54 ; poussés le 20 novembre à 7 h 30 : les fonds des écrans de chargement (ce commit), validés.
+- **En cours** : « duel4 » (agent Opus, lancé le 20 novembre à 7 h 25) : le freinage de l'adversaire au premier virage et son pilote.
+- Quota de la semaine à 93 % (retour le 25 novembre à 4 h) : « duel4 » est le dernier lot d'ici là.
 
 ## 2. Journal des demandes
 
@@ -20,8 +20,8 @@ Dernière mise à jour : 19 novembre 2026, 22 h 25.
 | « il faudra revoir les distances de circuit annoncés dans les menu ca affiche 0km parfois c'est juste pas possible » | Chaque départ affichait sa borne kilométrique (« km 0,0 » pour le premier) : il dit maintenant la distance jusqu'à l'arrivée, ou la longueur du tour sur un circuit | `59b38d2` |
 | « un élément à fixer ca sera pour la configuration des stickers j'ai l'impression qu'on a pas toutes les options visibles par exemple je peux pas en supprimer » | Les gestes du sticker (dont « Supprimer » et « Curseurs ») étaient au bout d'une rangée qui défilait de côté, hors de l'écran : ils ont leur propre rangée, qui passe à la ligne | `7b4f566` |
 | « les préparation moteur ca doit etre payant » | Chaque option de la fiche de préparation (hors « Origine ») est un article, valable pour tous les véhicules : Stage 1 à 3 à 120, 220, 350 $ ; carburation à 80, 160, 260 $ ; nitro à 100, 200, 320 $. Une option déjà montée dans une sauvegarde reste montée et agit ; elle garde son cadenas (règle commune des panneaux) | `215b80d` |
-| « pour les écrans de chargement il faudra générer des fonds (fond général de chargement de l'application, fond pour chaque lieux de courses) » | Source choisie par lui : des rendus de nos propres scènes par le jeu. Lot « fonds » prêt, lancé quand une place se libère ; images montrées avant d'être versées | — |
-| « traite les reste du del en prio puis NOS puis rodéo puis cartes puis vehicules » | Duel : plus de saut au contact, on double partout où il y a la place, l'adversaire a le son de son moteur (spatialisé) et envoie son NOS en Normal et Difficile | (ce commit) |
+| « pour les écrans de chargement il faudra générer des fonds (fond général de chargement de l'application, fond pour chaque lieux de courses) » | Des rendus de nos propres scènes par le jeu (son choix), de nuit, chaussée mouillée : le garage néon au lancement, une vue par carte au chargement de la sortie, en portrait et en paysage ; outil `npm run fonds:build` ; versés après son accord (« Envoi », 20 novembre) | (ce commit) |
+| « traite les reste du del en prio puis NOS puis rodéo puis cartes puis vehicules » | Duel : plus de saut au contact, on double partout où il y a la place, l'adversaire a le son de son moteur (spatialisé) et envoie son NOS en Normal et Difficile | `47be627` |
 | (même demande) | NOS : flammes pour le concept et le van, un vrai dard vu de dos, des traits de vitesse lisibles de jour, une poussée qui se sent sur chaque véhicule (la Cox 60 → 92 km/h en 3 s) | `65b28a9` |
 
 ### Soirée et nuit du 18 au 19 novembre : six lots publiés dans la nuit
@@ -71,6 +71,7 @@ Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : t
 - **Néons** : les arcs des roues sont un liseré fin, presque caché quand le pneu remplit l'arche ; celui du van se voit à peine (sa voûte modelée est plus basse que le jeu déclaré : réglage `wheels.gap` à décider) ; les cercles des motos ne braquent pas avec la fourche ; la lueur reste à plat et n'a pas été vue contre un trottoir de ville ; LED d'habitacle invisibles en caméra embarquée ; ciel étoilé du concept jamais vu à l'image ; pulsation sur la musique (§ 5.4) pas faite.
 - **Carrière** : « sans NOS » n'est jugé qu'à l'arrivée et le bouton reste à l'écran ; on peut partir avec la mauvaise famille de véhicule (la fiche avertit seulement) ; l'annonce de fin de saison n'a ni parcours ni capture ; la finale dure environ neuf minutes ; le haut fait de la saison 1 garde son ancienne description.
 - **Capot** : la Cox seulement (le van n'a pas de modèle de moteur, le pivot du capot du concept n'est pas à la charnière, les motos ont leur moteur dans leur carrosserie) ; de dos, la vitre montre peu le moteur ; pas d'ouverture en pause pendant une sortie.
+- **Fonds de chargement** : au lancement en paysage, le titre est centré par-dessus le véhicule (le voile le cache presque) ; sur le plateau matheysin, l'eau est noire de nuit et aucun lac ne se lit ; le concept est en vedette partout (les substituts de la Cox et du van montrent une plaque vierge de face) : à refaire par l'outil quand les vrais modèles arriveront ; les fonds de carte ne sont pas au précache.
 - **Fin de course** : en paysage et très grand texte, le bouton du garage s'écrit sur plusieurs lignes ; l'écran d'un rendez-vous manqué n'a pas de capture.
 - **Clavier** : jamais essayé sur un vrai clavier ; pas de touche de pause.
 - **Tests** : `sortie-pilotage.spec.ts:204` est trop lourd (à couper en deux) ; `drift.spec.ts` a besoin de quinze minutes en CI, et le 19 novembre à 18 h 39 sa tranche (parcours complets 5/5) a atteint la limite de 60 min avec un échec à `drift.spec.ts:257` (`data-placement` du manche sous 0,5), alors que le test passe en local : la publication n'en dépend pas, mais la CI est rouge ; `carriere.spec.ts:310` a échoué une fois sur un chargement de modèle (« Failed to fetch »), vert rejoué seul ; le parcours d'échec de la carrière est à réécrire.

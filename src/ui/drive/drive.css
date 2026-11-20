@@ -752,6 +752,12 @@ body:has(.drive-top) .tuto-aide {
   margin-top: 0.25rem;
 }
 
+/* Fond de la carte (champ « fond » de map.json) : le texte de la sortie monte plus haut que celui du
+   lancement, le voile aussi (tuto.css, .fond-chargement). */
+.drive-chargement .fond-chargement {
+  --voile: 50%;
+}
+
 /* Téléphone couché (retour du 18 novembre 2026 : les titres du chargement passaient hors de l'écran) : le bloc
    s'élargit pour que le nom de la carte tienne sur moins de lignes, le titre suit la hauteur de l'écran, et
    rien ne sort jamais par le haut (« safe » : trop haut, le bloc se cale en haut et l'écran défile). */
@@ -770,6 +776,17 @@ body:has(.drive-top) .tuto-aide {
 
   .drive-chargement .tuto-marque b {
     font-size: clamp(1.5rem, 9vh, 2.5rem);
+  }
+
+  /* Avec un fond : le texte passe à gauche, le voile vient de la gauche, l'image se voit à droite (le
+     véhicule y est cadré par tools/fonds/). Sans fond, la mise en page d'avant. */
+  .drive-chargement .fond-chargement::after {
+    background: linear-gradient(to right, var(--night) 0%, rgb(10 9 17 / 92%) 56%, rgb(10 9 17 / 15%) 74%, rgb(10 9 17 / 8%) 100%);
+  }
+
+  .drive-chargement .fond-chargement ~ .tuto-chargement-bas {
+    max-width: min(40rem, 55%);
+    margin-left: 0;
   }
 }
 

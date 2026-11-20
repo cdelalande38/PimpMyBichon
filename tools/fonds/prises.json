@@ -1,0 +1,25 @@
+{
+  "garage": { "cadrage": "Trois-quarts avant" },
+  "cartes": {
+    "monaco-ville": {
+      "vehicule": "concept", "peinture": "candy:00c2b8", "meteo": "pluie", "s": 1220, "camera": "orbite",
+      "orbite": { "yaw": 2.9, "pitch": 0.1, "distance": 8 },
+      "portrait": { "orbite": { "yaw": 2.9, "pitch": 0.1, "distance": 13 } }
+    },
+    "monaco-circuit": {
+      "vehicule": "concept", "peinture": "candy:ff8a00", "meteo": "pluie", "s": 2650, "camera": "orbite",
+      "orbite": { "yaw": 2.9, "pitch": 0.08, "distance": 8.5 },
+      "portrait": { "orbite": { "yaw": 2.9, "pitch": 0.08, "distance": 13 } }
+    },
+    "miami-beach": {
+      "vehicule": "concept", "peinture": "candy:ff2d8a", "meteo": "pluie", "s": 600, "camera": "orbite",
+      "orbite": { "yaw": 2.9, "pitch": 0.1, "distance": 8.5 },
+      "portrait": { "orbite": { "yaw": 2.9, "pitch": 0.1, "distance": 13 } }
+    },
+    "plateau-matheysin": {
+      "vehicule": "concept", "peinture": "metallise:2f6bff", "meteo": "pluie", "s": 6300, "camera": "orbite",
+      "orbite": { "yaw": 3.4, "pitch": 0.1, "distance": 8.5 },
+      "portrait": { "orbite": { "yaw": 3.4, "pitch": 0.1, "distance": 13 } }
+    }
+  }
+}

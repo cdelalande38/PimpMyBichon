@@ -32,13 +32,14 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { closeSheet } from '../../app/useRoute.ts';
 import { useMediaQuery } from '../../app/useMediaQuery.ts';
-import { creditLine, mapById } from '../../data/maps.ts';
+import { creditLine, mapById, mapFileUrl } from '../../data/maps.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { DRIVE_STAGE_CLASS } from '../../drive/contrat.ts';
 import { brancherSonSortie } from '../../drive/son.ts';
 import { useBuilds } from '../../state/builds.ts';
 import { directionDe, useDrive } from '../../state/drive.ts';
 import { RadioButton } from '../radio/RadioButton.tsx';
+import { FondChargement } from '../tuto/Chargement.tsx';
 import '../tuto/tuto.css';
 import { CompteTours, useBoucleImage } from './CompteTours.tsx';
 import { MiniCarte } from './MiniCarte.tsx';
@@ -673,6 +674,7 @@ function DriveLoading() {
   const courante = etapes[Math.min(faites, etapes.length - 1)] ?? ETAPES[0];
   return (
     <div className="drive-veil drive-chargement" data-etat="chargement" data-fini={ready || undefined} inert={ready}>
+      {map.fond && <FondChargement paysage={mapFileUrl(map, map.fond.paysage)} portrait={mapFileUrl(map, map.fond.portrait)} />}
       <div className="tuto-chargement-bas">
         <p className="tuto-marque">
           <span>Sortie</span>

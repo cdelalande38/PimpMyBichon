@@ -6,6 +6,7 @@
   "order": 3,
   "zone": { "id": "monaco", "label": "Monaco", "circuit": "Le circuit" },
   "route": "route.json",
+  "fond": { "paysage": "fond-paysage-2bd0e580.webp", "portrait": "fond-portrait-33e3d5dd.webp" },
   "credits": [
     { "source": "IGN, BD TOPO (routes, bâtiments, trait de côte, végétation)", "licence": "Licence Ouverte 2.0", "date": "2026-11" },
     { "source": "IGN, service d’altimétrie de la Géoplateforme (relief)", "licence": "Licence Ouverte 2.0", "date": "2026-11" },
