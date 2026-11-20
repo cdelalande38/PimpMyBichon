@@ -6,7 +6,7 @@ Dernière mise à jour : 20 novembre 2026, 9 h.
 
 ## 1. Où on en est
 
-- **En ligne** : les fonds (`0dd9a7c`, publiés le 20 novembre à 7 h 30) ; poussé le 20 novembre à 9 h : « duel4 » (ce commit), validé.
+- **En ligne** : les fonds (`0dd9a7c`, publiés le 20 novembre à 7 h 30) ; poussé le 20 novembre à 9 h : « duel4 » (`cdd0c8b`), validé.
 - **Aucun agent en vol.** Quota de la semaine à 94 % (retour le 25 novembre à 4 h) : plus aucun lot d'ici là. La file reprend au § 4 (rodéo, cartes, véhicules).
 
 ## 2. Journal des demandes
@@ -17,7 +17,7 @@ Dernière mise à jour : 20 novembre 2026, 9 h.
 |---|---|---|
 | « Direction à renommer en conduite assistée » | Le réglage s'appelle « Conduite assistée », choix « Oui » et « Non » | `59b38d2` |
 | « il faudra revoir les distances de circuit annoncés dans les menu ca affiche 0km parfois c'est juste pas possible » | Chaque départ affichait sa borne kilométrique (« km 0,0 » pour le premier) : il dit maintenant la distance jusqu'à l'arrivée, ou la longueur du tour sur un circuit | `59b38d2` |
-| « au premier virage elle a freiné tellement que je l'ai dépassée sans souci. J'ai même cru qu'elle était à l'arrêt. Aussi il manque un personnage sur les véhicules de duel » (20 novembre, après essai) | L'adversaire ne freine plus avant la conduite de référence ; nouveau réglage « audace » par niveau (Difficile : il ne lève pas le pied, comme un joueur plein gaz) ; il a un pilote, du même modèle que le joueur, à la tenue teintée de sa couleur | (ce commit) |
+| « au premier virage elle a freiné tellement que je l'ai dépassée sans souci. J'ai même cru qu'elle était à l'arrêt. Aussi il manque un personnage sur les véhicules de duel » (20 novembre, après essai) | L'adversaire ne freine plus avant la conduite de référence ; nouveau réglage « audace » par niveau (Difficile : il ne lève pas le pied, comme un joueur plein gaz) ; il a un pilote, du même modèle que le joueur, à la tenue teintée de sa couleur | `cdd0c8b` |
 | « un élément à fixer ca sera pour la configuration des stickers j'ai l'impression qu'on a pas toutes les options visibles par exemple je peux pas en supprimer » | Les gestes du sticker (dont « Supprimer » et « Curseurs ») étaient au bout d'une rangée qui défilait de côté, hors de l'écran : ils ont leur propre rangée, qui passe à la ligne | `7b4f566` |
 | « les préparation moteur ca doit etre payant » | Chaque option de la fiche de préparation (hors « Origine ») est un article, valable pour tous les véhicules : Stage 1 à 3 à 120, 220, 350 $ ; carburation à 80, 160, 260 $ ; nitro à 100, 200, 320 $. Une option déjà montée dans une sauvegarde reste montée et agit ; elle garde son cadenas (règle commune des panneaux) | `215b80d` |
 | « pour les écrans de chargement il faudra générer des fonds (fond général de chargement de l'application, fond pour chaque lieux de courses) » | Des rendus de nos propres scènes par le jeu (son choix), de nuit, chaussée mouillée : le garage néon au lancement, une vue par carte au chargement de la sortie, en portrait et en paysage ; outil `npm run fonds:build` ; versés après son accord (« Envoi », 20 novembre) | `0dd9a7c` |
