@@ -12,7 +12,7 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, attendreSurLaRoute, commencerCourse, DELAI_ROUTE, openApp, reglerSortie, reloadSaved, tempsDeRoute, waitForScene } from './helpers.ts';
+import { attendreRoute, attendreSurLaRoute, commencerCourse, DELAI_ROUTE, openApp, reglerSortie, reloadSaved, tempsDeRoute, waitForScene } from './helpers.ts';
 
 const CAPTURES = process.env.PMB_CAPTURES_NOS;
 const MESURE = process.env.PMB_MESURE_NOS;
@@ -73,7 +73,7 @@ async function lancer(page: Page, vehicule: string, moment: 'Nuit' | 'Jour', { p
   await page.goto('./#/sortie');
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
   await expect(stage(page)).toHaveAttribute('data-vehicule', vehicule);
-  await attendreApercu(page);
+  await attendreRoute(page);
   await reglerSortie(page, 'Météo', 'Sec', { garder: true });
   await reglerSortie(page, 'Moment', moment);
   await commencerCourse(page, { parti: true });

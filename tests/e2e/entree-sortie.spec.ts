@@ -1,15 +1,15 @@
-// Le menu de la sortie par étapes (vague U, retour du 18 novembre 2026, fait deux fois, téléphone en
-// paysage à l'appui) : chaque étape remplace la précédente (mode, lieu, circuit du lieu, départ,
-// réglages), le fil dit où l'on est, « Retour » remonte d'UNE étape, ce qui est choisi se relit en une
-// ligne ; « Jouer » est toujours entier, à 48 px au moins, sous le pouce, en portrait comme en paysage,
-// en texte grand et très grand, et redit le format choisi. Rouvrir l'entrée ramène aux réglages.
-// Captures de revue (chaque étape, 390 × 844 et 844 × 390) : PMB_CAPTURES_ENTREE=1, dans
-// captures/vague-u-entree/.
+// L'écran « Jouer » (vague X, 21 novembre 2026 ; avant : le menu « Sortie » des vagues U et V) : les modes en
+// cartes, puis le lieu, le circuit du lieu et les réglages de ce mode, une étape à la fois ; le titre d'étape
+// remplace le fil ; « Retour » et Échap remontent d'UNE étape ; « Jouer » (le bouton du garage) est visible à
+// toute profondeur du menu ; « Jouer » (aux réglages) est toujours entier, à 48 px au moins, sous le pouce, en
+// portrait comme en paysage, en texte grand et très grand, et redit le mode choisi. « Continuer » reprend la
+// dernière sortie. Captures de revue (chaque étape, 390 × 844, 844 × 390 et 1366 × 768) : PMB_CAPTURES_ENTREE=1,
+// dans captures/vague-x-jouer/.
 
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { backToSections, cartesDuMenu, ENTREE_SORTIE, entreeSortie, etapePrecedente, openApp, openEntry, pickMap, quick, reloadSaved, waitForScene } from './helpers.ts';
+import { attendreRoute, backToSections, cartesDuMenu, choisirMode, DELAI_ROUTE, ENTREE_SORTIE, entreeSortie, etapePrecedente, openApp, openEntry, ouvrirCiel, pickMap, quick, reloadSaved, waitForScene } from './helpers.ts';
 
 const CAPTURES = Boolean(process.env.PMB_CAPTURES_ENTREE);
 const dock = (page: Page) => page.locator('footer.dock');
@@ -18,7 +18,7 @@ const ici = (page: Page) => dock(page).locator('.dock-crumb-here');
 
 async function shot(page: Page, name: string): Promise<void> {
   if (!CAPTURES) return;
-  const path = resolve('captures', 'vague-u-entree', `${name}.png`);
+  const path = resolve('captures', 'vague-x-jouer', `${name}.png`);
   mkdirSync(dirname(path), { recursive: true });
   // Le temps que la scène du garage se recadre sous le menu.
   await page.waitForTimeout(600);
@@ -107,15 +107,12 @@ async function setTextSize(page: Page, size: 'Normal' | 'Grand' | 'Très grand')
   await expect(dialog).toBeHidden();
 }
 
-/** Fil du dock : le chemin, puis l'étape où l'on est. */
-async function fil(page: Page): Promise<string> {
-  return ((await dock(page).locator('.dock-crumbs').innerText()) ?? '').replace(/\s+/g, ' ').trim();
-}
+const mode = (page: Page, id: string) => dock(page).getByRole('group', { name: 'Mode' }).locator(`[data-mode="${id}"]`);
 
-test.describe('menu de la sortie par étapes', () => {
+test.describe('écran Jouer', () => {
   test.setTimeout(240_000);
 
-  test('portrait : une étape à la fois, le fil, « Retour » d’une étape, « Jouer » entier et qui redit le format', { tag: '@essentiel' }, async ({ page }) => {
+  test('portrait : les modes en cartes, une étape à la fois, le titre, « Retour » d’une étape, « Jouer » entier et qui redit le mode', { tag: '@essentiel' }, async ({ page }) => {
     const { plusieurs, seul } = lieux();
     const multi = plusieurs[plusieurs.length - 1]!;
     await openApp(page);
@@ -123,17 +120,20 @@ test.describe('menu de la sortie par étapes', () => {
     await openEntry(page, ENTREE_SORTIE);
     const entree = entreeSortie(page);
 
-    // 1. Le mode, seul.
+    // 1. Les modes, seuls : une carte chacun, le rodéo sans carte, pas de « Continuer » sur une sauvegarde neuve.
     await expect(entree).toHaveAttribute('data-etape', 'mode');
-    await expect(ici(page)).toHaveText(ENTREE_SORTIE);
-    await expect(dock(page).getByRole('group', { name: 'Mode' }).getByRole('button')).toHaveCount(2);
+    await expect(ici(page)).toHaveText('Jouer');
+    await expect(dock(page).getByRole('group', { name: 'Mode' }).locator('[data-mode]')).toHaveCount(5);
+    for (const id of ['carriere', 'course', 'duel', 'drift', 'balade']) await expect(mode(page, id)).toBeVisible();
+    await expect(mode(page, 'rodeo')).toHaveCount(0);
+    await expect(mode(page, 'continuer')).toHaveCount(0);
     await expect(dock(page).getByRole('group', { name: 'Lieu' })).toHaveCount(0);
     await expect(sortir(page)).toHaveCount(0);
-    await commandesA48(page, 'mode');
-    await shot(page, 'portrait-1-mode');
+    await commandesA48(page, 'modes');
+    await shot(page, 'portrait-1-modes');
 
-    // Carrière : son panneau, et « Retour » ramène au mode.
-    await dock(page).getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Carrière/ }).tap();
+    // Carrière : son panneau (la fiche du prochain rendez-vous), et « Retour » ramène aux modes.
+    await mode(page, 'carriere').tap();
     await expect(entree).toHaveAttribute('data-etape', 'carriere');
     await expect(ici(page)).toHaveText('Carrière');
     await expect(dock(page).getByRole('group', { name: 'Mode' })).toHaveCount(0);
@@ -142,20 +142,20 @@ test.describe('menu de la sortie par étapes', () => {
     await expect(entree).toHaveAttribute('data-etape', 'mode');
 
     // 2. Le lieu : les lieux seulement.
-    await dock(page).getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
+    await mode(page, 'course').tap();
     await expect(entree).toHaveAttribute('data-etape', 'zone');
-    await expect(ici(page)).toHaveText('Libre');
+    await expect(ici(page)).toHaveText('Choisis ton lieu');
     await expect(dock(page).getByRole('group', { name: 'Mode' })).toHaveCount(0);
     const lieuxDuMenu = dock(page).getByRole('group', { name: 'Lieu' });
     await expect(lieuxDuMenu.getByRole('button')).toHaveCount(new Set(cartesDuMenu().map((carte) => carte.zone)).size);
-    await expect(entree.locator('.entree-rappel')).toContainText('Libre');
+    await expect(entree.locator('.entree-rappel')).toContainText('Course');
     await commandesA48(page, 'lieu');
     await shot(page, 'portrait-2-lieu');
 
     // 3. Le circuit d'un lieu qui en a plusieurs : ses circuits, et seulement eux ; plus de lieux.
     await lieuxDuMenu.locator(`[data-zone="${multi.zone}"]`).tap();
     await expect(entree).toHaveAttribute('data-etape', 'circuit');
-    await expect(ici(page)).toHaveText(multi.lieu);
+    await expect(ici(page)).toHaveText('Choisis ton circuit');
     await expect(dock(page).getByRole('group', { name: 'Lieu' })).toHaveCount(0);
     const circuits = dock(page).getByRole('group', { name: 'Circuit' });
     await expect(circuits.getByRole('button')).toHaveCount(plusieurs.length);
@@ -164,74 +164,175 @@ test.describe('menu de la sortie par étapes', () => {
     await commandesA48(page, 'circuit');
     await shot(page, 'portrait-3-circuit');
 
-    // 4. Les départs du circuit choisi, et seulement eux.
+    // « Retour » remonte d'une étape (le lieu), pas aux modes ; on redescend.
+    await etapePrecedente(page);
+    await expect(entree).toHaveAttribute('data-etape', 'zone');
+    await lieuxDuMenu.locator(`[data-zone="${multi.zone}"]`).tap();
     await circuits.locator(`[data-carte="${multi.id}"]`).tap();
-    await expect(entree).toHaveAttribute('data-etape', 'depart');
-    await expect(ici(page)).toHaveText(multi.circuit);
-    expect(await fil(page)).toContain(multi.lieu);
+
+    // 4. Les réglages de la course, droit après le circuit (plus d'étape des départs) : le rappel en une ligne,
+    // le format, le départ (la route en a plusieurs), moment et météo repliés, crédits repliés, « Jouer ».
+    await expect(entree).toHaveAttribute('data-etape', 'reglages');
+    await expect(ici(page)).toHaveText('Prépare ton départ');
     await expect(dock(page).getByRole('group', { name: 'Circuit' })).toHaveCount(0);
     const departs = dock(page).getByRole('group', { name: 'Départ' });
-    await expect(departs.getByRole('button').nth(1)).toBeVisible();
-    await expect(entree.locator('.entree-rappel')).toContainText(`${multi.lieu} › ${multi.circuit}`);
-    await commandesA48(page, 'départ');
-    await shot(page, 'portrait-4-depart');
-
-    // « Retour » remonte d'une étape (le circuit), pas au menu ; on redescend.
-    await etapePrecedente(page);
-    await expect(entree).toHaveAttribute('data-etape', 'circuit');
-    await circuits.locator(`[data-carte="${multi.id}"]`).tap();
-    await expect(entree).toHaveAttribute('data-etape', 'depart');
+    await expect(departs.getByRole('button').nth(1)).toBeVisible({ timeout: 30_000 });
     const nomDepart = ((await departs.getByRole('button').nth(1).locator('b').textContent()) ?? '').trim();
     await departs.getByRole('button').nth(1).tap();
-
-    // 5. Les réglages : rappel en une ligne, moment, météo, format, crédits, « Jouer ».
-    await expect(entree).toHaveAttribute('data-etape', 'reglages');
-    await expect(ici(page)).toHaveText(nomDepart);
-    await expect(dock(page).getByRole('group', { name: 'Départ' })).toHaveCount(0);
+    await expect(departs.getByRole('button').nth(1)).toHaveAttribute('aria-pressed', 'true');
     await expect(entree.locator('.entree-rappel')).toContainText(`${multi.lieu} › ${multi.circuit} › ${nomDepart}`);
-    for (const groupe of ['Moment', 'Météo', 'Format']) await expect(dock(page).getByRole('group', { name: groupe })).toBeAttached();
-    await expect(dock(page).locator(`.drive-credits[data-credits="${multi.id}"]`)).toBeAttached();
-    // Le format d'une sauvegarde neuve : la course d'un tour ; « Jouer » le redit, avec ce qu'il rapporte.
     const formats = dock(page).getByRole('group', { name: 'Format' });
+    await expect(formats.getByRole('button')).toHaveCount(2);
     await expect(formats.getByRole('button', { name: /^Course 1 tour/ })).toHaveAttribute('aria-pressed', 'true');
+    // Moment et météo : une ligne (« Nuit · Pluie »), qui s'ouvre d'un appui.
+    const resume = entree.locator('.entree-ciel-resume');
+    await expect(resume).toContainText(/(Nuit|Jour) · (Sec|Pluie|Neige)/);
+    await expect(dock(page).getByRole('group', { name: 'Météo' })).toBeHidden();
+    await ouvrirCiel(page);
+    await expect(dock(page).getByRole('group', { name: 'Moment' })).toBeVisible();
+    await resume.tap();
+    await expect(dock(page).getByRole('group', { name: 'Météo' })).toBeHidden();
+    await expect(dock(page).locator(`.drive-credits[data-credits="${multi.id}"]`)).toContainText('Licence');
+    // « Jouer » redit le mode et ce qu'il rapporte.
     await expect(sortir(page)).toContainText('Course 1 tour');
     await expect(sortir(page)).toContainText('dollars');
     await sortirEntier(page, 'portrait');
     await commandesA48(page, 'réglages');
-    await shot(page, 'portrait-5-reglages');
-    await formats.getByRole('button', { name: /^Balade/ }).tap();
-    await expect(sortir(page)).toContainText('Balade');
-    await expect(sortir(page)).toContainText('sans gain');
-    await formats.getByRole('button', { name: /^Course 1 tour/ }).tap();
+    await shot(page, 'portrait-4-reglages');
 
-    // « Retour » d'une étape à chaque appui : départ, circuit, lieu, mode.
-    for (const etape of ['depart', 'circuit', 'zone', 'mode']) {
-      await etapePrecedente(page);
-      await expect(entree).toHaveAttribute('data-etape', etape);
+    // Les réglages suivent le mode : la balade, le duel et le drift n'ont pas la rangée des formats.
+    await etapePrecedente(page);
+    await etapePrecedente(page);
+    await etapePrecedente(page);
+    await expect(entree).toHaveAttribute('data-etape', 'mode');
+    for (const [id, dit] of [
+      ['balade', 'sans gain'],
+      ['drift', 'Drift'],
+      ['duel', 'Duel'],
+    ] as const) {
+      await choisirMode(page, id);
+      await dock(page).getByRole('group', { name: 'Lieu' }).locator(`[data-zone="${seul[0]!.zone}"]`).tap();
+      await expect(entree).toHaveAttribute('data-etape', 'reglages');
+      await expect(dock(page).getByRole('group', { name: 'Format' })).toHaveCount(0);
+      await expect(sortir(page)).toContainText(dit);
+      if (id === 'duel') await expect(dock(page).getByRole('group', { name: 'Adversaire' })).toBeVisible();
+      else await expect(dock(page).getByRole('group', { name: 'Adversaire' })).toHaveCount(0);
+      await sortirEntier(page, `portrait ${id}`);
     }
 
-    // Un lieu à un seul circuit passe droit à ses départs.
-    await dock(page).getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
-    await dock(page).getByRole('group', { name: 'Lieu' }).locator(`[data-zone="${seul[0]!.zone}"]`).tap();
-    await expect(entree).toHaveAttribute('data-etape', 'depart');
+    // Un lieu à un seul circuit passe droit aux réglages.
     await expect(dock(page).getByRole('group', { name: 'Circuit' })).toHaveCount(0);
     await etapePrecedente(page);
     await expect(entree).toHaveAttribute('data-etape', 'zone');
 
-    // Rouvrir l'entrée : droit aux réglages du dernier choix, « Changer de circuit » ramène aux lieux.
+    // Échap remonte d'une étape, comme « Retour ».
+    await page.keyboard.press('Escape');
+    await expect(entree).toHaveAttribute('data-etape', 'mode');
+
+    // « Continuer » : la dernière sortie, un appui, droit aux réglages ; « Retour » remonte étape par étape.
     await pickMap(page, cartesDuMenu().findIndex((carte) => carte.id === multi.id));
     await backToSections(page);
     await openEntry(page, ENTREE_SORTIE);
+    await expect(entree).toHaveAttribute('data-etape', 'mode');
+    await expect(mode(page, 'continuer')).toContainText(`${multi.lieu} › ${multi.circuit}`);
+    await shot(page, 'portrait-5-continuer');
+    await mode(page, 'continuer').tap();
     await expect(entree).toHaveAttribute('data-etape', 'reglages');
     await expect(dock(page).locator(`.drive-credits[data-credits="${multi.id}"]`)).toBeAttached();
     await etapePrecedente(page);
-    await expect(entree).toHaveAttribute('data-etape', 'depart');
-    await departs.locator('[aria-pressed="true"]').tap();
-    await dock(page).getByRole('button', { name: 'Changer de circuit' }).tap();
+    await expect(entree).toHaveAttribute('data-etape', 'circuit');
+    await etapePrecedente(page);
     await expect(entree).toHaveAttribute('data-etape', 'zone');
   });
 
-  test('la dernière sortie est gardée : au lancement, l’entrée rouvre ses réglages', async ({ page }) => {
+  test('« Jouer » est visible à toute profondeur du menu, le bouton rond de la carrière n’existe plus, Garage n’a plus « Sortie »', { tag: '@essentiel' }, async ({ page }) => {
+    await openApp(page);
+    await waitForScene(page);
+    await expect(page.getByRole('button', { name: /^Carrière : prochain rendez-vous/ })).toHaveCount(0);
+    await expect(quick(page).getByRole('button')).not.toHaveCount(0);
+    const jouer = dock(page).getByRole('button', { name: 'Jouer', exact: true });
+    // Aux sections, dans une section, dans un contenu, dans un sous-niveau (Peinture : une zone), menu fermé.
+    await expect(jouer).toBeVisible();
+    await openEntry(page, 'Peinture');
+    await expect(jouer).toBeVisible();
+    await dock(page).locator('.dock-tab[data-onglet="peinture"] button').first().tap();
+    await expect(jouer).toBeVisible();
+    const box = await jouer.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(47.5);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(47.5);
+    // Il ne recouvre ni « Retour » ni la croix.
+    for (const nom of ['Retour', 'Fermer le menu']) {
+      const autre = await dock(page).getByRole('button', { name: nom, exact: true }).boundingBox();
+      if (!box || !autre) throw new Error(`${nom} : pas de boîte`);
+      expect(box.x + box.width <= autre.x + 0.5 || autre.x + autre.width <= box.x + 0.5 || box.y + box.height <= autre.y + 0.5 || autre.y + autre.height <= box.y + 0.5, `Jouer recouvre ${nom}`).toBe(true);
+    }
+    await jouer.tap();
+    await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'mode');
+    await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toHaveCount(0);
+    await shot(page, 'portrait-0-jouer-depuis-peinture');
+    // Garage : l'ambiance seule, droit à son contenu (la sortie n'y est plus).
+    await backToSections(page);
+    await dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: 'Garage', exact: true }).tap();
+    await expect(dock(page).locator('.dock-tab[data-onglet="ambiance"]')).toBeVisible();
+    await expect(dock(page).locator('.drive-entry')).toHaveCount(0);
+    await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toBeVisible();
+    await shot(page, 'portrait-0-garage-sans-bouton-rond');
+    // Menu fermé : « Jouer » reste à côté de « Personnaliser ».
+    await dock(page).getByRole('button', { name: 'Fermer le menu' }).tap();
+    await expect(dock(page).getByRole('button', { name: 'Personnaliser' })).toBeVisible();
+    await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toBeVisible();
+  });
+
+  test('une première course libre : quatre ou cinq appuis, et la grille tout de suite (plus d’aperçu)', { tag: '@essentiel' }, async ({ page }) => {
+    test.setTimeout(360_000);
+    const carte = cartesDuMenu()[0]!;
+    const plusieurs = cartesDuMenu().filter((autre) => autre.zone === carte.zone).length > 1;
+    await openApp(page);
+    await waitForScene(page);
+    let appuis = 0;
+    await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
+    appuis += 1;
+    await mode(page, 'course').tap();
+    appuis += 1;
+    await dock(page).getByRole('group', { name: 'Lieu' }).locator(`[data-zone="${carte.zone}"]`).tap();
+    appuis += 1;
+    if (plusieurs) {
+      await dock(page).getByRole('group', { name: 'Circuit' }).locator(`[data-carte="${carte.id}"]`).tap();
+      appuis += 1;
+    }
+    await sortir(page).tap();
+    appuis += 1;
+    test.info().annotations.push({ type: 'appuis', description: `${appuis} appuis avant les feux (le rapport en comptait jusqu'à 7)` });
+    expect(appuis).toBeLessThanOrEqual(5);
+    await attendreRoute(page);
+    // Pas d'aperçu : la conduite est déjà à la main, aux feux.
+    await expect(page.locator('.drive-invite')).toHaveCount(0);
+    await expect(page.locator('.drive-mid')).toHaveAttribute('data-conduite', 'main');
+    await expect(page.locator('.drive-stage')).toHaveAttribute('data-depart', /^(attente|feux|parti)$/, { timeout: DELAI_ROUTE });
+  });
+
+  test('l’aperçu reste en balade, et seulement là', async ({ page }) => {
+    test.setTimeout(360_000);
+    await openApp(page);
+    await waitForScene(page);
+    await openEntry(page, ENTREE_SORTIE);
+    await pickMap(page, 0, 'balade');
+    await sortir(page).tap();
+    await expect(page.locator('.drive-invite')).toHaveText('Touche l’écran pour commencer', { timeout: DELAI_ROUTE });
+    await expect(page.locator('.drive-mid')).toHaveAttribute('data-conduite', 'auto');
+  });
+
+  test('« Entrée » lance depuis les réglages', async ({ page }) => {
+    test.setTimeout(360_000);
+    await openApp(page);
+    await waitForScene(page);
+    await openEntry(page, ENTREE_SORTIE);
+    await pickMap(page);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.drive-stage')).toBeVisible({ timeout: DELAI_ROUTE });
+  });
+
+  test('la dernière sortie est gardée : « Continuer » reprend ses réglages', async ({ page }) => {
     const cartes = cartesDuMenu();
     const derniere = cartes[cartes.length - 1]!;
     await openApp(page);
@@ -254,6 +355,9 @@ test.describe('menu de la sortie par étapes', () => {
     await reloadSaved(page);
     await waitForScene(page);
     await openEntry(page, ENTREE_SORTIE);
+    // L'écran s'ouvre sur les modes (plus de saut aux réglages) ; « Continuer » y mène d'un appui.
+    await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'mode');
+    await mode(page, 'continuer').tap();
     await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'reglages');
     await expect(dock(page).locator(`.drive-credits[data-credits="${derniere.id}"]`)).toBeAttached();
     // Un choix fait exprès en version 2 (la balade) est respecté.
@@ -277,9 +381,9 @@ test.describe('menu de la sortie par étapes', () => {
         await openEntry(page, ENTREE_SORTIE);
         const entree = entreeSortie(page);
         await expect(entree).toHaveAttribute('data-etape', 'mode');
-        await commandesA48(page, `${nom} mode`);
-        if (vue.width === 844) await shot(page, `${nom}-1-mode`);
-        await dock(page).getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
+        await commandesA48(page, `${nom} modes`);
+        if (vue.width === 844) await shot(page, `${nom}-1-modes`);
+        await mode(page, 'course').tap();
         await expect(entree).toHaveAttribute('data-etape', 'zone');
         await commandesA48(page, `${nom} lieu`);
         if (vue.width === 844) await shot(page, `${nom}-2-lieu`);
@@ -288,21 +392,17 @@ test.describe('menu de la sortie par étapes', () => {
         await expect(dock(page).getByRole('group', { name: 'Lieu' })).toHaveCount(0);
         if (vue.width === 844) await shot(page, `${nom}-3-circuit`);
         await dock(page).getByRole('group', { name: 'Circuit' }).locator(`[data-carte="${multi.id}"]`).tap();
-        await expect(entree).toHaveAttribute('data-etape', 'depart');
-        await expect(dock(page).getByRole('group', { name: 'Départ' }).getByRole('button').first()).toBeVisible();
-        await commandesA48(page, `${nom} départ`);
-        if (vue.width === 844) await shot(page, `${nom}-4-depart`);
-        await dock(page).getByRole('group', { name: 'Départ' }).getByRole('button').first().tap();
         await expect(entree).toHaveAttribute('data-etape', 'reglages');
+        await expect(dock(page).getByRole('group', { name: 'Départ' }).getByRole('button').first()).toBeVisible({ timeout: 30_000 });
         await sortirEntier(page, `${nom} texte normal`);
         await commandesA48(page, `${nom} réglages`);
-        await shot(page, `${nom}-5-reglages`);
+        await shot(page, `${nom}-4-reglages`);
         for (const size of ['Grand', 'Très grand'] as const) {
           await setTextSize(page, size);
           await expect(entree).toHaveAttribute('data-etape', 'reglages');
           await sortirEntier(page, `${nom} texte ${size}`);
           await expect(sortir(page)).toContainText('Course 1 tour');
-          if (size === 'Très grand') await shot(page, `${nom}-6-reglages-tres-grand`);
+          if (size === 'Très grand') await shot(page, `${nom}-5-reglages-tres-grand`);
         }
       });
     });
@@ -316,6 +416,6 @@ test.describe('menu de la sortie par étapes', () => {
     await pickMap(page);
     await sortirEntier(page, 'portrait très grand');
     await commandesA48(page, 'portrait très grand');
-    await shot(page, 'portrait-6-reglages-tres-grand');
+    await shot(page, 'portrait-5-reglages-tres-grand');
   });
 });

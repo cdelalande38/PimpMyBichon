@@ -11,7 +11,8 @@ import { useBench } from '../state/bench.ts';
 import { useBuilds } from '../state/builds.ts';
 import { useDrive } from '../state/drive.ts';
 import { useSettings } from '../state/store.ts';
-import { Dock } from '../ui/Dock.tsx';
+import { Dock, useMenuNommeLeVehicule } from '../ui/Dock.tsx';
+import { brancherRangees } from '../ui/rangees.ts';
 import { DriveScreen } from '../ui/drive/DriveScreen.tsx';
 import { QuitterSortie } from '../ui/drive/QuitterSortie.tsx';
 import { Hud } from '../ui/Hud.tsx';
@@ -52,6 +53,7 @@ export function App() {
   const sortie = route.name === 'sortie';
   const driveMap = mapById(useDrive((state) => state.map));
   const driveAttempt = useDrive((state) => state.attempt);
+  const menuNommeLeVehicule = useMenuNommeLeVehicule();
 
   // L'adresse décide : « #/sortie » entre en sortie (carte et départ choisis dans le menu, sinon la
   // première carte), toute autre adresse rentre au garage (bouton, geste retour d'Android).
@@ -59,6 +61,9 @@ export function App() {
     if (sortie) useDrive.getState().enter();
     else useDrive.getState().leave();
   }, [sortie]);
+
+  // Molette et flèches à la souris sur les rangées qui défilent de côté (audit des menus, B2).
+  useEffect(() => brancherRangees(), []);
 
   // La taille du texte s'applique à la racine : toute l'interface est dimensionnée en rem.
   useEffect(() => {
@@ -106,7 +111,9 @@ export function App() {
               {/* Où l'on est et le véhicule à l'écran, puis son chargement. Le mot « substitut » n'y est
                   plus (retour du 16 novembre 2026 : il ne se comprenait pas) : une maquette est annoncée
                   dans le choix du véhicule et dans Atelier › Sous le capot. */}
-              {!sceneFailed && (
+              {/* Le menu ouvert dit déjà « Au garage · <véhicule> » (audit des menus, A4) : l'étiquette ne
+                  revient que pour un état à dire (chargement, modèle absent) ou menu fermé ou descendu. */}
+              {!sceneFailed && (!menuNommeLeVehicule || benchStatus !== 'pret') && (
                 <p className="tag" role="status">
                   {`Garage · ${vehicle.name}`}
                   {benchStatus === 'chargement' && ' · en route…'}

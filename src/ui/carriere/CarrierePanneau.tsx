@@ -11,6 +11,7 @@
 //   médaille ou le temps ; la prime n'est versée qu'une fois).
 // Le bouton d'action est collé en bas, sous le pouce et toujours entier : il part avec TOUT imposé.
 
+import { useState } from 'react';
 import { MEDAILLES } from '../../data/courses.ts';
 import { SAISONS, type RendezVous, type Saison } from '../../data/carriere.ts';
 import { formatChrono } from '../../drive/depart.ts';
@@ -58,10 +59,15 @@ function Action({ rdv, numero, total, label, aide }: { rdv: RendezVous; numero: 
 
 /** Les saisons, une rangée chacune : bouclée, en cours, ou fermée (avec ce qui l'ouvre). */
 function ListeSaisons({ progression }: { progression: ProgressionCarriere }) {
+  const [ouvert, setOuvert] = useState(false);
   return (
+    // Repliées (vague X, C8 de l'audit des menus) : la fiche du rendez-vous et « Jouer » tiennent à l'écran sans
+    // une première ligne de la liste coupée dessous ; un appui sur « Les saisons » déplie la liste.
     <section className="carriere-saisons" aria-label="Les saisons">
-      <h4 className="carriere-sous-titre">Les saisons</h4>
-      <ul className="carriere-lignes">
+      <button type="button" className="carriere-sous-titre carriere-saisons-bouton" aria-expanded={ouvert} aria-controls="carriere-saisons-liste" onClick={() => setOuvert(!ouvert)}>
+        Les saisons
+      </button>
+      <ul id="carriere-saisons-liste" className="carriere-lignes" hidden={!ouvert}>
         {SAISONS.map((saison, i) => {
           const ouverte = saisonOuverte(progression, SAISONS, i);
           const bouclee = saisonBouclee(progression, saison);

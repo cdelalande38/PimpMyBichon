@@ -176,7 +176,6 @@ export function EnginePanel() {
 
   return (
     <div className="engine" data-agrandir="toujours">
-      <EngineSoundControls />
       <p className="engine-spec">
         <strong>{engine.label}</strong>
         <span>
@@ -216,6 +215,9 @@ export function EnginePanel() {
       {slots.map((slot) => (
         <SlotRow key={slot.id} slot={slot} vehicle={vehicle.id} build={build} engine={engine} achat={achat} setAchat={setAchat} setMessage={(text) => setMessage(text === null ? null : { vehicle: vehicle.id, text })} />
       ))}
+
+      {/* Les essais de son après les options à monter (audit des menus, B6) : en dock compact, on voit d'abord ce qui se règle. */}
+      <EngineSoundControls />
 
       {message?.vehicle === vehicle.id && (
         <p className="engine-message" role="status">

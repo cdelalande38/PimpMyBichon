@@ -71,16 +71,17 @@ describe('pile des niveaux du dock', () => {
     dock().setSection('custom');
     dock().setEntry('peinture');
     dock().push({ kind: 'zone', zone: 'toit', step: 'couleur' });
-    // Garage, deux entrées (Ambiance, Sortie) : ses entrées d'abord, puis le contenu ;
-    // « Retour » remonte aux entrées, puis aux sections.
+    // Garage n'a plus que l'ambiance (vague X) : droit au contenu ; « Retour » remonte aux sections.
     dock().setSection('garage');
-    expect(dock().menu).toBe('entrees');
-    expect(dock().levels).toEqual([]);
-    dock().setEntry('sortie');
     expect(dock().menu).toBe('contenu');
-    expect(entryOf('garage', dock().entries)).toBe('sortie');
+    expect(dock().levels).toEqual([]);
+    expect(entryOf('garage', dock().entries)).toBe('ambiance');
     expect(dock().back()).toBe(true);
-    expect(dock().menu).toBe('entrees');
+    expect(dock().menu).toBe('sections');
+    // L'écran « Jouer » : sa section cachée, ouverte par son bouton ; « Retour » remonte aux sections.
+    dock().openEntry('sortie');
+    expect(dock().section).toBe('jouer');
+    expect(dock().menu).toBe('contenu');
     expect(dock().back()).toBe(true);
     expect(dock().menu).toBe('sections');
     dock().setSection('garage');

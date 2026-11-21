@@ -131,7 +131,8 @@ describe('écran de fin : un seul jeu de boutons, « Course suivante » en carri
       format: second.format,
       rendezVous: { id: second.id, numero: 2, total: suite.length, libre: { weather: 'neige', moment: 'nuit', format: 'balade' } },
       fin: null,
-      apercu: true,
+      // Un rendez-vous de carrière est une course : droit sur la grille, sans aperçu (vague X).
+      apercu: false,
       attempt: essai + 1,
       telemetry: { ready: false, failed: false, finished: false },
     });

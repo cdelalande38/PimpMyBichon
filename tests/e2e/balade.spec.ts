@@ -26,7 +26,6 @@ async function photo(page: Page, nom: string): Promise<void> {
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const dock = (page: Page) => page.locator('footer.dock');
-const format = (page: Page, nom: string) => dock(page).getByRole('group', { name: 'Format' }).getByRole('button', { name: new RegExp(`^${nom}`) });
 const annonce = (page: Page) => page.locator('.drive-balade-annonce');
 
 /** Miami Beach (route ouverte), au sec, au format voulu : la route prête, à l'aperçu. */
@@ -34,9 +33,9 @@ async function partir(page: Page, nomFormat: string): Promise<void> {
   await openApp(page);
   await waitForScene(page);
   await openEntry(page, ENTREE_SORTIE);
-  await pickMap(page);
-  await format(page, nomFormat).tap();
-  await expect(format(page, nomFormat)).toHaveAttribute('aria-pressed', 'true');
+  // Le format est le mode choisi sur l'écran « Jouer » (vague X) : la balade, ou la course d'un tour.
+  await pickMap(page, 0, nomFormat === 'Balade' ? 'balade' : 'course');
+  await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toContainText(nomFormat);
   await auSec(page);
   await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
@@ -121,7 +120,8 @@ test.describe('Sortie : captures de revue', () => {
     await waitForScene(page);
     await backToSections(page);
     await dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: 'Garage', exact: true }).tap();
-    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Garage' }).getByRole('button', { name: ENTREE_SORTIE, exact: true })).toBeVisible();
+    // Garage n'a plus que l'ambiance (vague X) : « Jouer » reste, lui, à une touche.
+    await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toBeVisible();
     await photo(page, '01-menu-garage');
     await openEntry(page, ENTREE_SORTIE);
     await pickMap(page);

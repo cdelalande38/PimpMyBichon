@@ -62,13 +62,14 @@ describe('préférences', () => {
     const drive = await launch();
     expect(drive.getState().commande).toBe('manche');
     drive.getState().setWeather('sec');
-    drive.getState().setCamera('avant');
     drive.getState().setCommande('pedales');
     drive.getState().setDirection('assistee');
     drive.getState().setFormat('tour1');
     drive.getState().setMoment('jour');
     drive.getState().setRegard('haut');
     drive.getState().enter(first.id, null);
+    // Entrer sur une course met la caméra de poursuite : la caméra se règle ensuite.
+    drive.getState().setCamera('avant');
     drive.getState().setSlow(true);
     await vi.waitFor(async () => {
       const raw = await get<string>(DRIVE_KEY, db());
@@ -100,6 +101,8 @@ describe('préférences', () => {
 describe('une sortie', () => {
   it('entrer : sur le choix du menu, pilote automatique et réalisateur d’office ; rentrer remet à zéro', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     expect(drive.getState().map).toBeNull();
     drive.getState().chooseMap(first.id);
     drive.getState().chooseStart('quelque-part');
@@ -131,6 +134,8 @@ describe('une sortie', () => {
 
   it('aperçu, commencer, pilote automatique, repartir', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     drive.getState().setDirection('assistee');
     drive.getState().enter();
     expect(drive.getState()).toMatchObject({ apercu: true, director: true, input: AUTO_INPUT });
@@ -159,8 +164,33 @@ describe('une sortie', () => {
     expect(drive.getState()).toMatchObject({ apercu: true, input: AUTO_INPUT });
   });
 
+  it('course, duel, drift : droit sur la grille, à la main ; la balade seule garde l’aperçu (vague X)', async () => {
+    const drive = await launch();
+    drive.getState().setDirection('assistee');
+    for (const format of ['tour1', 'tours3', 'drift'] as const) {
+      drive.getState().leave();
+      drive.getState().setFormat(format);
+      drive.getState().enter();
+      expect(drive.getState(), format).toMatchObject({ apercu: false, director: false, camera: 'poursuite' });
+      expect(drive.getState().input, format).toMatchObject({ auto: false, throttle: 0, brake: 0 });
+      expect(drive.getState().input.assist, format).toBe(format === 'drift' ? undefined : true);
+    }
+    // « Réessayer » et « Repartir sur » respectent la même règle.
+    drive.getState().setFormat('tour1');
+    drive.getState().retry();
+    expect(drive.getState()).toMatchObject({ apercu: false, input: { auto: false } });
+    drive.getState().leave();
+    drive.getState().setFormat('balade');
+    drive.getState().enter();
+    expect(drive.getState()).toMatchObject({ apercu: true, director: true, input: AUTO_INPUT });
+    drive.getState().retry();
+    expect(drive.getState().apercu).toBe(true);
+  });
+
   it('fondu de fin d’aperçu : levé, confirmé noir, baissé par la scène ; remis à zéro par chaque départ', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     drive.getState().enter();
     expect(drive.getState().fondu).toBe('non');
     drive.getState().setFondu('sortie');
@@ -200,6 +230,8 @@ describe('une sortie', () => {
 
   it('caméra choisie à la main : le réalisateur s’arrête', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     drive.getState().enter();
     expect(drive.getState().director).toBe(true);
     drive.getState().nextCamera();
@@ -225,6 +257,8 @@ describe('une sortie', () => {
 
   it('commandes : ignorées en pilote automatique, bornées à la main, relâchées au changement de mode', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     // Direction libre choisie : le défaut est l'assistée depuis le 19 novembre 2026.
     drive.getState().setDirection('libre');
     drive.getState().enter();
@@ -243,6 +277,8 @@ describe('une sortie', () => {
 
   it('manche : gaz, frein et placement d’un coup, bornés ; sans placement, retour aux bords demandés', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     // Direction libre choisie : le défaut est l'assistée depuis le 19 novembre 2026.
     drive.getState().setDirection('libre');
     drive.getState().enter();
@@ -264,6 +300,8 @@ describe('une sortie', () => {
 
   it('à la main : poursuite et réalisateur coupé ; rien ne les remet tout seul ; direction assistée passée au pilote', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     // Direction libre choisie : le défaut est l'assistée depuis le 19 novembre 2026.
     drive.getState().setDirection('libre');
     drive.getState().enter();
@@ -303,6 +341,8 @@ describe('une sortie', () => {
 
   it('orbite bornée, ralenti, pause, télémétrie publiée seulement quand elle change', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     drive.getState().setOrbit({ pitch: 9, distance: -4 });
     expect(drive.getState().orbit.pitch).toBeLessThan(1.3);
     expect(drive.getState().orbit.distance).toBeGreaterThan(2);
@@ -316,6 +356,8 @@ describe('une sortie', () => {
 
   it('erreur puis « Réessayer » : la scène est remontée, la télémétrie repart de zéro', async () => {
     const drive = await launch();
+    // L'aperçu ne reste qu'en balade (vague X) : les autres formats partent droit sur la grille.
+    drive.getState().setFormat('balade');
     drive.getState().enter();
     drive.getState().fail();
     expect(drive.getState().telemetry.failed).toBe(true);

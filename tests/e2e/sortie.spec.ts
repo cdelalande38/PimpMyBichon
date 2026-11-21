@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, attendreSurLaRoute, capture, choisirCamera, commencerCourse, ENTREE_SORTIE, entreeSortie, etapeSortie, fermerReglages, openApp, openEntry, ouvrirReglages, rentrerAuGarage, waitForScene } from './helpers.ts';
+import { attendreApercu, attendreRoute, attendreSurLaRoute, capture, choisirCamera, commencerCourse, ENTREE_SORTIE, entreeSortie, etapeSortie, fermerReglages, openApp, openEntry, ouvrirCiel, ouvrirReglages, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 // Sortie de nuit, lot 1 (§ 5.5) : on entre par le menu (Garage · Sortie), on roule, on change
 // de caméra, on passe à la main, on rentre au garage. Le parcours ne lit que les attributs que la
@@ -20,8 +20,8 @@ test.describe('sortie de nuit', () => {
     await openApp(page);
     await waitForScene(page);
 
-    // Le menu, par étapes (vague U) : le mode, le lieu (lu dans le catalogue), son circuit, le départ,
-    // puis les réglages : crédits, météo, « Jouer ». Chaque étape remplace la précédente.
+    // L'écran « Jouer », par étapes (vague X) : le mode, le lieu (lu dans le catalogue), son circuit, puis les
+    // réglages : départ, crédits, météo, « Jouer ». Chaque étape remplace la précédente. La balade garde l'aperçu.
     await openEntry(page, ENTREE_SORTIE);
     const dock = page.locator('footer.dock');
     // Rien n'est choisi à l'ouverture : le mode seul ; ni lieux, ni départs, ni météo, ni « Jouer ».
@@ -32,7 +32,7 @@ test.describe('sortie de nuit', () => {
     await expect(starts).toHaveCount(0);
     await expect(dock.getByRole('group', { name: 'Météo' })).toHaveCount(0);
     await expect(dock.getByRole('button', { name: 'Jouer', exact: true })).toHaveCount(0);
-    await dock.getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
+    await dock.getByRole('group', { name: 'Mode' }).locator('[data-mode="balade"]').tap();
     await expect(lieux.getByRole('button').first()).toBeVisible();
     await expect(lieux.locator('[aria-pressed="true"]')).toHaveCount(0);
     await capture(page, 'sortie-menu-cartes');
@@ -42,9 +42,10 @@ test.describe('sortie de nuit', () => {
     await expect(starts.getByRole('button').first()).toBeVisible();
     const second = ((await starts.getByRole('button').nth(1).locator('b').textContent()) ?? '').trim();
     await starts.getByRole('button').nth(1).tap();
-    await expect(starts).toHaveCount(0);
+    await expect(starts.getByRole('button').nth(1)).toHaveAttribute('aria-pressed', 'true');
     await expect(entreeSortie(page).locator('.entree-rappel')).toContainText(second);
     await expect(dock.locator('.drive-credits')).toContainText('Licence Ouverte');
+    await ouvrirCiel(page);
     await dock.getByRole('group', { name: 'Météo' }).getByRole('button', { name: 'Pluie' }).tap();
     await capture(page, 'sortie-menu');
     await dock.getByRole('button', { name: 'Jouer', exact: true }).tap();
@@ -155,8 +156,9 @@ test.describe('sortie de nuit', () => {
     release();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(veil).toHaveCount(0);
-    await attendreApercu(page);
-    // L'aperçu, puis les réglages ouverts : chaque bouton visible offre 48 px au doigt.
+    // Course d'un tour (format par défaut) : droit sur la grille, sans aperçu (vague X).
+    await attendreRoute(page);
+    // La route, puis les réglages ouverts : chaque bouton visible offre 48 px au doigt.
     const tailles = async () => {
       const controls = page.locator('.app button:visible');
       const count = await controls.count();
@@ -223,8 +225,8 @@ test.describe('sortie de nuit', () => {
     await page.unroute('**/assets/maps/*/route.json');
     await page.getByRole('button', { name: 'Réessayer' }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
-    // « Réessayer » rouvre sur l'aperçu.
-    await attendreApercu(page);
+    // « Réessayer » rouvre la sortie (sur la grille : le format par défaut est une course).
+    await attendreRoute(page);
     await rentrerAuGarage(page);
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
   });

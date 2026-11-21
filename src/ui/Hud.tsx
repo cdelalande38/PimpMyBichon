@@ -11,7 +11,6 @@ import { useView } from '../state/view.ts';
 import { openAtelier } from './AtelierSwitcher.tsx';
 import { Icon } from './icons.tsx';
 import { Solde } from './jeu/Solde.tsx';
-import { PastilleCarriere } from './carriere/RappelCarriere.tsx';
 import { PlacePicker } from './PlacePicker.tsx';
 import { offlineLabel } from './labels.ts';
 import { RadioButton } from './radio/RadioButton.tsx';
@@ -102,8 +101,8 @@ function InteriorButton() {
   const remembered = useView((state) => state.places[vehicle.id]);
   const place = placeOf(vehicle, remembered);
   if (!place) return null;
-  const label = inside ? 'Sortir' : 'Intérieur';
-  const title = inside ? 'Sortir : retour à l’atelier' : `Intérieur : place ${place.label.toLowerCase()}`;
+  const label = inside ? 'Vue atelier' : 'Intérieur';
+  const title = inside ? 'Vue atelier : retour à l’atelier' : `Intérieur : place ${place.label.toLowerCase()}`;
   return (
     <button type="button" className="quick-btn" aria-label={label} title={title} data-on={inside || undefined} onClick={() => enterOrLeave(vehicle.id)}>
       <Icon name="volant" />
@@ -146,8 +145,7 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
           <RadioButton />
           {/* Le raccourci rond « Sortie » est devenu le bouton « Jouer » du bas de l'écran, à côté de
               « Personnaliser » (src/ui/Dock.tsx, retour du 18 novembre 2026). */}
-          {/* La carrière : la météo et le numéro du prochain rendez-vous, tant qu'elle n'est pas bouclée ; un appui l'ouvre. */}
-          {!sceneFailed && <PastilleCarriere />}
+          {/* La carrière n'a plus de bouton rond (vague X) : elle est une carte de l'écran « Jouer », avec son prochain rendez-vous. */}
           {!sceneFailed && <InteriorButton />}
         </nav>
       </div>

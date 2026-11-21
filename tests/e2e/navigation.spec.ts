@@ -6,7 +6,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { ENTREE_SORTIE, openApp, openEntry, reloadSaved, waitForScene } from './helpers.ts';
+import { ARTICLES_PREPARATION, openApp, openEntry, poserArticles, reloadSaved, waitForScene } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
 const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
@@ -135,16 +135,12 @@ test.describe('navigation du dock', () => {
     await back(page).tap();
     await expect(tabs(page)).toBeVisible();
     await expect(back(page)).toHaveCount(0);
-    // Garage, deux entrées (Ambiance, Sortie) : ses entrées d'abord, puis le contenu ;
-    // « Retour » remonte aux entrées, puis aux sections.
+    // Garage, l'ambiance seule (la sortie est l'écran « Jouer », vague X) : droit au contenu ;
+    // « Retour » remonte aux sections.
     await tabs(page).getByRole('button', { name: 'Garage', exact: true }).tap();
-    const garageEntries = dock(page).getByRole('navigation', { name: 'Entrées · Garage' });
-    await expect(garageEntries.getByRole('button')).toHaveText(['Ambiance', ENTREE_SORTIE]);
-    await garageEntries.getByRole('button', { name: 'Ambiance', exact: true }).tap();
+    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Garage' })).toHaveCount(0);
     await expect(dock(page).getByRole('group', { name: 'Ambiance' })).toBeVisible();
     await expectCrumbs(page, ['Garage', 'Ambiance']);
-    await back(page).tap();
-    await expect(garageEntries).toBeVisible();
     await back(page).tap();
     await expect(tabs(page)).toBeVisible();
     await openEntry(page, 'Peinture');
@@ -294,6 +290,7 @@ test.describe('navigation du dock', () => {
   test('défilement stable : choisir une option ne déplace jamais le menu ; « Retour » rend la position du niveau', async ({ page }) => {
     test.setTimeout(150_000);
     await openApp(page);
+    await poserArticles(page, ARTICLES_PREPARATION);
     await waitForScene(page);
     const body = dock(page).locator('.dock-tab');
 

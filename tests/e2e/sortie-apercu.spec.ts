@@ -7,6 +7,7 @@
 // perdre le parcours. L'arrivée (panneau « Arrivée », « Repartir ») n'est pas parcourue ici : il
 // faudrait rouler plus d'un kilomètre, des minutes en rendu logiciel ; son cœur est prouvé par
 // tests/unit/drive-depart.test.ts.
+// Vague X (21 novembre 2026) : l'aperçu ne reste qu'en balade ; les parcours posent la balade (preferBalade).
 // Délais larges : en rendu logiciel la scène avance d'un dixième de seconde par image.
 // Captures : captures/vague-q-attente/ (vague Q), captures/vague-r-course/ (vague R : boutons du haut en paysage, texte très grand).
 
@@ -14,7 +15,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, commencerCourse, DELAI_ROUTE, fermerReglages, ouvrirReglages, reglagesSortie, rentrerAuGarage } from './helpers.ts';
+import { attendreApercu, commencerCourse, DELAI_ROUTE, fermerReglages, ouvrirReglages, preferBalade, reglagesSortie, rentrerAuGarage } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const attr = async (page: Page, name: string) => Number(await stage(page).getAttribute(name));
@@ -68,7 +69,8 @@ async function boutonsDuHaut48(page: Page, attendus: number, contexte: string): 
     }, texte);
     for (let essai = 0; essai < 5; essai += 1) {
       await page.waitForTimeout(100);
-      const boites = await page.evaluate((sel) => [...document.querySelectorAll(sel)].map((el) => {
+      // Les boutons rendus (le « ? » reste dans la page en course, caché : audit des menus, E3).
+      const boites = await page.evaluate((sel) => [...document.querySelectorAll(sel)].filter((el) => el.getClientRects().length > 0).map((el) => {
         const r = el.getBoundingClientRect();
         return { nom: el.getAttribute('aria-label') ?? el.className, w: r.width, h: r.height };
       }), BOUTONS_HAUT);
@@ -146,6 +148,7 @@ test.describe('sortie de nuit : l’aperçu, puis la course', () => {
   test('portrait : aperçu épuré, réglages rangés, un appui lance les feux à la main, Repartir, Pilote automatique', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    await preferBalade(page);
     await page.goto('./#/sortie');
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await verifierApercu(page);
@@ -193,10 +196,12 @@ test.describe('sortie de nuit : l’aperçu, puis la course', () => {
     await expect(offre).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'NOS' })).toBeVisible();
     await expect(page.locator('.drive-amorce')).toBeVisible();
+    // Plus de « ? » en pleine course (audit des menus, E3).
+    await expect(page.getByRole('button', { name: 'Aide', exact: true })).toBeHidden();
     await sansRecouvrement(
       page,
-      ['.tuto-aide', '.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-nos', '.drive-amorce'],
-      ['.tuto-aide', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-nos'],
+      ['.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-nos', '.drive-amorce'],
+      ['.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-nos'],
     );
     await shot(page, '04-course-portrait');
 
@@ -240,6 +245,7 @@ test.describe('sortie de nuit : l’aperçu, puis la course', () => {
     await page.setViewportSize({ width: 844, height: 390 });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    await preferBalade(page);
     await page.goto('./#/sortie');
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await verifierApercu(page);
@@ -256,10 +262,12 @@ test.describe('sortie de nuit : l’aperçu, puis la course', () => {
     await expect(page.getByRole('button', { name: /Mode manette/ })).toHaveCount(0);
     for (const nom of ['Gaz', 'Frein', 'NOS']) await expect(page.getByRole('button', { name: nom, exact: true })).toBeVisible();
     await expect(page.locator('.drive-amorce')).toBeVisible();
+    // Plus de « ? » en pleine course (audit des menus, E3).
+    await expect(page.getByRole('button', { name: 'Aide', exact: true })).toBeHidden();
     await sansRecouvrement(
       page,
-      ['.tuto-aide', '.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)', '.drive-amorce'],
-      ['.tuto-aide', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)'],
+      ['.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)', '.drive-amorce'],
+      ['.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)'],
     );
     await shot(page, '08-course-paysage');
     await rentrerAuGarage(page);
@@ -271,13 +279,14 @@ test.describe('sortie de nuit : l’aperçu, puis la course', () => {
     await page.setViewportSize({ width: 844, height: 390 });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    await preferBalade(page);
     await page.goto('./#/sortie');
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await attendreApercu(page);
-    // Aperçu : l'aide, la radio, les réglages ; course : la pause en plus.
+    // Aperçu : l'aide, la radio, les réglages ; course : la radio, les réglages, la pause (plus de « ? », E3).
     await boutonsDuHaut48(page, 3, 'aperçu paysage');
     await commencerCourse(page);
-    await boutonsDuHaut48(page, 4, 'course paysage');
+    await boutonsDuHaut48(page, 3, 'course paysage');
     await page.evaluate(() => {
       document.documentElement.dataset.text = 'tres-grand';
     });

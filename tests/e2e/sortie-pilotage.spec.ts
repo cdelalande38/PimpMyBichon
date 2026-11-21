@@ -22,7 +22,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, attendreSurLaRoute, commencerCourse, fermerReglages, ouvrirReglages, reglagesSortie, reglerSortie } from './helpers.ts';
+import { attendreApercu, attendreSurLaRoute, commencerCourse, fermerReglages, ouvrirReglages, preferBalade, reglagesSortie, reglerSortie } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const dial = (page: Page) => page.locator('.drive-dial');
@@ -164,12 +164,13 @@ async function sansRecouvrement(page: Page, selectors: string[], width: number, 
   }
 }
 
-/** Le nom de la carte tient en entier (jamais coupé) et passe au-dessus du « ? » de l'aide. */
+/** Le nom de la carte tient en entier (jamais coupé) et passe au-dessus du « ? » de l'aide (caché en course : audit des menus, E3). */
 async function nomEntier(page: Page): Promise<void> {
   const mesure = await page.evaluate(() => {
     const name = document.querySelector<HTMLElement>('.drive-map');
     const where = document.querySelector('.drive-where')?.getBoundingClientRect();
-    const aide = document.querySelector('.tuto-aide')?.getBoundingClientRect();
+    const bouton = document.querySelector('.tuto-aide');
+    const aide = bouton && bouton.getClientRects().length > 0 ? bouton.getBoundingClientRect() : undefined;
     return name && where ? { scroll: name.scrollWidth, client: name.clientWidth, bas: where.bottom, aide: aide?.top ?? 1e9, texte: name.textContent ?? '' } : null;
   });
   expect(mesure).not.toBeNull();
@@ -191,6 +192,7 @@ async function sortir(page: Page, errors: string[]): Promise<void> {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('./');
   await putOnScreen(page, 'concept');
+  await preferBalade(page);
   await page.goto('./#/sortie');
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
   await expect(page.locator('.drive-chargement')).toHaveCount(0, { timeout: 10_000 });
@@ -208,6 +210,7 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await putOnScreen(page, 'concept');
 
     // Chargement : plein écran, la carte nommée, sans bouton (Précédent et Échap ramènent au garage) ; parti une fois la route prête.
+    await preferBalade(page);
     await page.goto('./#/sortie');
     const loading = page.locator('.drive-chargement');
     await expect(loading).toBeVisible({ timeout: 30_000 });
@@ -419,11 +422,13 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await page.waitForTimeout(500);
     await shot(page, '07-main-360');
     await nomEntier(page);
+    // Plus de « ? » en pleine course (audit des menus, E3).
+    await expect(page.getByRole('button', { name: 'Aide', exact: true })).toBeHidden();
     await sansRecouvrement(
       page,
-      ['.tuto-aide', '.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-nos', '.drive-amorce'],
+      ['.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-nos', '.drive-amorce'],
       360,
-      ['.tuto-aide', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-nos'],
+      ['.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-nos'],
     );
     expect(errors).toEqual([]);
   });
@@ -451,11 +456,13 @@ test.describe('sortie de nuit, pilotage au doigt', () => {
     await expect(page.locator('.drive-amorce')).toBeVisible();
     await page.waitForTimeout(500);
     await shot(page, '08-paysage-arret');
+    // Plus de « ? » en pleine course (audit des menus, E3).
+    await expect(page.getByRole('button', { name: 'Aide', exact: true })).toBeHidden();
     await sansRecouvrement(
       page,
-      ['.tuto-aide', '.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)', '.drive-amorce'],
+      ['.drive-dial', '.drive-where', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-minicarte-place', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)', '.drive-amorce'],
       844,
-      ['.tuto-aide', '.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)'],
+      ['.drive-top .quick-btn', '.drive-reglages-btn', '.drive-pause', '.drive-pave .drive-nos', '.drive-pave-gaz', '.drive-pave-btn:not(.drive-pave-gaz)'],
     );
 
     // Le manche sous le pouce gauche (placement) et le GAZ sous le pouce droit, en même temps.

@@ -1,7 +1,7 @@
 // Pilotage au clavier (src/ui/drive/clavier.ts) : la table des touches par leur place, ce qui est tenu,
 // le braquage qui monte et revient en douceur, et le tout-lâché.
 import { describe, expect, it } from 'vitest';
-import { actionDe, appuyer, avancerClavier, CLAVIER, etatClavierVide, relacher, tient, TOUCHES, TOUCHES_LANCEMENT, toutRelacher } from '../../src/ui/drive/clavier.ts';
+import { actionDe, appuyer, avancerClavier, CLAVIER, etatClavierVide, relacher, tient, TOUCHES, TOUCHES_LANCEMENT, TOUCHES_PAUSE, toutRelacher } from '../../src/ui/drive/clavier.ts';
 import type { LectureManche } from '../../src/ui/drive/manche.ts';
 
 const lecture = (): LectureManche => ({ throttle: 0, brake: 0, steer: 0 });
@@ -23,6 +23,14 @@ describe('clavier de la sortie', () => {
     // Chaque action a au moins deux touches ; on lance avec Entrée, Espace ou les gaz.
     for (const action of ['gaz', 'frein', 'gauche', 'droite', 'nos'] as const) expect(Object.values(TOUCHES).filter((a) => a === action).length).toBeGreaterThanOrEqual(2);
     expect(TOUCHES_LANCEMENT).toEqual(expect.arrayContaining(['Enter', 'Space', 'ArrowUp']));
+  });
+
+  it('Échap et P mettent en pause, et ne conduisent ni ne lancent rien', () => {
+    expect(TOUCHES_PAUSE).toEqual(['Escape', 'KeyP']);
+    for (const code of TOUCHES_PAUSE) {
+      expect(actionDe(code)).toBeNull();
+      expect(TOUCHES_LANCEMENT).not.toContain(code);
+    }
   });
 
   it('une touche tenue ne compte qu’une fois ; deux touches pour la même action : il faut lâcher les deux', () => {

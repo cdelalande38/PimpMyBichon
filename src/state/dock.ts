@@ -13,7 +13,7 @@
 // contenu → entrées de la section, ou sections si elle n'a qu'une entrée, entrées → sections). Un
 // prochain menu s'y branche en ajoutant une sorte de niveau ici et son libellé dans le fil.
 // Sortie (vague U, retour du 18 novembre 2026) : ses étapes sont des niveaux (`kind: 'sortie'`) :
-// mode → zone → circuit → départ → réglages, ou mode → carrière. Chaque étape remplace la précédente,
+// mode → zone → circuit → réglages (le départ est un choix des réglages, vague X), ou mode → carrière. Chaque étape remplace la précédente,
 // « Retour » remonte d'une étape ; chaque niveau porte le libellé du choix qui y a mené, pour le fil.
 // Moteur et Carrosserie (même retour) : la liste des éléments, puis l'élément choisi (`kind: 'element'`).
 // Néons (vague V) de même : la liste des zones, puis la zone choisie.
@@ -45,7 +45,7 @@ export function opensDirectly(section: SectionId): boolean {
 export type PickerTarget = 'color' | 'color2';
 
 /** Étapes de la sortie sous son mode (le mode est l'étape de départ, sans niveau). */
-export const ETAPES_SORTIE = ['carriere', 'zone', 'circuit', 'depart', 'reglages'] as const;
+export const ETAPES_SORTIE = ['carriere', 'zone', 'circuit', 'reglages'] as const;
 export type EtapeSortie = (typeof ETAPES_SORTIE)[number];
 
 /** Un niveau sous l'onglet. */
@@ -99,7 +99,7 @@ function sanitizeSortieLevel(level: Record<string, unknown>): DockLevel | null {
   return { kind: 'sortie', etape, libelle: level.libelle };
 }
 
-/** Une pile de la sortie n'est valable que dans l'ordre des étapes : carrière (puis sa saison et son rendez-vous), ou zone, circuit, départ, réglages (sauts permis). */
+/** Une pile de la sortie n'est valable que dans l'ordre des étapes : carrière (puis sa saison et son rendez-vous), ou zone, circuit, réglages (sauts permis). */
 function sanitizeSortieLevels(raw: readonly unknown[]): DockLevel[] {
   const levels: DockLevel[] = [];
   let rank = -1;

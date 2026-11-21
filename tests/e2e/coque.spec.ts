@@ -14,9 +14,12 @@ test.describe('coque de l’app', () => {
     await waitForScene(page);
     await waitForBench(page);
 
-    // Le véhicule de départ est un substitut déclaré : il est annoncé à l'écran et nommé dans le dock.
-    await expect(page.locator('.tag')).toHaveText(/^Garage · /);
+    // Le véhicule de départ est un substitut déclaré : il est nommé dans le dock (aux sections, c'est lui qui le dit :
+    // l'étiquette du haut ne l'écrit plus une seconde fois, audit des menus A4) et par l'étiquette menu fermé.
+    await expect(page.locator('.tag')).toHaveCount(0);
     await expect(page.locator('footer.dock .dock-vehicle')).not.toBeEmpty();
+    await page.locator('footer.dock').getByRole('button', { name: 'Fermer le menu' }).tap();
+    await expect(page.locator('.tag')).toHaveText(/^Garage · /);
     // Radio, photo et atelier : les boutons ronds du haut de l'écran.
     for (const name of [/^Radio/, /^Photo$/, /^Atelier$/]) await expect(quick(page).getByRole('button', { name })).toBeVisible();
     await capture(page, '01-garage');

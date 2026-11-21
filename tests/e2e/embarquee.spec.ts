@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, choisirCamera, ENTREE_SORTIE, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, reglerSortie, reloadSaved, rentrerAuGarage, waitForBench, waitForScene } from './helpers.ts';
+import { attendreRoute, choisirCamera, ENTREE_SORTIE, fermerReglages, openApp, openEntry, ouvrirReglages, pickMap, reglerSortie, reloadSaved, rentrerAuGarage, waitForBench, waitForScene } from './helpers.ts';
 
 // Caméra embarquée : voir la route depuis l'intérieur (vague U, demande du 18 novembre 2026 : « on voit
 // pas assez la route, il faudrait qu'on puisse prendre un peu plus de hauteur »). Le réglage « Hauteur du
@@ -37,7 +37,7 @@ test('caméra embarquée : la hauteur du regard se règle, s’applique et se re
   await waitForScene(page);
   await waitForBench(page);
   await sortir(page);
-  await attendreApercu(page);
+  await attendreRoute(page);
   // Pas à la poursuite : le réglage ne se montre qu'à la caméra embarquée.
   let panneau = await ouvrirReglages(page);
   await expect(panneau.getByRole('group', { name: 'Hauteur du regard' })).toHaveCount(0);
@@ -78,7 +78,7 @@ test('caméra embarquée : la hauteur du regard se règle, s’applique et se re
   }
   // Le cran est relu de la sauvegarde ; la sortie repart en aperçu (réalisateur) : on reprend l'embarquée.
   await expect(stage(page)).toHaveAttribute('data-regard', 'haut', { timeout: 150_000 });
-  await attendreApercu(page);
+  await attendreRoute(page);
   await choisirCamera(page, 'Embarquée');
   await expect(stage(page)).toHaveAttribute('data-camera', 'embarquee');
   panneau = await ouvrirReglages(page);
@@ -107,7 +107,7 @@ test.describe('caméra embarquée : captures de revue', () => {
       await waitForBench(page);
       await choisirVehicule(page, vehicle);
       await sortir(page, MONACO_CIRCUIT);
-      await attendreApercu(page);
+      await attendreRoute(page);
       await reglerSortie(page, 'Moment', 'Jour');
       await reglerSortie(page, 'Météo', 'Sec');
       await choisirCamera(page, 'Embarquée');

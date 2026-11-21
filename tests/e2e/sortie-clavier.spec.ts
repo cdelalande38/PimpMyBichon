@@ -5,7 +5,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, attendreSurLaRoute, DELAI_ROUTE, reglerSortie } from './helpers.ts';
+import { attendreApercu, attendreSurLaRoute, DELAI_ROUTE, preferBalade, reglerSortie } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const gestes = (page: Page) => page.locator('.drive-mid');
@@ -42,6 +42,7 @@ test.describe('sortie, pilotage au clavier', () => {
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto('./');
     await poserVehicule(page, 'concept');
+    await preferBalade(page);
     await page.goto('./#/sortie');
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
 

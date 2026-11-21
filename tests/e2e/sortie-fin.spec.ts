@@ -23,11 +23,11 @@ async function shot(page: Page, name: string): Promise<void> {
 }
 
 /** Sort sur Miami Beach, au dernier départ : il reste peu de route. */
-async function sortirDuMenu(page: Page): Promise<void> {
+async function sortirDuMenu(page: Page, mode: 'course' | 'balade' = 'course'): Promise<void> {
   await openApp(page);
   await waitForScene(page);
   await openEntry(page, ENTREE_SORTIE);
-  await pickMap(page, CARTE);
+  await pickMap(page, CARTE, mode);
   const dock = page.locator('footer.dock');
   await choisirDepart(page, new RegExp(DEPART));
   await dock.getByRole('button', { name: 'Jouer', exact: true }).tap();
@@ -132,7 +132,7 @@ test.describe('sortie de nuit : le bout de la route', () => {
   test('à l’arrivée, un seul « Rentrer au garage »', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    await sortirDuMenu(page);
+    await sortirDuMenu(page, 'balade');
     // À la main depuis la ligne, puis le pilote automatique mène jusqu'à l'arrivée.
     await attendreApercu(page);
     await page.locator('.drive-mid').tap({ position: { x: 150, y: 200 } });

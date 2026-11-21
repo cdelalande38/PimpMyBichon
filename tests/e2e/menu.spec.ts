@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { backToSections, openApp, openEntry, quick, reloadSaved, waitForBench, waitForScene } from './helpers.ts';
+import { backToSections, openApp, openEntry, quick, reloadSaved, waitForBench, waitForScene, ARTICLES_PREPARATION, poserArticles } from './helpers.ts';
 
 // Menu agrandi : la poignée du dock fait monter le menu (60 % de l'écran au plus) et passe les
 // options de l'onglet sur plusieurs lignes, sans défilement en largeur. Elle ne paraît que là où
@@ -272,6 +272,7 @@ test.describe('menu agrandi', () => {
   test('fiche moteur : les options passent à la ligne, « Origine » reste à l’écran au stage 3', async ({ page }) => {
     test.setTimeout(150_000);
     await openApp(page);
+    await poserArticles(page, ARTICLES_PREPARATION);
     await openEntry(page, 'Véhicule');
     await dock(page).getByRole('group', { name: 'Véhicule' }).locator('[data-vehicle="van"]').tap();
     // La fiche vit dans « Mécanique · Préparation », dock agrandi pour la voir en entier.

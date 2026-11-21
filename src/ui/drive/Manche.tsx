@@ -104,7 +104,7 @@ export function useManettePhysique(main: boolean, manche: boolean): void {
 }
 
 /** Vrai si la touche s'adresse à un champ, à un bouton (Espace, Entrée) ou à une fenêtre ouverte : le clavier ne conduit pas. */
-function toucheAilleurs(event: KeyboardEvent, enCourse = false): boolean {
+export function toucheAilleurs(event: KeyboardEvent, enCourse = false): boolean {
   if (event.ctrlKey || event.altKey || event.metaKey) return true;
   if (document.querySelector('dialog[open]')) return true;
   const cible = event.target instanceof HTMLElement ? event.target : null;

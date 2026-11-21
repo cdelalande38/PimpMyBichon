@@ -139,9 +139,10 @@ async function expectNoOverlap(page: Page, label: string): Promise<void> {
   const named: Array<[string, Rect]> = [
     ['menu', menu],
     ['marque', await rectOf(page, 'h1.brand')],
-    ['étiquette', await rectOf(page, '.mid > .tag')],
     ['« ? »', await rectOf(page, '.tuto-aide')],
   ];
+  // L'étiquette se tait quand le menu ouvert nomme déjà le véhicule (audit des menus, A4).
+  if ((await page.locator('.mid > .tag').count()) > 0) named.splice(2, 0, ['étiquette', await rectOf(page, '.mid > .tag')]);
   const buttons = quick(page).getByRole('button');
   for (let i = 0; i < (await buttons.count()); i += 1) {
     const box = await buttons.nth(i).boundingBox();
@@ -315,7 +316,7 @@ for (const screen of SCREENS) {
           if (box) expect(intersect(group, { left: box.x, right: box.x + box.width, top: box.y, bottom: box.y + box.height }), `places / bouton rond ${i + 1}`).toBe(false);
         }
         expect(await smallTargets(page, '.places'), 'places : 48 px').toEqual([]);
-        await quick(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+        await quick(page).getByRole('button', { name: 'Vue atelier', exact: true }).tap();
         await expect(stage(page)).toHaveAttribute('data-vue', 'atelier');
       }
 
@@ -393,7 +394,7 @@ test.describe('garage en paysage, tourner le téléphone', () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(stage(page)).toHaveAttribute('data-vue', 'interieur');
       await expect(page.getByRole('group', { name: 'Ta place dans le véhicule' })).toBeVisible();
-      await quick(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await quick(page).getByRole('button', { name: 'Vue atelier', exact: true }).tap();
     }
   });
 });
@@ -553,7 +554,7 @@ test.describe('garage, tourner le téléphone garde la vue choisie au doigt', ()
           return Math.max(Math.abs((yaw ?? 999) - (yaw0 ?? 0)), Math.abs((pitch ?? 999) - (pitch0 ?? 0)));
         })
         .toBeLessThanOrEqual(4);
-      await quick(page).getByRole('button', { name: 'Sortir', exact: true }).tap();
+      await quick(page).getByRole('button', { name: 'Vue atelier', exact: true }).tap();
       await expect(stage(page)).toHaveAttribute('data-vue', 'atelier');
       expectSameView(await settledOrbit(page), beforeInterior, 'sortie de la vue intérieure en paysage');
       await page.setViewportSize({ width: 390, height: 844 });

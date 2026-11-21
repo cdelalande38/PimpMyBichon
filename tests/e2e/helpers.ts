@@ -52,17 +52,17 @@ export async function backToSections(page: Page): Promise<void> {
 }
 
 /**
- * Libellé, dans le menu du bas (Garage), de l'entrée qui mène à la sortie (src/data/dockMenu.ts, id
- * `sortie`) : à passer à `openEntry`, jamais écrit en dur dans un parcours. Depuis la vague U (§ 5.5, mode
- * jour) elle s'appelle « Sortie » ; son bouton rond du coin du garage porte le même nom accessible.
+ * Libellé de l'écran « Jouer » (src/data/dockMenu.ts, entrée `sortie` de la section cachée `jouer`) : à passer
+ * à `openEntry`, jamais écrit en dur dans un parcours. Depuis la vague X (21 novembre 2026), il n'est plus dans
+ * le menu du bas : le bouton « Jouer » de l'en-tête du dock l'ouvre, à toute profondeur du menu.
  */
-export const ENTREE_SORTIE = 'Sortie';
+export const ENTREE_SORTIE = 'Jouer';
 
 /**
  * Ouvre une entrée du dock par son libellé (« Peinture », « Préparation », « Ambiance »,
  * « Véhicule ») : on remonte aux sections, on touche la section qui la porte
  * (src/data/dockMenu.ts), puis l'entrée si la section en montre plusieurs. On arrive en haut de
- * l'entrée, seule à l'écran sous la ligne de repère.
+ * l'entrée, seule à l'écran sous la ligne de repère. « Jouer » (ENTREE_SORTIE) : son bouton, aux sections.
  */
 export async function openEntry(page: Page, label: string): Promise<void> {
   const section = DOCK_MENU.find((item) => item.entries.some((entry) => entry.label === label));
@@ -70,6 +70,11 @@ export async function openEntry(page: Page, label: string): Promise<void> {
   if (!section || !entry) throw new Error(`entrée inconnue : ${label}`);
   const dock = page.locator('footer.dock');
   await backToSections(page);
+  if (section.cachee) {
+    await dock.getByRole('button', { name: 'Jouer', exact: true }).tap();
+    await expect(dock.locator(`.dock-tab[data-onglet="${entry.id}"]`)).toBeVisible();
+    return;
+  }
   await dock.getByRole('navigation', { name: 'Onglets de l’atelier' }).getByRole('button', { name: section.label, exact: true }).tap();
   const entries = dock.getByRole('navigation', { name: `Entrées · ${section.label}` });
   const body = dock.locator(`.dock-tab[data-onglet="${entry.id}"]`);
@@ -258,31 +263,70 @@ export async function reloadSaved(page: Page): Promise<void> {
 }
 
 /**
- * La sortie : elle s'ouvre sur l'aperçu (pilote automatique, réalisateur, presque rien à
- * l'écran) ; un appui sur la route lance la course à la main depuis la ligne (src/ui/drive/DriveScreen.tsx) ;
+ * Garde la balade comme format préféré (la sauvegarde de la sortie, IndexedDB), puis recharge le garage : la
+ * sortie ouverte ensuite (le lien « #/sortie » compris) s'ouvre sur l'aperçu, qui ne reste qu'en balade (vague X).
+ */
+export async function preferBalade(page: Page): Promise<void> {
+  await page.goto('./');
+  // Le garage monté : les sauvegardes sont relues et réécrites avant la nôtre.
+  await waitForScene(page);
+  await page.evaluate(
+    () =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open('pimpmybichon');
+        open.onupgradeneeded = () => open.result.createObjectStore('kv');
+        open.onerror = () => fail(open.error);
+        open.onsuccess = () => {
+          const transaction = open.result.transaction('kv', 'readwrite');
+          transaction.objectStore('kv').put(JSON.stringify({ state: { format: 'balade' }, version: 2 }), 'pmb-sortie');
+          transaction.oncomplete = () => done();
+          transaction.onerror = () => fail(transaction.error);
+        };
+      }),
+  );
+  await reloadSaved(page);
+}
+
+/**
+ * La sortie. Vague X (21 novembre 2026) : l'aperçu (pilote automatique, réalisateur, presque rien à l'écran)
+ * ne reste qu'en BALADE ; une course, un duel ou un drift partent droit sur la grille, aux feux, à la main.
+ * Un appui sur la route de l'aperçu lance la course à la main depuis la ligne (src/ui/drive/DriveScreen.tsx) ;
  * la petite icône du coin ouvre les réglages (src/ui/drive/Reglages.tsx).
  */
 export const DELAI_ROUTE = 150_000;
 
-/** L'aperçu roule : la route est prête et l'invitation « Touche l'écran pour commencer » est là. */
+/** L'aperçu roule (Balade) : la route est prête et l'invitation « Touche l'écran pour commencer » est là. */
 export async function attendreApercu(page: Page): Promise<void> {
   await expect(page.locator('.drive-invite')).toHaveText('Touche l’écran pour commencer', { timeout: DELAI_ROUTE });
 }
 
 /**
- * Commence la course depuis l'aperçu : un appui bref au milieu de la route. On repart de la ligne, aux
- * feux, à la main. `parti` : attend aussi le vert (« parti ») avant de rendre la main au parcours.
+ * La route est prête, quel que soit le mode : l'aperçu de la balade (invitation à toucher l'écran) ou la
+ * grille d'une course, d'un duel, d'un drift (la conduite est à la main, le départ arrêté ou lancé).
+ */
+export async function attendreRoute(page: Page): Promise<void> {
+  const invite = page.locator('.drive-invite');
+  const main = page.locator('.drive-mid[data-conduite="main"]');
+  await expect(invite.or(main)).toBeVisible({ timeout: DELAI_ROUTE });
+}
+
+/**
+ * Commence la course : depuis l'aperçu de la balade, un appui bref au milieu de la route ; on repart de la
+ * ligne, aux feux, à la main. Course, duel, drift : elle est déjà sur la grille, rien à toucher. `parti` :
+ * attend aussi le vert (« parti ») avant de rendre la main au parcours.
  */
 export async function commencerCourse(page: Page, { parti = false }: { parti?: boolean } = {}): Promise<void> {
-  await attendreApercu(page);
+  await attendreRoute(page);
   const zone = page.locator('.drive-mid');
-  const box = await zone.boundingBox();
-  if (!box) throw new Error('zone des gestes introuvable');
-  await zone.tap({ position: { x: box.width * 0.5, y: box.height * 0.4 } });
+  if (await page.locator('.drive-invite').isVisible()) {
+    const box = await zone.boundingBox();
+    if (!box) throw new Error('zone des gestes introuvable');
+    await zone.tap({ position: { x: box.width * 0.5, y: box.height * 0.4 } });
+  }
   await expect(zone).toHaveAttribute('data-conduite', 'main');
   await expect(page.locator('.drive-invite')).toHaveCount(0);
   // La scène a repris le départ arrêté (l'aperçu, lui, était « parti » sans feux).
-  await expect(page.locator('.drive-stage')).toHaveAttribute('data-depart', /^(attente|feux)$/, { timeout: DELAI_ROUTE });
+  await expect(page.locator('.drive-stage')).toHaveAttribute('data-depart', /^(attente|feux|parti)$/, { timeout: DELAI_ROUTE });
   if (parti) await expect(page.locator('.drive-stage')).toHaveAttribute('data-depart', 'parti', { timeout: DELAI_ROUTE });
 }
 
@@ -385,11 +429,22 @@ export async function attendreSurLaRoute<T>(
 }
 
 /**
- * Menu « Sortie », carte touchée : met la météo au sec. Pour les parcours qui ne parlent pas de
+ * Écran « Jouer », aux réglages : ouvre « Moment et météo » (repliés sur une ligne, « Nuit · Pluie ») ; sans effet
+ * s'ils sont déjà ouverts.
+ */
+export async function ouvrirCiel(page: Page): Promise<void> {
+  const resume = page.locator('footer.dock .entree-ciel-resume');
+  if ((await resume.getAttribute('aria-expanded')) !== 'true') await resume.tap();
+  await expect(page.locator('footer.dock').getByRole('group', { name: 'Météo' })).toBeVisible();
+}
+
+/**
+ * Écran « Jouer », carte touchée : met la météo au sec. Pour les parcours qui ne parlent pas de
  * météo : la pluie (réglage par défaut) allonge les accélérations à la main d'un quart et ralentit le
  * pilote automatique en courbe (src/data/adherence.ts).
  */
 export async function auSec(page: Page): Promise<void> {
+  await ouvrirCiel(page);
   const sec = page.locator('footer.dock').getByRole('group', { name: 'Météo' }).getByRole('button', { name: 'Sec', exact: true });
   await sec.tap();
   await expect(sec).toHaveAttribute('aria-pressed', 'true');
@@ -420,85 +475,111 @@ export function cartesDuMenu(): CarteDuMenu[] {
     .sort((a, b) => a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
-/** Le menu de la sortie à l'écran (son étape dans data-etape : mode, zone, circuit, depart, reglages, carriere). */
+/** L'écran « Jouer » à l'écran (son étape dans data-etape : mode, zone, circuit, reglages, carriere). */
 export function entreeSortie(page: Page) {
   return page.locator('footer.dock .drive-entry');
 }
 
-/** Étape du menu de la sortie à l'écran. */
+/** Étape de l'écran « Jouer » à l'écran. */
 export async function etapeSortie(page: Page): Promise<string> {
   return (await entreeSortie(page).getAttribute('data-etape')) ?? '';
 }
 
-/** Menu de la sortie : « Retour » du dock, une étape plus haut. */
+/** Écran « Jouer » : « Retour » du dock, une étape plus haut. */
 export async function etapePrecedente(page: Page): Promise<void> {
   const avant = await etapeSortie(page);
   await page.locator('footer.dock').getByRole('button', { name: 'Retour', exact: true }).tap();
   if (avant !== 'mode') await expect(entreeSortie(page)).not.toHaveAttribute('data-etape', avant);
 }
 
-/**
- * Menu « Sortie » ouvert, à n'importe quelle étape : mène aux réglages de la carte donnée par les étapes
- * (mode libre, lieu, circuit du lieu s'il en a plusieurs, départ), en touchant le départ `depart`, ou
- * celui déjà choisi (le premier par défaut). Sans dépendre de l'ordre des étapes à l'écran.
- */
-export async function allerALaCarte(page: Page, carte: CarteDuMenu, { depart }: { depart?: string | RegExp } = {}): Promise<void> {
+/** Les modes de l'écran « Jouer » (carte `data-mode`, src/data/modes.ts) que les parcours touchent. */
+export type ModeJeu = 'course' | 'duel' | 'drift' | 'balade';
+
+/** Écran « Jouer » ouvert, à n'importe quelle étape : remonte aux modes et touche la carte du mode donné. */
+export async function choisirMode(page: Page, mode: ModeJeu): Promise<void> {
   const dock = page.locator('footer.dock');
   const entree = entreeSortie(page);
   await expect(entree).toBeVisible();
-  for (let i = 0; i < 6; i += 1) {
-    const etape = await etapeSortie(page);
-    if (etape === 'mode' || etape === 'zone') break;
-    await etapePrecedente(page);
-  }
-  if ((await etapeSortie(page)) === 'mode') await dock.getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
+  for (let i = 0; i < 6 && (await etapeSortie(page)) !== 'mode'; i += 1) await etapePrecedente(page);
+  await dock.getByRole('group', { name: 'Mode' }).locator(`[data-mode="${mode}"]`).tap();
   await expect(entree).toHaveAttribute('data-etape', 'zone');
+}
+
+/**
+ * Écran « Jouer » ouvert, à n'importe quelle étape : mène aux réglages de la carte donnée par les étapes
+ * (le mode `mode`, « course » par défaut, puis le lieu, le circuit du lieu s'il en a plusieurs), en touchant le
+ * départ `depart` s'il est donné (la route en a plusieurs), sinon celui déjà choisi (le premier par défaut).
+ * Sans dépendre de l'ordre des étapes à l'écran.
+ */
+export async function allerALaCarte(page: Page, carte: CarteDuMenu, { depart, mode = 'course' }: { depart?: string | RegExp; mode?: ModeJeu } = {}): Promise<void> {
+  const dock = page.locator('footer.dock');
+  const entree = entreeSortie(page);
+  await choisirMode(page, mode);
   await dock.getByRole('group', { name: 'Lieu' }).locator(`[data-zone="${carte.zone}"]`).tap();
-  await expect(entree).toHaveAttribute('data-etape', /^(circuit|depart|reglages)$/);
+  await expect(entree).toHaveAttribute('data-etape', /^(circuit|reglages)$/);
   if ((await etapeSortie(page)) === 'circuit') await dock.getByRole('group', { name: 'Circuit' }).locator(`[data-carte="${carte.id}"]`).tap();
-  await expect(entree).toHaveAttribute('data-etape', /^(depart|reglages)$/);
-  if ((await etapeSortie(page)) === 'depart') {
-    const departs = dock.getByRole('group', { name: 'Départ' });
-    const reglages = dock.locator('.drive-entry[data-etape="reglages"]');
-    // La route se charge (départs) ; une carte à un seul départ passe d'elle-même aux réglages.
-    await expect(departs.getByRole('button').first().or(reglages)).toBeVisible({ timeout: 30_000 });
-    if (!(await reglages.isVisible())) {
-      const presse = departs.locator('[aria-pressed="true"]');
-      const bouton = depart !== undefined ? departs.getByRole('button', { name: depart }) : (await presse.count()) > 0 ? presse : departs.getByRole('button').first();
-      await bouton.tap();
-    }
-  }
   await expect(entree).toHaveAttribute('data-etape', 'reglages');
   await expect(dock.locator(`.drive-credits[data-credits="${carte.id}"]`)).toBeVisible();
+  if (depart !== undefined) await choisirDepart(page, depart);
 }
 
 /**
- * Menu « Sortie » : choisit une carte (la première du catalogue par défaut ; `index` : son rang dans
- * l'ordre du catalogue) par les étapes du menu, et arrive à ses réglages : moment, météo, format et
- * « Jouer » sont à l'écran. Le départ est celui déjà choisi, le premier par défaut (voir choisirDepart).
+ * Écran « Jouer » : choisit une carte (la première du catalogue par défaut ; `index` : son rang dans
+ * l'ordre du catalogue) par les étapes, dans le mode `mode` (« course » par défaut), et arrive à ses réglages :
+ * « Jouer » est à l'écran. Le départ est celui déjà choisi, le premier par défaut (voir choisirDepart).
  */
-export async function pickMap(page: Page, index = 0): Promise<void> {
+export async function pickMap(page: Page, index = 0, mode: ModeJeu = 'course'): Promise<void> {
   const carte = cartesDuMenu()[index];
   if (!carte) throw new Error(`pas de carte au rang ${index}`);
-  await allerALaCarte(page, carte);
+  await allerALaCarte(page, carte, { mode });
 }
 
-/** Menu « Sortie » : choisit la carte dont le nom (« Monaco, le circuit ») répond à `nom`, jusqu'à ses réglages. */
-export async function choisirCarte(page: Page, nom: string | RegExp): Promise<void> {
+/** Écran « Jouer » : choisit la carte dont le nom (« Monaco, le circuit ») répond à `nom`, jusqu'à ses réglages. */
+export async function choisirCarte(page: Page, nom: string | RegExp, mode: ModeJeu = 'course'): Promise<void> {
   const carte = cartesDuMenu().find((item) => (typeof nom === 'string' ? item.name.includes(nom) : nom.test(item.name)));
   if (!carte) throw new Error(`pas de carte nommée ${String(nom)}`);
-  await allerALaCarte(page, carte);
+  await allerALaCarte(page, carte, { mode });
 }
 
 /**
- * Menu « Sortie », une carte choisie (réglages ou départs à l'écran) : touche le départ `nom` et revient
- * aux réglages.
+ * Écran « Jouer », aux réglages d'une carte (la route chargée) : touche le départ `nom`. Le départ est une
+ * rangée des réglages, sans étape à part ; une carte à un seul départ n'a pas cette rangée.
  */
 export async function choisirDepart(page: Page, nom: string | RegExp): Promise<void> {
   const dock = page.locator('footer.dock');
-  if ((await etapeSortie(page)) === 'reglages') await etapePrecedente(page);
-  await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'depart');
+  await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'reglages');
   const bouton = dock.getByRole('group', { name: 'Départ' }).getByRole('button', { name: nom });
   await bouton.tap();
-  await expect(entreeSortie(page)).toHaveAttribute('data-etape', 'reglages');
+  await expect(bouton).toHaveAttribute('aria-pressed', 'true');
+}
+
+/**
+ * Les options de la fiche de préparation, payantes depuis le 19 novembre 2026 (`articlePrep` de
+ * src/data/enginePrep.ts, qu'un parcours ne peut pas importer : il passe par import.meta.glob de Vite).
+ */
+export const ARTICLES_PREPARATION: readonly string[] = ['reprog-stage1', 'reprog-stage2', 'reprog-stage3', 'carbu-gicleurs', 'carbu-gros-carbu', 'carbu-double-carbu', 'nitro-nitro-petit', 'nitro-nitro-moyen', 'nitro-nitro-gros'].map((id) => `piece-${id}`);
+
+/**
+ * Pose dans la sauvegarde du jeu les articles achetés `ids` (solde nul), puis recharge : pour les parcours
+ * qui choisissent une option payante sans passer par la boutique (la fiche de préparation est payante
+ * depuis le 19 novembre 2026).
+ */
+export async function poserArticles(page: Page, ids: readonly string[]): Promise<void> {
+  const etat = { solde: 0, articles: Object.fromEntries(ids.map((id) => [id, true])), hautsFaits: { 'premiere-course': true }, cumuls: { courses: 4, distance: 9300 } };
+  await page.evaluate(
+    (value) =>
+      new Promise<void>((done, fail) => {
+        const open = indexedDB.open('pimpmybichon');
+        open.onupgradeneeded = () => open.result.createObjectStore('kv');
+        open.onerror = () => fail(open.error);
+        open.onsuccess = () => {
+          const transaction = open.result.transaction('kv', 'readwrite');
+          transaction.objectStore('kv').put(JSON.stringify({ state: value, version: 1 }), 'pmb-jeu');
+          transaction.oncomplete = () => done();
+          transaction.onerror = () => fail(transaction.error);
+        };
+      }),
+    etat,
+  );
+  await reloadSaved(page);
 }

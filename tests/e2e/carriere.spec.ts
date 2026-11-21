@@ -1,6 +1,7 @@
 // Le mode carrière (vague U, 18 novembre 2026 ; src/data/carriere.ts, src/ui/carriere/) :
-// - au garage, le bouton rond du prochain rendez-vous ; un appui ouvre le panneau de la carrière (il vit
-//   dans le menu de la sortie, à l'étape « Mode », Carrière choisie) ; la fiche du premier
+// - sur l'écran « Jouer », la carte « Carrière » dit le prochain rendez-vous et sa météo (le bouton rond du garage
+//   est retiré, vague X) ; un appui ouvre le panneau de la carrière (il vit dans l'écran « Jouer »,
+//   Carrière choisie) ; la fiche du premier
 //   rendez-vous (zone, départ, météo, moment, format, objectif, prime, conseil) et « Jouer », entier,
 //   en portrait comme en paysage ;
 // - la sortie imposée : l'écran de route dit le rendez-vous et son objectif, les réglages ne laissent changer
@@ -22,7 +23,7 @@ import { resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
 import { boutonsDeFin, finEnDeuxColonnes, finEnPortrait } from './fin-course.ts';
-import { attendreApercu, attendreSurLaRoute, commencerCourse, DELAI_ROUTE, fermerReglages, openApp, ouvrirReglages, reglerSortie, reloadSaved, rentrerAuGarage, tempsDeRoute, waitForScene } from './helpers.ts';
+import { attendreRoute, attendreSurLaRoute, backToSections, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, fermerReglages, openApp, openEntry, ouvrirReglages, reglerSortie, reloadSaved, rentrerAuGarage, tempsDeRoute, waitForScene } from './helpers.ts';
 
 interface Rdv {
   id: string;
@@ -44,7 +45,20 @@ const PAYSAGE = { width: 844, height: 390 } as const;
 const PORTRAIT = { width: 390, height: 844 } as const;
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
-const pastille = (page: Page) => page.getByRole('button', { name: /^Carrière : prochain rendez-vous/ });
+/** La carte « Carrière » de l'écran « Jouer » : ce que portait le bouton rond du garage (le prochain rendez-vous et sa météo). */
+const pastille = (page: Page) => page.locator('footer.dock').getByRole('group', { name: 'Mode' }).locator('[data-mode="carriere"]');
+/** Ouvre l'écran « Jouer » (aux modes) et rend la carte « Carrière », visible en entier. */
+async function carteCarriere(page: Page): Promise<Locator> {
+  await openEntry(page, ENTREE_SORTIE);
+  const carte = pastille(page);
+  await carte.scrollIntoViewIfNeeded();
+  return carte;
+}
+/** Le texte de la carte « Carrière » dit le prochain rendez-vous ; l'écran « Jouer » se referme ensuite sur les sections. */
+async function prochainRendezVous(page: Page, texte: RegExp | string): Promise<void> {
+  await expect(await carteCarriere(page)).toContainText(texte);
+  await backToSections(page);
+}
 const compte = (page: Page) => page.getByRole('dialog', { name: 'Ton compte' });
 /** Le panneau de la carrière, dans le menu de la sortie (Garage › Sortie › Carrière). */
 const menuCarriere = (page: Page) => page.locator('footer.dock').getByRole('region', { name: 'Carrière', exact: true });
@@ -150,13 +164,16 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await openApp(page);
     await waitForScene(page);
 
-    // Au garage : le bouton rond du prochain rendez-vous, dans la colonne des raccourcis, 48 px au doigt.
-    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`^Carrière : prochain rendez-vous 1 sur ${SUITE.length}, ${premier.titre}`));
-    await entiere(page, pastille(page), 'bouton rond de la carrière');
-    await photo(page, '01-garage-bouton-portrait');
+    // Au garage : plus de bouton rond de la carrière ; sur l'écran « Jouer », sa carte dit le prochain rendez-vous.
+    await expect(page.getByRole('button', { name: /^Carrière : prochain rendez-vous/ })).toHaveCount(0);
+    const carte = await carteCarriere(page);
+    await expect(carte).toContainText(`Rendez-vous 1 sur ${SUITE.length} · ${premier.titre}`);
+    await expect(carte.locator('.drive-icon')).toHaveCount(1);
+    await entiere(page, carte, 'carte Carrière');
+    await photo(page, '01-jouer-carte-carriere-portrait');
 
-    // Un appui ouvre la carrière : le menu de la sortie, à l'étape du mode, Carrière choisie.
-    await pastille(page).tap();
+    // Un appui ouvre la carrière : l'écran « Jouer », à l'étape de la carrière.
+    await carte.tap();
     await expect(page.locator('footer.dock .drive-entry')).toHaveAttribute('data-etape', 'carriere');
     const panneau = menuCarriere(page);
     await expect(panneau).toBeVisible();
@@ -227,7 +244,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
 
     // Au garage : le rappel est passé au suivant, sans bandeau sur la scène.
     await rentrerPreparer(page);
-    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous 2 sur ${SUITE.length}, ${second.titre}`));
+    await prochainRendezVous(page, `Rendez-vous 2 sur ${SUITE.length} · ${second.titre}`);
     await page.getByRole('button', { name: /Ton solde/ }).tap();
     const rappel = compte(page).locator('.carriere-rappel');
     await expect(rappel).toContainText(`Prochain rendez-vous : 2 sur ${SUITE.length}, ${second.titre}`);
@@ -241,11 +258,13 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     // Rechargement : la progression est gardée.
     await reloadSaved(page);
     await waitForScene(page);
-    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous 2 sur ${SUITE.length}`));
-    await entiere(page, pastille(page), 'bouton rond de la carrière (portrait)');
+    const gardee = await carteCarriere(page);
+    await expect(gardee).toContainText(`Rendez-vous 2 sur ${SUITE.length}`);
+    await entiere(page, gardee, 'carte Carrière (portrait)');
     await page.setViewportSize(PAYSAGE);
-    await entiere(page, pastille(page), 'bouton rond de la carrière (paysage)');
-    await photo(page, '08-garage-bouton-paysage');
+    await (await carteCarriere(page)).scrollIntoViewIfNeeded();
+    await entiere(page, pastille(page), 'carte Carrière (paysage)');
+    await photo(page, '08-jouer-carte-carriere-paysage');
     expect(errors).toEqual([]);
   });
 
@@ -267,8 +286,8 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await waitForScene(page);
     const reussis = Object.fromEntries(SUITE.slice(0, index).map((r) => [r.id, { reussi: true, essais: 1, meilleurTemps: 60, medaille: null }]));
     await poserJeu(page, { solde: 500, articles: {}, hautsFaits: {}, cumuls: {}, carriere: { resultats: reussis } });
-    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${numero} sur ${SUITE.length}`));
-    await pastille(page).tap();
+    await (await carteCarriere(page)).tap();
+    await expect(pastille(page)).toHaveCount(0);
     await menuCarriere(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     const objectif = (await page.locator('.drive-rendez-vous small').textContent()) ?? '';
@@ -304,7 +323,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     // Rentrer : le rendez-vous reste le courant (rien de perdu).
     await rentrerAuGarage(page);
     await expect(stage(page)).toHaveCount(0);
-    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${numero} sur ${SUITE.length}`));
+    await prochainRendezVous(page, `Rendez-vous ${numero} sur ${SUITE.length}`);
     expect(errors).toEqual([]);
   });
   test('« Course suivante » : la sortie se recharge sur le rendez-vous suivant, tout imposé ; Précédent ramène au garage', async ({ page }) => {
@@ -325,8 +344,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await waitForScene(page);
     const reussis = Object.fromEntries(SUITE.slice(0, i).map((r) => [r.id, { reussi: true, essais: 1, meilleurTemps: 60, medaille: null }]));
     await poserJeu(page, { solde: 500, articles: {}, hautsFaits: {}, cumuls: {}, carriere: { resultats: reussis } });
-    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${i + 1} sur ${SUITE.length}`));
-    await pastille(page).tap();
+    await (await carteCarriere(page)).tap();
     await menuCarriere(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-carte', rdv.carte);
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
@@ -369,7 +387,8 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await expect(page).toHaveURL(/#\/sortie$/);
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await expect(stage(page)).toHaveAttribute('data-meteo', suivant.meteo);
-    await attendreApercu(page);
+    // Un rendez-vous est une course : droit sur la grille, sans aperçu (vague X).
+    await attendreRoute(page);
     await expect(page.locator('.drive-rendez-vous')).toContainText(`Rendez-vous ${i + 2} sur ${SUITE.length}`);
     const reglages = await ouvrirReglages(page);
     const meteo = { sec: 'Sec', pluie: 'Pluie', neige: 'Neige' }[suivant.meteo] ?? suivant.meteo;
@@ -389,7 +408,7 @@ test.describe('carrière : des rendez-vous imposés, annoncés à l’avance', (
     await expect(page.getByRole('heading', { level: 1, name: 'PimpMyBichon' })).toBeVisible();
     await expect(stage(page)).toHaveCount(0);
     expect(new URL(page.url()).hash).toBe('');
-    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`prochain rendez-vous ${i + 2} sur ${SUITE.length}`));
+    await prochainRendezVous(page, `Rendez-vous ${i + 2} sur ${SUITE.length}`);
     expect(errors).toEqual([]);
   });
 });
@@ -415,9 +434,10 @@ test.describe('carrière : les saisons', () => {
     const resultats = Object.fromEntries(SUITE.map((r, i) => [r.id, { reussi: true, essais: 2, meilleurTemps: 40 + i, medaille: medailles[i % 4] }]));
     await poserJeu(page, { solde: 900, articles: {}, hautsFaits: { 'carriere-bouclee': true }, cumuls: {}, carriere: { resultats } });
 
-    // Au garage, le bouton rond annonce le premier rendez-vous de la saison 2.
-    await expect(pastille(page)).toHaveAccessibleName(new RegExp(`^Carrière : prochain rendez-vous 1 sur ${S2.length} de la saison 2, ${premier.titre}`));
-    await pastille(page).tap();
+    // Sur l'écran « Jouer », la carte « Carrière » annonce le premier rendez-vous de la saison 2.
+    const carteS2 = await carteCarriere(page);
+    await expect(carteS2).toContainText(`Rendez-vous 1 sur ${S2.length} (saison 2) · ${premier.titre}`);
+    await carteS2.tap();
     const panneau = menuCarriere(page);
     await expect(panneau.locator('.carriere-surtitre')).toHaveText(`Saison 2 · 1 sur ${S2.length}`);
     const fiche = panneau.locator(`.carriere-fiche[data-rendez-vous="${premier.id}"]`);
@@ -431,8 +451,10 @@ test.describe('carrière : les saisons', () => {
     await entiere(page, sortir, 'Jouer (saison 2, paysage)');
     await photo(page, '11-saison2-fiche-paysage');
     // La liste des saisons, sous la fiche : la saison 1 bouclée, la 2 en cours.
+    // Repliée sous la fiche (vague X) : un appui sur « Les saisons » déplie la liste.
     const saisons = panneau.getByRole('region', { name: 'Les saisons' });
     await saisons.scrollIntoViewIfNeeded();
+    await saisons.getByRole('button', { name: /^Les saisons/ }).tap();
     await expect(saisons.locator('[data-etat="bouclee"]')).toContainText('Saison 1 · L’échauffement');
     await expect(saisons.locator('[data-etat="en-cours"]')).toContainText(`Saison 2 · ${SAISONS[1]!.titre}`);
     await photo(page, '12-saisons-paysage');

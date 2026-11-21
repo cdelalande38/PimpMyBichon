@@ -43,10 +43,11 @@ test.describe('courses : format, tours, écran de fin', () => {
     await waitForScene(page);
     await openEntry(page, ENTREE_SORTIE);
     await carte(page, 'Miami Beach');
-    // Route ouverte : la course d'un tour par défaut (vague U), 3 tours grisés avec la phrase.
+    // Route ouverte : la course d'un tour par défaut (vague U), 3 tours grisés ; la raison est sur la case (vague X).
     await expect(format(page, 'Course 1 tour')).toHaveAttribute('aria-pressed', 'true');
     await expect(format(page, 'Course 3 tours')).toBeDisabled();
-    await expect(dock(page).getByText('Trois tours, c’est sur un circuit')).toBeVisible();
+    await expect(format(page, 'Course 3 tours')).toContainText('Sur un circuit fermé seulement');
+    await expect(format(page, 'Course 1 tour')).not.toContainText('circuit fermé');
     await format(page, 'Course 1 tour').tap();
     await expect(format(page, 'Course 1 tour')).toHaveAttribute('aria-pressed', 'true');
     // Le circuit : 3 tours possibles.
@@ -54,9 +55,9 @@ test.describe('courses : format, tours, écran de fin', () => {
     await expect(formats(page)).toHaveAttribute('data-boucle', 'oui');
     await format(page, 'Course 3 tours').tap();
     await expect(format(page, 'Course 3 tours')).toHaveAttribute('aria-pressed', 'true');
-    await expect(dock(page).getByText('Trois tours, c’est sur un circuit')).toHaveCount(0);
+    await expect(format(page, 'Course 3 tours')).not.toContainText('circuit fermé');
     // Chaque format offre 48 px au doigt.
-    for (const nom of ['Balade', 'Course 1 tour', 'Course 3 tours']) {
+    for (const nom of ['Course 1 tour', 'Course 3 tours']) {
       const box = await format(page, nom).boundingBox();
       expect(box?.height ?? 0, nom).toBeGreaterThanOrEqual(48);
     }
@@ -65,7 +66,7 @@ test.describe('courses : format, tours, écran de fin', () => {
     await carte(page, 'Miami Beach');
     await expect(format(page, 'Course 1 tour')).toHaveAttribute('aria-pressed', 'true');
     await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toContainText('Course 1 tour');
-    await dock(page).getByText('Trois tours, c’est sur un circuit').scrollIntoViewIfNeeded();
+    await format(page, 'Course 3 tours').scrollIntoViewIfNeeded();
     await shot(page, '02-format-route-ouverte');
     // Gardé au rechargement.
     await reloadSaved(page);

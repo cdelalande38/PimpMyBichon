@@ -28,6 +28,9 @@ export const TOUCHES: Readonly<Record<string, ActionClavier>> = {
 /** Touches qui lancent la course depuis l'aperçu, ou rendent le volant sous le pilote automatique. */
 export const TOUCHES_LANCEMENT: readonly string[] = ['Enter', 'NumpadEnter', 'Space', 'ArrowUp', 'KeyW'];
 
+/** Touches qui mettent la course en pause, ou la reprennent (demande de l'audit des menus, E2). */
+export const TOUCHES_PAUSE: readonly string[] = ['Escape', 'KeyP'];
+
 /** Vitesses du braquage au clavier, en course du volant par seconde (1 = de l'axe à la butée). */
 export const CLAVIER = { braquage: 3.5, retour: 6 } as const;
 

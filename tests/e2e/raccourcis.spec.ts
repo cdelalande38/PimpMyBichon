@@ -5,7 +5,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { backToSections, ENTREE_SORTIE, openApp, openAtelier, openEntry, quick, VIEWPORT, waitForScene } from './helpers.ts';
+import { ARTICLES_PREPARATION, backToSections, openApp, openAtelier, openEntry, poserArticles, quick, VIEWPORT, waitForScene } from './helpers.ts';
 
 const dock = (page: Page) => page.locator('footer.dock');
 const tabs = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
@@ -71,11 +71,10 @@ test.describe('raccourcis et dock de personnalisation', () => {
     await expect(dock(page).getByRole('navigation', { name: /^Entrées/ })).toHaveCount(0);
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Custom', 'Peinture']);
     await shot(page, '01c-custom-peinture');
-    // « Garage » : deux entrées (Ambiance, Sortie) ; le fil dit « Garage · Ambiance ».
+    // « Garage » : l'ambiance seule (la sortie est l'écran « Jouer », vague X) ; le fil dit « Garage · Ambiance ».
     await backToSections(page);
     await tabs(page).getByRole('button', { name: 'Garage', exact: true }).tap();
-    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Garage' }).getByRole('button')).toHaveText(['Ambiance', ENTREE_SORTIE]);
-    await dock(page).getByRole('navigation', { name: 'Entrées · Garage' }).getByRole('button', { name: 'Ambiance', exact: true }).tap();
+    await expect(dock(page).getByRole('navigation', { name: 'Entrées · Garage' })).toHaveCount(0);
     await expect(dock(page).getByRole('group', { name: 'Ambiance' })).toBeVisible();
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Garage', 'Ambiance']);
     await backToSections(page);
@@ -124,6 +123,7 @@ test.describe('raccourcis et dock de personnalisation', () => {
   test('« Mécanique · Préparation » : la fiche dans le dock, l’essentiel en compact, tout en agrandi', async ({ page }) => {
     test.setTimeout(120_000);
     await openApp(page);
+    await poserArticles(page, ARTICLES_PREPARATION);
     await waitForScene(page);
     await openEntry(page, 'Préparation');
     await expect(dock(page).locator('.dock-crumb')).toHaveText(['Mécanique', 'Préparation']);

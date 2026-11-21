@@ -1,22 +1,29 @@
-// Dernière étape du menu de la sortie : le rappel des choix (lieu › circuit › départ) et « Changer de
-// circuit », le moment (nuit, jour), la météo (au choix en mode libre), le format (chacun dit ce qu'il
-// rapporte ; 3 tours grisés avec leur phrase sur une route ouverte), les crédits des données de la
-// carte (obligation de licence), puis « Jouer ». « Jouer » n'est jamais dans ce qui défile : il est
-// sous le corps de l'étape, entier, sur toute la largeur du menu, sous le pouce, et redit le format.
+// Dernière étape de l'écran « Jouer » : le rappel des choix (mode, lieu › circuit › départ) et « Changer »,
+// puis, selon le mode, ce qui sert à ce mode et rien de plus : le format (la course : 1 ou 3 tours ; 3 tours
+// dit sur la case pourquoi il est grisé sur une route ouverte), l'adversaire et la difficulté (le duel), le
+// départ (quand la route en a plusieurs), « Nuit · Pluie » (le moment et la météo, repliés, un appui les
+// ouvre) et les crédits des données de la carte (obligation de licence, repliés). « Jouer » n'est jamais dans
+// ce qui défile : il est sous le corps de l'étape, entier, sur toute la largeur du menu, sous le pouce, et
+// redit le mode.
 
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { openSheet } from '../../../app/useRoute.ts';
-import { AIDES_FORMAT, FORMATS, formatCouru, formatPossible, formatSpec, PHRASE_SANS_BOUCLE } from '../../../data/courses.ts';
+import { AIDES_FORMAT, FORMATS, formatCouru, formatPossible, formatSpec } from '../../../data/courses.ts';
 import { creditLine, mapById } from '../../../data/maps.ts';
+import { MODES_JEU, modeDe } from '../../../data/modes.ts';
 import { MOMENTS } from '../../../data/moments.ts';
 import { useDock } from '../../../state/dock.ts';
 import { useDrive, WEATHERS } from '../../../state/drive.ts';
+import { kilometres } from '../../jeu/libelles.ts';
 import { useRevealPressed } from '../../scroll.ts';
 import { DriveIcon } from '../icones.tsx';
-import { apresDepart, LIBELLE_DEBUT, LIBELLE_LIBRE, niveauLieu, rappel, sansEtapeDepart } from './etapes.ts';
+import { LIBELLE_DEBUT, niveauLieu, rappel } from './etapes.ts';
 import { useDeparts } from './useDeparts.ts';
 import { useDuel } from '../../../drive/adversaire/choix.ts';
-import { ChoixAdversaire, PuceDuel, reditDuel, useDuelChoisi } from '../Duel.tsx';
+import { ChoixAdversaire, reditDuel, useDuelChoisi } from '../Duel.tsx';
+
+/** Phrase de la case « 3 tours » grisée : la raison est sur la case, pas en petit plus bas. */
+const RAISON_SANS_BOUCLE = 'Sur un circuit fermé seulement';
 
 export function EtapeReglages() {
   const map = mapById(useDrive((state) => state.choice.map));
@@ -30,32 +37,19 @@ export function EtapeReglages() {
   const moment = useDrive((state) => state.moment);
   const setMoment = useDrive((state) => state.setMoment);
   const setLevels = useDock((state) => state.setLevels);
-  const replace = useDock((state) => state.replace);
   const starts = useDeparts(map);
   const start = starts?.list.find((item) => item.id === chosen) ?? starts?.list[0];
   const boucle = starts?.loop === true;
   const couru = formatCouru(format, boucle);
   const formatRow = useRevealPressed<HTMLDivElement>(couru);
-  const ready = starts?.status === 'pret' ? starts.list : null;
-  const libelle = starts?.status === 'erreur' ? LIBELLE_DEBUT : start?.label;
-  // Duel (src/ui/drive/Duel.tsx) : une puce de plus dans la rangée des formats, puis le choix de l'adversaire.
+  const departRow = useRevealPressed<HTMLDivElement>(start?.id ?? '');
+  const [cielOuvert, setCielOuvert] = useState(false);
   const duel = useDuelChoisi();
   useDuel((state) => state.adversaire);
   useDuel((state) => state.niveau);
-
-  // Menu rouvert sur la dernière sortie : le fil finit sur le nom du départ dès que la route l'a dit, et
-  // une carte à un seul départ n'a pas d'étape des départs où « Retour » s'arrêterait.
-  useEffect(() => {
-    if (!libelle) return;
-    const levels = useDock.getState().levels;
-    const top = levels.at(-1);
-    if (top?.kind === 'sortie' && top.etape === 'reglages' && top.libelle !== libelle) replace(apresDepart(libelle));
-  }, [libelle, replace]);
-  useEffect(() => {
-    if (!ready) return;
-    const next = sansEtapeDepart(useDock.getState().levels, ready);
-    if (next) setLevels(next);
-  }, [ready, setLevels]);
+  const mode = modeDe(couru, duel);
+  const nomMode = MODES_JEU.find((item) => item.id === mode)?.label ?? '';
+  const libelle = starts?.status === 'erreur' ? LIBELLE_DEBUT : start?.label;
 
   if (!map) return <p className="drive-note">Choisis d’abord un circuit : reviens d’une étape.</p>;
 
@@ -64,22 +58,56 @@ export function EtapeReglages() {
     chooseStart(start?.id ?? null);
     openSheet({ name: 'sortie' });
   };
-  // « Jouer » redit le format et ce qu'il rapporte : « Course 1 tour : chrono, dollars et hauts faits ».
+  // « Jouer » redit le mode et ce qu'il rapporte : « Course 1 tour : chrono, dollars et hauts faits ».
   const aide = AIDES_FORMAT[couru];
   const redit = (duel ? reditDuel() : null) ?? `${formatSpec(couru).label} : ${aide.charAt(0).toLowerCase()}${aide.slice(1)}`;
+  const departs = starts?.status === 'pret' && starts.list.length > 1 ? starts.list : [];
+  const meteo = WEATHERS.find((item) => item.id === weather)?.label ?? '';
+  const momentLabel = MOMENTS.find((item) => item.id === moment)?.label ?? '';
 
   return (
     <>
       <div className="entree-corps">
         <div className="entree-rappel entree-rappel-reglages">
           <p>
-            <b>{LIBELLE_LIBRE}</b> · {rappel(map, starts?.status === 'chargement' ? null : (libelle ?? null))}
+            <b>{nomMode}</b> · {rappel(map, starts?.status === 'chargement' ? null : (libelle ?? null))}
           </p>
-          <button type="button" className="btn entree-changer" aria-label="Changer de circuit" onClick={() => setLevels([niveauLieu()])}>
+          <button type="button" className="btn entree-changer" aria-label="Changer de circuit" onClick={() => setLevels([niveauLieu(nomMode)])}>
             Changer
           </button>
         </div>
-        <div className="entree-ciel">
+        {mode === 'course' && (
+          <div ref={formatRow} className="chips drive-formats" role="group" aria-label="Format" data-boucle={boucle ? 'oui' : 'non'}>
+            {FORMATS.filter((item) => item.tours !== null && item.id !== 'drift').map((item) => {
+              const possible = formatPossible(item.id, boucle);
+              return (
+                <button key={item.id} type="button" className="chip" data-format={item.id} aria-pressed={item.id === couru} disabled={!possible} onClick={() => setFormat(item.id)}>
+                  <b>{item.label}</b>
+                  <small>{possible || starts?.status === 'chargement' ? AIDES_FORMAT[item.id] : RAISON_SANS_BOUCLE}</small>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <ChoixAdversaire />
+        {departs.length > 0 && (
+          <div ref={departRow} className="chips entree-liste entree-departs" role="group" aria-label="Départ">
+            {departs.map((item) => (
+              <button key={item.id} type="button" className="chip" data-depart={item.id} aria-pressed={item.id === start?.id} onClick={() => chooseStart(item.id)}>
+                <b>{item.label}</b>
+                {/* Longueur de course, pas la borne du départ : « km 0,0 » se lisait « 0 km ». */}
+                <small>{starts?.loop ? `${kilometres(starts.length)} le tour` : `${kilometres((starts?.length ?? 0) - item.at)} jusqu’à l’arrivée`}</small>
+              </button>
+            ))}
+          </div>
+        )}
+        <button type="button" className="chip entree-ciel-resume" aria-expanded={cielOuvert} aria-controls="entree-ciel" onClick={() => setCielOuvert(!cielOuvert)}>
+          <b>
+            {momentLabel} · {meteo}
+          </b>
+          <small>{cielOuvert ? 'Replier' : 'Moment et météo'}</small>
+        </button>
+        <div id="entree-ciel" className="entree-ciel" hidden={!cielOuvert}>
           <div className="drive-weather" role="group" aria-label="Moment">
             {MOMENTS.map((item) => (
               <button key={item.id} type="button" className="btn drive-weather-btn" aria-pressed={moment === item.id} onClick={() => setMoment(item.id)}>
@@ -96,39 +124,10 @@ export function EtapeReglages() {
             ))}
           </div>
         </div>
-        <div ref={formatRow} className="chips drive-formats" role="group" aria-label="Format" data-boucle={boucle ? 'oui' : 'non'}>
-          {FORMATS.map((item) => {
-            const possible = formatPossible(item.id, boucle);
-            return (
-              <button
-                key={item.id}
-                type="button"
-                className="chip"
-                data-format={item.id}
-                aria-pressed={item.id === couru && !duel}
-                disabled={!possible}
-                aria-describedby={possible ? undefined : 'sortie-format-phrase'}
-                onClick={() => {
-                  setFormat(item.id);
-                  useDuel.getState().setActif(false);
-                }}
-              >
-                <b>{item.label}</b>
-                <small>{AIDES_FORMAT[item.id]}</small>
-              </button>
-            );
-          })}
-          <PuceDuel />
-        </div>
-        <ChoixAdversaire />
-        {!boucle && starts?.status !== 'chargement' && FORMATS.some((item) => !formatPossible(item.id, false)) && (
-          <p id="sortie-format-phrase" className="drive-note drive-format-phrase">
-            {PHRASE_SANS_BOUCLE}
-          </p>
-        )}
-        <p className="drive-credits" data-credits={map.id}>
-          Données de la carte : {map.credits.map(creditLine).join(' ; ')}.
-        </p>
+        <details className="drive-credits" data-credits={map.id}>
+          <summary>Données de la carte</summary>
+          <p>{map.credits.map(creditLine).join(' ; ')}.</p>
+        </details>
       </div>
       <button type="button" className="btn cta drive-go" aria-label="Jouer" aria-describedby="sortie-go-format" data-format={duel ? 'duel' : couru} onClick={go}>
         <span>Jouer</span>

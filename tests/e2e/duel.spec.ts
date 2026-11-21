@@ -62,13 +62,12 @@ async function tenirLeGaz(page: Page): Promise<() => Promise<void>> {
 test.describe('duel contre un adversaire piloté par le jeu', () => {
   test.use({ serviceWorkers: 'block' });
 
-  /** « Duel » au menu de la sortie (réglages à l'écran), contre `adversaire`, en `niveau`. */
+  /** Le mode « Duel » choisi (réglages à l'écran) : l'adversaire `adversaire`, le `niveau`. */
   async function choisirDuel(page: Page, adversaire: string, niveau: string): Promise<void> {
     const dock = page.locator('footer.dock');
-    const puce = dock.getByRole('group', { name: 'Format' }).locator('[data-format="duel"]');
-    await puce.tap();
-    await expect(puce).toHaveAttribute('aria-pressed', 'true');
-    await expect(dock.getByRole('group', { name: 'Format' }).locator('[aria-pressed="true"]')).toHaveCount(1);
+    // Le mode « Duel » est choisi sur l'écran « Jouer » (vague X) : pas de rangée de formats, l'adversaire à la place.
+    await expect(dock.getByRole('group', { name: 'Format' })).toHaveCount(0);
+    await expect(dock.getByRole('group', { name: 'Adversaire' })).toBeVisible();
     const choix = dock.getByRole('group', { name: 'Adversaire' }).locator(`[data-adversaire="${adversaire}"]`);
     await choix.tap();
     await expect(choix).toHaveAttribute('aria-pressed', 'true');
@@ -90,7 +89,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
     await openApp(page);
     await waitForScene(page);
     await openEntry(page, ENTREE_SORTIE);
-    await pickMap(page);
+    await pickMap(page, 0, 'duel');
     await auSec(page);
     await choisirDuel(page, adversaire, niveau);
   }
@@ -229,7 +228,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
       await openApp(page);
       await waitForScene(page);
       await openEntry(page, ENTREE_SORTIE);
-      await choisirCarte(page, carte);
+      await choisirCarte(page, carte, 'duel');
       await choisirDepart(page, depart);
       await auSec(page);
       await choisirDuel(page, adversaire, 'normal');
@@ -254,7 +253,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
     await waitForScene(page);
     await prendreVehicule(page, 'van');
     await openEntry(page, ENTREE_SORTIE);
-    await choisirCarte(page, /Monaco, la ville/);
+    await choisirCarte(page, /Monaco, la ville/, 'duel');
     await choisirDepart(page, /Place du Casino/);
     await auSec(page);
     await choisirDuel(page, 'momo', 'normal');
@@ -279,7 +278,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
       await openApp(page);
       await waitForScene(page);
       await openEntry(page, ENTREE_SORTIE);
-      await choisirCarte(page, /Miami/);
+      await choisirCarte(page, /Miami/, 'duel');
       await choisirDepart(page, /41e rue/);
       await auSec(page);
       await choisirDuel(page, adversaire, 'normal');
@@ -302,7 +301,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
     await waitForScene(page);
     await prendreVehicule(page, 'sportive');
     await openEntry(page, ENTREE_SORTIE);
-    await choisirCarte(page, /Miami/);
+    await choisirCarte(page, /Miami/, 'duel');
     await choisirDepart(page, /Ocean Drive/);
     await auSec(page);
     await choisirDuel(page, 'lulu', 'normal');
@@ -343,7 +342,7 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
     await waitForScene(page);
     await prendreVehicule(page, 'sportive');
     await openEntry(page, ENTREE_SORTIE);
-    await choisirCarte(page, /Miami/);
+    await choisirCarte(page, /Miami/, 'duel');
     await choisirDepart(page, /Ocean Drive/);
     await auSec(page);
     await choisirDuel(page, 'comete', 'difficile');

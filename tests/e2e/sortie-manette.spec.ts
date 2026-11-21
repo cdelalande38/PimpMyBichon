@@ -9,7 +9,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, DELAI_ROUTE, fermerReglages, ouvrirReglages, reglagesSortie, rentrerAuGarage } from './helpers.ts';
+import { attendreApercu, DELAI_ROUTE, fermerReglages, ouvrirReglages, preferBalade, reglagesSortie, rentrerAuGarage } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 
@@ -68,6 +68,7 @@ test.describe('sortie de nuit : la manette physique', () => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await installerManette(page);
+    await preferBalade(page);
     await page.goto('./#/sortie');
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     // Sans manette : l'invitation d'avant.

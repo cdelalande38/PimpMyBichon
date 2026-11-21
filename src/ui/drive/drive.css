@@ -185,12 +185,149 @@
   justify-content: flex-start;
 }
 
-/* Le mode : deux choix côte à côte, toujours entiers. */
-.entree-liste[aria-label='Mode'] .chip {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: none;
+/* L'écran « Jouer » (src/ui/drive/entree/Modes.tsx) : « Continuer » sur toute la largeur, puis les modes en
+   cartes, deux par ligne ; une dernière carte seule prend la ligne. Chaque carte : son pictogramme, son nom,
+   ce qu'on y gagne, et (la carrière) le prochain rendez-vous. Paysage : une colonne, pour lire sans couper. */
+.jouer-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-content: start;
 }
+
+.jouer-carte {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  min-height: var(--tap-chip);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--chrome);
+  text-align: left;
+  pointer-events: auto;
+}
+
+.jouer-carte:active {
+  filter: brightness(1.2);
+}
+
+.jouer-carte:last-child:nth-child(odd),
+.jouer-continuer {
+  grid-column: 1 / -1;
+}
+
+.jouer-continuer {
+  border-color: var(--rouge);
+  background: var(--rouge);
+  color: var(--night);
+}
+
+.jouer-picto {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.jouer-continuer .jouer-picto {
+  fill: currentColor;
+}
+
+.jouer-texte {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.jouer-texte b {
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.jouer-texte small {
+  color: var(--mute);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.jouer-continuer .jouer-texte small {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* Le prochain rendez-vous de la carrière, avec la météo qu'il impose. */
+.jouer-etat {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--ambre);
+  font-size: 0.75rem;
+  font-style: normal;
+  line-height: 1.3;
+}
+
+.jouer-etat .drive-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+/* Moment et météo repliés sur une ligne (« Nuit · Pluie ») ; le départ, quand la route en a plusieurs. */
+.entree-ciel-resume {
+  width: 100%;
+  max-width: none;
+  clip-path: none;
+  border-radius: 4px;
+}
+
+.entree-ciel-resume b {
+  font-size: 0.875rem;
+}
+
+.entree-ciel[hidden] {
+  display: none;
+}
+
+/* Crédits des données de la carte : repliés, une ligne de 48 px au doigt les ouvre. */
+.drive-credits summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+
+.drive-credits p {
+  margin: 0 0 0.5rem;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .jouer-modes {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .jouer-carte {
+    min-height: 52px;
+    padding: 0.25rem 0.75rem;
+  }
+}
+
+/* Départs : deux par ligne quand la place le permet (une route en a jusqu'à cinq ou six). */
+.dock[data-taille='agrandi'] .drive-entry .entree-liste.entree-departs .chip {
+  flex: 1 1 8.5rem;
+}
+
 
 /* Dock agrandi et paysage (colonne étroite à droite) : les choix passent à la ligne et leur petite
    ligne aussi ; les formats prennent chacun la largeur, pour se lire d'un coup d'œil. */

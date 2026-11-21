@@ -11,7 +11,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, commencerCourse, ouvrirReglages, reglagesSortie } from './helpers.ts';
+import { attendreApercu, commencerCourse, ouvrirReglages, preferBalade, reglagesSortie } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const carte = (page: Page) => page.locator('.minicarte');
@@ -30,6 +30,7 @@ test.describe('annonce des virages', () => {
   test('la mini-carte est là en course, et data-virage change après un virage', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    await preferBalade(page);
     await page.goto('./#/sortie');
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(page.locator('.drive-chargement')).toHaveCount(0, { timeout: 30_000 });

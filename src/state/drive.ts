@@ -6,7 +6,8 @@
 // Passer « À la main » met la caméra de poursuite et coupe le réalisateur (demande du 16 novembre
 // 2026) ; ensuite rien ne les change tout seul : seuls les boutons de caméra et de réalisateur le font.
 // Le choix fait dans le menu (carte, départ) dure la séance : « Jouer » part de là.
-// Déroulé (demande du 17 novembre 2026) : la sortie s'ouvre sur l'aperçu (`apercu` : la vitrine en
+// Déroulé (demande du 17 novembre 2026 ; depuis le 21 novembre 2026 l'aperçu ne reste qu'en balade, les autres
+// formats partent droit sur la grille : `debutDeSortie`) : la sortie s'ouvre sur l'aperçu (`apercu` : la vitrine en
 // pilote automatique, réalisateur, départ lancé sans feux) ; « commencer » (un appui sur la route)
 // remet le véhicule sur la ligne du départ choisi, feux, à la main ; « Repartir » fait de même.
 // « Pilote automatique » des réglages (`laisserConduire`) rend le volant au pilote sans rien perdre
@@ -135,6 +136,18 @@ export function etapeFondu(depuis: number, maintenant: number, reduit: boolean, 
 export const AUTO_INPUT: Readonly<DriveInput> = Object.freeze({ auto: true, throttle: 0, brake: 0, lane: 0 });
 
 /**
+ * Début de sortie (vague X, décision du 21 novembre 2026) : l'aperçu (« Touche l'écran pour commencer ») ne
+ * reste qu'en Balade ; une course, un duel, un drift ou un rendez-vous de carrière partent droit sur la
+ * grille : à la main, caméra de poursuite, réalisateur coupé, comme après le premier appui de l'aperçu.
+ */
+export function debutDeSortie(state: { format: FormatCourse; direction: DriveDirection; input: DriveInput }) {
+  if (state.format === 'balade') return { apercu: true, input: { ...AUTO_INPUT }, director: true };
+  const nos = state.input.nos === undefined ? {} : { nos: state.input.nos };
+  const input: DriveInput = { auto: false, throttle: 0, brake: 0, lane: 0, ...(directionDe(state) === 'assistee' ? { assist: true } : {}), ...nos };
+  return { apercu: false, input, director: false, camera: CAMERA_A_LA_MAIN };
+}
+
+/**
  * Le pilote de la sortie en cours, posé par la scène (src/drive/scene/moteur.ts) et retiré quand
  * elle se démonte : le compte-tours et le NOS le lisent à chaque image (sans faire rendre React),
  * le son du moteur à chaque télémétrie. Jamais sauvegardé.
@@ -181,6 +194,8 @@ export const IDLE_TELEMETRY: Readonly<DriveTelemetry> = Object.freeze({
 export interface DerniereSortie {
   map: MapId;
   start: string | null;
+  /** Vrai : la dernière sortie était un rendez-vous de carrière (« Continuer », src/ui/drive/entree/Modes.tsx, y reprend). */
+  carriere?: true;
 }
 
 const ID_SORTIE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -188,9 +203,9 @@ const ID_SORTIE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 /** Lecture tolérante de la dernière sortie ; la carte peut avoir quitté le catalogue (le menu le vérifie). */
 export function sanitizeDerniere(raw: unknown): DerniereSortie | null {
   if (typeof raw !== 'object' || raw === null) return null;
-  const { map, start } = raw as Record<string, unknown>;
+  const { map, start, carriere } = raw as Record<string, unknown>;
   if (typeof map !== 'string' || !ID_SORTIE.test(map)) return null;
-  return { map, start: typeof start === 'string' && start.length > 0 && start.length <= 64 ? start : null };
+  return { map, start: typeof start === 'string' && start.length > 0 && start.length <= 64 ? start : null, ...(carriere === true ? { carriere } : {}) };
 }
 
 /**
@@ -395,7 +410,7 @@ export const useDrive = create<DriveState>()(
         set((state) =>
           state.map === null
             ? state
-            : { attempt: state.attempt + 1, apercu: true, fondu: 'non', fin: null, input: { ...AUTO_INPUT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            : { attempt: state.attempt + 1, fondu: 'non', fin: null, ...(state.format === 'balade' ? { apercu: true, input: { ...AUTO_INPUT } } : debutDeSortie(state)), slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
         ),
       commencer: () =>
         set((state) => {
@@ -424,13 +439,11 @@ export const useDrive = create<DriveState>()(
         set({
           map: target.id,
           start: wanted,
-          // Un rendez-vous de carrière ne remplace pas la dernière sortie libre (celle que rouvre le menu).
-          ...(state.rendezVous ? {} : { derniere: { map: target.id, start: wanted } }),
-          apercu: true,
+          // Un rendez-vous de carrière ne remplace pas la dernière sortie libre (celle que rouvre le menu) : il le note.
+          derniere: state.rendezVous ? { map: state.derniere?.map ?? target.id, start: state.derniere?.start ?? wanted, carriere: true } : { map: target.id, start: wanted },
           fondu: 'non',
           fin: null,
-          director: true,
-          input: { ...AUTO_INPUT },
+          ...debutDeSortie(state),
           orbit: { ...DEFAULT_ORBIT },
           slow: false,
           paused: false,
@@ -544,7 +557,7 @@ export const useDrive = create<DriveState>()(
         set((state) =>
           state.map === null || !mapById(map)
             ? state
-            : { map, start, attempt: state.attempt + 1, apercu: true, fondu: 'non', fin: null, director: true, input: { ...AUTO_INPUT }, orbit: { ...DEFAULT_ORBIT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
+            : { map, start, attempt: state.attempt + 1, fondu: 'non', fin: null, ...debutDeSortie(state), orbit: { ...DEFAULT_ORBIT }, slow: false, paused: false, telemetry: { ...IDLE_TELEMETRY } },
         ),
     }),
     {

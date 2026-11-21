@@ -9,7 +9,7 @@
 import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { auSec, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, pickMap, rentrerAuGarage, waitForScene } from './helpers.ts';
+import { auSec, commencerCourse, DELAI_ROUTE, ENTREE_SORTIE, openApp, openEntry, ouvrirCiel, pickMap, rentrerAuGarage, waitForScene } from './helpers.ts';
 
 const SORTIE = process.env.PMB_MESURE_DUEL;
 const PLUIE = process.env.PMB_MESURE_DUEL_METEO === 'pluie';
@@ -38,14 +38,13 @@ async function relever(page: Page, images: number): Promise<{ calls: number; tri
 
 async function sortieEnFeux(page: Page, duel: boolean): Promise<void> {
   await openEntry(page, ENTREE_SORTIE);
-  await pickMap(page);
+  await pickMap(page, 0, duel ? 'duel' : 'course');
+  await ouvrirCiel(page);
   if (PLUIE) {
     const pluie = page.locator('footer.dock').getByRole('group', { name: 'Météo' }).getByRole('button', { name: 'Pluie', exact: true });
     await pluie.tap();
     await expect(pluie).toHaveAttribute('aria-pressed', 'true');
   } else await auSec(page);
-  const formats = page.locator('footer.dock').getByRole('group', { name: 'Format' });
-  await formats.locator(duel ? '[data-format="duel"]' : '[data-format="tour1"]').tap();
   if (duel) {
     await page.locator('footer.dock').getByRole('group', { name: 'Adversaire' }).locator('[data-adversaire="comete"]').tap();
     await page.locator('footer.dock').getByRole('group', { name: 'Difficulté' }).locator('[data-niveau="difficile"]').tap();

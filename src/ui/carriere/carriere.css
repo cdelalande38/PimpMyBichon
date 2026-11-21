@@ -174,6 +174,34 @@
   text-transform: uppercase;
 }
 
+/* « Les saisons » : une ligne de 48 px au doigt, qui déplie la liste. */
+.carriere-saisons-bouton {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--tap);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.carriere-saisons-bouton::after {
+  content: '›';
+  margin-left: auto;
+  transition: transform 0.15s;
+}
+
+.carriere-saisons-bouton[aria-expanded='true']::after {
+  transform: rotate(90deg);
+}
+
+.carriere-saisons [hidden] {
+  display: none;
+}
+
 .carriere .carriere-lignes {
   display: flex;
   flex-direction: column;
@@ -507,37 +535,6 @@
   background: var(--sheet);
 }
 
-/* ───────────── Bouton rond au garage ───────────── */
-
-/* Dans la colonne des raccourcis : la météo du prochain rendez-vous, son numéro en pastille au coin. */
-.carriere-rond {
-  color: var(--ambre);
-}
-
-.carriere-rond .drive-icon {
-  width: 1.375rem;
-  height: 1.375rem;
-}
-
-.carriere-rond-numero {
-  position: absolute;
-  right: -0.25rem;
-  bottom: -0.25rem;
-  display: grid;
-  place-items: center;
-  min-width: 1.25rem;
-  height: 1.25rem;
-  padding: 0 0.25rem;
-  border-radius: 999px;
-  background: var(--ambre);
-  color: var(--night);
-  font-family: var(--display);
-  font-size: 0.6875rem;
-  font-weight: 400;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-
 /* ───────────── Écran de fin ───────────── */
 
 .carriere-fin h3 {
@@ -614,12 +611,4 @@
 
 .drive-reglages .drive-puce:disabled[aria-pressed='true'] {
   opacity: 0.9;
-}
-
-/* Paysage : avec le bouton de la carrière, la colonne des raccourcis compte six ronds ; elle se resserre
-   pour tenir dans 360 px de haut, texte très grand compris (6 × 55 px + 5 × 5 px). */
-@media (orientation: landscape) and (max-height: 540px) {
-  body:has(.app > .dock) .quick:has(> .carriere-rond) {
-    gap: 0.25rem;
-  }
 }

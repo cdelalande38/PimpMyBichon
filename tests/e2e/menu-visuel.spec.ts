@@ -74,7 +74,7 @@ test.describe('menu visuel', () => {
 
     // Sections : les noms d'avant, une icône au-dessus de chacun.
     await backToSections(page);
-    for (const section of DOCK_MENU) await expect(sections(page).getByRole('button', { name: section.label, exact: true })).toBeVisible();
+    for (const section of DOCK_MENU.filter((item) => !item.cachee)) await expect(sections(page).getByRole('button', { name: section.label, exact: true })).toBeVisible();
     await expectSections(page, '390 × 844');
     const compactTop = (await dock(page).boundingBox())!.y;
     expect(compactTop, 'le menu reste dans le tiers bas').toBeGreaterThanOrEqual((height * 2) / 3 - 1);
@@ -85,7 +85,6 @@ test.describe('menu visuel', () => {
     for (const [id, name] of [
       ['custom', '02-custom'],
       ['mecanique', '03-mecanique'],
-      ['garage', '04-garage'],
     ] as const) {
       const section = DOCK_MENU.find((item) => item.id === id)!;
       await backToSections(page);
@@ -167,9 +166,9 @@ test.describe('menu visuel', () => {
     const ambiances = dock(page).getByRole('group', { name: 'Ambiance' });
     await expect(ambiances.locator('svg.picto')).toHaveCount(await ambiances.getByRole('button').count());
 
-    // Sortie : la miniature du tracé de chaque lieu (celui de sa première carte), après « Libre ».
+    // Jouer : la miniature du tracé de chaque lieu (celui de sa première carte), après « Course ».
     await openEntry(page, ENTREE_SORTIE);
-    await dock(page).getByRole('group', { name: 'Mode' }).getByRole('button', { name: /^Libre/ }).tap();
+    await dock(page).getByRole('group', { name: 'Mode' }).locator('[data-mode="course"]').tap();
     const maps = dock(page).getByRole('group', { name: 'Lieu' });
     await expect(maps.getByRole('button').first()).toBeVisible();
     await expect(maps.locator('svg.picto-carte')).toHaveCount(await maps.getByRole('button').count());

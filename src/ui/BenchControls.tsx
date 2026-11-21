@@ -9,7 +9,7 @@
 
 import { useRef, type ReactNode } from 'react';
 import { AMBIANCES } from '../data/ambiances.ts';
-import { activeEntry, sectionEntries, visibleSections, type EntryId } from '../data/dockMenu.ts';
+import { activeEntry, sectionEntries, sectionsDeLaRangee, visibleSections, type EntryId } from '../data/dockMenu.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
 import { useBench } from '../state/bench.ts';
 import { useBuilds } from '../state/builds.ts';
@@ -95,7 +95,7 @@ export function BenchControls() {
     return (
       <div className="dock-tabs-row">
         <nav className="tabs dock-sections" aria-label="Onglets de l’atelier">
-          {sections.map((item) => (
+          {sectionsDeLaRangee(hasEngine).map((item) => (
             <button key={item.id} type="button" aria-current={section?.id === item.id ? 'true' : undefined} onClick={() => setSection(item.id)}>
               {item.icon && <Icon name={item.icon} />}
               <span className="dock-label">{item.label}</span>

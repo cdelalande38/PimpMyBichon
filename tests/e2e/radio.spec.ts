@@ -684,7 +684,8 @@ async function expectMiniFits(page: Page): Promise<void> {
     const box = await nav.getByRole('button', { name, exact: true }).boundingBox();
     if (box) expect(overlaps(mini, box), `recouvre ${name}`).toBe(false);
   }
-  const tag = await page.locator('.tag').boundingBox();
+  // L'étiquette se tait quand le menu nomme déjà le véhicule (audit des menus, A4).
+  const tag = (await page.locator('.tag').count()) > 0 ? await page.locator('.tag').boundingBox() : null;
   if (tag) expect(overlaps(mini, tag), 'recouvre l’étiquette du véhicule').toBe(false);
   for (const button of await page.locator('.radio-mini button').all()) {
     const box = (await button.boundingBox())!;

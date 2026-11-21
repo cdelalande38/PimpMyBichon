@@ -18,9 +18,10 @@ import type { VehicleManifest } from '../data/vehicleTypes.ts';
 import { usePwa } from '../pwa/pwaStore.ts';
 import { applyUpdate } from '../pwa/register.ts';
 import { useBuilds } from '../state/builds.ts';
-import { dockSize, useDock, type DockLevel, type MenuLevel } from '../state/dock.ts';
+import { dockSize, useDock, type DockLevel, type MenuLevel, type SectionId } from '../state/dock.ts';
 import { activeEntry, visibleSections } from '../data/dockMenu.ts';
 import { BenchControls } from './BenchControls.tsx';
+import { titreEtape } from './drive/entree/etapes.ts';
 
 interface DockProps {
   /** La scène 3D n'a pas démarré : le dock propose de relancer. */
@@ -88,19 +89,36 @@ function moreWhenExpanded(footer: HTMLElement, level: MenuLevel): boolean {
   return [...tab.querySelectorAll<HTMLElement>('.chips, .tabs')].some(rowOverflows);
 }
 
+/** Vrai si la tête du menu dit déjà « Au garage · <véhicule> » : aux sections, ou au choix du véhicule. */
+function teteDitLeVehicule(level: MenuLevel, section: SectionId | undefined, profondeur: number): boolean {
+  return level === 'sections' || (section === 'vehicule' && profondeur === 0);
+}
+
+/** Le menu est ouvert et nomme déjà le véhicule : l'étiquette du haut de l'écran (src/app/App.tsx) se tait. */
+export function useMenuNommeLeVehicule(): boolean {
+  const vehicle = resolveVehicle(useBuilds((state) => state.current));
+  const closed = useDock((state) => state.closed);
+  const chosen = useDock((state) => state.section);
+  const menu = useDock((state) => state.menu);
+  const depth = useDock((state) => state.levels.length);
+  const shown = visibleSections(vehicle.engine !== undefined).find((item) => item.id === chosen);
+  return !closed && teteDitLeVehicule(shown ? menu : 'sections', shown?.id, depth);
+}
+
 /** Ligne de repère : Retour, le fil (section · entrée · niveaux), la poignée (si utile), Fermer le menu. */
 /**
- * « Jouer » : ouvre le menu de la sortie (Garage › Sortie : Libre ou Carrière, src/ui/drive/SortieEntree.tsx).
- * Il a pris la place du raccourci rond « Sortie » de la colonne de droite (retour du 18 novembre 2026 :
- * « au même niveau que le bouton configuration. Désormais c'est [un] élément important de l'application »).
+ * « Jouer » : ouvre l'écran des modes (src/ui/drive/SortieEntree.tsx), à toute profondeur du menu comme fermé
+ * (vague X, 21 novembre 2026 : « Jouer » disparaissait dès qu'on entrait dans une section). Il avait pris la
+ * place du raccourci rond « Sortie » (retour du 18 novembre 2026 : « au même niveau que le bouton
+ * configuration. Désormais c'est [un] élément important de l'application »).
  */
 function BoutonJouer({ className }: { className: string }) {
   return (
-    <button type="button" className={className} title="Jouer : choisir une sortie ou la carrière" onClick={() => useDock.getState().openEntry('sortie')}>
+    <button type="button" className={className} title="Jouer : choisir un mode" onClick={() => useDock.getState().openEntry('sortie')}>
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path className="dock-jouer-picto" d="M8 5.5v13l10.5-6.5z" />
       </svg>
-      Jouer
+      <span className="dock-jouer-label">Jouer</span>
     </button>
   );
 }
@@ -119,13 +137,17 @@ function filDeborde(element: HTMLElement): boolean {
   return texte > element.getBoundingClientRect().width + 0.25;
 }
 
+const FIL_SERRE = [undefined, 'serre', 'jouer-rond', 'deux-lignes'] as const;
+
 /**
  * Le fil tient-il sur sa ligne ? Mesuré pour toute entrée, quel que soit son nom : 0, tout tient ; 1,
- * « Retour » se réduit à sa flèche (son nom reste lu) ; 2, l'étape passe sur deux lignes, sans le
- * chemin. Remesuré quand le texte du fil, la poignée, la largeur de la ligne, la taille du texte ou la police changent ;
- * jamais sur ce que le resserrement lui-même déplace (pas d'aller-retour).
+ * « Retour » se réduit à sa flèche (son nom reste lu) ; 2, « Jouer » aussi, en rond (vague X : il est là à
+ * toute profondeur) ; 3, l'étape passe sur deux lignes, sans le chemin. Aux sections et au choix du véhicule,
+ * le nom du véhicule tient lieu d'étape, « Au garage » de chemin. Remesuré
+ * quand le texte du fil, la poignée, la largeur de la ligne, la taille du texte ou la police changent ; jamais
+ * sur ce que le resserrement lui-même déplace (pas d'aller-retour).
  */
-function useFilSerre(head: RefObject<HTMLDivElement | null>, here: RefObject<HTMLSpanElement | null>, texte: string): number {
+function useFilSerre(head: RefObject<HTMLDivElement | null>, here: RefObject<HTMLElement | null>, texte: string): number {
   const [version, setVersion] = useState(0);
   useEffect(() => {
     const element = head.current;
@@ -154,10 +176,10 @@ function useFilSerre(head: RefObject<HTMLDivElement | null>, here: RefObject<HTM
   const cle = `${texte}|${version}`;
   const [etat, setEtat] = useState({ cle: '', niveau: 0 });
   const niveau = etat.cle === cle ? etat.niveau : 0;
-  // Mesuré avant l'affichage : un cran de plus tant que l'étape déborde (deux au plus).
+  // Mesuré avant l'affichage : un cran de plus tant que l'étape déborde (trois au plus).
   useLayoutEffect(() => {
     const mesurer = () => {
-      if (niveau >= 2) return;
+      if (niveau >= FIL_SERRE.length - 1) return;
       const element = here.current;
       const deborde = element !== null && filDeborde(element);
       if (etat.cle !== cle) setEtat({ cle, niveau: deborde ? 1 : 0 });
@@ -167,8 +189,6 @@ function useFilSerre(head: RefObject<HTMLDivElement | null>, here: RefObject<HTM
   }, [cle, etat, niveau, here]);
   return niveau;
 }
-
-const FIL_SERRE = [undefined, 'serre', 'deux-lignes'] as const;
 
 function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boolean }) {
   const chosen = useDock((state) => state.section);
@@ -192,16 +212,18 @@ function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boo
     level === 'entrees'
       ? [section?.label]
       : [section?.label, entry && entry.label !== section?.label ? entry.label : undefined, ...deeper];
-  const parts = crumbs.filter((crumb): crumb is string => crumb !== undefined);
+  // L'écran « Jouer » : le titre de l'étape, sans chemin (le fil se tassait en « Sort… · Lib… · Mona… »).
+  const surJouer = level === 'contenu' && entry?.id === 'sortie';
+  const parts = surJouer ? [titreEtape(levels)] : crumbs.filter((crumb): crumb is string => crumb !== undefined);
   // Les sections, ou le choix du véhicule : le véhicule à l'écran reste lisible.
-  const top = level === 'sections' || (section?.id === 'vehicule' && levels.length === 0);
+  const top = teteDitLeVehicule(level, section?.id, levels.length);
   // Un nom long (« Échappement » en très grand texte, en paysage) : le fil se resserre plutôt que de le couper.
   const headRef = useRef<HTMLDivElement>(null);
-  const hereRef = useRef<HTMLSpanElement>(null);
-  const serre = useFilSerre(headRef, hereRef, top ? '' : `${level}|${handle ? 'poignée' : ''}|${parts.join('·')}`);
+  const hereRef = useRef<HTMLElement>(null);
+  const serre = useFilSerre(headRef, hereRef, `${level}|${handle ? 'poignée' : ''}|${top ? vehicle.name : parts.join('·')}`);
 
   return (
-    <div ref={headRef} className="dock-head" data-fil={top ? undefined : FIL_SERRE[serre]}>
+    <div ref={headRef} className="dock-head" data-fil={FIL_SERRE[serre]}>
       {level !== 'sections' && (
         <button type="button" className="btn dock-back" onClick={() => back()}>
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -213,7 +235,10 @@ function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boo
       <p className="dock-crumbs" aria-live="polite">
         {top ? (
           <span className="eyebrow">
-            Au garage · <b className="dock-vehicle">{vehicle.name}</b>
+            <span className="dock-garage">Au garage ·</span>{' '}
+            <b ref={hereRef} className="dock-vehicle">
+              {vehicle.name}
+            </b>
           </span>
         ) : (
           <>
@@ -233,8 +258,8 @@ function DockHeader({ vehicle, handle }: { vehicle: VehicleManifest; handle: boo
           </>
         )}
       </p>
-      {/* Aux sections, « Jouer » reste à une touche (menu de la sortie : Libre ou Carrière). */}
-      {level === 'sections' && <BoutonJouer className="btn cta dock-jouer-tete" />}
+      {/* « Jouer » reste à une touche, à tout niveau du menu, sauf sur l'écran « Jouer » lui-même. */}
+      {!surJouer && <BoutonJouer className="btn cta dock-jouer-tete" />}
       {handle && <DockHandle />}
       <button type="button" className="dock-close" aria-label="Fermer le menu" title="Fermer le menu" onClick={() => setClosed(true)}>
         <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -279,8 +304,11 @@ function useKeepFocus(footer: RefObject<HTMLElement | null>, key: string): void 
     if (!element || !inside.current) return;
     const active = document.activeElement;
     if (active && active !== document.body) return;
+    // L'écran « Jouer » (vague X) : le focus va à l'action principale de l'étape (« Continuer », « Jouer »), pour que
+    // Entrée lance.
     const target =
       element.querySelector<HTMLElement>('.dock-open') ??
+      element.querySelector<HTMLElement>('.dock-tab .drive-go, .dock-tab .carriere-sortir, .dock-tab .jouer-continuer') ??
       element.querySelector<HTMLElement>('.dock-tab button:not([disabled]), .dock-tab input, nav.tabs button:not([disabled])') ??
       element.querySelector<HTMLElement>('.dock-back, .dock-close');
     // Sans défilement : la position rendue au niveau (src/ui/scroll.ts) ne doit pas bouger.
@@ -359,14 +387,41 @@ export function Dock({ sceneFailed, covered = false }: DockProps) {
     };
   }, [size, setTop, paysage]);
 
-  // Échap : remonte d'un niveau, puis ferme le menu. Un panneau ouvert garde sa touche Échap.
+  // Clavier au garage (audit des menus, P1) : Échap remonte d'un niveau, puis ferme le menu ; Entrée lance
+  // « Jouer » ; 1 à 4 ouvrent les sections ; Tab, depuis la page, tombe d'abord sur le menu. Un panneau
+  // ouvert garde ses touches ; un bouton qui a le focus garde Entrée.
   useEffect(() => {
     if (sceneFailed) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented || document.querySelector('dialog[open]')) return;
+      if (event.defaultPrevented || document.querySelector('dialog[open], [role="dialog"]')) return;
       const state = useDock.getState();
-      if (state.closed) return;
-      if (!state.back()) state.setClosed(true);
+      if (event.key === 'Escape') {
+        if (!state.closed && !state.back()) state.setClosed(true);
+        return;
+      }
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+      const cible = event.target instanceof HTMLElement ? event.target : null;
+      if (cible?.closest('input, textarea, select, [contenteditable]')) return;
+      if (event.key === 'Tab' && !event.shiftKey && (!cible || cible === document.body)) {
+        const premier = footer.current?.querySelector<HTMLElement>('button:not([disabled])');
+        if (premier) {
+          event.preventDefault();
+          premier.focus();
+        }
+        return;
+      }
+      if (event.key === 'Enter' && cible?.closest('button, a[href], [role="button"]') === null) {
+        event.preventDefault();
+        state.openEntry('sortie');
+        return;
+      }
+      const numero = /^(?:Digit|Numpad)([1-4])$/.exec(event.code);
+      const section = numero ? visibleSections(resolveVehicle(useBuilds.getState().current).engine !== undefined)[Number(numero[1]) - 1] : undefined;
+      if (section) {
+        event.preventDefault();
+        state.setClosed(false);
+        state.setSection(section.id);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

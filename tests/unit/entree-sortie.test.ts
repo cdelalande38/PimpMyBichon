@@ -1,6 +1,6 @@
-// Menu de la sortie par étapes (vague U, retour du 18 novembre 2026) : le lieu des cartes (champ `zone`
-// des manifestes), les étapes et leur pile dans le dock, la reprise sur la dernière sortie, le format par
-// défaut (course d'un tour) et la migration d'une sauvegarde d'avant.
+// L'écran « Jouer » par étapes (vagues U et X) : le lieu des cartes (champ `zone` des manifestes), les modes
+// (src/data/modes.ts), les étapes et leur pile dans le dock, le titre d'étape, « Continuer » sur la dernière sortie,
+// le format par défaut (course d'un tour), l'aperçu réservé à la balade et la migration d'une sauvegarde d'avant.
 
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
@@ -9,9 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AIDES_FORMAT, FORMAT_PAR_DEFAUT } from '../../src/data/courses.ts';
 import { buildMapCatalog, circuitLabel, MAPS, validateMapManifest, zoneOf, zonesOf } from '../../src/data/maps.ts';
 import type { MapManifest } from '../../src/data/mapTypes.ts';
+import { formatDuMode, MODES_JEU, modeDe } from '../../src/data/modes.ts';
 import { sanitizeLevels, type DockLevel } from '../../src/state/dock.ts';
-import { DEFAULT_DRIVE_PREFS, DRIVE_KEY, DRIVE_VERSION, migrerDrivePrefs, sanitizeDerniere } from '../../src/state/drive.ts';
-import { apresCircuit, apresDepart, apresLieu, etapeDe, LIBELLE_DEBUT, niveauCarriere, niveauLieu, pileReprise, rappel, sansEtapeDepart } from '../../src/ui/drive/entree/etapes.ts';
+import { AUTO_INPUT, debutDeSortie, DEFAULT_DRIVE_PREFS, DRIVE_KEY, DRIVE_VERSION, migrerDrivePrefs, sanitizeDerniere } from '../../src/state/drive.ts';
+import { apresCircuit, apresLieu, etapeDe, niveauCarriere, niveauLieu, pileReprise, rappel, titreEtape } from '../../src/ui/drive/entree/etapes.ts';
 
 const BASE = {
   name: 'Route d’essai',
@@ -72,46 +73,46 @@ describe('lieu des cartes (champ zone des manifestes)', () => {
   });
 });
 
-describe('étapes du menu', () => {
-  it('un lieu à un seul circuit va droit aux départs ; plusieurs : l’étape du circuit', () => {
+describe('étapes de l’écran Jouer', () => {
+  it('un lieu à un seul circuit va droit aux réglages ; plusieurs : l’étape du circuit', () => {
     const [plateau, port] = zonesOf(CATALOGUE);
-    expect(apresLieu(plateau!)).toEqual({ niveau: { kind: 'sortie', etape: 'depart', libelle: 'Plateau' }, carte: SEULE });
+    expect(apresLieu(plateau!)).toEqual({ niveau: { kind: 'sortie', etape: 'reglages', libelle: 'Les lacs' }, carte: SEULE });
     expect(apresLieu(port!)).toEqual({ niveau: { kind: 'sortie', etape: 'circuit', libelle: 'Le port', lieu: 'port' }, carte: null });
-    expect(apresCircuit(CIRCUIT)).toEqual({ kind: 'sortie', etape: 'depart', libelle: 'Le circuit' });
+    expect(apresCircuit(CIRCUIT)).toEqual({ kind: 'sortie', etape: 'reglages', libelle: 'Le circuit' });
   });
 
-  it('étape à l’écran : le mode sans niveau, puis le haut de la pile', () => {
+  it('étape à l’écran : les modes sans niveau, puis le haut de la pile', () => {
     expect(etapeDe([])).toBe('mode');
-    expect(etapeDe([niveauLieu()])).toBe('zone');
+    expect(etapeDe([niveauLieu('Course')])).toBe('zone');
     expect(etapeDe([niveauCarriere()])).toBe('carriere');
     expect(etapeDe([{ kind: 'zone', zone: 'toit', step: 'couleur' }])).toBe('mode');
   });
 
-  it('pile de reprise : droit aux réglages, « Retour » remonte étape par étape', () => {
-    expect(sortie(pileReprise(CIRCUIT, 'Le casino', CATALOGUE))).toEqual(['zone', 'circuit', 'depart', 'reglages']);
-    expect(sortie(pileReprise(SEULE, null, CATALOGUE))).toEqual(['zone', 'depart', 'reglages']);
-    expect(pileReprise(CIRCUIT, 'Le casino', CATALOGUE).map((level) => (level.kind === 'sortie' ? level.libelle : ''))).toEqual(['Libre', 'Le port', 'Le circuit', 'Le casino']);
-    // La pile passe la validation du dock telle quelle.
-    expect(sanitizeLevels('sortie', pileReprise(CIRCUIT, 'Le casino', CATALOGUE))).toEqual(pileReprise(CIRCUIT, 'Le casino', CATALOGUE));
+  it('le titre d’étape remplace le fil : ce qu’on attend, en toutes lettres', () => {
+    const [, port] = zonesOf(CATALOGUE);
+    expect(titreEtape([])).toBe('Jouer');
+    expect(titreEtape([niveauLieu('Course')])).toBe('Choisis ton lieu');
+    expect(titreEtape([niveauLieu('Course'), apresLieu(port!).niveau])).toBe('Choisis ton circuit');
+    expect(titreEtape(pileReprise(CIRCUIT, 'Duel', CATALOGUE))).toBe('Prépare ton départ');
+    expect(titreEtape([niveauCarriere()])).toBe('Carrière');
+    expect(titreEtape([niveauCarriere(), { kind: 'element', element: 'saison-1', libelle: 'Saison 1' }])).toBe('Saison 1');
   });
 
-  it('une carte à un seul départ n’a pas d’étape des départs', () => {
-    const depart = [niveauLieu(), apresLieu(zonesOf(CATALOGUE)[0]!).niveau];
-    const un = [{ id: 'a', label: 'Le col', at: 0 }];
-    const deux = [...un, { id: 'b', label: 'La gare', at: 900 }];
-    expect(sansEtapeDepart(depart, deux)).toBeNull();
-    expect(sortie(sansEtapeDepart(depart, un) ?? [])).toEqual(['zone', 'reglages']);
-    expect(sansEtapeDepart(depart, un)?.at(-1)).toEqual(apresDepart('Le col'));
-    expect(sansEtapeDepart(depart, [])?.at(-1)).toEqual(apresDepart(LIBELLE_DEBUT));
-    expect(sortie(sansEtapeDepart([...depart, apresDepart('Le col')], un) ?? [])).toEqual(['zone', 'reglages']);
+  it('pile de « Continuer » : droit aux réglages, « Retour » remonte étape par étape', () => {
+    expect(sortie(pileReprise(CIRCUIT, 'Course', CATALOGUE))).toEqual(['zone', 'circuit', 'reglages']);
+    expect(sortie(pileReprise(SEULE, 'Course', CATALOGUE))).toEqual(['zone', 'reglages']);
+    expect(pileReprise(CIRCUIT, 'Drift', CATALOGUE).map((level) => (level.kind === 'sortie' ? level.libelle : ''))).toEqual(['Drift', 'Le port', 'Le circuit']);
+    // La pile passe la validation du dock telle quelle.
+    expect(sanitizeLevels('sortie', pileReprise(CIRCUIT, 'Course', CATALOGUE))).toEqual(pileReprise(CIRCUIT, 'Course', CATALOGUE));
   });
 
   it('le dock ne garde une pile de la sortie que dans l’ordre des étapes', () => {
-    const lieu = niveauLieu();
+    const lieu = niveauLieu('Course');
     const circuit = apresLieu(zonesOf(CATALOGUE)[1]!).niveau;
     expect(sanitizeLevels('sortie', [lieu, circuit])).toEqual([lieu, circuit]);
     expect(sanitizeLevels('sortie', [circuit])).toEqual([]);
-    expect(sanitizeLevels('sortie', [lieu, apresDepart('x'), circuit])).toEqual([lieu, apresDepart('x')]);
+    expect(sanitizeLevels('sortie', [lieu, apresCircuit(CIRCUIT), circuit])).toEqual([lieu, apresCircuit(CIRCUIT)]);
+    expect(sanitizeLevels('sortie', [lieu, { kind: 'sortie', etape: 'depart', libelle: 'x' }])).toEqual([lieu]);
     expect(sanitizeLevels('sortie', [niveauCarriere(), lieu])).toEqual([niveauCarriere()]);
     expect(sanitizeLevels('sortie', [lieu, { kind: 'sortie', etape: 'circuit', libelle: 'x', lieu: '<b>' }])).toEqual([lieu]);
     expect(sanitizeLevels('peinture', [lieu])).toEqual([]);
@@ -121,6 +122,40 @@ describe('étapes du menu', () => {
   it('le rappel relit lieu, circuit et départ en une ligne', () => {
     expect(rappel(CIRCUIT, 'Le casino', CATALOGUE)).toBe('Le port › Le circuit › Le casino');
     expect(rappel(SEULE, null, CATALOGUE)).toBe('Plateau › Les lacs');
+  });
+});
+
+describe('modes de l’écran Jouer', () => {
+  it('une carte par mode livré, la place du rodéo sans carte, chaque mode dit ce qu’on y gagne', () => {
+    const livres = MODES_JEU.filter((mode) => mode.disponible).map((mode) => mode.id);
+    expect(livres).toEqual(['carriere', 'course', 'duel', 'drift', 'balade']);
+    expect(MODES_JEU.find((mode) => mode.id === 'rodeo')?.disponible).toBe(false);
+    for (const mode of MODES_JEU) expect(mode.aide.trim().length, mode.id).toBeGreaterThan(0);
+  });
+
+  it('un mode règle le format, le format dit le mode (la course garde 1 ou 3 tours)', () => {
+    expect(formatDuMode('balade', 'tour1')).toBe('balade');
+    expect(formatDuMode('drift', 'tour1')).toBe('drift');
+    expect(formatDuMode('duel', 'tours3')).toBe('tour1');
+    expect(formatDuMode('course', 'tours3')).toBe('tours3');
+    expect(formatDuMode('course', 'drift')).toBe('tour1');
+    expect(modeDe('tour1', true)).toBe('duel');
+    expect(modeDe('tours3', false)).toBe('course');
+    expect(modeDe('drift', false)).toBe('drift');
+    expect(modeDe('balade', false)).toBe('balade');
+  });
+
+  it('l’aperçu ne reste qu’en balade : le reste part droit sur la grille, à la main', () => {
+    const base = { direction: 'assistee', input: { ...AUTO_INPUT, nos: 2 } } as const;
+    expect(debutDeSortie({ ...base, format: 'balade' })).toEqual({ apercu: true, input: AUTO_INPUT, director: true });
+    for (const format of ['tour1', 'tours3', 'drift'] as const) {
+      const debut = debutDeSortie({ ...base, format });
+      expect(debut, format).toMatchObject({ apercu: false, director: false, camera: 'poursuite' });
+      expect(debut.input, format).toMatchObject({ auto: false, nos: 2 });
+    }
+    // Drift : direction libre d'office ; ailleurs, assistée.
+    expect(debutDeSortie({ ...base, format: 'drift' }).input.assist).toBeUndefined();
+    expect(debutDeSortie({ ...base, format: 'tour1' }).input.assist).toBe(true);
   });
 });
 
@@ -148,6 +183,9 @@ describe('format par défaut et dernière sortie', () => {
   it('dernière sortie relue de façon tolérante', () => {
     expect(sanitizeDerniere({ map: 'monaco-circuit', start: 'casino' })).toEqual({ map: 'monaco-circuit', start: 'casino' });
     expect(sanitizeDerniere({ map: 'monaco-circuit', start: 4 })).toEqual({ map: 'monaco-circuit', start: null });
+    // Un rendez-vous de carrière le note : « Continuer » y reprend.
+    expect(sanitizeDerniere({ map: 'monaco-circuit', start: 'casino', carriere: true })).toEqual({ map: 'monaco-circuit', start: 'casino', carriere: true });
+    expect(sanitizeDerniere({ map: 'monaco-circuit', start: 'casino', carriere: 'oui' })).toEqual({ map: 'monaco-circuit', start: 'casino' });
     for (const raw of [null, 'x', { map: '../x' }, { map: '' }, { start: 'a' }]) expect(sanitizeDerniere(raw), JSON.stringify(raw)).toBeNull();
   });
 

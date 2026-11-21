@@ -22,7 +22,6 @@ import { attendreSurLaRoute, auSec, choisirCarte, choisirDepart, commencerCourse
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const dock = (page: Page) => page.locator('footer.dock');
-const format = (page: Page, nom: string) => dock(page).getByRole('group', { name: 'Format' }).getByRole('button', { name: new RegExp(`^${nom}`) });
 const kmh = async (page: Page) => Number(await stage(page).getAttribute('data-vitesse'));
 
 const CAPTURES = process.env.PMB_CAPTURES_DRIFT;
@@ -192,17 +191,16 @@ test.describe('format « Drift »', () => {
     await waitForScene(page);
     expect(await directionGardee(page)).toBe('assistee');
     await openEntry(page, ENTREE_SORTIE);
-    await choisirCarte(page, 'Miami Beach');
+    await choisirCarte(page, 'Miami Beach', 'drift');
     await choisirDepart(page, /Vers la 41e rue/);
-    // Le format « Drift », à côté de la balade et des courses : 48 px au doigt, redit sous « Jouer ».
-    await format(page, 'Drift').tap();
-    await expect(format(page, 'Drift')).toHaveAttribute('aria-pressed', 'true');
-    expect((await format(page, 'Drift').boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(48);
+    // Le mode « Drift », une carte de l'écran « Jouer » (vague X) : pas de rangée de formats, « Jouer » le redit.
+    await expect(dock(page).getByRole('group', { name: 'Format' })).toHaveCount(0);
+    expect((await dock(page).getByRole('button', { name: 'Jouer', exact: true }).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(48);
     await expect(dock(page).getByRole('button', { name: 'Jouer', exact: true })).toContainText('Drift');
     await shot(page, '01-menu-format-drift-390x844');
     if (CAPTURES) {
       await page.setViewportSize({ width: 844, height: 390 });
-      await format(page, 'Drift').scrollIntoViewIfNeeded();
+      await dock(page).getByRole('button', { name: 'Jouer', exact: true }).scrollIntoViewIfNeeded();
       await shot(page, '01b-menu-format-drift-844x390');
       await page.setViewportSize({ width: 390, height: 844 });
     }

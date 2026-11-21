@@ -61,6 +61,7 @@ import {
   MANUEL,
   MancheDessin,
   poserManche,
+  toucheAilleurs,
   useAppui,
   useBoutonManette,
   useClavier,
@@ -68,6 +69,7 @@ import {
   useToucheLancement,
   type MancheTenu,
 } from './Manche.tsx';
+import { TOUCHES_PAUSE } from './clavier.ts';
 import { axeManche } from './manche.ts';
 import { entrerManette, quitterManette, useManette, useManetteBranchee } from './manette.ts';
 import { ReglagesPanneau, useReglages } from './Reglages.tsx';
@@ -90,6 +92,22 @@ const ORBIT_PITCH_PER_PX = 0.006;
 const HINT_FADE_S = 4;
 const HINT_MOVING_KMH = 10;
 const HINT_STOP_KMH = 3;
+
+/** Échap et P : pause pendant la course, et reprise. Un panneau ouvert (réglages, tutos, quitter) garde Échap. */
+function usePauseClavier(actif: boolean): void {
+  useEffect(() => {
+    if (!actif) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat || event.defaultPrevented || !TOUCHES_PAUSE.includes(event.code)) return;
+      if (toucheAilleurs(event) || document.querySelector('[role="dialog"]')) return;
+      event.preventDefault();
+      const drive = useDrive.getState();
+      drive.setPaused(!drive.paused);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [actif]);
+}
 
 function DriveTop({ apercu, reglages, ouvrirReglages }: { apercu: boolean; reglages: boolean; ouvrirReglages: () => void }) {
   const mapId = useDrive((state) => state.map);
@@ -776,6 +794,7 @@ export function DriveScreen() {
   useBoutonManette(auto && prete && !reglages.ouvert, reprendre);
   // Au clavier : Entrée, Espace ou la touche des gaz.
   useToucheLancement(auto && prete && !reglages.ouvert, reprendre);
+  usePauseClavier(!apercu && prete && !reglages.ouvert);
   // Le son du moteur suit la sortie tant que l'écran est là ; il se coupe au retour au garage.
   useEffect(() => brancherSonSortie(), []);
   // En rentrant au garage, le mode manette s'arrête : verrou levé, plein écran quitté.

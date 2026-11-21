@@ -48,9 +48,9 @@ async function sortir(page: Page, format: 'Balade' | 'Course 1 tour'): Promise<v
   await waitForScene(page);
   await openEntry(page, ENTREE_SORTIE);
   // Le menu de la sortie va par étapes (lieu, circuit, départ, réglages) : tests/e2e/helpers.ts les passe.
-  await choisirCarte(page, 'Miami Beach');
+  // Le format est le mode de l'écran « Jouer » (vague X) : la balade, ou la course d'un tour.
+  await choisirCarte(page, 'Miami Beach', format === 'Balade' ? 'balade' : 'course');
   await choisirDepart(page, /Vers la 41e rue/);
-  await dock(page).getByRole('group', { name: 'Format' }).getByRole('button', { name: new RegExp(`^${format}`) }).tap();
   await auSec(page);
   await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
   await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });

@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
 import {
-  attendreApercu,
+  attendreRoute,
   attendreSurLaRoute,
   auSec,
   backToSections,
@@ -225,10 +225,11 @@ test.describe('finitions au garage', () => {
     test.setTimeout(240_000);
     await openApp(page);
     await waitForScene(page);
-    // Texte normal : la ligne n'a pas à se resserrer.
+    // Texte normal : l'étape tient sur sa ligne, avec son chemin. « Retour » et « Jouer » (là à toute profondeur
+    // depuis la vague X) peuvent se réduire à leur pictogramme ; le dernier cran, deux lignes, n'est pas utile.
     await openEntry(page, 'Échappement');
     await filEntier(page, 'Échappement', 'texte normal');
-    await expect(dock(page).locator('.dock-head')).not.toHaveAttribute('data-fil', /./);
+    await expect(dock(page).locator('.dock-head')).not.toHaveAttribute('data-fil', 'deux-lignes');
 
     await tailleTexte(page, 'Très grand');
     await openEntry(page, 'Échappement');
@@ -392,7 +393,7 @@ test.describe('vues de revue des finitions', () => {
     await expect(sortie(page)).toHaveAttribute('data-sortie', 'prete', { timeout: DELAI_ROUTE });
     await expect(sortie(page)).toHaveAttribute('data-meteo', 'pluie');
     await expect(sortie(page)).toHaveAttribute('data-phares', 'violet');
-    await attendreApercu(page);
+    await attendreRoute(page);
     await choisirCamera(page, 'Poursuite');
     await page.waitForTimeout(4_000);
     await photo(page, '11-pluie-violette-poursuite');

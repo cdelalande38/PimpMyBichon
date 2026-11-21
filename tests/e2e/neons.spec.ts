@@ -5,7 +5,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
-import { attendreApercu, auSec, choisirCamera, commencerCourse, ENTREE_SORTIE, openApp, openAtelier, openEntry, pickMap, quick, readBuilds, reglerSortie, reloadSaved, rentrerAuGarage, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { attendreRoute, auSec, choisirCamera, commencerCourse, ENTREE_SORTIE, openApp, openAtelier, openEntry, pickMap, quick, readBuilds, reglerSortie, reloadSaved, rentrerAuGarage, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 const CAPTURES = process.env.PMB_CAPTURES_NEONS;
 
@@ -350,7 +350,7 @@ test.describe('néons : captures de revue', () => {
       await auSec(page);
       await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
       await expect(page.locator('.drive-stage')).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
-      await attendreApercu(page);
+      await attendreRoute(page);
       await choisirCamera(page, 'Poursuite');
       await page.waitForTimeout(3_000);
       const sec = await appelsParImage(page, 15_000);
@@ -414,7 +414,7 @@ async function sortieDeNuit(page: Page, nom: string): Promise<void> {
   await page.locator('footer.dock').getByRole('button', { name: 'Jouer', exact: true }).tap();
   const stage = page.locator('.drive-stage');
   await expect(stage).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
-  await attendreApercu(page);
+  await attendreRoute(page);
   await expect(stage).toHaveAttribute('data-neons', /avant:fixe/);
   await expect(stage).toHaveAttribute('data-neons-lueur', '100', { timeout: 30_000 });
   await choisirCamera(page, 'Poursuite');
@@ -500,7 +500,7 @@ test.describe('néons : arcs et lueur, captures de revue', () => {
     await dock(page).getByRole('button', { name: 'Jouer', exact: true }).tap();
     const stage = page.locator('.drive-stage');
     await expect(stage).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
-    await attendreApercu(page);
+    await attendreRoute(page);
     await expect(stage).toHaveAttribute('data-neons-lueur', '100', { timeout: 30_000 });
     await choisirCamera(page, 'Poursuite');
     await page.waitForTimeout(6_000);

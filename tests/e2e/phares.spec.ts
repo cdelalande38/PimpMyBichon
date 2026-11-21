@@ -8,7 +8,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, auSec, choisirCamera, ENTREE_SORTIE, openApp, openEntry, pickMap, readBuilds, reloadSaved, rentrerAuGarage, waitForBench, waitForScene, waitForStill } from './helpers.ts';
+import { attendreRoute, auSec, choisirCamera, ENTREE_SORTIE, openApp, openEntry, pickMap, readBuilds, reloadSaved, rentrerAuGarage, waitForBench, waitForScene, waitForStill } from './helpers.ts';
 
 const CAPTURES = process.env.PMB_CAPTURES_PHARES ?? resolve('captures', 'vague-t-phares');
 
@@ -224,7 +224,7 @@ test.describe('phares', () => {
     await expect(sortie(page)).toHaveAttribute('data-phares-teinte', '30');
     await expect(sortie(page)).toHaveAttribute('data-feux', 'fumes');
 
-    await attendreApercu(page);
+    await attendreRoute(page);
     await choisirCamera(page, 'Poursuite');
     await expect(sortie(page)).toHaveAttribute('data-camera', 'poursuite');
     await page.waitForTimeout(3_000);

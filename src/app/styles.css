@@ -352,6 +352,12 @@ button {
   gap: 0.5rem;
 }
 
+/* La pastille d'état passe sous les boutons ronds : large, elle recouvrait le solde, voisin de la
+   marque (audit des menus, A1). Seul l'ordre à l'écran change, pas celui de la lecture. */
+.hud-side > .pill {
+  order: 1;
+}
+
 .quick-btn {
   position: relative;
   display: inline-grid;
@@ -722,6 +728,99 @@ button {
 
 .tabs::-webkit-scrollbar,
 .chips::-webkit-scrollbar {
+  display: none;
+}
+
+/* Une rangée qui défile se voit : un fondu au bord où il reste du contenu, qui s'efface au bout (audit
+   des menus, B1). Piloté par le défilement lui-même (Chrome ; ailleurs, pas de fondu, la rangée se
+   comporte comme avant) : une rangée qui tient, ou qui passe à la ligne, n'en a pas. La règle est
+   triplée (:is) pour battre les « .dock .chips » et consorts, quel que soit l'ordre des feuilles. */
+@property --fondu-g {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fondu-d {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes rangee-fondu-g {
+  from {
+    --fondu-g: 0px;
+  }
+  to {
+    --fondu-g: 2rem;
+  }
+}
+
+@keyframes rangee-fondu-d {
+  from {
+    --fondu-d: 2rem;
+  }
+  to {
+    --fondu-d: 0px;
+  }
+}
+
+:is(.chips, .tabs):is(.chips, .tabs):is(.chips, .tabs) {
+  animation: rangee-fondu-g linear both, rangee-fondu-d linear both;
+  animation-timeline: scroll(self inline), scroll(self inline);
+  animation-range: 0 1.5rem, calc(100% - 1.5rem) 100%;
+  mask-image: linear-gradient(to right, transparent, #000 var(--fondu-g), #000 calc(100% - var(--fondu-d)), transparent);
+}
+
+/* Molette et flèches à la souris (src/ui/rangees.ts) : les flèches sont posées par-dessus la rangée
+   survolée, jamais au toucher. */
+.rangee-fleches {
+  position: fixed;
+  z-index: 50;
+  inset: 0 auto auto 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.rangee-fleche {
+  position: fixed;
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  color: var(--chrome);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.rangee-fleche[data-sens='gauche'] {
+  background: linear-gradient(to right, rgba(10, 9, 17, 0.95) 40%, rgba(10, 9, 17, 0));
+}
+
+.rangee-fleche[data-sens='droite'] {
+  background: linear-gradient(to left, rgba(10, 9, 17, 0.95) 40%, rgba(10, 9, 17, 0));
+}
+
+.rangee-fleche[hidden] {
+  display: none;
+}
+
+.rangee-fleche svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Pas de « ? » en pleine course : un appui par erreur ouvrait un tutoriel sous le pouce (audit des
+   menus, E3). Il reste dans l'aperçu et au chargement, où la sortie est encore une vitrine. */
+body:has(.drive-top:not([data-apercu])) .tuto-aide {
   display: none;
 }
 
@@ -1186,8 +1285,24 @@ button {
 }
 
 .dock-crumbs > .eyebrow {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* « Au garage » sur une ligne (coupé par une ellipse s'il le faut), puis le nom du véhicule, mesuré comme l'étape
+   (src/ui/Dock.tsx, useFilSerre) : sur sa ligne, jamais haché. Deux lignes au plus. */
+.dock-crumbs .dock-garage {
+  white-space: nowrap;
+}
+
+.dock-crumbs .dock-vehicle {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
 .dock-crumbs-path {
@@ -1234,14 +1349,16 @@ button {
 
 /* Fil serré, mesuré pour toute entrée (src/ui/Dock.tsx, useFilSerre) : un nom qui ne tient pas (très
    grand texte, paysage) ne se coupe plus. D'abord « Retour » se réduit à sa flèche, 48 px au doigt, son
-   nom lu par les lecteurs d'écran ; s'il le faut encore, l'étape passe sur deux lignes et le chemin se tait. */
+   nom lu par les lecteurs d'écran ; puis « Jouer » à son triangle, en rond ; s'il le faut encore, l'étape
+   passe sur deux lignes et le chemin se tait. */
 .dock .dock-head[data-fil] .btn.dock-back {
   justify-content: center;
   width: 48px;
   padding: 0;
 }
 
-.dock-head[data-fil] .dock-back-label {
+.dock-head[data-fil] .dock-back-label,
+.dock-head:is([data-fil='jouer-rond'], [data-fil='deux-lignes']) .dock-jouer-label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1250,11 +1367,17 @@ button {
   white-space: nowrap;
 }
 
-.dock-head[data-fil='deux-lignes'] .dock-crumbs-path {
+.dock .dock-head:is([data-fil='jouer-rond'], [data-fil='deux-lignes']) .btn.dock-jouer-tete {
+  justify-content: center;
+  width: 48px;
+  padding: 0;
+}
+
+.dock-head[data-fil='deux-lignes'] :is(.dock-crumbs-path, .dock-garage) {
   display: none;
 }
 
-.dock-head[data-fil='deux-lignes'] .dock-crumb.dock-crumb-here {
+.dock-head[data-fil='deux-lignes'] :is(.dock-crumb.dock-crumb-here, .dock-vehicle) {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;

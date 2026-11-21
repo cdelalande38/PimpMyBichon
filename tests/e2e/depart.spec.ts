@@ -9,7 +9,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
-import { attendreApercu, commencerCourse } from './helpers.ts';
+import { attendreApercu, commencerCourse, preferBalade } from './helpers.ts';
 
 const stage = (page: Page) => page.locator(`.${DRIVE_STAGE_CLASS}`);
 const attr = async (page: Page, name: string) => Number(await stage(page).getAttribute(name));
@@ -20,6 +20,7 @@ test.describe('départ arrêté', () => {
   test('feux, véhicule tenu même accélérateur tenu, chrono au vert, pause qui fige', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    await preferBalade(page);
     await page.goto('./#/sortie');
     await expect(stage(page)).toHaveAttribute('data-sortie', 'prete', { timeout: 150_000 });
     await expect(page.locator('.drive-chargement')).toHaveCount(0, { timeout: 30_000 });

@@ -10,6 +10,17 @@
    commande garde 48 px. La scène ne bouge pas quand le menu s'ouvre ou se ferme : seule la vue glisse
    (src/scene/GarageCanvas.tsx). */
 
+/* Fondu du bas du contenu d'une entrée du menu, tant qu'il reste de la suite à faire défiler (B7 : voir
+   `.dock-tab::after` plus bas). */
+@keyframes tab-fondu {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
   :root {
     /* Colonne du menu (largeur du doigt, pas plus), avec la zone de sécurité du bord droit. */
@@ -131,10 +142,35 @@
     border-top: 1px solid var(--line);
   }
 
-  /* Le contenu d'une entrée prend la hauteur qui reste et défile dedans. */
+  /* Le contenu d'une entrée prend la hauteur qui reste et défile dedans. La dernière ligne garde de
+     l'air sous elle (sauf la sortie, plus bas), et un fondu en bas dit qu'il y a de la suite (audit des
+     menus, B7 ; même principe que les rangées, src/app/styles.css). Ce n'est pas un masque : un masque
+     rognerait les messages posés hors de la colonne (cadenas de la peinture). Le fondu est un pied collant,
+     visible tant que le contenu défile et qu'on n'est pas au bout ; sans défilement, il reste invisible. */
   .app > .dock .dock-tab {
     flex: 1 1 auto;
     min-height: 0;
+  }
+
+  .app > .dock .dock-tab::after {
+    content: '';
+    position: sticky;
+    bottom: 0;
+    flex: none;
+    height: 1.5rem;
+    /* Annule la hauteur du pied et l'écart de la colonne : il ne prend aucune place. */
+    margin-top: calc(-1.5rem - 0.5rem);
+    background: linear-gradient(to top, rgba(10, 9, 17, 0.95), rgba(10, 9, 17, 0));
+    opacity: 0;
+    pointer-events: none;
+    animation: tab-fondu linear both;
+    animation-timeline: scroll(nearest block);
+    animation-range: calc(100% - 1.5rem) 100%;
+  }
+
+  /* Sauf la sortie, dont « Jouer » reste collé au bas du menu, sous le pouce. */
+  .app > .dock .dock-tab:not([data-onglet='sortie']) {
+    padding-bottom: 1.5rem;
   }
 
   /* ───────────── Boutons ronds : une colonne à gauche, sous le pouce gauche ───────────── */
@@ -170,6 +206,9 @@
 
   /* Pastille d'état, « Nouvelle version », installation : en haut à droite de la zone libre, sous le « ? ». */
   body:has(.app > .dock) .hud-side {
+    /* Fixe, comme la colonne des boutons : le bandeau est lui-même hors du flux, sa boîte ne sert
+       pas de repère (la pastille atterrissait sur le bouton Atelier, audit des menus A1). */
+    position: fixed;
     top: calc(var(--p-top) + 3.5rem);
     right: calc(var(--p-menu) + var(--gutter));
     max-width: calc(100vw - var(--p-rail) - var(--p-menu) - 2 * var(--gutter) - 8rem);
@@ -288,18 +327,19 @@
     flex: 1 1 0;
   }
 
-  /* Panneau « Atelier » : les rubriques et « Retour » partagent la dernière rangée (la hauteur est
-     rare en paysage : le contenu garde la place). */
+  /* Panneau « Atelier » : les rubriques sur leur rangée, au-dessus de « Retour » (audit des menus, D1 :
+     côte à côte, « Jeu » passait sous « Retour »). « Sous le capot » y ajoute Mesurer et Comparer, sur la
+     rangée de « Retour ». */
   body:has(.app > .dock) .card:has(> .atelier-tabs) {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 0.5rem 0;
   }
 
   body:has(.app > .dock) .card:has(> .atelier-tabs) > .card-scroll {
-    grid-column: 1 / -1;
+    grid-column: 1;
     height: 100%;
   }
 
@@ -307,34 +347,14 @@
     grid-column: 1;
     grid-row: 2;
     min-width: 0;
+    margin-left: 0;
     border-top: 0;
   }
 
   body:has(.app > .dock) .card:has(> .atelier-tabs) > .sheet-acts {
-    grid-column: 2;
-    grid-row: 2;
-    margin-left: 0;
-  }
-
-  /* « Sous le capot » : Mesurer et Comparer s'ajoutent à Retour, la rangée prend toute la largeur
-     sous les rubriques. */
-  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto auto;
-  }
-
-  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) > .atelier-tabs,
-  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) > .sheet-acts {
     grid-column: 1;
-    margin-left: var(--pad-l);
-  }
-
-  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) > .atelier-tabs {
-    margin-left: 0;
-  }
-
-  body:has(.app > .dock) .card:has(> .atelier-tabs):has(> .sheet-acts > .btn:nth-child(2)) > .sheet-acts {
     grid-row: 3;
+    margin-left: var(--pad-l);
   }
 
   /* ───────────── Tutoriels : la carte dans la zone libre, jamais sur le menu ───────────── */

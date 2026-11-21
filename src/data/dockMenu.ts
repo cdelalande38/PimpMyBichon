@@ -5,7 +5,7 @@
 // Chaque section et chaque entrée nomme son icône (dessinée dans src/ui/icons.tsx), posée avec le mot ;
 // sans icône, le mot seul.
 
-export type SectionId = 'vehicule' | 'custom' | 'mecanique' | 'garage';
+export type SectionId = 'vehicule' | 'custom' | 'mecanique' | 'garage' | 'jouer';
 
 export type EntryId =
   | 'vehicule'
@@ -61,6 +61,8 @@ export interface DockSection {
   icon?: MenuIcon;
   /** « engine » : section absente si le véhicule à l'écran ne déclare pas de moteur. */
   requires?: 'engine';
+  /** Vrai : pas dans la rangée des sections ; seul « Jouer » l'ouvre (le menu du bas ne sert qu'à personnaliser). */
+  cachee?: boolean;
   entries: readonly DockEntry[];
 }
 
@@ -112,11 +114,23 @@ export const DOCK_MENU: readonly DockSection[] = [
     icon: 'garage',
     entries: [
       { id: 'ambiance', label: 'Ambiance', icon: 'neon', available: true },
-      // La sortie de nuit (§ 5.5) : la carte, le départ, la météo et « Jouer ».
-      { id: 'sortie', label: 'Sortie', icon: 'route', available: true },
     ],
   },
+  // L'écran « Jouer » (vague X, § 5.5) : les modes, puis le lieu et les réglages. Il vit dans le dock mais
+  // pas dans sa rangée de sections : un bouton « Jouer », toujours visible au garage, l'ouvre.
+  {
+    id: 'jouer',
+    label: 'Jouer',
+    icon: 'route',
+    cachee: true,
+    entries: [{ id: 'sortie', label: 'Jouer', icon: 'route', available: true }],
+  },
 ];
+
+/** Les sections de la rangée du menu (celles que le joueur touche pour personnaliser). */
+export function sectionsDeLaRangee(hasEngine: boolean, menu: readonly DockSection[] = DOCK_MENU): DockSection[] {
+  return visibleSections(hasEngine, menu).filter((section) => section.cachee !== true);
+}
 
 /** Sections à l'écran pour ce véhicule. */
 export function visibleSections(hasEngine: boolean, menu: readonly DockSection[] = DOCK_MENU): DockSection[] {
@@ -137,8 +151,8 @@ export function activeEntry(section: DockSection, last: EntryId | undefined): Do
 
 /**
  * Entrée qu'une section ouvre directement : la seule disponible, quand la section n'en annonce
- * aucune autre (« bientôt » comprises). Véhicule n'a pas d'écran intermédiaire à un seul
- * choix ; Custom, Mécanique et Garage (Ambiance, Sortie) montrent d'abord leurs entrées.
+ * aucune autre (« bientôt » comprises). Véhicule, Garage (Ambiance seule) et Jouer n'ont pas d'écran
+ * intermédiaire à un seul choix ; Custom et Mécanique montrent d'abord leurs entrées.
  */
 export function directEntry(section: DockSection, showUpcoming = SHOW_UPCOMING): DockEntry | undefined {
   const list = sectionEntries(section, showUpcoming);
