@@ -38,6 +38,13 @@ export interface ReglageDepart {
 
 export const DEPART: Readonly<ReglageDepart> = Object.freeze({ avant: 0.8, feu: 1, rouges: 2, effacement: 1 });
 
+/**
+ * Chauffe : une fois la route et le véhicule posés, la scène tourne encore ce temps (horloge réelle, en ms)
+ * sous l'écran de chargement avant de se dire prête et d'allumer les feux, le temps que le téléphone
+ * prépare ses effets (sinon l'image se figeait au début : retour du commanditaire, 21 novembre 2026).
+ */
+export const CHAUFFE_MS = 1500;
+
 /** Ce que le départ sait du parcours (src/drive/contrat.ts, Rail). */
 export interface ParcoursDepart {
   readonly length: number;

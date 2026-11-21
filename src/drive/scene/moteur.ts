@@ -41,7 +41,7 @@ import { useBuilds } from '../../state/builds.ts';
 import { etapeFondu, liveDepart, livePilot, useDrive } from '../../state/drive.ts';
 import { cameraShot, guardShot } from '../cameras.ts';
 import type { CameraId, CameraShot, Director, DriveTelemetry, Pilot, Rail, RailPose, VehicleFrame } from '../contrat.ts';
-import { armerDepart, cleTemps, createDepart, enCourse, lancerDepart, pasDepart, tenuSurLaLigne } from '../depart.ts';
+import { armerDepart, CHAUFFE_MS, cleTemps, createDepart, enCourse, lancerDepart, pasDepart, tenuSurLaLigne } from '../depart.ts';
 import { courseFinie, SuiviCourse } from '../course.ts';
 import { formatCouru, toursDuFormat } from '../../data/courses.ts';
 import { createPilot, performanceDe } from '../pilote.ts';
@@ -272,6 +272,20 @@ export class DriveEngine {
   speedFactor = 0;
   private lastPub = -Infinity;
   private frames = 0;
+  /** Début de la chauffe (performance.now(), -1 : pas encore posée) et image où elle a commencé. */
+  private poseeA = -1;
+  private poseeImage = 0;
+
+  /** Posée (route et véhicule) depuis au moins CHAUFFE_MS et trois images : l'écran de chargement peut partir. */
+  private chaude(posee: boolean): boolean {
+    if (!posee) return false;
+    const now = performance.now();
+    if (this.poseeA < 0) {
+      this.poseeA = now;
+      this.poseeImage = this.frames;
+    }
+    return now - this.poseeA >= CHAUFFE_MS && this.frames - this.poseeImage > 2;
+  }
   private primed = false;
   /** Cadence mesurée au début de la sortie : sous le plancher, la scène s'allège d'elle-même. */
   private slowFrames = 0;
@@ -494,7 +508,7 @@ export class DriveEngine {
     const motion = this.pilot.step(dt, drive.input, this.kind);
     const arrived = depart.phase === 'arrive';
     this.suivi.pas(depart, dt, drive.input, motion, (this.pilot as { contact?: number }).contact ?? 0, this.pilot.train?.nos === true);
-    pasDepart(depart, dt, this.vehicleReady && !this.vehicleFailed && decor.status.loaded > 0 && this.frames > 2 && (this.duel?.pret ?? true), motion.s, this.rail, motion.finished);
+    pasDepart(depart, dt, this.chaude(this.vehicleReady && decor.status.loaded > 0) && !this.vehicleFailed && (this.duel?.pret ?? true), motion.s, this.rail, motion.finished);
     // Duel : l'adversaire avance avec le joueur ; le contact le range ou retient celui de derrière.
     if (this.duel) {
       this.duel.pilote.pilot.setWeather(drive.weather);
@@ -755,7 +769,7 @@ export class DriveEngine {
     // Télémétrie et attributs, quatre fois par seconde au plus.
     if (due(now, this.lastPub)) {
       this.lastPub = now;
-      const ready = this.vehicleReady && decor.status.loaded > 0 && this.frames > 2;
+      const ready = this.chaude(this.vehicleReady && decor.status.loaded > 0);
       const broken = decor.status.failed || this.vehicleFailed;
       if (broken && !this.reportedFailure) {
         this.reportedFailure = true;
