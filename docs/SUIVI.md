@@ -6,7 +6,7 @@ Dernière mise à jour : 21 novembre 2026, 17 h 45.
 
 ## 1. Où on en est
 
-- **En ligne** : poussé le 21 novembre à 17 h 45, validé : l'écran « Jouer » et les retouches de l'audit des menus (ce commit), le chargement prolongé de la course (`aa89235`).
+- **En ligne** : poussé le 21 novembre à 17 h 45, validé : l'écran « Jouer » et les retouches de l'audit des menus (`3b2cee9`), le chargement prolongé de la course (`aa89235`).
 - **Aucun agent en vol.** À trancher par lui : le mot de la vue intérieure (« Vue atelier » posé ; ou « Atelier », « Retour ») et « Jouer » réduit à son triangle quand la ligne manque de place.
 
 ## 2. Journal des demandes
@@ -16,7 +16,7 @@ Dernière mise à jour : 21 novembre 2026, 17 h 45.
 | Demande (ses mots) | Ce qui a été livré | Commit |
 |---|---|---|
 | « si un participant arrive sur la ligne d'arrivée il bloque les autres potentiellement. Il faut pas que ça bloque une fois sur la ligne. Par contre pendant la course ça doit rester comme actuellement » | Une fois l'un des deux arrivé, le contact ne s'applique plus entre eux (l'autre passe à côté ou au travers) ; pendant la course, rien ne change | `ff0fc7f` |
-| (décisions sur l'audit, 21 novembre) | Un seul écran « Jouer » : cartes Continuer, Carrière, Course, Duel, Drift, Balade ; « Jouer » dans l'en-tête du menu à toute profondeur (réduit à son triangle quand la place manque) ; bouton rond de la carrière retiré ; aperçu seulement en Balade ; titre d'étape au lieu du fil ; première course libre en 4 ou 5 appuis au lieu de 7. Retouches : pastille d'état, étiquette en double, fondu et molette des rangées, rubriques de l'Atelier visibles en paysage, Échap et P pour la pause, « ? » masqué en course, raccourcis clavier au garage, « Sortir » devenu « Vue atelier » | (ce commit) |
+| (décisions sur l'audit, 21 novembre) | Un seul écran « Jouer » : cartes Continuer, Carrière, Course, Duel, Drift, Balade ; « Jouer » dans l'en-tête du menu à toute profondeur (réduit à son triangle quand la place manque) ; bouton rond de la carrière retiré ; aperçu seulement en Balade ; titre d'étape au lieu du fil ; première course libre en 4 ou 5 appuis au lieu de 7. Retouches : pastille d'état, étiquette en double, fondu et molette des rangées, rubriques de l'Atelier visibles en paysage, Échap et P pour la pause, « ? » masqué en course, raccourcis clavier au garage, « Sortir » devenu « Vue atelier » | `3b2cee9` |
 | « lorsqu'on charge une course au début c'est figé […] laisser l'écran de chargement de la course un peu plus longtemps, 1 à 2 s » | L'écran de chargement reste 1,5 s de plus, les feux attendent (`CHAUFFE_MS`) | `aa89235` |
 | « lance une analyse des menus et place-toi en expert du jeu vidéo et de l'ergonomie de jeux vidéo mobile et PC […] fais un état des lieux et propose des améliorations » | Rapport docs/AUDIT_MENUS.md : 39 problèmes classés, architecture cible, plan. Ses décisions du 21 novembre : bouton rond « Carrière » retiré au profit d'un seul écran « Jouer » ; porte de garage sur le mur avant, près du néon ; aperçu seulement en Balade ; retouches rapides et écran « Jouer » lancés | `80ec58a` |
 
