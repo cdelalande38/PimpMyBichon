@@ -691,6 +691,91 @@ describe('on double', () => {
   });
 });
 
+// L'arrivée (demande du 20 novembre 2026 : « si un participant arrive sur la ligne d'arrivée il bloque les autres
+// potentiellement. Il faut pas que ça bloque une fois sur la ligne ») : celui de devant passe la ligne au ralenti
+// (8 m/s), l'autre arrive lancé (20 m/s) 3 m derrière lui, au même écart, le même véhicule des deux côtés : deux
+// vans sur la route étroite (le bout de Monaco-Ville, 6 m), deux voitures sur la boucle. Le joueur en conduite
+// appliquée (gaz à fond, direction assistée), en pilote automatique une fois arrivé, comme dans la scène.
+// `seul` : celui de devant posé 300 m derrière l'autre, pour le temps que l'autre fait sans lui.
+const ARRIVEES = [
+  { map: 'monaco-ville', nom: 'route ouverte étroite, deux vans', adversaire: 'momo', dims: LARGE },
+  { map: 'monaco-circuit', nom: 'boucle, deux voitures', adversaire: 'comete', dims: MOYENNE },
+] as const;
+
+function arriveeSerree(cas: (typeof ARRIVEES)[number], devantQui: 'joueur' | 'adversaire', seul = false) {
+  const { demiLargeur: dl, demiLongueur: dL } = cas.dims;
+  const r = route(cas.map);
+  const rail = createRail(r);
+  const L = rail.length;
+  const sur = (x: number) => (rail.loop ? ((x % L) + L) % L : x);
+  const ligne = r.starts[0]!.at;
+  const fin = rail.loop ? ligne : L;
+  const adv = ADVERSAIRES.find((a) => a.id === cas.adversaire)!;
+  const vehicule = vehicleById(adv.vehicule)!;
+  const duel = new DuelEnCourse(adv, vehicule, rail, plusDur());
+  duel.mesurer(dl, dL);
+  const joueur = createPilot(rail, performanceDe(vehicule));
+  joueur.setSize(dl, dL);
+  joueur.reset(ligne);
+  duel.depart(joueur, 'car', ligne, joueur.motion.offset, dl, dL, 1, true);
+  const sDerriere = sur(fin - 0.5 - 2 * dL - 3);
+  const sDevant = seul ? sur(sDerriere - 300) : sur(fin - 0.5);
+  const [sJ, sA] = devantQui === 'joueur' ? [sDevant, sDerriere] : [sDerriere, sDevant];
+  joueur.reset(sur(fin - 0.5));
+  const offset = joueur.motion.offset;
+  joueur.reset(sJ);
+  joueur.motion.offset = offset;
+  joueur.motion.speed = devantQui === 'joueur' ? 8 : 20;
+  remettreAdversaire(duel.pilote, sA, offset);
+  duel.pilote.pilot.motion.speed = devantQui === 'joueur' ? 20 : 8;
+  // La course lancée, le dernier tour presque bouclé (sur une route ouverte, l'arrivée est au bout).
+  const depart = armerDepart(createDepart(), ligne, rail.loop, false, 1);
+  depart.phase = 'parti';
+  depart.vert = true;
+  depart.depuisVert = Infinity;
+  depart.sPrec = sJ;
+  depart.parcouru = rail.loop ? L - devant(sJ, fin, L, true) : sJ - ligne;
+  const input: DriveInput = { auto: false, throttle: 1, brake: 0, lane: 0, assist: true };
+  const adversaire = duel.duel.adv;
+  const arrive = (qui: 'joueur' | 'adversaire') => (qui === 'joueur' ? depart.phase === 'arrive' : adversaire.phase === 'arrive');
+  const derriere = devantQui === 'joueur' ? 'adversaire' : 'joueur';
+  // Pas où le contact a joué (retenue ou frottement) une fois celui de devant arrivé.
+  let gene = 0;
+  // Le duel part (l'adversaire compte sa course depuis la ligne du joueur).
+  duel.pas(0, joueur, depart, dl, dL);
+  adversaire.parcouru = depart.parcouru + devant(sJ, sA, L, rail.loop);
+  for (let t = 0; t < 12 && !(arrive('joueur') && arrive('adversaire')); t += 0.1) {
+    const devantArrive = arrive(devantQui);
+    // Arrivé, le joueur passe en pilote automatique (src/state/drive.ts, `terminerCourse`).
+    if (arrive('joueur')) Object.assign(input, { auto: true, throttle: 0, brake: 0, lane: 0 });
+    joueur.setHold(false);
+    const m = joueur.step(0.1, input, 'car');
+    pasDepart(depart, 0.1, true, m.s, rail, m.finished);
+    duel.pas(0.1, joueur, depart, dl, dL, input.auto);
+    if (devantArrive && (duel.retenue !== null || duel.contact.frotte)) gene += 1;
+  }
+  const temps = (qui: 'joueur' | 'adversaire') => (arrive(qui) ? (qui === 'joueur' ? depart.arrivee : adversaire.arrivee) / 1000 : Infinity);
+  return { gene, tempsDerriere: temps(derriere), tempsDevant: temps(devantQui), verdict: duel.duel.verdict };
+}
+
+describe('à l’arrivée, plus de blocage', () => {
+  for (const cas of ARRIVEES) {
+    const { map, nom } = cas;
+    for (const devantQui of ['joueur', 'adversaire'] as const) {
+      it.skipIf(!built.some((m) => m.id === map))(`${nom} : ${devantQui === 'joueur' ? 'le joueur' : 'l’adversaire'} passe la ligne, l’autre arrive juste derrière, n’est pas retenu, et son temps est celui qu’il ferait seul`, { timeout: 60_000 }, () => {
+        const a = arriveeSerree(cas, devantQui);
+        const seul = arriveeSerree(cas, devantQui, true);
+        expect(a.tempsDevant).toBeLessThan(a.tempsDerriere);
+        expect(a.gene).toBe(0);
+        expect(Number.isFinite(a.tempsDerriere)).toBe(true);
+        expect(Math.abs(a.tempsDerriere - seul.tempsDerriere)).toBeLessThan(0.05);
+        // Le verdict : gagné si le joueur passe la ligne le premier.
+        expect(a.verdict?.gagne).toBe(devantQui === 'joueur');
+      });
+    }
+  }
+});
+
 describe('écart et vainqueur', () => {
   const parcours = { length: 1000, loop: false };
 

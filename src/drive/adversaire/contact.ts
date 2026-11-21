@@ -16,6 +16,9 @@
 // - Là où la chaussée est trop étroite pour deux (les deux flancs déjà contre les bords), le joueur nettement
 //   derrière cède, l'adversaire s'ils sont à la même hauteur : il recule sur l'autre d'au plus `cedeParSeconde`
 //   m/s, sans saut.
+// - Une fois l'un des deux arrivé (`traversable`, demande du 20 novembre 2026 : « Il faut pas que ça bloque une fois
+//   sur la ligne ») : plus de gêne, ni frottement, ni poussée, ni retenue ; l'adversaire prend encore son côté
+//   (l'autre passe à côté quand la chaussée a la place, au travers sinon).
 //
 // Repère de la route : abscisse s (m), écart à l'axe (m, positif à gauche de la marche). Pur, sans
 // allocation : l'état est réécrit sur place.
@@ -98,9 +101,10 @@ export function coteLibre(d: number, vu: number, jo: number, g: number, lo: numb
  * Un pas de `dt` s. `adv.offset` et `joueur.offset` sont les écarts de leurs PILOTES (sans le décalage
  * d'évitement ni la poussée) ; [`lo`, `hi`] et [`loJ`, `hiJ`] : écarts permis à l'adversaire et au joueur ici
  * (laneLimits). Met à jour le côté, le décalage, la poussée, le frottement et le recul ; rend qui doit être
- * retenu derrière l'autre (de `c.recul` m) pour qu'ils ne se recouvrent pas.
+ * retenu derrière l'autre (de `c.recul` m) pour qu'ils ne se recouvrent pas. `traversable` : l'un des deux est
+ * arrivé, ils ne se gênent plus (la poussée retombe, rien n'est retenu).
  */
-export function pasContact(c: EtatContact, joueur: CorpsRoute, adv: CorpsRoute, lo: number, hi: number, loJ: number, hiJ: number, reglage: ReglageContact, dt: number, longueur: number, boucle: boolean): Retenue {
+export function pasContact(c: EtatContact, joueur: CorpsRoute, adv: CorpsRoute, lo: number, hi: number, loJ: number, hiJ: number, reglage: ReglageContact, dt: number, longueur: number, boucle: boolean, traversable = false): Retenue {
   const pas = Math.max(0, Number.isFinite(dt) ? dt : 0);
   const d = devant(joueur.s, adv.s, longueur, boucle);
   const longueurs = joueur.demiLongueur + adv.demiLongueur;
@@ -128,6 +132,7 @@ export function pasContact(c: EtatContact, joueur: CorpsRoute, adv: CorpsRoute, 
   // Au bord de la chaussée, le décalage ne pousse jamais l'adversaire dehors.
   let ao = borne(adv.offset + c.ecart, lo, hi);
   c.ecart = ao - adv.offset;
+  if (traversable) return null;
   const penL = longueurs - Math.abs(d);
   const dl = ao - jo;
   const penW = largeurs - Math.abs(dl);

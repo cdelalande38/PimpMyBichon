@@ -2,14 +2,21 @@
 
 Document de passation, tenu à jour à chaque étape. Il dit, pour quelqu'un qui arrive à froid : ce que le commanditaire a demandé (avec ses mots), ce qui est en ligne, ce qui reste faux dans ce qui est livré, et ce qui vient. Le détail technique de chaque lot est dans le message de son commit ; les règles de travail sont dans `CLAUDE.md` ; le périmètre est dans `CAHIER_DES_CHARGES.md` (§ 5.5 pour la sortie, § 11 pour ce que la publication attend) ; les substituts et ce qui manque sont dans `TODO_ASSETS.md`.
 
-Dernière mise à jour : 20 novembre 2026, 9 h.
+Dernière mise à jour : 21 novembre 2026, 13 h 20.
 
 ## 1. Où on en est
 
-- **En ligne** : les fonds (`0dd9a7c`, publiés le 20 novembre à 7 h 30) ; poussé le 20 novembre à 9 h : « duel4 » (`cdd0c8b`), validé.
-- **Aucun agent en vol.** Quota de la semaine à 94 % (retour le 25 novembre à 4 h) : plus aucun lot d'ici là. La file reprend au § 4 (rodéo, cartes, véhicules).
+- **En ligne** : poussé le 21 novembre à 13 h 20 : la ligne d'arrivée du duel (ce commit) et l'audit des menus (`80ec58a`, docs/AUDIT_MENUS.md).
+- **En cours** (depuis le 21 novembre, 12 h 57) : « jouer » (un seul écran « Jouer » pour tous les modes) et « retouches » (retouches rapides de l'audit), deux agents Sonnet.
 
 ## 2. Journal des demandes
+
+### 20 et 21 novembre
+
+| Demande (ses mots) | Ce qui a été livré | Commit |
+|---|---|---|
+| « si un participant arrive sur la ligne d'arrivée il bloque les autres potentiellement. Il faut pas que ça bloque une fois sur la ligne. Par contre pendant la course ça doit rester comme actuellement » | Une fois l'un des deux arrivé, le contact ne s'applique plus entre eux (l'autre passe à côté ou au travers) ; pendant la course, rien ne change | (ce commit) |
+| « lance une analyse des menus et place-toi en expert du jeu vidéo et de l'ergonomie de jeux vidéo mobile et PC […] fais un état des lieux et propose des améliorations » | Rapport docs/AUDIT_MENUS.md : 39 problèmes classés, architecture cible, plan. Ses décisions du 21 novembre : bouton rond « Carrière » retiré au profit d'un seul écran « Jouer » ; porte de garage sur le mur avant, près du néon ; aperçu seulement en Balade ; retouches rapides et écran « Jouer » lancés | `80ec58a` |
 
 ### Soir du 19 novembre
 
@@ -81,6 +88,7 @@ Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : t
 
 Ordre fixé par le commanditaire le 19 novembre au soir : restes du duel, NOS, rodéo, cartes, véhicules. Le reste de la liste vient après. « Gros » : un lot d'agent complet avec validation ; « petit » : une retouche de la boucle principale.
 
+0. **Menus** (d'après docs/AUDIT_MENUS.md § 7) : écran « Jouer » et retouches rapides en cours ; puis menu de pause, panneaux en paysage, choix du lieu en grandes cartes illustrées, porte de garage (mur avant, près du néon « GOOD VIBES ONLY », Opus), disposition PC, choix du véhicule en cartes. À trancher par lui : les mots (« Sortie », « Sortir », « Jeu » ou « Ton compte »), le menu fermé par défaut en paysage, le regroupement des entrées de Custom.
 1. **Restes du duel et du NOS** (moyen) : le saut de l'adversaire, le dépassement, les sorties d'échappement du concept et du van, la poussée trop faible de la Cox.
 2. **Rodéo** (gros) : duel d'accélération en ligne droite, NOS et passages de rapport au bon moment. Réutilise l'adversaire du duel (`DuelEnCourse`). Dernier des quatre chantiers de jeu ouverts le 18 novembre.
 3. **Cartes** (gros, une par lot ; données téléchargées par la boucle principale, licence notée dans `CREDITS.md`) : Paris le long de la Seine d'abord ; puis l'Italie (Rome, Pise, Milan), des circuits connus (nommés par leur ville), Moscou, Tokyo, la muraille de Chine, l'Australie, la route 66. Hors de France : OpenStreetMap ; la source du relief est à vérifier pays par pays. Des départs dédiés au drift sur les cartes actuelles (Monaco, la ville, vers 1 800 m ; le plateau vers 6 050 m) sont un petit lot.

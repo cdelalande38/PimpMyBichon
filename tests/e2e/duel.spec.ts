@@ -9,7 +9,7 @@
 // Captures de revue à la demande : PMB_CAPTURES_DUEL=<dossier>. Vague W, à la demande aussi : la grille en
 // quinconce (deux vans sur la route étroite), un dépassement en cours et l'adversaire qui envoie son NOS.
 
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { DRIVE_STAGE_CLASS } from '../../src/drive/contrat.ts';
@@ -186,6 +186,34 @@ test.describe('duel contre un adversaire piloté par le jeu', () => {
     await fin.locator('.fin-course-actes').getByRole('button', { name: 'Revanche' }).tap();
     await expect(fin).toHaveCount(0);
     await expect(stage(page)).toHaveAttribute('data-duel-verdict', 'non', { timeout: DELAI_ROUTE });
+    expect(errors).toEqual([]);
+  });
+
+  // Vague X (demande du 20 novembre 2026 : « si un participant arrive sur la ligne d'arrivée il bloque les autres ») :
+  // au bout de la première carte (route étroite, départs en quinconce), le joueur file plein gaz, Nova (le même
+  // véhicule) en Difficile juste derrière lui. Le premier arrivé s'arrête au bout de la route ; l'autre n'est plus
+  // retenu derrière lui et passe la ligne à son tour (avant : collé 4,4 m avant elle). Captures (PMB_CAPTURES_DUEL).
+  test('à l’arrivée, celui qui arrive juste derrière n’est pas retenu', async ({ page }) => {
+    test.setTimeout(600_000);
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const carte = cartesDuMenu()[0]!;
+    const longueur = (JSON.parse(readFileSync(resolve('public', 'assets', 'maps', carte.id, 'route.json'), 'utf8')) as { length: number }).length;
+    await menuDuel(page, 'nova', 'difficile');
+    await page.setViewportSize(PAYSAGE);
+    await sortirEnDuel(page);
+    await expect(stage(page)).toHaveAttribute('data-depart', 'parti', { timeout: DELAI_ROUTE });
+    const lire = () => stage(page).evaluate((el) => ({ s: Number(el.dataset.s), sA: Number(el.dataset.duelS), devant: Number(el.dataset.duelDevant) }));
+    const lacher = await tenirLeGaz(page);
+    const v = await attendreSurLaRoute(page, 'près de la ligne', lire, (x) => Math.max(x.s, x.sA) >= longueur - 15, { secondes: 60, horloge: 300_000, intervalle: 100 });
+    await photo(page, `17-arrivee-approche-${Math.round(Math.abs(v.devant))}m-paysage`);
+    const fin = page.locator('.fin-course');
+    await attendreSurLaRoute(page, 'écran de fin', () => fin.isVisible(), (vu) => vu, { secondes: 60, horloge: 300_000, intervalle: 300 });
+    await lacher();
+    await photo(page, '18-arrivee-fin-paysage');
+    // Le chrono est arrêté : l'autre se guette à l'horloge (quelques images suffisent, il est à quelques mètres).
+    await expect.poll(async () => Math.min((await lire()).s, (await lire()).sA), { timeout: 120_000, intervals: [300] }).toBeGreaterThanOrEqual(Math.round(longueur) - 1);
+    await expect(fin.locator('.duel-verdict')).toHaveAttribute('data-duel', /^(gagne|perdu)$/);
     expect(errors).toEqual([]);
   });
 

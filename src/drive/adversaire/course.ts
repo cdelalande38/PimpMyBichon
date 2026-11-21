@@ -291,7 +291,10 @@ export class DuelEnCourse {
     a.s = motion.s;
     a.offset = motion.offset;
     const c = this.contact;
-    const retenue = pasContact(c, j, a, this.limites[0], this.limites[1], this.limitesJ[0], this.limitesJ[1], this.reglage, dt, rail.length, rail.loop);
+    // Un véhicule arrivé ne bloque plus l'autre : il passe, au travers s'il le faut. L'arrivée de l'adversaire est
+    // comptée plus bas (pasDuel) : au bout d'une route ouverte, où il s'arrête net, elle vaut dès ce pas.
+    const arrivee = departJoueur.phase === 'arrive' || this.duel.adv.phase === 'arrive' || motion.finished;
+    const retenue = pasContact(c, j, a, this.limites[0], this.limites[1], this.limitesJ[0], this.limitesJ[1], this.reglage, dt, rail.length, rail.loop, arrivee);
     this.pilote.lane = laneDuCote(c.cote);
     // La poussée du joueur s'ajoute à l'écart de son pilote (reprise à chaque image, elle retombe sans contact).
     joueur.motion.offset += c.pousse;
