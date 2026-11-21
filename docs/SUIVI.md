@@ -2,11 +2,11 @@
 
 Document de passation, tenu à jour à chaque étape. Il dit, pour quelqu'un qui arrive à froid : ce que le commanditaire a demandé (avec ses mots), ce qui est en ligne, ce qui reste faux dans ce qui est livré, et ce qui vient. Le détail technique de chaque lot est dans le message de son commit ; les règles de travail sont dans `CLAUDE.md` ; le périmètre est dans `CAHIER_DES_CHARGES.md` (§ 5.5 pour la sortie, § 11 pour ce que la publication attend) ; les substituts et ce qui manque sont dans `TODO_ASSETS.md`.
 
-Dernière mise à jour : 21 novembre 2026, 13 h 20.
+Dernière mise à jour : 21 novembre 2026, 13 h 40.
 
 ## 1. Où on en est
 
-- **En ligne** : poussé le 21 novembre à 13 h 20 : la ligne d'arrivée du duel (ce commit) et l'audit des menus (`80ec58a`, docs/AUDIT_MENUS.md).
+- **En ligne** : poussé le 21 novembre à 13 h 20 : la ligne d'arrivée du duel (`ff0fc7f`) et l'audit des menus (`80ec58a`, docs/AUDIT_MENUS.md).
 - **En cours** (depuis le 21 novembre, 12 h 57) : « jouer » (un seul écran « Jouer » pour tous les modes) et « retouches » (retouches rapides de l'audit), deux agents Sonnet.
 
 ## 2. Journal des demandes
@@ -15,7 +15,7 @@ Dernière mise à jour : 21 novembre 2026, 13 h 20.
 
 | Demande (ses mots) | Ce qui a été livré | Commit |
 |---|---|---|
-| « si un participant arrive sur la ligne d'arrivée il bloque les autres potentiellement. Il faut pas que ça bloque une fois sur la ligne. Par contre pendant la course ça doit rester comme actuellement » | Une fois l'un des deux arrivé, le contact ne s'applique plus entre eux (l'autre passe à côté ou au travers) ; pendant la course, rien ne change | (ce commit) |
+| « si un participant arrive sur la ligne d'arrivée il bloque les autres potentiellement. Il faut pas que ça bloque une fois sur la ligne. Par contre pendant la course ça doit rester comme actuellement » | Une fois l'un des deux arrivé, le contact ne s'applique plus entre eux (l'autre passe à côté ou au travers) ; pendant la course, rien ne change | `ff0fc7f` |
 | « lance une analyse des menus et place-toi en expert du jeu vidéo et de l'ergonomie de jeux vidéo mobile et PC […] fais un état des lieux et propose des améliorations » | Rapport docs/AUDIT_MENUS.md : 39 problèmes classés, architecture cible, plan. Ses décisions du 21 novembre : bouton rond « Carrière » retiré au profit d'un seul écran « Jouer » ; porte de garage sur le mur avant, près du néon ; aperçu seulement en Balade ; retouches rapides et écran « Jouer » lancés | `80ec58a` |
 
 ### Soir du 19 novembre
@@ -86,10 +86,16 @@ Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : t
 
 ## 4. Lots à venir
 
-Ordre fixé par le commanditaire le 19 novembre au soir : restes du duel, NOS, rodéo, cartes, véhicules. Le reste de la liste vient après. « Gros » : un lot d'agent complet avec validation ; « petit » : une retouche de la boucle principale.
+Ordre : les menus (en cours, ses décisions du 21 novembre), puis le rendu (ajouté par lui le 21 novembre « pour que ça soit travaillé à la suite »), puis l'ordre qu'il avait fixé le 19 novembre (rodéo, cartes, véhicules). « Gros » : un lot d'agent complet avec validation ; « petit » : une retouche de la boucle principale.
 
 0. **Menus** (d'après docs/AUDIT_MENUS.md § 7) : écran « Jouer » et retouches rapides en cours ; puis menu de pause, panneaux en paysage, choix du lieu en grandes cartes illustrées, porte de garage (mur avant, près du néon « GOOD VIBES ONLY », Opus), disposition PC, choix du véhicule en cartes. À trancher par lui : les mots (« Sortie », « Sortir », « Jeu » ou « Ton compte »), le menu fermé par défaut en paysage, le regroupement des entrées de Custom.
-1. **Restes du duel et du NOS** (moyen) : le saut de l'adversaire, le dépassement, les sorties d'échappement du concept et du van, la poussée trop faible de la Cox.
+1. **Rendu : aller vers une qualité « vitrine »** (demande du 21 novembre : « J'aime bien tes propositions d'amélioration, alimente le plan avec tout ça pour que ça soit travaillé à la suite » ; probablement la semaine du 25 novembre, selon le quota). Pas un rendu de jeu de console sur téléphone (le GPU d'un téléphone est 3 à 5 fois moins puissant et chauffe, et le vrai fossé est celui des assets), mais le garage au niveau des meilleurs jeux de voiture sur mobile, et une nuit néon fluide en course. Dans l'ordre :
+   1. *État des lieux du rendu* (Opus, analyse, comme l'audit des menus) : image par image, ce qui fait « amateur », ce que chaque chantier ci-dessous apporterait, son coût en temps d'image sur le téléphone de référence et en quota ; des paliers de qualité (bas, haut) et une résolution qui s'adapte.
+   2. *De vrais modèles de véhicules* : le premier levier, de loin (la voiture est dans chaque image) ; la Cox et le van sont encore des substituts générés par code. Modèles sous licence ouverte vérifiée (voir le sourcing plus bas) ou achetés et rangés dans le dépôt privé des assets : décision et budget du commanditaire.
+   3. *Éclairage précalculé* (Opus, un à deux lots) : la lumière du garage puis de chaque carte calculée une fois (réflexions, ombres douces, rebonds des néons) et seulement affichée par l'app ; gros gain pour presque rien en temps d'image.
+   4. *Passage à WebGPU* (Opus, deux ou trois lots) : le moteur de rendu WebGPU de three.js, avec repli WebGL pour les téléphones qui ne l'ont pas ; meilleurs reflets, brouillard volumétrique, anticrénelage propre, plus d'objets à l'écran.
+   5. *Cartes habillées* (gros, carte par carte ; rejoint « Textures des cartes ») : textures de chaussée et de façades (les immeubles sont aujourd'hui des boîtes tirées d'OpenStreetMap), mobilier urbain, végétation modélisée, lumière précalculée par tronçon.
+   6. *Mode photo en rendu de film* (moyen) : un moteur de lancer de rayons qui affine l'image en quelques secondes pour les captures du garage ; c'est là qu'on approche le plus le photoréalisme.
 2. **Rodéo** (gros) : duel d'accélération en ligne droite, NOS et passages de rapport au bon moment. Réutilise l'adversaire du duel (`DuelEnCourse`). Dernier des quatre chantiers de jeu ouverts le 18 novembre.
 3. **Cartes** (gros, une par lot ; données téléchargées par la boucle principale, licence notée dans `CREDITS.md`) : Paris le long de la Seine d'abord ; puis l'Italie (Rome, Pise, Milan), des circuits connus (nommés par leur ville), Moscou, Tokyo, la muraille de Chine, l'Australie, la route 66. Hors de France : OpenStreetMap ; la source du relief est à vérifier pays par pays. Des départs dédiés au drift sur les cartes actuelles (Monaco, la ville, vers 1 800 m ; le plateau vers 6 050 m) sont un petit lot.
 4. **Véhicules** (gros, un par lot) : buggy, hot rod, gros 4x4 ; puis un camion à cabine personnalisable. Un convoi avec remorque articulée est un chantier à part (conduite, caméra, grille).
@@ -101,7 +107,8 @@ Ordre fixé par le commanditaire le 19 novembre au soir : restes du duel, NOS, r
 
 Tranché le 19 novembre au soir : publier (fait), l'ordre des lots, « Conduite assistée », l'arc de néon du van laissé tel quel, les prix et les gains posés sans lui gardés.
 
-- Renommer ou non le « Sortir » de la vue intérieure et l'entrée « Sortie » du menu.
+- Les mots de l'interface (« Sortie », « Sortir », « Jeu » ou « Ton compte »), le menu fermé par défaut en paysage, le regroupement des entrées de Custom (audit des menus, § 7.5).
+- De vrais modèles de véhicules : licence ouverte vérifiée ou achat (dépôt privé des assets), et quel budget (chantier « Rendu » du § 4).
 - Toujours en attente de son jugement : les sons de gain et des lignes d'échappement à l'oreille ; la taille du compte-tours en paysage ; le « D'origine » du moteur qui efface aussi les niveaux d'optimisation ; le bouton rond « Carrière » à garder ou non.
 
 ## 6. Reprendre le travail
