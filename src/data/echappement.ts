@@ -29,11 +29,14 @@ export interface Cloche {
 }
 
 /**
- * Caractère sonore d'une ligne : quatre filtres en série (plateau grave, cloche du médium, plateau
- * aigu, passe-bas), puis une saturation douce, puis un gain de sortie calculé pour que le niveau ne
- * bouge que de `niveau` dB (src/audio/engine/echappement.ts, `reglageSon`).
+ * Caractère sonore d'une ligne : un taux de lecture (`hauteur`), quatre filtres en série (plateau grave,
+ * cloche du médium, plateau aigu, passe-bas), puis une saturation douce, puis un gain de sortie calculé pour
+ * que le niveau ne bouge que de `niveau` dB (src/audio/engine/echappement.ts, `reglageSon`). Tout se règle
+ * ici, ligne par ligne : c'est l'objet à retoucher à l'oreille.
  */
 export interface SonLigne {
+  /** Taux de lecture des prises du moteur (1 : tel qu'enregistré ; 0,94 : environ un demi-ton plus grave, borné à 0,85-1,05). */
+  hauteur: number;
   graves: Plateau;
   medium: Cloche;
   aigus: Plateau;
@@ -102,7 +105,7 @@ export interface LigneEchappement {
 }
 
 /** Bande neutre : aucun effet. */
-const PLAT = { graves: { frequence: 120, gain: 0 }, medium: { frequence: 800, q: 0.9, gain: 0 }, aigus: { frequence: 3500, gain: 0 } } as const;
+const PLAT = { hauteur: 1, graves: { frequence: 120, gain: 0 }, medium: { frequence: 800, q: 0.9, gain: 0 }, aigus: { frequence: 3500, gain: 0 } } as const;
 
 /** Les lignes, de la plus discrète à la plus libre. L'origine est la première. */
 export const LIGNES_ECHAPPEMENT: readonly LigneEchappement[] = [
@@ -118,21 +121,23 @@ export const LIGNES_ECHAPPEMENT: readonly LigneEchappement[] = [
     label: 'Feutrée',
     hint: 'Discrète et sourde',
     description: 'Un gros silencieux : le haut est étouffé, le moteur ronronne plus bas.',
-    son: { graves: { frequence: 110, gain: 1.5 }, medium: { frequence: 900, q: 0.8, gain: -1 }, aigus: { frequence: 2500, gain: -4 }, coupure: 2000, saturation: 0, niveau: -3.5 },
+    son: { hauteur: 1, graves: { frequence: 110, gain: 1.5 }, medium: { frequence: 900, q: 0.8, gain: -1 }, aigus: { frequence: 2500, gain: -4 }, coupure: 2000, saturation: 0, niveau: -3.5 },
   },
   {
     id: 'sport',
     label: 'Sport',
     hint: 'Plus grave, plus ouverte',
-    description: 'Plus de graves, un médium moins enfermé, des aigus qui respirent ; un peu de grain.',
-    son: { graves: { frequence: 120, gain: 4 }, medium: { frequence: 450, q: 1, gain: -2 }, aigus: { frequence: 3000, gain: 2.5 }, saturation: 0.6, niveau: 1 },
+    description: 'Plus de graves, un médium moins enfermé, des aigus qui respirent ; du grain.',
+    // Retour du 22 novembre 2026 (« ça fait jouet ») : un peu plus grave (taux de lecture), plus de bas, plus de grain, plus fort.
+    son: { hauteur: 0.97, graves: { frequence: 110, gain: 6 }, medium: { frequence: 450, q: 1, gain: -2 }, aigus: { frequence: 3000, gain: 2.5 }, saturation: 1, niveau: 2 },
   },
   {
     id: 'libre',
     label: 'Libre',
     hint: 'Rauque, crache des flammes',
-    description: 'Sans silencieux : rauque, plus fort, et ça crache au lever de pied.',
-    son: { graves: { frequence: 90, gain: 3 }, medium: { frequence: 1400, q: 0.8, gain: 4.5 }, aigus: { frequence: 4500, gain: 1.5 }, saturation: 1.6, niveau: 2.5 },
+    description: 'Sans silencieux : rauque, agressive, plus forte, et ça crache au lever de pied.',
+    // La plus course, la plus agressive : un demi-ton plus bas, un gros plateau grave, la saturation au maximum.
+    son: { hauteur: 0.94, graves: { frequence: 90, gain: 7 }, medium: { frequence: 1400, q: 0.8, gain: 4.5 }, aigus: { frequence: 4500, gain: 1.5 }, saturation: 2, niveau: 3.5 },
     // Vue de la poursuite, la gerbe fait jusqu'à 40 cm de large (son cœur, 25 cm) ; orangée, jaune au cœur, sans blanc brûlé.
     flammes: { regimeMin: 0.6, chance: 1, attente: 1.2, duree: 0.45, salves: 2, longueur: 0.7, largeur: 0.14, disque: 0.35, eclat: 1.15, coeur: 0.3, voile: 1.6, tenueGarage: 0.6 },
   },

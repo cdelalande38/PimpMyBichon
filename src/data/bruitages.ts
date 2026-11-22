@@ -159,8 +159,14 @@ export const FAMILLE_INTERFACE = 'interface';
 /** Les sons d'interface que l'app demande : `gain` (haut fait, objet débloqué, médaille, record), `dollars` (de l'argent seul). */
 export type SonInterface = 'gain' | 'dollars';
 
-/** Qui joue quoi : l'emplacement de l'index et son niveau, de 0 à 1, avant le curseur « Route ». */
-export const SONS_INTERFACE: Readonly<Record<SonInterface, { emplacement: string; niveau: number }>> = Object.freeze({
-  gain: { emplacement: 'gain', niveau: 1 },
-  dollars: { emplacement: 'dollars', niveau: 1 },
+/**
+ * Qui joue quoi : l'emplacement de l'index, son niveau (de 0 à 1, avant le curseur « Route ») et `gainDb`, le
+ * coup de pouce en dB posé au-dessus du gain de chaque prise (sfx.json). Retour du 22 novembre 2026, « on
+ * n'entend pas trop » : +5 dB sur les deux. Les crêtes des prises (-1,2 dB au plus fort) dépassent alors 0 dB
+ * avant la sortie, que le limiteur du moteur tient (src/audio/sfx/interface.ts) ; retoucher ici, pas dans sfx.json
+ * (`npm run sons:build` le réécrit).
+ */
+export const SONS_INTERFACE: Readonly<Record<SonInterface, { emplacement: string; niveau: number; gainDb: number }>> = Object.freeze({
+  gain: { emplacement: 'gain', niveau: 1, gainDb: 5 },
+  dollars: { emplacement: 'dollars', niveau: 1, gainDb: 5 },
 });

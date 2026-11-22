@@ -3,7 +3,7 @@
 // (src/data/moteurs.ts, src/data/optimisation.ts), va en deux étapes qui se remplacent (retour du 18
 // novembre 2026 : « séparer la sélection des éléments des actions à mener dessus ») :
 // 1. « Pièce » : la vue éclatée au curseur, la liste des pièces (chacune rappelle son traitement et son
-//    niveau d'optimisation), le gain total du moteur et « D'origine » ; toucher une pièce l'allume et
+//    niveau d'optimisation), le gain total du moteur et « D'origine » (traitements et échanges, jamais les niveaux payés) ; toucher une pièce l'allume et
 //    passe à l'étape suivante ;
 // 2. ses actions, en volets : Finition (traitement, couleur), Optimisation (niveaux payants qui comptent
 //    pour la puissance), Échange (le filtre à air) ; la caméra cadre la pièce. « Retour » rend la liste,
@@ -35,7 +35,7 @@ import {
   type MoteurPiece,
   type Traitement,
 } from '../../data/moteurs.ts';
-import { articleNiveau, cleNiveau, clesOptimisation, niveauxDe, optimisationMoteur, optimisationTouchee, ORIGINE_NIVEAU, resolveNiveau, type NiveauOptimisation } from '../../data/optimisation.ts';
+import { articleNiveau, cleNiveau, niveauxDe, optimisationMoteur, ORIGINE_NIVEAU, resolveNiveau, type NiveauOptimisation } from '../../data/optimisation.ts';
 import { PAINT_COLORS } from '../../data/paintColors.ts';
 import { resolveVehicle } from '../../data/vehicles.ts';
 import { possedeDans } from '../../jeu/achats.ts';
@@ -145,10 +145,10 @@ export function MoteurPanel() {
   const owned = (id: string | undefined) => id === undefined || possedeDans({ articles: acquis }, id);
   const gain = gainPieces(vehicle, build);
   const total = optimisationMoteur(famille, build);
-  const touche = moteurTouche(famille, build) || optimisationTouchee(famille, build);
+  const touche = moteurTouche(famille, build);
   const remettre = () => {
-    const cles = clesMoteur(famille);
-    resetKeys(vehicle.id, { parts: [...cles.parts, ...clesOptimisation(famille)], partPaints: cles.partPaints });
+    // Les traitements et les échanges seulement : les niveaux d'optimisation déjà payés restent (décision du 22 novembre 2026).
+    resetKeys(vehicle.id, clesMoteur(famille));
   };
   const ouvrir = (piece: MoteurPiece) => {
     setAchat(null);

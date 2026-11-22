@@ -1,4 +1,4 @@
-// Le bloc d'achat, partagé : il s'ouvre sous ce qu'on veut débloquer (un pack dans Atelier › Jeu, une
+// Le bloc d'achat, partagé : il s'ouvre sous ce qu'on veut débloquer (un pack dans Atelier › Ton compte, une
 // pièce dans son panneau du dock) et demande confirmation, ou explique ce qui manque quand le solde ne
 // suffit pas. L'achat passe par l'état du jeu (src/state/jeu.ts) ; rien n'est débité sans « Acheter ».
 

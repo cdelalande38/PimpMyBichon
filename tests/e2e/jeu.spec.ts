@@ -1,4 +1,4 @@
-// Le jeu : le solde au garage, la rubrique « Jeu » de l'Atelier (boutique, hauts faits), l'achat d'un pack
+// Le jeu : le solde au garage, la rubrique « Ton compte » de l'Atelier (boutique, hauts faits), l'achat d'un pack
 // (confirmation, solde insuffisant), la sauvegarde. Un solde est posé dans la sauvegarde avant le lancement.
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -75,7 +75,7 @@ test.describe('jeu : dollars, boutique, hauts faits', () => {
     await expect(page).toHaveURL(/#\/jeu$/);
     await expect(panneau.getByRole('status', { name: /Ton solde : 180 dollars/ })).toBeVisible();
     await expect(panneau.getByText(/4.courses finies/)).toBeVisible();
-    await expect(panneau.getByRole('navigation', { name: 'Rubriques de l’atelier' }).getByRole('button', { name: 'Jeu', exact: true })).toHaveAttribute('aria-current', 'true');
+    await expect(panneau.getByRole('navigation', { name: 'Rubriques de l’atelier' }).getByRole('button', { name: 'Ton compte', exact: true })).toHaveAttribute('aria-current', 'true');
 
     // La boutique : le pack de départ est offert, les trois autres s'achètent.
     await expect(panneau.getByText('Offert')).toBeVisible();
@@ -122,7 +122,7 @@ test.describe('jeu : dollars, boutique, hauts faits', () => {
     await photo(page, '05-jeu-achete');
 
     // Les hauts faits : obtenus et à faire, avec l'avancement des cumuls.
-    await panneau.getByRole('navigation', { name: 'Rubriques du jeu' }).getByRole('button', { name: 'Hauts faits' }).tap();
+    await panneau.getByRole('navigation', { name: 'Rubriques du compte' }).getByRole('button', { name: 'Hauts faits' }).tap();
     await expect(panneau.getByText(/2 sur \d+ obtenus/)).toBeVisible();
     await expect(panneau.locator('[data-haut-fait="premiere-course"]')).toContainText('Obtenu');
     await expect(panneau.locator('[data-haut-fait="premier-achat"]')).toContainText('Obtenu');
@@ -185,7 +185,7 @@ test.describe('jeu : dollars, boutique, hauts faits', () => {
     await expect(panneau).toBeVisible();
     await expect(panneau.getByText('Gagné', { exact: true })).toHaveCount(1);
     await expect(panneau.getByText('À gagner', { exact: true }).first()).toBeVisible();
-    await panneau.getByRole('navigation', { name: 'Rubriques du jeu' }).getByRole('button', { name: 'Hauts faits' }).tap();
+    await panneau.getByRole('navigation', { name: 'Rubriques du compte' }).getByRole('button', { name: 'Hauts faits' }).tap();
     await expect(panneau.locator('[data-haut-fait="premier-or"]')).toContainText('Obtenu');
     await expect(panneau.locator('[data-haut-fait="premier-or"]')).toContainText('Trophée d’or');
     await expect(panneau.locator('[data-haut-fait="vingt-cinq-courses"]')).toContainText('12 sur 25');

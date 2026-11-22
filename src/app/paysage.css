@@ -134,6 +134,13 @@
     gap: 0.125rem 0.75rem;
   }
 
+  /* Les familles d'entrées : un titre au-dessus de chaque groupe de rangées. */
+  .app > .dock .dock-entries .dock-famille {
+    align-self: stretch;
+    padding: 0.25rem 0 0;
+    border-left: 0;
+  }
+
   .app > .dock .dock-soon small {
     margin-left: auto;
   }
@@ -328,7 +335,7 @@
   }
 
   /* Panneau « Atelier » : les rubriques sur leur rangée, au-dessus de « Retour » (audit des menus, D1 :
-     côte à côte, « Jeu » passait sous « Retour »). « Sous le capot » y ajoute Mesurer et Comparer, sur la
+     côte à côte, « Ton compte » passait sous « Retour »). « Sous le capot » y ajoute Mesurer et Comparer, sur la
      rangée de « Retour ». */
   body:has(.app > .dock) .card:has(> .atelier-tabs) {
     display: grid;

@@ -31,7 +31,7 @@ const CONTENT: Record<SheetRouteName, SheetContent> = {
     actions: <MeterButton />,
   },
   jeu: {
-    eyebrow: 'Atelier · jeu',
+    eyebrow: 'Atelier · boutique et hauts faits',
     title: 'Ton compte',
     body: <JeuPanel />,
   },

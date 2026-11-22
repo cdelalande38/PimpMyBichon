@@ -72,9 +72,13 @@ export interface ReglageContact {
   cedeParSeconde: number;
 }
 
-/** Le bruit de son moteur (src/drive/adversaire/son.ts) : volume tout près, distance où il commence à baisser, portée, coupure des aigus quand il est juste derrière. */
+/**
+ * Le bruit de son moteur (src/drive/adversaire/son.ts) : volume tout près, distance où il commence à baisser,
+ * raideur de la baisse, portée, coupure des aigus quand il est juste derrière, et l'effet d'approche et d'éloignement
+ * (retour du 22 novembre 2026 : plus fort de près, qui monte quand il arrive et redescend quand il s'éloigne).
+ */
 export interface ReglageSon {
-  /** Volume tout près, de 0 à 1 (fois le volume du moteur du joueur). */
+  /** Volume tout près, de 0 à 1 (fois le volume du moteur du joueur : 1, à sa hauteur, il s'entend autant que lui). */
   niveau: number;
   /** En deçà (m), le volume ne monte plus. */
   proche: number;
@@ -82,6 +86,16 @@ export interface ReglageSon {
   portee: number;
   /** Fréquence de coupure (Hz) quand il est juste derrière (devant : rien n'est coupé). */
   derriere: number;
+  /** Raideur de la baisse avec la distance au-delà de `proche` : le volume suit (proche ÷ distance) à cette puissance (1 : en 1/distance). */
+  chute: number;
+  /** Part du volume gagnée en approche (perdue en éloignement) à `vitesseRef` de vitesse relative, de 0 à 0,6. */
+  approche: number;
+  /** Écart de hauteur (taux de lecture, 0,05 : ± 5 %) à `vitesseRef` : plus aigu en approche, plus grave en éloignement. */
+  hauteur: number;
+  /** Vitesse relative (m/s) à laquelle l'effet d'approche est plein. */
+  vitesseRef: number;
+  /** Lissage de la vitesse relative (s) : plus c'est long, plus l'effet est doux, sans à-coup. */
+  lissage: number;
 }
 
 /** Son pilote (src/drive/scene/adversaire.tsx) : le conducteur du joueur, une passe de sa tenue teintée de sa couleur. */
@@ -108,7 +122,8 @@ const nombre = (value: unknown, min: number, max: number): value is number => ty
 
 const PILOTAGE_DEFAUT: ReglagePilotage = { section: 140, nosRayon: 250, nosDepart: 150 };
 const CONTACT_DEFAUT: ReglageContact = { garde: 0.3, approche: 6, relache: 12, ecartParSeconde: 3, frottement: 2, cedeParSeconde: 6 };
-const SON_DEFAUT: ReglageSon = { niveau: 0.5, proche: 6, portee: 150, derriere: 1800 };
+type ReglageApproche = Pick<ReglageSon, 'chute' | 'approche' | 'hauteur' | 'vitesseRef' | 'lissage'>;
+const SON_DEFAUT: ReglageSon = { niveau: 1, proche: 6, portee: 120, derriere: 1800, chute: 1.6, approche: 0.3, hauteur: 0.04, vitesseRef: 30, lissage: 0.4 };
 const PILOTE_DEFAUT: ReglagePilote = { passe: null };
 const objet = (value: unknown): Record<string, unknown> => (typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {});
 
@@ -171,6 +186,9 @@ export function lireAdversaires(raw: unknown, vehicules: readonly Pick<VehicleMa
   if (!nombre(c.frottement, 0, 10) || !nombre(c.cedeParSeconde, 0.5, 20)) problemes.push(`${where} : contact.frottement (0 à 10 m/s²) et contact.cedeParSeconde (0,5 à 20 m/s)`);
   const son = objet(source.son);
   if (!nombre(son.niveau, 0, 1) || !nombre(son.proche, 1, 50) || !nombre(son.portee, 20, 1000) || (son.portee as number) <= (son.proche as number) || !nombre(son.derriere, 300, 20000)) problemes.push(`${where} : son.niveau (0 à 1), son.proche (1 à 50 m), son.portee (20 à 1 000 m, au-delà de proche), son.derriere (300 à 20 000 Hz)`);
+  // Les réglages d'approche, absents d'un ancien fichier, prennent leur valeur par défaut.
+  const approche = { chute: son.chute ?? SON_DEFAUT.chute, approche: son.approche ?? SON_DEFAUT.approche, hauteur: son.hauteur ?? SON_DEFAUT.hauteur, vitesseRef: son.vitesseRef ?? SON_DEFAUT.vitesseRef, lissage: son.lissage ?? SON_DEFAUT.lissage };
+  if (!nombre(approche.chute, 1, 3) || !nombre(approche.approche, 0, 0.6) || !nombre(approche.hauteur, 0, 0.1) || !nombre(approche.vitesseRef, 5, 100) || !nombre(approche.lissage, 0.05, 2)) problemes.push(`${where} : son.chute (1 à 3), son.approche (0 à 0,6), son.hauteur (0 à 0,1), son.vitesseRef (5 à 100 m/s), son.lissage (0,05 à 2 s)`);
   const pilote = objet(source.pilote);
   if (pilote.passe !== undefined && (typeof pilote.passe !== 'string' || !/^[a-z]{2,24}$/.test(pilote.passe))) problemes.push(`${where} : pilote.passe, l'id d'une passe du conducteur`);
   if (problemes.length > 0) return { ...vide, problemes };
@@ -180,7 +198,7 @@ export function lireAdversaires(raw: unknown, vehicules: readonly Pick<VehicleMa
     niveauParDefaut: source.niveauParDefaut as string,
     pilotage: { section: p.section as number, nosRayon: p.nosRayon as number, nosDepart: p.nosDepart as number },
     contact: { garde: c.garde as number, approche: c.approche as number, relache: c.relache as number, ecartParSeconde: c.ecartParSeconde as number, frottement: c.frottement as number, cedeParSeconde: c.cedeParSeconde as number },
-    son: { niveau: son.niveau as number, proche: son.proche as number, portee: son.portee as number, derriere: son.derriere as number },
+    son: { niveau: son.niveau as number, proche: son.proche as number, portee: son.portee as number, derriere: son.derriere as number, ...(approche as ReglageApproche) },
     pilote: { passe: typeof pilote.passe === 'string' ? pilote.passe : null },
     problemes,
   };

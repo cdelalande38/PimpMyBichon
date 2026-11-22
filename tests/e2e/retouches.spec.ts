@@ -1,6 +1,6 @@
 // Retouches rapides de l'audit des menus (vague X, 21 novembre 2026) : docs/AUDIT_MENUS.md, § 7.1.
 // A1 pastille d'état, A4 étiquette en double, B1 et B2 rangées (fondu, molette, flèches à la souris), B8 « Vue
-// atelier », D1 rubrique « Jeu » en paysage, E2 Échap et P en course, E3 pas de « ? » en course, P1 clavier au
+// atelier », D1 rubrique « Ton compte » en paysage, E2 Échap et P en course, E3 pas de « ? » en course, P1 clavier au
 // garage. Les captures de revue (trois formats) : PMB_REVUE_RETOUCHES=1, voir retouches-revue.spec.ts.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
@@ -100,7 +100,7 @@ test.describe('retouches : téléphone', () => {
     expect(await variable(rangee, '--fondu-d')).toBe('32px');
   });
 
-  test('A4 : « Garage · <véhicule> » n’est plus écrit deux fois ; B8 : « Vue atelier »', async ({ page }) => {
+  test('A4 : « Garage · <véhicule> » n’est plus écrit deux fois ; B8 : « Atelier »', async ({ page }) => {
     await openApp(page);
     await waitForBench(page);
     // Aux sections, le menu dit déjà « Au garage · <véhicule> » : plus d'étiquette en haut.
@@ -110,12 +110,12 @@ test.describe('retouches : téléphone', () => {
     await dock(page).getByRole('button', { name: 'Fermer le menu' }).tap();
     await expect(page.locator('.tag')).toHaveText(/^Garage · /);
 
-    // Vue intérieure : « Vue atelier » (le bouton rond et la rangée des places) au lieu de « Sortir ».
+    // Vue intérieure : « Atelier » (le bouton rond et la rangée des places) au lieu de « Sortir ».
     const volant = quick(page).getByRole('button', { name: 'Intérieur', exact: true });
     await volant.tap();
-    await expect(quick(page).getByRole('button', { name: 'Vue atelier', exact: true })).toBeVisible();
+    await expect(quick(page).getByRole('button', { name: 'Revenir à l’atelier', exact: true })).toBeVisible();
     const places = page.getByRole('group', { name: 'Ta place dans le véhicule' });
-    await expect(places.getByRole('button', { name: 'Vue atelier', exact: true })).toBeVisible();
+    await expect(places.getByRole('button', { name: 'Atelier', exact: true })).toBeVisible();
     await expect(places.getByRole('button', { name: 'Sortir' })).toHaveCount(0);
   });
 
@@ -151,7 +151,7 @@ test.describe('retouches : téléphone', () => {
     });
   });
 
-  test('D1 : en paysage, la rubrique « Jeu » de l’Atelier se voit et ne passe pas sous « Retour »', { tag: '@essentiel' }, async ({ page }) => {
+  test('D1 : en paysage, la rubrique « Ton compte » de l’Atelier se voit et ne passe pas sous « Retour »', { tag: '@essentiel' }, async ({ page }) => {
     await page.setViewportSize({ width: 844, height: 390 });
     await openApp(page);
     await quick(page).getByRole('button', { name: 'Atelier', exact: true }).tap();
@@ -161,7 +161,7 @@ test.describe('retouches : téléphone', () => {
     const retour = await panneau.getByRole('button', { name: 'Retour à l’atelier' }).boundingBox();
     const zone = await rubriques.boundingBox();
     if (!retour || !zone) throw new Error('boîtes introuvables');
-    for (const nom of ['Réglages', 'Sous le capot', 'Jeu']) {
+    for (const nom of ['Réglages', 'Sous le capot', 'Ton compte']) {
       const b = await rubriques.getByRole('button', { name: nom, exact: true }).boundingBox();
       expect(b, nom).not.toBeNull();
       if (!b) continue;
@@ -169,7 +169,7 @@ test.describe('retouches : téléphone', () => {
       const recouvre = b.x < retour.x + retour.width && retour.x < b.x + b.width && b.y < retour.y + retour.height && retour.y < b.y + b.height;
       expect(recouvre, `${nom} sous « Retour »`).toBe(false);
     }
-    await rubriques.getByRole('button', { name: 'Jeu', exact: true }).tap();
+    await rubriques.getByRole('button', { name: 'Ton compte', exact: true }).tap();
     await expect(panneau.getByRole('heading', { name: 'Ton compte' })).toBeVisible();
   });
 });

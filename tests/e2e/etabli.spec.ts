@@ -308,7 +308,7 @@ test.describe('Mécanique · Moteur', () => {
     await expect(stage(page)).toHaveAttribute('data-vehicule-ecran', /^\d+,\d+$/);
   });
 
-  test('un moteur sans modèle le dit ; « D’origine » remet tout le moteur ; grand texte, 360 px et paysage, aux deux étapes', async ({ page }) => {
+  test('un moteur sans modèle le dit ; « D’origine » remet les traitements, pas les niveaux payés ; grand texte, 360 px et paysage, aux deux étapes', async ({ page }) => {
     test.setTimeout(480_000);
     await openApp(page);
     await waitForScene(page);
@@ -322,7 +322,7 @@ test.describe('Mécanique · Moteur', () => {
     await expect(stage(page)).not.toHaveAttribute('data-etabli', /.+/);
     await expect(stage(page)).toHaveAttribute('data-vehicle', 'van');
 
-    // La Cox, avec un moteur déjà traité et optimisé : « D'origine » remet tout.
+    // La Cox, avec un moteur déjà traité et optimisé : « D'origine » remet les traitements et l'échange, pas les niveaux payés.
     await poserSauvegarde(page, { builds: { current: 'cox', builds: traite, recents: [] } });
     await waitForBench(page);
     await openEntry(page, 'Moteur');
@@ -332,13 +332,13 @@ test.describe('Mécanique · Moteur', () => {
     await expect(origine).toBeEnabled();
     await origine.tap();
     await expect(origine).toBeDisabled();
-    await expect(panneau(page).getByTestId('moteur-total')).toContainText('+ 0 %');
+    await expect(panneau(page).getByTestId('moteur-total')).toContainText('+ 6 %');
     await expect
       .poll(async () => {
         const saved = (await readBuilds(page))?.builds.cox as { parts?: Record<string, string>; partPaints?: Record<string, unknown> } | undefined;
-        return [Object.keys(saved?.parts ?? {}).length, Object.keys(saved?.partPaints ?? {}).length];
+        return [Object.keys(saved?.parts ?? {}).sort(), Object.keys(saved?.partPaints ?? {}).length];
       })
-      .toEqual([0, 0]);
+      .toEqual([['moteur_culasses_niveau', 'moteur_filtres_niveau'], 0]);
 
     // Très grand texte, puis 360 × 780, puis paysage : 48 px au doigt, rien ne déborde, aux deux étapes.
     await tailleDuTexte(page, 'Très grand');

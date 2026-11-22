@@ -58,7 +58,8 @@ test('en paysage, menu replié : « Personnaliser » et « Jouer » entiers, san
   await openApp(page);
   await waitForScene(page);
   const dock = page.locator('footer.dock');
-  await dock.getByRole('button', { name: 'Fermer le menu' }).tap();
+  // Lancé en paysage, le menu est déjà replié (décision du 22 novembre 2026) : rien à fermer.
+  await expect(dock).toHaveAttribute('data-taille', 'ferme');
   const personnaliser = dock.getByRole('button', { name: 'Personnaliser', exact: true });
   const jouer = dock.getByRole('button', { name: 'Jouer', exact: true });
   await expect(jouer).toBeVisible();

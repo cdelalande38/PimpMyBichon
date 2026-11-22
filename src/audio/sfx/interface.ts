@@ -208,7 +208,7 @@ export class LecteurInterface {
       source.buffer = prise.buffer;
       const gain = ctx.createGain();
       // Le niveau du curseur est relu au moment de jouer (il a pu bouger pendant le chargement).
-      gain.gain.value = regle.niveau * unite(this.niveau()) * dbToGain(prise.gain);
+      gain.gain.value = regle.niveau * unite(this.niveau()) * dbToGain(prise.gain + regle.gainDb);
       source.connect(gain).connect(sortie.sortie);
       source.onended = () => {
         source.disconnect();

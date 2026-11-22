@@ -61,9 +61,14 @@
     "passe": "tissu"
   },
   "son": {
-    "niveau": 0.5,
+    "niveau": 1,
     "proche": 6,
-    "portee": 150,
-    "derriere": 1800
+    "portee": 120,
+    "derriere": 1800,
+    "chute": 1.6,
+    "approche": 0.3,
+    "hauteur": 0.04,
+    "vitesseRef": 30,
+    "lissage": 0.4
   }
 }

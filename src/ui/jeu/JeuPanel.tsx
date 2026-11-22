@@ -1,4 +1,4 @@
-// Atelier › Jeu : ton solde, la boutique (packs de stickers, trophées à gagner) et les hauts faits,
+// Atelier › Ton compte : ton solde, la boutique (packs de stickers, trophées à gagner) et les hauts faits,
 // obtenus et à faire. Tout vient des données (src/data/boutique.ts, hautsFaits.ts, economie.ts).
 
 import { useState } from 'react';
@@ -185,7 +185,7 @@ export function JeuPanel() {
     <>
       <Resume />
       <RappelCarriere />
-      <nav className="tabs" aria-label="Rubriques du jeu">
+      <nav className="tabs" aria-label="Rubriques du compte">
         {ONGLETS.map((item) => (
           <button key={item.id} type="button" aria-current={onglet === item.id ? 'true' : undefined} onClick={() => setOnglet(item.id)}>
             {item.label}

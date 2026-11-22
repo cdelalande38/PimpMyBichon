@@ -75,11 +75,11 @@ for (const format of FORMATS) {
 
       await quick(page).getByRole('button', { name: 'Intérieur', exact: true }).click();
       await photo(page, format.nom, '07-vue-interieure');
-      await quick(page).getByRole('button', { name: 'Vue atelier', exact: true }).click();
+      await quick(page).getByRole('button', { name: 'Revenir à l’atelier', exact: true }).click();
 
       await quick(page).getByRole('button', { name: 'Atelier', exact: true }).click();
       const panneau = page.getByRole('dialog');
-      await panneau.getByRole('navigation', { name: 'Rubriques de l’atelier' }).getByRole('button', { name: 'Jeu', exact: true }).click();
+      await panneau.getByRole('navigation', { name: 'Rubriques de l’atelier' }).getByRole('button', { name: 'Ton compte', exact: true }).click();
       await expect(panneau.getByRole('heading', { name: 'Ton compte' })).toBeVisible();
       await photo(page, format.nom, '08-atelier-jeu');
     });

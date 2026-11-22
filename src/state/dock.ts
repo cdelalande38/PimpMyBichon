@@ -21,6 +21,7 @@
 import { create } from 'zustand';
 import { directEntry, DOCK_MENU, type EntryId, type SectionId } from '../data/dockMenu.ts';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { PAYSAGE } from '../app/paysage.ts';
 import { idbStorage, shareAcrossTabs } from './persistence.ts';
 
 export const DOCK_KEY = 'pmb-dock';
@@ -206,6 +207,16 @@ export interface DockState extends DockChoices {
   openEntry: (entry: EntryId, zone?: string) => void;
 }
 
+/**
+ * Lancé en paysage (audit des menus, A6 ; décision du 22 novembre 2026) : le menu s'ouvre FERMÉ, le garage en
+ * plein écran, « Personnaliser » et « Jouer » à portée du pouce. Une seule fois, au premier chargement de la
+ * sauvegarde (une relecture venue d'un autre onglet ne referme rien), et sans toucher à la sauvegarde : un
+ * lancement suivant en portrait retrouve le menu comme le joueur l'y avait laissé. Tourner le téléphone ensuite
+ * ne change rien au menu (niveau et panneau restent).
+ */
+let fermeAuLancement = false;
+let lancementFait = false;
+
 export const useDock = create<DockState>()(
   persist(
     (set, get) => ({
@@ -269,11 +280,14 @@ export const useDock = create<DockState>()(
       name: DOCK_KEY,
       version: DOCK_VERSION,
       storage: createJSONStorage(() => idbStorage),
-      partialize: ({ expanded, closed }) => ({ expanded, closed }),
+      partialize: ({ expanded, closed }) => ({ expanded, closed: closed && !fermeAuLancement }),
       migrate: (persisted) => sanitizeDock(persisted),
       merge: (persisted, current) => ({ ...current, ...sanitizeDock(persisted) }),
       onRehydrateStorage: () => () => {
-        useDock.setState({ hydrated: true });
+        const ferme = !lancementFait && globalThis.matchMedia?.(PAYSAGE).matches === true;
+        lancementFait = true;
+        if (ferme) fermeAuLancement = true;
+        useDock.setState(ferme ? { hydrated: true, closed: true } : { hydrated: true });
       },
     },
   ),

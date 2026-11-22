@@ -1,5 +1,5 @@
 // Les gestes de la carrière hors de son panneau : l'ouvrir (depuis le bouton rond du garage ou le rappel
-// de la rubrique « Jeu »), partir sur un rendez-vous (depuis le panneau), et enchaîner sur le suivant
+// de la rubrique « Ton compte »), partir sur un rendez-vous (depuis le panneau), et enchaîner sur le suivant
 // (« Course suivante », depuis l'écran de fin d'un rendez-vous réussi).
 //
 // Le panneau vit dans le menu de la sortie, à l'étape « Mode », mode Carrière choisi

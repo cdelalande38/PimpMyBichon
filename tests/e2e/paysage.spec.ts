@@ -36,6 +36,11 @@ interface Rect {
 
 const dock = (page: Page) => page.locator('footer.dock');
 const stage = (page: Page) => page.locator('.stage');
+/** Lancé en paysage, le menu est fermé (décision du 22 novembre 2026) : « Personnaliser » le rouvre. */
+async function ouvrirLeMenu(page: Page): Promise<void> {
+  await dock(page).getByRole('button', { name: 'Personnaliser', exact: true }).tap();
+  await expect(dock(page)).toHaveAttribute('data-taille', 'agrandi');
+}
 const sectionsNav = (page: Page) => dock(page).getByRole('navigation', { name: 'Onglets de l’atelier' });
 
 async function rectOf(page: Page, selector: string): Promise<Rect> {
@@ -168,11 +173,29 @@ for (const screen of SCREENS) {
   test.describe(`garage en paysage, ${screen.width} × ${screen.height}`, () => {
     test.use({ viewport: screen });
 
+    test('lancé en paysage, le menu est fermé : le garage plein écran, « Personnaliser » et « Jouer » à portée du pouce', async ({ page }) => {
+      test.setTimeout(240_000);
+      await openApp(page);
+      await waitForScene(page);
+      await waitForBench(page);
+      await expect(dock(page)).toHaveAttribute('data-taille', 'ferme');
+      await expect(sectionsNav(page)).toHaveCount(0);
+      for (const nom of ['Personnaliser', 'Jouer']) {
+        const bouton = dock(page).getByRole('button', { name: nom, exact: true });
+        await expect(bouton).toBeVisible();
+        expect((await bouton.boundingBox())?.height ?? 0, nom).toBeGreaterThanOrEqual(47.5);
+      }
+      // Il s'ouvre en colonne d'un appui.
+      await ouvrirLeMenu(page);
+      await expect(sectionsNav(page)).toBeVisible();
+    });
+
     test('le menu est une colonne à droite sur toute la hauteur, avec ses sections, ses entrées et un contenu', async ({ page }) => {
       test.setTimeout(240_000);
       await openApp(page);
       await waitForScene(page);
       await waitForBench(page);
+      await ouvrirLeMenu(page);
 
       // Une colonne collée au bord droit, sur toute la hauteur, d'au plus la moitié de la largeur.
       const column = await rectOf(page, '.app > footer.dock');
@@ -244,6 +267,7 @@ for (const screen of SCREENS) {
       await openApp(page);
       await waitForScene(page);
       await waitForBench(page);
+      await ouvrirLeMenu(page);
       for (const size of ['Normal', 'Grand', 'Très grand'] as const) {
         await setTextSize(page, size);
         await backToSections(page);
@@ -272,6 +296,7 @@ for (const screen of SCREENS) {
       await openApp(page);
       await waitForScene(page);
       await waitForBench(page);
+      await ouvrirLeMenu(page);
 
       // Panneau : Atelier › Réglages, une feuille à droite sur toute la hauteur ; Sous le capot aussi.
       await quick(page).getByRole('button', { name: 'Atelier', exact: true }).tap();
@@ -316,7 +341,7 @@ for (const screen of SCREENS) {
           if (box) expect(intersect(group, { left: box.x, right: box.x + box.width, top: box.y, bottom: box.y + box.height }), `places / bouton rond ${i + 1}`).toBe(false);
         }
         expect(await smallTargets(page, '.places'), 'places : 48 px').toEqual([]);
-        await quick(page).getByRole('button', { name: 'Vue atelier', exact: true }).tap();
+        await quick(page).getByRole('button', { name: 'Revenir à l’atelier', exact: true }).tap();
         await expect(stage(page)).toHaveAttribute('data-vue', 'atelier');
       }
 
@@ -394,7 +419,7 @@ test.describe('garage en paysage, tourner le téléphone', () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(stage(page)).toHaveAttribute('data-vue', 'interieur');
       await expect(page.getByRole('group', { name: 'Ta place dans le véhicule' })).toBeVisible();
-      await quick(page).getByRole('button', { name: 'Vue atelier', exact: true }).tap();
+      await quick(page).getByRole('button', { name: 'Revenir à l’atelier', exact: true }).tap();
     }
   });
 });
@@ -407,6 +432,7 @@ test.describe('garage en paysage, cadrage par véhicule', () => {
     await openApp(page);
     await waitForScene(page);
     await waitForBench(page);
+    await ouvrirLeMenu(page);
     for (const entry of CATALOG) {
       await chooseVehicle(page, entry.id);
       const frame = await settledFrame(page);
@@ -554,7 +580,7 @@ test.describe('garage, tourner le téléphone garde la vue choisie au doigt', ()
           return Math.max(Math.abs((yaw ?? 999) - (yaw0 ?? 0)), Math.abs((pitch ?? 999) - (pitch0 ?? 0)));
         })
         .toBeLessThanOrEqual(4);
-      await quick(page).getByRole('button', { name: 'Vue atelier', exact: true }).tap();
+      await quick(page).getByRole('button', { name: 'Revenir à l’atelier', exact: true }).tap();
       await expect(stage(page)).toHaveAttribute('data-vue', 'atelier');
       expectSameView(await settledOrbit(page), beforeInterior, 'sortie de la vue intérieure en paysage');
       await page.setViewportSize({ width: 390, height: 844 });
@@ -590,6 +616,7 @@ for (const screen of SCREENS) {
         await openApp(page);
         await waitForScene(page);
         await waitForBench(page);
+        await ouvrirLeMenu(page);
         const withInterior = CATALOG.find((entry) => entry.interiorView);
         test.skip(!withInterior, 'aucun véhicule à vue intérieure');
         if (size !== 'Normal') await setTextSize(page, size);
@@ -627,6 +654,7 @@ for (const screen of SCREENS) {
       await openApp(page);
       await waitForScene(page);
       await waitForBench(page);
+      await ouvrirLeMenu(page);
       for (const size of ['Normal', 'Très grand'] as const) {
         if (size !== 'Normal') {
           await quick(page).getByRole('button', { name: 'Atelier', exact: true }).tap();

@@ -39,6 +39,8 @@ export const Q_PASSE_BAS_DB = -3.01;
 /** Bornes : écart de niveau voulu (dB), saturation. */
 export const NIVEAU_MAX_DB = 4;
 export const SATURATION_MAX = 2;
+export const HAUTEUR_MIN = 0.85;
+export const HAUTEUR_MAX = 1.05;
 /** Constante de temps des rampes au changement de ligne (s). */
 const RAMPE = 0.06;
 /** Points de la courbe de saturation (impair : le zéro tombe sur un point). */
@@ -137,6 +139,8 @@ export interface ReglageSon {
   medium: { frequence: number; q: number; gain: number };
   aigus: { frequence: number; gain: number };
   coupure: number;
+  /** Taux de lecture des prises (1 : tel qu'enregistré), borné à HAUTEUR_MIN-HAUTEUR_MAX. */
+  hauteur: number;
   /** Pente de la saturation (1 : aucune). */
   pente: number;
   /** Gain de sortie, linéaire, au plus 1 : compense l'égalisation et la saturation. */
@@ -160,12 +164,13 @@ export function reglageSon(son: SonLigne, fs = FS_REFERENCE): ReglageSon {
   const aigus = { frequence: borne(son.aigus.frequence, 1000, 16000), gain: plat(son.aigus.gain) };
   const coupure = son.coupure === undefined ? COUPURE_OUVERTE : borne(son.coupure, 400, COUPURE_OUVERTE);
   const pente = penteSaturation(son.saturation);
-  const borneSon: SonLigne = { graves, medium, aigus, coupure, saturation: son.saturation, niveau: son.niveau };
+  const borneSon: SonLigne = { hauteur: 1, graves, medium, aigus, coupure, saturation: son.saturation, niveau: son.niveau };
   const niveau = borne(son.niveau, -NIVEAU_MAX_DB, NIVEAU_MAX_DB);
   const saturationDb = 20 * Math.log10(gainSaturation(pente));
   const sortieDb = Math.min(0, niveau - egalisationMoyenne(borneSon, fs) - saturationDb);
   const ecartDb = sortieDb + egalisationMoyenne(borneSon, fs) + saturationDb;
-  return { graves, medium, aigus, coupure, pente, sortie: 10 ** (sortieDb / 20), ecartDb };
+  const hauteur = Number.isFinite(son.hauteur) ? Math.min(HAUTEUR_MAX, Math.max(HAUTEUR_MIN, son.hauteur)) : 1;
+  return { graves, medium, aigus, coupure, hauteur, pente, sortie: 10 ** (sortieDb / 20), ecartDb };
 }
 
 /** Ce que le lecteur tient : la ligne jouée, et `suivre` à appeler à chaque pas. */
@@ -174,6 +179,8 @@ export interface ChaineEchappement {
   readonly ligne: string;
   /** Faux en repli (bus relié au limiteur tel quel). */
   readonly active: boolean;
+  /** Taux de lecture à multiplier à celui des prises (1 : tel qu'enregistré) ; suit la ligne. */
+  readonly hauteur: number;
   /** Relit `echappementSon` et applique la ligne si elle a changé (rampes ; aucune allocation). */
   suivre(): void;
 }
@@ -204,7 +211,7 @@ export function brancherEchappement(ctx: ContexteTraitement, entree: AudioNode, 
     nodes.saturation.oversample = '2x';
   } catch {
     entree.connect(sortie);
-    return { ligne: LIGNE_ORIGINE.id, active: false, suivre: () => undefined };
+    return { ligne: LIGNE_ORIGINE.id, active: false, hauteur: 1, suivre: () => undefined };
   }
   const { graves, medium, aigus, coupure, saturation, niveau } = nodes;
   entree.connect(graves).connect(medium).connect(aigus).connect(coupure).connect(saturation).connect(niveau).connect(sortie);
@@ -213,7 +220,7 @@ export function brancherEchappement(ctx: ContexteTraitement, entree: AudioNode, 
     const reglage = reglageSon(ligne.son);
     return [ligne.id as string, { reglage, courbe: courbeSaturation(reglage.pente) }];
   }));
-  const chaine = { ligne: '', active: true, tour: -1, suivre };
+  const chaine = { ligne: '', active: true, hauteur: 1, tour: -1, suivre };
   const poser = (param: AudioParam, value: number, now: number, premier: boolean) => {
     param.cancelScheduledValues(now);
     if (premier) param.setValueAtTime(value, now);
@@ -239,6 +246,7 @@ export function brancherEchappement(ctx: ContexteTraitement, entree: AudioNode, 
     } catch {
       // Courbe refusée : la saturation reste celle d'avant, le gain compensé suit quand même.
     }
+    chaine.hauteur = reglage.hauteur;
     chaine.ligne = id;
   }
   function suivre(): void {

@@ -1,6 +1,6 @@
 // Choix de la place en vue intérieure (demande du 16 novembre 2026 : « se placer à la place
 // conducteur, passager ou arrière… c'est le menu qui va pas surtout ») : une commande nommée par
-// place du manifeste (src/data/vehicles.ts, placesOf), plus « Vue atelier » (retour à l'atelier, audit des menus B8), en une rangée au pouce, posée
+// place du manifeste (src/data/vehicles.ts, placesOf), plus « Atelier » (retour à l'atelier, audit des menus B8), en une rangée au pouce, posée
 // juste au-dessus du dock (compact ou agrandi) : elle ne recouvre ni le dock ni les raccourcis. La
 // place choisie à la main est gardée pour ce véhicule (src/state/view.ts).
 
@@ -57,7 +57,7 @@ export function PlacePicker({ covered = false }: { covered?: boolean }) {
         </button>
       ))}
       <button type="button" className="place-btn place-sortir" onClick={() => setMode('atelier')}>
-        Vue atelier
+        Atelier
       </button>
     </div>
   );

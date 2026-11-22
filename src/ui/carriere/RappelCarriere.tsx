@@ -1,6 +1,6 @@
 // Le rappel de la carrière au garage (demande du 18 novembre 2026 : le joueur sait TOUJOURS quel est son
 // prochain rendez-vous, pour préparer son véhicule avant de partir), discret, jamais un bandeau sur la scène :
-// `RappelCarriere`, dans Atelier › Jeu (une ligne dans src/ui/jeu/JeuPanel.tsx) : le prochain rendez-vous en une
+// `RappelCarriere`, dans Atelier › Ton compte (une ligne dans src/ui/jeu/JeuPanel.tsx) : le prochain rendez-vous en une
 // phrase, et « Voir » qui ouvre le panneau de la carrière (src/ui/carriere/actions.ts). Le bouton rond du garage,
 // qui portait la météo et le numéro du prochain rendez-vous, est retiré (vague X, 21 novembre 2026) : la carte
 // « Carrière » de l'écran « Jouer » (src/ui/drive/entree/Modes.tsx) les porte.

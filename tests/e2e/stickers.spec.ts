@@ -513,6 +513,9 @@ test.describe('stickers en paysage', () => {
     mkdirSync(dir, { recursive: true });
     await openApp(page);
     await waitForBench(page);
+    // Lancé en paysage, le menu est fermé (décision du 22 novembre 2026) : on l'ouvre avant de prendre la vue de référence.
+    await dock(page).getByRole('button', { name: 'Personnaliser', exact: true }).tap();
+    await waitForBench(page);
     const camera = await stage(page).getAttribute('data-camera');
     await openEntry(page, 'Stickers');
     const zone = await dock(page).locator('.stickers').getAttribute('data-zone');

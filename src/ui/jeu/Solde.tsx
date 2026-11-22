@@ -1,5 +1,5 @@
 // Le solde en dollars, au garage : une petite pastille à côté de la marque (src/ui/Hud.tsx). Un appui
-// ouvre Atelier › Jeu. Le bouton fait 48 px ; la pastille dessinée, plus petite, est son étiquette. Elle se
+// ouvre Atelier › Ton compte. Le bouton fait 48 px ; la pastille dessinée, plus petite, est son étiquette. Elle se
 // tait tant que la sauvegarde n'est pas lue, pour ne pas afficher « 0 $ » à tort.
 
 import { openSheet } from '../../app/useRoute.ts';

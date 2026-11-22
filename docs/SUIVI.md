@@ -6,8 +6,9 @@ Dernière mise à jour : 22 novembre 2026.
 
 ## 1. Où on en est
 
-- **En ligne** : poussé le 21 novembre à 17 h 45, validé : l'écran « Jouer » et les retouches de l'audit des menus (`3b2cee9`), le chargement prolongé de la course (`aa89235`).
-- **Aucun agent en vol.** À trancher par lui : le mot de la vue intérieure (« Vue atelier » posé ; ou « Atelier », « Retour ») et « Jouer » réduit à son triangle quand la ligne manque de place.
+- **En ligne** : poussé le 22 novembre à 12 h 25, validé : ses décisions du 22 novembre (ce commit).
+- **Aucun agent en vol.** Quota de la semaine à 94 % (retour le 25 novembre à 4 h) : arrêt jusque-là.
+- **Reprise** : repartir d'une session neuve de Claude Code (la conversation du 19 au 22 novembre est devenue trop longue). Premier lot : la manette (§ 4, point 0b), puis le reste des menus, les routes plus larges, le rendu.
 
 ## 2. Journal des demandes
 
@@ -16,6 +17,7 @@ Dernière mise à jour : 22 novembre 2026.
 | Demande (ses mots) | Ce qui a été livré | Commit |
 |---|---|---|
 | « si un participant arrive sur la ligne d'arrivée il bloque les autres potentiellement. Il faut pas que ça bloque une fois sur la ligne. Par contre pendant la course ça doit rester comme actuellement » | Une fois l'un des deux arrivé, le contact ne s'applique plus entre eux (l'autre passe à côté ou au travers) ; pendant la course, rien ne change | `ff0fc7f` |
+| Ses décisions du 22 novembre (§ 5) | « Atelier » dans la vue intérieure (nom accessible « Revenir à l'atelier », la roue dentée s'appelant déjà « Atelier ») ; « Ton compte » ; menu fermé au lancement en paysage ; Custom en trois familles (Couleurs, Pièces, Habitacle) ; « D'origine » du moteur sans les niveaux d'optimisation ; sons de gain +5 dB ; lignes d'échappement plus graves, plus de basses et saturation douce (Sport, Libre) ; moteur de l'adversaire au niveau du joueur de près, qui monte en approche et baisse en éloignement | (ce commit) |
 | (décisions sur l'audit, 21 novembre) | Un seul écran « Jouer » : cartes Continuer, Carrière, Course, Duel, Drift, Balade ; « Jouer » dans l'en-tête du menu à toute profondeur (réduit à son triangle quand la place manque) ; bouton rond de la carrière retiré ; aperçu seulement en Balade ; titre d'étape au lieu du fil ; première course libre en 4 ou 5 appuis au lieu de 7. Retouches : pastille d'état, étiquette en double, fondu et molette des rangées, rubriques de l'Atelier visibles en paysage, Échap et P pour la pause, « ? » masqué en course, raccourcis clavier au garage, « Sortir » devenu « Vue atelier » | `3b2cee9` |
 | « lorsqu'on charge une course au début c'est figé […] laisser l'écran de chargement de la course un peu plus longtemps, 1 à 2 s » | L'écran de chargement reste 1,5 s de plus, les feux attendent (`CHAUFFE_MS`) | `aa89235` |
 | « lance une analyse des menus et place-toi en expert du jeu vidéo et de l'ergonomie de jeux vidéo mobile et PC […] fais un état des lieux et propose des améliorations » | Rapport docs/AUDIT_MENUS.md : 39 problèmes classés, architecture cible, plan. Ses décisions du 21 novembre : bouton rond « Carrière » retiré au profit d'un seul écran « Jouer » ; porte de garage sur le mur avant, près du néon ; aperçu seulement en Balade ; retouches rapides et écran « Jouer » lancés | `80ec58a` |
@@ -80,6 +82,7 @@ Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : t
 - **Néons** : les arcs des roues sont un liseré fin, presque caché quand le pneu remplit l'arche ; celui du van se voit à peine (sa voûte modelée est plus basse que le jeu déclaré : réglage `wheels.gap` à décider) ; les cercles des motos ne braquent pas avec la fourche ; la lueur reste à plat et n'a pas été vue contre un trottoir de ville ; LED d'habitacle invisibles en caméra embarquée ; ciel étoilé du concept jamais vu à l'image ; pulsation sur la musique (§ 5.4) pas faite.
 - **Carrière** : « sans NOS » n'est jugé qu'à l'arrivée et le bouton reste à l'écran ; on peut partir avec la mauvaise famille de véhicule (la fiche avertit seulement) ; l'annonce de fin de saison n'a ni parcours ni capture ; la finale dure environ neuf minutes ; le haut fait de la saison 1 garde son ancienne description.
 - **Capot** : la Cox seulement (le van n'a pas de modèle de moteur, le pivot du capot du concept n'est pas à la charnière, les motos ont leur moteur dans leur carrosserie) ; de dos, la vitre montre peu le moteur ; pas d'ouverture en pause pendant une sortie.
+- **Décisions du 22 novembre** : personne n'a écouté les nouveaux sons (gain, échappement, adversaire) ; après +5 dB, trois sons de gain dépassent 0 dBFS dans le fichier et seul le limiteur de la chaîne tient la sortie ; `sortie-son.spec.ts` échoue sur 2 tests sur 4 (le rapport de vitesse n'est jamais compté : sans doute le départ aux feux de `aa89235`, à corriger en tête du prochain lot).
 - **Menus** (21 novembre) : en paysage, la boutique de l'Atelier est plus serrée qu'avant (la rangée des rubriques prend 48 px ; feuille latérale à faire) ; texte très grand en paysage : le contenu de l'Atelier passe sous le « ? » en défilant ; le fondu des rangées ne marche que sous Chrome ; le choix du lieu défile encore (Miami caché en portrait) ; la liste des saisons de la carrière est repliée sous sa fiche, pas un écran à elle ; phares.spec:199 a échoué une fois sur cinq (rangée des départs qui bouge pendant l'appui).
 - **Fonds de chargement** : au lancement en paysage, le titre est centré par-dessus le véhicule (le voile le cache presque) ; sur le plateau matheysin, l'eau est noire de nuit et aucun lac ne se lit ; le concept est en vedette partout (les substituts de la Cox et du van montrent une plaque vierge de face) : à refaire par l'outil quand les vrais modèles arriveront ; les fonds de carte ne sont pas au précache.
 - **Fin de course** : en paysage et très grand texte, le bouton du garage s'écrit sur plusieurs lignes ; l'écran d'un rendez-vous manqué n'a pas de capture.
@@ -125,7 +128,7 @@ Tranché le 22 novembre (ses réponses) :
 - taille du compte-tours en paysage : « parfait » ;
 - moteur de l'adversaire au duel : plus fort, surtout de près, qui monte quand il arrive et baisse quand il s'éloigne, dans un sens comme dans l'autre.
 
-Encore en attente : rien de nouveau ; ses retours après essai de chaque publication.
+Encore en attente : ses retours après essai de chaque publication (en particulier les sons, à l'oreille).
 
 ## 6. Reprendre le travail
 

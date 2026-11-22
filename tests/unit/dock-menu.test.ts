@@ -31,15 +31,17 @@ describe('arbre du dock', () => {
     const mecanique = DOCK_MENU.find((section) => section.id === 'mecanique');
     expect(custom && sectionEntries(custom).map((entry) => [entry.label, entry.available])).toEqual([
       ['Peinture', true],
-      ['Roues', true],
-      ['Suspension', true],
-      ['Intérieur', true],
       ['Stickers', true],
-      ['Carrosserie', true],
-      ['Phares', true],
-      ['Ailerons', true],
       ['Néons', true],
+      ['Roues', true],
+      ['Carrosserie', true],
+      ['Ailerons', true],
+      ['Phares', true],
+      ['Intérieur', true],
+      ['Suspension', true],
     ]);
+    // Trois familles (audit des menus, B9), chacune d'un seul tenant.
+    expect(custom?.entries.map((entry) => entry.famille)).toEqual(['Couleurs', 'Couleurs', 'Couleurs', 'Pièces', 'Pièces', 'Pièces', 'Pièces', 'Habitacle', 'Habitacle']);
     expect(mecanique && sectionEntries(mecanique).map((entry) => [entry.label, entry.available])).toEqual([
       ['Préparation', true],
       ['Moteur', true],
@@ -53,7 +55,7 @@ describe('arbre du dock', () => {
     expect(jouer && sectionEntries(jouer).map((entry) => entry.id)).toEqual(['sortie']);
     expect(sectionsDeLaRangee(true).map((section) => section.id)).not.toContain('jouer');
     // Masquées d'un coup : il ne reste que les entrées disponibles.
-    expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture', 'roues', 'suspension', 'interieur', 'stickers', 'carrosserie', 'phares', 'ailerons', 'neons']);
+    expect(custom && sectionEntries(custom, false).map((entry) => entry.id)).toEqual(['peinture', 'stickers', 'neons', 'roues', 'carrosserie', 'ailerons', 'phares', 'interieur', 'suspension']);
   });
 
   it('« Mécanique » n’existe que pour un véhicule à moteur déclaré', () => {

@@ -6,21 +6,20 @@
 import { describe, expect, it } from 'vitest';
 import { A_VENDRE, articleParId } from '../../src/data/boutique.ts';
 import { computePrep, gainPieces } from '../../src/data/enginePrep.ts';
-import { familleById, familleOf, GENRES_OPTIMISATION, MOTEURS_CATALOGUE, pieceById, validateMoteursCatalogue, type MoteurFamille, type MoteurPiece } from '../../src/data/moteurs.ts';
+import { clesMoteur, familleById, familleOf, GENRES_OPTIMISATION, MOTEURS_CATALOGUE, moteurTouche, pieceById, validateMoteursCatalogue, type MoteurFamille, type MoteurPiece } from '../../src/data/moteurs.ts';
 import {
   articleNiveau,
   cleNiveau,
-  clesOptimisation,
   coefficientPieces,
   niveauxDe,
   OPTIMISATIONS,
   optimisationMoteur,
-  optimisationTouchee,
   resolveNiveau,
 } from '../../src/data/optimisation.ts';
 import type { Build, VehicleManifest } from '../../src/data/vehicleTypes.ts';
 import { vehicleById, VEHICLES } from '../../src/data/vehicles.ts';
 import { performanceDe } from '../../src/drive/pilote.ts';
+import { useBuilds } from '../../src/state/builds.ts';
 import { sanitizeLevels } from '../../src/state/dock.ts';
 
 const vehicule = (id: string) => vehicleById(id) as VehicleManifest;
@@ -107,12 +106,19 @@ describe('niveau d’une pièce dans le build', () => {
     expect(resolveNiveau(filtres, b)?.id).toBe('sport');
   });
 
-  it('« D’origine » efface les niveaux des pièces qui s’optimisent, et le dit touché', () => {
+  it('« D’origine » ne remet que les traitements et les échanges : les niveaux payés restent', () => {
     const f = famille('quatre-a-plat');
-    expect(clesOptimisation(f).sort()).toEqual(['moteur_carburateur_niveau', 'moteur_collecteur_niveau', 'moteur_culasses_niveau', 'moteur_distributeur_niveau', 'moteur_filtres_niveau']);
-    expect(optimisationTouchee(f, undefined)).toBe(false);
-    expect(optimisationTouchee(f, parts({ aileron: 'haut' }))).toBe(false);
-    expect(optimisationTouchee(f, parts({ moteur_culasses_niveau: 'inconnu' }))).toBe(true);
+    const cles = clesMoteur(f);
+    expect([...cles.parts, ...cles.partPaints].some((cle) => cle.endsWith('_niveau'))).toBe(false);
+    const niveaux = { moteur_culasses_niveau: 'course', moteur_filtres_niveau: 'sport' };
+    const traite: Build = { paints: {}, parts: { moteur_filtres: 'coniques', ...niveaux }, partPaints: { moteur_carters: { finish: 'chrome' } } };
+    useBuilds.setState({ builds: { cox: traite } });
+    useBuilds.getState().resetKeys('cox', cles);
+    const apres = useBuilds.getState().builds.cox;
+    expect(apres?.parts).toEqual(niveaux);
+    expect(apres?.partPaints).toBeUndefined();
+    expect(moteurTouche(f, apres)).toBe(false);
+    expect(optimisationMoteur(f, apres).pourcent).toBe(optimisationMoteur(f, traite).pourcent);
   });
 });
 

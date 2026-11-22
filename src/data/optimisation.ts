@@ -130,13 +130,3 @@ export function coefficientPieces(engine: Pick<EngineSpec, 'model'> | undefined,
   if (!famille || !build?.parts) return 1;
   return 1 + optimisationMoteur(famille, build).pourcent / 100;
 }
-
-/** Clés que « D'origine » efface en plus de celles de l'aspect : le niveau de chaque pièce qui s'optimise. */
-export function clesOptimisation(famille: Pick<MoteurFamille, 'pieces'>): string[] {
-  return famille.pieces.filter((piece) => niveauxDe(piece).length > 0).map((piece) => cleNiveau(piece.id));
-}
-
-/** Vrai si le build a posé un niveau (même inconnu) sur une pièce de ce moteur. */
-export function optimisationTouchee(famille: Pick<MoteurFamille, 'pieces'>, build: Pick<Build, 'parts'> | undefined): boolean {
-  return clesOptimisation(famille).some((key) => build?.parts?.[key] !== undefined);
-}

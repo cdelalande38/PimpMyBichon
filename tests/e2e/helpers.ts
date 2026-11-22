@@ -44,6 +44,9 @@ export async function backToSections(page: Page): Promise<void> {
   const dock = page.locator('footer.dock');
   const sections = dock.getByRole('navigation', { name: 'Onglets de l’atelier' });
   const back = dock.getByRole('button', { name: 'Retour', exact: true });
+  // En paysage le menu s'ouvre fermé (décision du 22 novembre 2026) : « Personnaliser » le rouvre.
+  const ouvrir = dock.getByRole('button', { name: 'Personnaliser', exact: true });
+  if (await ouvrir.isVisible()) await ouvrir.tap();
   for (let i = 0; i < 10 && !(await sections.isVisible()); i += 1) {
     if (!(await back.isVisible())) break;
     await back.tap();

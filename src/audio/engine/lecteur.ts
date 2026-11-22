@@ -78,6 +78,8 @@ export class EngineSoundPlayer {
   /** Invité : coupure des aigus et placement gauche-droite, entre son bus et la sortie de l'hôte. */
   private voile: BiquadFilterNode | null = null;
   private place: StereoPannerNode | null = null;
+  /** Invité : taux de lecture d'ensemble (effet d'approche et d'éloignement), 1 : aucun. */
+  private pitch = 1;
 
   constructor(onState: (state: EngineState) => void, base: string = import.meta.env.BASE_URL, hote: (() => { ctx: AudioContext; sortie: AudioNode } | null) | null = null) {
     this.onState = onState;
@@ -306,6 +308,11 @@ export class EngineSoundPlayer {
     this.voile.frequency.setTargetAtTime(Number.isFinite(coupure) ? Math.min(20000, Math.max(100, coupure)) : 20000, ctx.currentTime, tau);
   }
 
+  /** Invité : taux de lecture d'ensemble des boucles (1 : tel quel), borné à 0,8-1,25 ; relu au pas suivant, qui le lisse. */
+  setPitch(ratio: number): void {
+    this.pitch = Number.isFinite(ratio) ? Math.min(1.25, Math.max(0.8, ratio)) : 1;
+  }
+
   /** Plage de régime jouable du jeu chargé (ralenti, plus haute boucle + 25 %), ou null. */
   get range(): { min: number; max: number } | null {
     const manifest = this.current?.manifest;
@@ -438,6 +445,7 @@ export class EngineSoundPlayer {
     if (!ctx || !buffer || !this.bus) return null;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
+    source.playbackRate.value = this.exhaust?.hauteur ?? 1;
     const gain = ctx.createGain();
     const level = dbToGain(shot.gain);
     if (fadeIn > 0) {
@@ -463,6 +471,8 @@ export class EngineSoundPlayer {
     const manifest = this.current?.manifest;
     if (!ctx || !manifest || this.voices.length === 0) return;
     this.exhaust?.suivre();
+    // La ligne d'échappement baisse le taux de lecture de toutes les prises (src/data/echappement.ts, `hauteur`).
+    const hauteur = this.exhaust?.hauteur ?? 1;
     const now = ctx.currentTime;
     const range = rpmRange(manifest.boucles, manifest.ralenti);
     let load: number;
@@ -484,7 +494,7 @@ export class EngineSoundPlayer {
       const voice = this.voices[level.index];
       if (!voice) continue;
       voice.gain.gain.setTargetAtTime(level.gain * dbToGain(voice.loop.gain) * loadGain(this.loadLevel) * duck, now, revving ? 0.08 : smooth);
-      voice.source.playbackRate.setTargetAtTime(level.rate, now, smooth);
+      voice.source.playbackRate.setTargetAtTime(level.rate * hauteur * this.pitch, now, smooth);
     }
     if (this.state === 'ralenti' || this.state === 'charge') {
       const loaded = this.pressed || revving || (this.external ? this.external.load > 0.35 || this.rpm > manifest.ralenti * 1.15 : this.rpm > manifest.ralenti * 1.08);

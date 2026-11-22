@@ -52,7 +52,7 @@ test.describe('raccourcis et dock de personnalisation', () => {
     // fin de rangée. « Peinture » ouvre ses choix, et masque à son tour les entrées.
     await tabs(page).getByRole('button', { name: 'Custom', exact: true }).tap();
     const entries = dock(page).getByRole('navigation', { name: 'Entrées · Custom' }).getByRole('button');
-    await expect(entries).toHaveText([/^Peinture$/, /^Roues$/, /^Suspension$/, /^Intérieur$/, /^Stickers$/, /^Carrosserie$/, /^Phares$/, /^Ailerons$/, /^Néons$/]);
+    await expect(entries).toHaveText([/^Peinture$/, /^Stickers$/, /^Néons$/, /^Roues$/, /^Carrosserie$/, /^Ailerons$/, /^Phares$/, /^Intérieur$/, /^Suspension$/]);
     await expect(entries.first()).toHaveAttribute('aria-current', 'true');
     await expect(entries.nth(1)).toBeEnabled();
     await expect(entries.nth(2)).toBeEnabled();
@@ -91,7 +91,7 @@ test.describe('raccourcis et dock de personnalisation', () => {
     await openAtelier(page, 'Réglages');
     await expect(page).toHaveURL(/#\/reglages$/);
     const rubriques = page.getByRole('navigation', { name: 'Rubriques de l’atelier' });
-    await expect(rubriques.getByRole('button')).toHaveText(['Réglages', 'Sous le capot', 'Jeu']);
+    await expect(rubriques.getByRole('button')).toHaveText(['Réglages', 'Sous le capot', 'Ton compte']);
     await shot(page, '02-atelier-reglages');
 
     await rubriques.getByRole('button', { name: 'Sous le capot' }).click();

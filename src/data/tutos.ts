@@ -279,7 +279,7 @@ export const TUTOS: readonly Tuto[] = [
     etapes: [
       { texte: 'Choisis ta place au pouce : Conducteur, Passager ou Arrière. L’atelier la garde pour ce véhicule.', cible: '.places' },
       { texte: 'Glisse un doigt pour regarder autour de toi, et lève les yeux vers le ciel de toit.' },
-      { texte: 'Pour ressortir, touche « Vue atelier », ou le bouton rond au volant.', cible: '.places .place-sortir' },
+      { texte: 'Pour ressortir, touche « Atelier », ou le bouton rond au volant.', cible: '.places .place-sortir' },
     ],
   },
   {

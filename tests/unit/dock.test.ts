@@ -165,6 +165,30 @@ describe('sauvegarde du dock', () => {
     expect(third.getState().expanded).toBe(true);
   });
 
+  it('lancé en paysage, le menu s’ouvre fermé sans toucher à la sauvegarde ; en portrait, rien ne change', async () => {
+    const stub = (paysage: boolean) => {
+      globalThis.matchMedia = ((requete: string) => ({ matches: paysage && requete.includes('landscape') })) as typeof globalThis.matchMedia;
+    };
+    try {
+      stub(true);
+      const paysage = await launch();
+      expect(paysage.getState().closed).toBe(true);
+      paysage.getState().setClosed(false);
+      paysage.getState().toggle();
+      await vi.waitFor(async () => {
+        const raw = await get<string>(DOCK_KEY, db());
+        expect(raw ? (JSON.parse(raw) as { state: unknown }).state : null).toEqual({ expanded: true, closed: false });
+      });
+      // La séance se ferme menu fermé : la sauvegarde ne retient pas cette fermeture, un lancement en portrait rouvre le menu.
+      paysage.getState().setClosed(true);
+      await new Promise((fini) => setTimeout(fini, 50));
+      stub(false);
+      expect((await launch()).getState().closed).toBe(false);
+    } finally {
+      delete (globalThis as { matchMedia?: unknown }).matchMedia;
+    }
+  });
+
   it('l’ancienne sauvegarde (version 1) rouvre le dock ouvert, à sa taille', async () => {
     await set(DOCK_KEY, JSON.stringify({ state: { expanded: true }, version: 1 }), db());
     const useDock = await launch();

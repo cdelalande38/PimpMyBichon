@@ -166,12 +166,14 @@ describe('lecteur des sons d’interface', () => {
     expect(await l.jouer('gain')).toBe(true);
     expect(await l.contenu()).toEqual({ gain: 3, dollars: 1 });
     expect(audio.sources[0]?.buffer.nom).toBe('gain-1.ogg');
-    // 0,5 × 10^(0/20) pour la première prise.
-    expect(audio.sources[0]?.gain?.gain.value).toBeCloseTo(0.5, 5);
+    // 0,5 × 10^((0 + gainDb)/20) pour la première prise : le coup de pouce de SONS_INTERFACE (+5 dB).
+    const pouce = (db: number) => 10 ** ((db + SONS_INTERFACE.gain.gainDb) / 20);
+    expect(SONS_INTERFACE.gain.gainDb).toBe(5);
+    expect(audio.sources[0]?.gain?.gain.value).toBeCloseTo(0.5 * pouce(0), 5);
     expect(await l.jouer('gain')).toBe(true);
     expect(audio.sources[1]?.buffer.nom).toBe('gain-2.ogg');
-    // La deuxième prise est à −6 dB : 0,5 × 0,501.
-    expect(audio.sources[1]?.gain?.gain.value).toBeCloseTo(0.5 * 10 ** (-6 / 20), 5);
+    // La deuxième prise est à −6 dB, plus le coup de pouce.
+    expect(audio.sources[1]?.gain?.gain.value).toBeCloseTo(0.5 * pouce(-6), 5);
     // Un emplacement que l'app ne demande pas (« clic ») n'est ni décodé ni demandé.
     const demandes = fetch.mock.calls.map((c) => String(c[0]));
     expect(demandes.filter((u) => u.includes('sfx.json'))).toHaveLength(1);

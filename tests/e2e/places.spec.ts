@@ -7,7 +7,7 @@ import { changedRatio, openApp, openEntry, quick, reloadSaved, sceneBand, waitFo
 // passager ou arrière… c'est le menu qui va pas surtout ») : en vue intérieure, une commande nommée
 // par place, au pouce, au-dessus du dock, sans toucher au dock ni aux raccourcis ; chaque place
 // change l'image ; on regarde autour et on lève les yeux ; la place est gardée par véhicule d'un
-// rechargement à l'autre ; « Vue atelier » rend l'atelier ; le dock garde sa hauteur.
+// rechargement à l'autre ; « Atelier » rend l'atelier ; le dock garde sa hauteur.
 
 interface Entry {
   id: string;
@@ -65,10 +65,10 @@ test.describe('places de la vue intérieure', () => {
       await expect(stage(page)).toHaveAttribute('data-vue', 'interieur');
       await expect(stage(page)).toHaveAttribute('data-place', 'conducteur');
 
-      // Les commandes : une par place, nommée, plus « Vue atelier », au pouce, sans rien recouvrir.
+      // Les commandes : une par place, nommée, plus « Atelier », au pouce, sans rien recouvrir.
       const wanted = [entry.interiorView, ...(entry.interiorViews ?? [])].map((view) => ({ id: view?.place ?? '', label: view?.label ?? '' }));
       const group = places(page);
-      await expect(group.getByRole('button')).toHaveText([...wanted.map((place) => place.label), 'Vue atelier']);
+      await expect(group.getByRole('button')).toHaveText([...wanted.map((place) => place.label), 'Atelier']);
       const dockBox = await dock(page).boundingBox();
       const quickBox = await quick(page).boundingBox();
       for (const button of await group.getByRole('button').all()) {
@@ -112,8 +112,8 @@ test.describe('places de la vue intérieure', () => {
         .toBe('gauche en haut');
       expect(await dock(page).boundingBox()).toEqual(dockBox);
 
-      // « Vue atelier », dans la rangée : l'atelier revient, les commandes s'effacent.
-      await group.getByRole('button', { name: 'Vue atelier', exact: true }).tap();
+      // « Atelier », dans la rangée : l'atelier revient, les commandes s'effacent.
+      await group.getByRole('button', { name: 'Atelier', exact: true }).tap();
       await expect(stage(page)).toHaveAttribute('data-vue', 'atelier');
       await expect(group).toHaveCount(0);
     }
@@ -132,7 +132,7 @@ test.describe('places de la vue intérieure', () => {
     await expect(stage(page)).toHaveAttribute('data-place', 'arriere');
     await expect(places(page).getByRole('button', { name: 'Arrière', exact: true })).toHaveAttribute('aria-pressed', 'true');
     // Le bouton rond ressort aussi.
-    await quick(page).getByRole('button', { name: 'Vue atelier', exact: true }).tap();
+    await quick(page).getByRole('button', { name: 'Revenir à l’atelier', exact: true }).tap();
     await expect(stage(page)).toHaveAttribute('data-vue', 'atelier');
   });
 

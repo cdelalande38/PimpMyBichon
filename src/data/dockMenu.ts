@@ -52,6 +52,8 @@ export interface DockEntry {
   icon?: MenuIcon;
   /** Faux : affichée « bientôt », estompée, sans action. */
   available: boolean;
+  /** Famille de la rangée (audit des menus, B9) : un titre discret avant la première entrée de chaque famille. */
+  famille?: string;
 }
 
 export interface DockSection {
@@ -81,19 +83,20 @@ export const DOCK_MENU: readonly DockSection[] = [
     label: 'Custom',
     icon: 'pistolet',
     entries: [
-      { id: 'peinture', label: 'Peinture', icon: 'bombe', available: true },
-      // Jantes, pneus et leurs cotes ; l'assiette (§ 5.4), dans Suspension.
-      { id: 'roues', label: 'Roues', icon: 'jante', available: true },
-      { id: 'suspension', label: 'Suspension', icon: 'ressort', available: true },
-      // Volant, pommeau, sièges et ciel étoilé (§ 5.4) ; l'ouvrir fait entrer dans la vue intérieure.
-      { id: 'interieur', label: 'Intérieur', icon: 'siege', available: true },
+      // Trois familles (audit des menus, B9) : couleurs, pièces, habitacle. Les entrées d'une famille se suivent.
+      { id: 'peinture', label: 'Peinture', icon: 'bombe', available: true, famille: 'Couleurs' },
       // Poser des stickers sur les zones de livrée du véhicule (§ 5.3, premier lot).
-      { id: 'stickers', label: 'Stickers', icon: 'sticker', available: true },
-      { id: 'carrosserie', label: 'Carrosserie', icon: 'portiere', available: true },
-      { id: 'phares', label: 'Phares', icon: 'phare', available: true },
-      { id: 'ailerons', label: 'Ailerons', icon: 'aileron', available: true },
+      { id: 'stickers', label: 'Stickers', icon: 'sticker', available: true, famille: 'Couleurs' },
       // Néons du véhicule, zone par zone, et LED de l'habitacle (§ 5.4) : la zone, puis ses réglages.
-      { id: 'neons', label: 'Néons', icon: 'neons', available: true },
+      { id: 'neons', label: 'Néons', icon: 'neons', available: true, famille: 'Couleurs' },
+      // Jantes, pneus et leurs cotes ; l'assiette (§ 5.4), dans Suspension.
+      { id: 'roues', label: 'Roues', icon: 'jante', available: true, famille: 'Pièces' },
+      { id: 'carrosserie', label: 'Carrosserie', icon: 'portiere', available: true, famille: 'Pièces' },
+      { id: 'ailerons', label: 'Ailerons', icon: 'aileron', available: true, famille: 'Pièces' },
+      { id: 'phares', label: 'Phares', icon: 'phare', available: true, famille: 'Pièces' },
+      // Volant, pommeau, sièges et ciel étoilé (§ 5.4) ; l'ouvrir fait entrer dans la vue intérieure.
+      { id: 'interieur', label: 'Intérieur', icon: 'siege', available: true, famille: 'Habitacle' },
+      { id: 'suspension', label: 'Suspension', icon: 'ressort', available: true, famille: 'Habitacle' },
     ],
   },
   {

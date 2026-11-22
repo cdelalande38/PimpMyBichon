@@ -101,8 +101,9 @@ function InteriorButton() {
   const remembered = useView((state) => state.places[vehicle.id]);
   const place = placeOf(vehicle, remembered);
   if (!place) return null;
-  const label = inside ? 'Vue atelier' : 'Intérieur';
-  const title = inside ? 'Vue atelier : retour à l’atelier' : `Intérieur : place ${place.label.toLowerCase()}`;
+  // Dedans, le bouton rond ramène à « Atelier » (le titre le dit) ; son nom accessible diffère de celui de la roue dentée, qui s'appelle aussi « Atelier » : deux boutons de même nom, c'est ambigu au lecteur d'écran.
+  const label = inside ? 'Revenir à l’atelier' : 'Intérieur';
+  const title = inside ? 'Atelier : retour à l’atelier' : `Intérieur : place ${place.label.toLowerCase()}`;
   return (
     <button type="button" className="quick-btn" aria-label={label} title={title} data-on={inside || undefined} onClick={() => enterOrLeave(vehicle.id)}>
       <Icon name="volant" />
@@ -124,7 +125,7 @@ export function Hud({ sceneFailed, covered = false }: HudProps) {
         <span aria-hidden="true">Pimp my</span>
         <b aria-hidden="true">Bichon</b>
       </h1>
-      {/* Le solde en dollars, discret, à côté de la marque : un appui ouvre Atelier › Jeu. */}
+      {/* Le solde en dollars, discret, à côté de la marque : un appui ouvre Atelier › Ton compte. */}
       <Solde covered={covered} />
       <div className="hud-side">
         <OfflinePill />

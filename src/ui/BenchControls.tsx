@@ -7,7 +7,7 @@
 // ligne. La poignée et « Retour » vivent dans la ligne de repère (src/ui/Dock.tsx). Sections et entrées
 // portent leur icône au-dessus du mot (déclarée dans src/data/dockMenu.ts) ; le nom du bouton reste le mot.
 
-import { useRef, type ReactNode } from 'react';
+import { Fragment, useRef, type ReactNode } from 'react';
 import { AMBIANCES } from '../data/ambiances.ts';
 import { activeEntry, sectionEntries, sectionsDeLaRangee, visibleSections, type EntryId } from '../data/dockMenu.ts';
 import { resolveVehicle } from '../data/vehicles.ts';
@@ -108,20 +108,23 @@ export function BenchControls() {
   if (level === 'entrees' && section) {
     return (
       <nav className="tabs dock-entries" aria-label={`Entrées · ${section.label}`}>
-        {list.map((item) =>
-          item.available ? (
-            <button key={item.id} type="button" aria-current={entry?.id === item.id ? 'true' : undefined} onClick={() => setEntry(item.id)}>
-              {item.icon && <Icon name={item.icon} />}
-              <span className="dock-label">{item.label}</span>
-            </button>
-          ) : (
-            <button key={item.id} type="button" className="dock-soon" disabled aria-label={`${item.label}, bientôt`}>
-              {item.icon && <Icon name={item.icon} />}
-              <span className="dock-label">{item.label}</span>
-              <small aria-hidden="true">bientôt</small>
-            </button>
-          ),
-        )}
+        {list.map((item, index) => (
+          <Fragment key={item.id}>
+            {item.famille !== undefined && item.famille !== list[index - 1]?.famille && <span className="dock-famille">{item.famille}</span>}
+            {item.available ? (
+              <button type="button" aria-current={entry?.id === item.id ? 'true' : undefined} onClick={() => setEntry(item.id)}>
+                {item.icon && <Icon name={item.icon} />}
+                <span className="dock-label">{item.label}</span>
+              </button>
+            ) : (
+              <button type="button" className="dock-soon" disabled aria-label={`${item.label}, bientôt`}>
+                {item.icon && <Icon name={item.icon} />}
+                <span className="dock-label">{item.label}</span>
+                <small aria-hidden="true">bientôt</small>
+              </button>
+            )}
+          </Fragment>
+        ))}
       </nav>
     );
   }

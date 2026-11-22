@@ -26,7 +26,7 @@ const CATALOG: Entry[] = readdirSync(DIR, { withFileTypes: true })
 const dock = (page: Page) => page.locator('footer.dock');
 const stage = (page: Page) => page.locator('.stage');
 const interiorButton = (page: Page) => quick(page).getByRole('button', { name: 'Intérieur', exact: true });
-const leaveButton = (page: Page) => quick(page).getByRole('button', { name: 'Vue atelier', exact: true });
+const leaveButton = (page: Page) => quick(page).getByRole('button', { name: 'Revenir à l’atelier', exact: true });
 const handle = (page: Page) => dock(page).getByRole('button', { name: /^(Agrandir|Réduire) le menu$/ });
 
 async function chooseVehicle(page: Page, id: string): Promise<void> {

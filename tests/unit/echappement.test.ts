@@ -13,8 +13,12 @@ import {
   courbeSaturation,
   echappementSon,
   egalisationMoyenne,
+  HAUTEUR_MAX,
+  HAUTEUR_MIN,
   NIVEAU_MAX_DB,
+  penteSaturation,
   reglageSon,
+  SATURATION_MAX,
   reponseDb,
 } from '../../src/audio/engine/echappement.ts';
 import { ARTICLES_ECHAPPEMENT } from '../../src/data/articles/echappement.ts';
@@ -107,6 +111,25 @@ describe('son des lignes : traitement des prises', () => {
     expect(feutree.niveau).toBeLessThan(0);
     // Ce que l'égalisation ajoute en moyenne est retiré par le gain de sortie.
     expect(egalisationMoyenne(sport)).toBeGreaterThan(0);
+  });
+
+  it('retour du 22 novembre : plus la ligne est « course », plus elle est grave, chargée en bas, saturée et forte ; hauteur dans ses bornes', () => {
+    const [origine, feutree, sport, libre2] = ['origine', 'feutree', 'sport', 'libre'].map((id) => ligneParId(id)!.son);
+    expect(origine!.hauteur).toBe(1);
+    expect(feutree!.hauteur).toBe(1);
+    expect(sport!.hauteur).toBeLessThan(1);
+    expect(libre2!.hauteur).toBeLessThan(sport!.hauteur);
+    expect(libre2!.graves.gain).toBeGreaterThan(sport!.graves.gain);
+    expect(sport!.graves.gain).toBeGreaterThanOrEqual(5);
+    expect(reglageSon(libre2!).pente).toBe(penteSaturation(SATURATION_MAX));
+    expect(libre2!.niveau).toBeGreaterThan(sport!.niveau);
+    for (const ligne of LIGNES_ECHAPPEMENT) {
+      const { hauteur } = reglageSon(ligne.son);
+      expect(hauteur, ligne.id).toBeGreaterThanOrEqual(HAUTEUR_MIN);
+      expect(hauteur, ligne.id).toBeLessThanOrEqual(HAUTEUR_MAX);
+    }
+    expect(reglageSon({ ...libre2!, hauteur: 0.1 }).hauteur).toBe(HAUTEUR_MIN);
+    expect(reglageSon({ ...libre2!, hauteur: Number.NaN }).hauteur).toBe(1);
   });
 
   it('courbe de saturation : impaire, croissante, bornée à la pleine échelle', () => {

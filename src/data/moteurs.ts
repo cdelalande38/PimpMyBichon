@@ -368,7 +368,7 @@ export function noeudsFamille(famille: MoteurFamille): Map<string, { piece: stri
   return out;
 }
 
-/** Clés que « D'origine » efface : les échanges et les traitements de toutes les pièces de la famille. */
+/** Clés que « D'origine » efface : les échanges et les traitements de toutes les pièces de la famille, et jamais les niveaux d'optimisation (`moteur_<pièce>_niveau`, déjà payés). */
 export function clesMoteur(famille: MoteurFamille): { parts: string[]; partPaints: string[] } {
   return {
     parts: famille.pieces.filter((piece) => piece.echange).map((piece) => cleMoteur(piece.id)),

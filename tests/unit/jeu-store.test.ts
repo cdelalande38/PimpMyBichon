@@ -99,7 +99,7 @@ describe('store du jeu', () => {
 });
 
 describe('route du jeu', () => {
-  it('#/jeu ouvre la rubrique Jeu du panneau Atelier', () => {
+  it('#/jeu ouvre la rubrique Ton compte du panneau Atelier', () => {
     expect(parseHash('#/jeu')).toEqual({ name: 'jeu' });
     expect(routeToHash({ name: 'jeu' })).toBe('#/jeu');
   });
