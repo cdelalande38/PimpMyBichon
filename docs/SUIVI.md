@@ -6,7 +6,7 @@ Dernière mise à jour : 22 novembre 2026.
 
 ## 1. Où on en est
 
-- **En ligne** : poussé le 22 novembre à 12 h 25, validé : ses décisions du 22 novembre (ce commit).
+- **En ligne** : poussé le 22 novembre à 12 h 25, validé : ses décisions du 22 novembre (`36eb276`).
 - **Aucun agent en vol.** Quota de la semaine à 94 % (retour le 25 novembre à 4 h) : arrêt jusque-là.
 - **Reprise** : repartir d'une session neuve de Claude Code (la conversation du 19 au 22 novembre est devenue trop longue). Premier lot : la manette (§ 4, point 0b), puis le reste des menus, les routes plus larges, le rendu.
 
@@ -17,7 +17,7 @@ Dernière mise à jour : 22 novembre 2026.
 | Demande (ses mots) | Ce qui a été livré | Commit |
 |---|---|---|
 | « si un participant arrive sur la ligne d'arrivée il bloque les autres potentiellement. Il faut pas que ça bloque une fois sur la ligne. Par contre pendant la course ça doit rester comme actuellement » | Une fois l'un des deux arrivé, le contact ne s'applique plus entre eux (l'autre passe à côté ou au travers) ; pendant la course, rien ne change | `ff0fc7f` |
-| Ses décisions du 22 novembre (§ 5) | « Atelier » dans la vue intérieure (nom accessible « Revenir à l'atelier », la roue dentée s'appelant déjà « Atelier ») ; « Ton compte » ; menu fermé au lancement en paysage ; Custom en trois familles (Couleurs, Pièces, Habitacle) ; « D'origine » du moteur sans les niveaux d'optimisation ; sons de gain +5 dB ; lignes d'échappement plus graves, plus de basses et saturation douce (Sport, Libre) ; moteur de l'adversaire au niveau du joueur de près, qui monte en approche et baisse en éloignement | (ce commit) |
+| Ses décisions du 22 novembre (§ 5) | « Atelier » dans la vue intérieure (nom accessible « Revenir à l'atelier », la roue dentée s'appelant déjà « Atelier ») ; « Ton compte » ; menu fermé au lancement en paysage ; Custom en trois familles (Couleurs, Pièces, Habitacle) ; « D'origine » du moteur sans les niveaux d'optimisation ; sons de gain +5 dB ; lignes d'échappement plus graves, plus de basses et saturation douce (Sport, Libre) ; moteur de l'adversaire au niveau du joueur de près, qui monte en approche et baisse en éloignement | `36eb276` |
 | (décisions sur l'audit, 21 novembre) | Un seul écran « Jouer » : cartes Continuer, Carrière, Course, Duel, Drift, Balade ; « Jouer » dans l'en-tête du menu à toute profondeur (réduit à son triangle quand la place manque) ; bouton rond de la carrière retiré ; aperçu seulement en Balade ; titre d'étape au lieu du fil ; première course libre en 4 ou 5 appuis au lieu de 7. Retouches : pastille d'état, étiquette en double, fondu et molette des rangées, rubriques de l'Atelier visibles en paysage, Échap et P pour la pause, « ? » masqué en course, raccourcis clavier au garage, « Sortir » devenu « Vue atelier » | `3b2cee9` |
 | « lorsqu'on charge une course au début c'est figé […] laisser l'écran de chargement de la course un peu plus longtemps, 1 à 2 s » | L'écran de chargement reste 1,5 s de plus, les feux attendent (`CHAUFFE_MS`) | `aa89235` |
 | « lance une analyse des menus et place-toi en expert du jeu vidéo et de l'ergonomie de jeux vidéo mobile et PC […] fais un état des lieux et propose des améliorations » | Rapport docs/AUDIT_MENUS.md : 39 problèmes classés, architecture cible, plan. Ses décisions du 21 novembre : bouton rond « Carrière » retiré au profit d'un seul écran « Jouer » ; porte de garage sur le mur avant, près du néon ; aperçu seulement en Balade ; retouches rapides et écran « Jouer » lancés | `80ec58a` |
