@@ -2,7 +2,7 @@
 
 Document de passation, tenu à jour à chaque étape. Il dit, pour quelqu'un qui arrive à froid : ce que le commanditaire a demandé (avec ses mots), ce qui est en ligne, ce qui reste faux dans ce qui est livré, et ce qui vient. Le détail technique de chaque lot est dans le message de son commit ; les règles de travail sont dans `CLAUDE.md` ; le périmètre est dans `CAHIER_DES_CHARGES.md` (§ 5.5 pour la sortie, § 11 pour ce que la publication attend) ; les substituts et ce qui manque sont dans `TODO_ASSETS.md`.
 
-Dernière mise à jour : 21 novembre 2026, 17 h 45.
+Dernière mise à jour : 22 novembre 2026.
 
 ## 1. Où on en est
 
@@ -91,11 +91,11 @@ Rien de ce qui suit n'a été vu sur un téléphone par celui qui l'a écrit : t
 
 Ordre : les menus (en cours, ses décisions du 21 novembre), puis des routes plus larges (son retour du 21 novembre), puis le rendu (ajouté par lui le 21 novembre « pour que ça soit travaillé à la suite »), puis l'ordre qu'il avait fixé le 19 novembre (rodéo, cartes, véhicules). « Gros » : un lot d'agent complet avec validation ; « petit » : une retouche de la boucle principale.
 
-0. **Menus** (d'après docs/AUDIT_MENUS.md § 7) : écran « Jouer » et retouches rapides faits le 21 novembre ; puis menu de pause, panneaux en paysage, choix du lieu en grandes cartes illustrées, porte de garage (mur avant, près du néon « GOOD VIBES ONLY », Opus), disposition PC, choix du véhicule en cartes. À trancher par lui : les mots (« Sortie », « Sortir », « Jeu » ou « Ton compte »), le menu fermé par défaut en paysage, le regroupement des entrées de Custom.
-1. **Routes plus larges, virages plus amples** (demande du 21 novembre : « Il faudra prévoir d'élargir les routes des circuits, c'est trop juste. Surtout les virages, c'est pas adapté à la taille des véhicules : il faut des virages beaucoup plus larges et étendus »). Lot Opus par carte, dans `tools/maps/` (la carte se refabrique, aucune retouche à la main du rail) : une largeur de chaussée minimale par carte et par type de voie, en données ; les virages adoucis à un rayon minimal (par exemple 25 à 30 m, à mesurer avec la conduite de référence et la moto) en élargissant aussi la chaussée dans le virage ; le décor (bâtiments, trottoirs, murets, lampadaires, arbres) repoussé ou découpé là où la route s'élargit ; le lieu reste reconnaissable (Monaco, Miami, le plateau). À refaire derrière, par l'outil : temps de référence et médailles (tools/courses/), paliers du drift, grilles de départ du duel, fonds de chargement (`npm run fonds:build`). Mesurer d'abord : largeur et rayon de chaque virage aujourd'hui, à côté de la largeur des véhicules (le van fait 2,26 m) et de la vitesse de passage.
+0. **Menus** (d'après docs/AUDIT_MENUS.md § 7) : écran « Jouer » et retouches rapides faits le 21 novembre ; ses décisions du 22 novembre (mots, menu fermé en paysage, Custom regroupé) en cours ; puis menu de pause, panneaux en paysage, choix du lieu en grandes cartes illustrées, porte de garage (mur avant, près du néon « GOOD VIBES ONLY », Opus), disposition PC, choix du véhicule en cartes. À trancher par lui : les mots (« Sortie », « Sortir », « Jeu » ou « Ton compte »), le menu fermé par défaut en paysage, le regroupement des entrées de Custom.
+1. **Routes plus larges, virages plus amples** (demande du 21 novembre : « Il faudra prévoir d'élargir les routes des circuits, c'est trop juste. Surtout les virages, c'est pas adapté à la taille des véhicules : il faut des virages beaucoup plus larges et étendus »). Lot Opus par carte, dans `tools/maps/` (la carte se refabrique, aucune retouche à la main du rail) : une largeur de chaussée minimale par carte et par type de voie, en données ; les virages adoucis à un rayon minimal (par exemple 25 à 30 m, à mesurer avec la conduite de référence et la moto) en élargissant aussi la chaussée dans le virage ; le bord de route durci (décision du 22 novembre : il freinait plus fort qu'un frein) ; le décor (bâtiments, trottoirs, murets, lampadaires, arbres) repoussé ou découpé là où la route s'élargit ; le lieu reste reconnaissable (Monaco, Miami, le plateau). À refaire derrière, par l'outil : temps de référence et médailles (tools/courses/), paliers du drift, grilles de départ du duel, fonds de chargement (`npm run fonds:build`). Mesurer d'abord : largeur et rayon de chaque virage aujourd'hui, à côté de la largeur des véhicules (le van fait 2,26 m) et de la vitesse de passage.
 2. **Rendu : aller vers une qualité « vitrine »** (demande du 21 novembre : « J'aime bien tes propositions d'amélioration, alimente le plan avec tout ça pour que ça soit travaillé à la suite » ; probablement la semaine du 25 novembre, selon le quota). Pas un rendu de jeu de console sur téléphone (le GPU d'un téléphone est 3 à 5 fois moins puissant et chauffe, et le vrai fossé est celui des assets), mais le garage au niveau des meilleurs jeux de voiture sur mobile, et une nuit néon fluide en course. Dans l'ordre :
    1. *État des lieux du rendu* (Opus, analyse, comme l'audit des menus) : image par image, ce qui fait « amateur », ce que chaque chantier ci-dessous apporterait, son coût en temps d'image sur le téléphone de référence et en quota ; des paliers de qualité (bas, haut) et une résolution qui s'adapte.
-   2. *De vrais modèles de véhicules* : le premier levier, de loin (la voiture est dans chaque image) ; la Cox et le van sont encore des substituts générés par code. Modèles sous licence ouverte vérifiée (voir le sourcing plus bas) ou achetés et rangés dans le dépôt privé des assets : décision et budget du commanditaire.
+   2. *De vrais modèles de véhicules* : le premier levier, de loin (la voiture est dans chaque image) ; la Cox et le van sont encore des substituts générés par code. Licence ouverte vérifiée seulement (CC0, CC-BY : décision du 22 novembre, aucun budget) : commencer par le sourcing (recherche par la boucle principale, avec le réseau).
    3. *Éclairage précalculé* (Opus, un à deux lots) : la lumière du garage puis de chaque carte calculée une fois (réflexions, ombres douces, rebonds des néons) et seulement affichée par l'app ; gros gain pour presque rien en temps d'image.
    4. *Passage à WebGPU* (Opus, deux ou trois lots) : le moteur de rendu WebGPU de three.js, avec repli WebGL pour les téléphones qui ne l'ont pas ; meilleurs reflets, brouillard volumétrique, anticrénelage propre, plus d'objets à l'écran.
    5. *Cartes habillées* (gros, carte par carte ; rejoint « Textures des cartes ») : textures de chaussée et de façades (les immeubles sont aujourd'hui des boîtes tirées d'OpenStreetMap), mobilier urbain, végétation modélisée, lumière précalculée par tronçon.
@@ -111,9 +111,20 @@ Ordre : les menus (en cours, ses décisions du 21 novembre), puis des routes plu
 
 Tranché le 19 novembre au soir : publier (fait), l'ordre des lots, « Conduite assistée », l'arc de néon du van laissé tel quel, les prix et les gains posés sans lui gardés.
 
-- Les mots de l'interface (« Sortie », « Sortir », « Jeu » ou « Ton compte »), le menu fermé par défaut en paysage, le regroupement des entrées de Custom (audit des menus, § 7.5).
-- De vrais modèles de véhicules : licence ouverte vérifiée ou achat (dépôt privé des assets), et quel budget (chantier « Rendu » du § 4).
-- Toujours en attente de son jugement : les sons de gain et des lignes d'échappement à l'oreille ; la taille du compte-tours en paysage ; le « D'origine » du moteur qui efface aussi les niveaux d'optimisation ; le bouton rond « Carrière » à garder ou non.
+Tranché le 22 novembre (ses réponses) :
+- la vue intérieure : « Atelier » au lieu de « Vue atelier » ;
+- « Jouer » réduit à son triangle quand l'en-tête manque de place : gardé ;
+- la rubrique de l'Atelier s'appelle « Ton compte » ;
+- en paysage, le menu est fermé par défaut ;
+- regroupement des entrées de Custom et ordre des sections : appliquer les recommandations de l'audit (docs/AUDIT_MENUS.md § 5.4) ;
+- le bord de route freine trop (environ 10 g, ne jamais freiner est la meilleure conduite) : le durcir, avec l'élargissement des routes ;
+- le « D'origine » du moteur ne remet que les pièces, pas les niveaux d'optimisation payés ;
+- modèles de véhicules : aucun budget, donc licence ouverte vérifiée seulement (CC0, CC-BY), rien d'acheté ;
+- sons de gain : plus forts (« on n'entend pas trop ») ; lignes d'échappement : plus agressives (« ça fait jouet ») ;
+- taille du compte-tours en paysage : « parfait » ;
+- moteur de l'adversaire au duel : plus fort, surtout de près, qui monte quand il arrive et baisse quand il s'éloigne, dans un sens comme dans l'autre.
+
+Encore en attente : rien de nouveau ; ses retours après essai de chaque publication.
 
 ## 6. Reprendre le travail
 
